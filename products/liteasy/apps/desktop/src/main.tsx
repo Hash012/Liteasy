@@ -1,3 +1,5 @@
+import { SurfaceErrorBoundary } from "./app/shared/ui/SurfaceErrorBoundary";
+import { installSurfaceErrorListeners } from "./app/shared/ui/surfaceDiagnostics";
 import { initializeUiLanguage } from "./app/controllers/initializeUiLanguage";
 import { message } from "./app/shared/i18n/i18n";
 import "./app/shared/i18n/language.css";
@@ -19,10 +21,11 @@ async function start() {
   await initializeUiLanguage();
   const { default: App } = await import("./App");
   initializeApplicationAppearance();
+  installSurfaceErrorListeners();
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
       <ApplicationThemeProvider>
-        <App />
+        <SurfaceErrorBoundary surface="workspace"><App /></SurfaceErrorBoundary>
       </ApplicationThemeProvider>
     </React.StrictMode>
   );

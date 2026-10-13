@@ -1,3 +1,4 @@
+import { selectPickerValue } from "./helpers/selectPickerValue";
 import { fireEvent, render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vitest";
@@ -53,7 +54,7 @@ test("filters details in the same column without mutating summary counts", async
   expand();
   fireEvent.click(screen.getByRole("button", { name: "查看全部证据" }));
   const inspector = screen.getByRole("region", { name: "证据详情" });
-  fireEvent.change(within(inspector).getByRole("combobox", { name: "筛选论断" }), { target: { value: "contested" } });
+  await selectPickerValue(within(inspector).getByRole("combobox", { name: "筛选论断" }), "contested");
   expect(within(inspector).getByText("两个实验结果不一致")).toBeVisible();
   expect(within(inspector).queryByText("模型对所有人有效")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: /1 篇来源.*1 处引用.*1 有分歧.*1 未核验/ })).toBeVisible();
@@ -128,9 +129,10 @@ test("keeps failed check status visible while collapsing detailed execution reco
   value.verifications = [{ id: "check", checkerKind: "structural_rules", origin: "structural_rules", status: "timed_out", evaluatedClaimIds: [], reviewedPassageIds: [], finding: "远端响应超过时限，已回退结构检查。" }];
   const { container } = render(<EvidenceLens report={value} />);
   expand();
-  const details = container.querySelector("details.evidence-lens__checks")!;
-  expect(details).not.toHaveAttribute("open");
-  expect(within(details.querySelector("summary")!).getByText(/检查超时/)).toBeVisible();
+  const details = container.querySelector(".evidence-lens__checks")!;
+  const heading = within(details as HTMLElement).getByRole("button");
+  expect(heading).toHaveAttribute("aria-expanded", "false");
+  expect(within(heading).getByText(/检查超时/)).toBeVisible();
   fireEvent.click(within(details as HTMLElement).getByText(/核验说明/));
   expect(screen.getByText("远端响应超过时限，已回退结构检查。")).toBeVisible();
 });

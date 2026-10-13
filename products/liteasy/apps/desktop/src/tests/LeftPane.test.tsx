@@ -1,3 +1,4 @@
+import { selectPickerValue } from "./helpers/selectPickerValue";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -254,7 +255,7 @@ describe("LeftPane", () => {
       recommendationItems: [recommendation]
     })} />);
     const panel = within(screen.getByRole("region", { name: "关联推荐" }));
-    await user.selectOptions(panel.getByRole("combobox", { name: "推荐风格" }), "classic");
+    await selectPickerValue(panel.getByRole("combobox", { name: "推荐风格" }), "classic");
     expect(onRecommendationStyleChange).toHaveBeenCalledWith("classic");
     const row = panel.getByRole("button", { name: `查看推荐 ${recommendation.title}` });
     expect(within(row).getByText("2017")).toBeInTheDocument();
@@ -318,7 +319,9 @@ describe("LeftPane", () => {
     expect(onOpenArtifact).toHaveBeenCalledWith("artifact-saved");
 
     await user.click(screen.getByRole("button", { name: "当前论文" }));
-    expect(screen.getByRole("combobox", { name: "按来源论文筛选" })).toHaveValue("paper-1");
+    await user.click(screen.getByRole("button", { name: "筛选产物" }));
+    expect(screen.getByRole("combobox", { name: "按来源论文筛选" })).toHaveTextContent("Attention Is All You Need");
+    await user.keyboard("{Escape}");
     await user.click(screen.getByRole("button", { name: "产物操作：Saved artifact" }));
     await user.click(screen.getByRole("menuitem", { name: "阅读来源：Attention Is All You Need" }));
     expect(onOpenPaper).toHaveBeenCalledWith("paper-1");

@@ -1,7 +1,8 @@
+import { FilterPopover, OptionPicker } from "../../shared/ui/productPrimitives";
 import { SearchOptions } from "../search/SearchOptions";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { readingResourceCapabilities } from "../reading-library/readingResourceCapabilities";
-import { Button, Input, Select, Tooltip } from "@fluentui/react-components";
+import { Button, Input, Tooltip } from "@fluentui/react-components";
 import { AddRegular, ArrowLeftRegular, ArrowRightRegular, BookOpenRegular, DismissRegular, DocumentPdfRegular, DocumentTextRegular, SearchRegular } from "@fluentui/react-icons";
 import { ReadingCatalogDetails, type ReadingCatalogActions } from "./ReadingCatalogDetails";
 import { indexReadingCatalog, queryReadingCatalog, type ReadingCatalogFilters, type ReadingCatalogSort } from "./readingCatalogSearch";
@@ -77,26 +78,16 @@ export function ReadingLibraryCatalog({ entries, loading = false, message, onImp
       }}>导入文件</Button> : null}
     </header>
     <div className="reading-catalog-controls" role="search" aria-label="筛查阅读库">
-      <Input ref={searchInput} className="reading-catalog-search" aria-label="搜索文献与文件" placeholder="搜索标题、作者、DOI、摘要、标签或路径" contentBefore={<SearchRegular />} value={filters.query} onChange={(_, data) => updateFilter("query", data.value)} contentAfter={filters.query ? <Tooltip content="清空搜索" relationship="description"><Button appearance="transparent" size="small" icon={<DismissRegular />} aria-label="清空搜索" onClick={() => { updateFilter("query", ""); searchInput.current?.focus(); }} /></Tooltip> : undefined} />
+      <Input ref={searchInput} className="reading-catalog-search" aria-label="搜索文献与文件" placeholder="搜索文献与文件" contentBefore={<SearchRegular />} value={filters.query} onChange={(_, data) => updateFilter("query", data.value)} contentAfter={filters.query ? <Tooltip content="清空搜索" relationship="description"><Button appearance="transparent" size="small" icon={<DismissRegular />} aria-label="清空搜索" onClick={() => { updateFilter("query", ""); searchInput.current?.focus(); }} /></Tooltip> : undefined} />
       <SearchOptions query={filters.query} onChange={(value) => updateFilter("query", value)} tags={entries.flatMap((entry) => entry.tags ?? [])} />
-      <div className="reading-catalog-filters">
-        <Select aria-label="筛选文件格式" value={filters.format} onChange={(_, data) => updateFilter("format", data.value as ReadingCatalogFormat | "all")}>
-          <option value="all">全部格式</option>{Object.entries(readingCatalogFormatLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </Select>
-        <Select aria-label="筛选阅读状态" value={filters.status} onChange={(_, data) => updateFilter("status", data.value as ReadingCatalogStatus | "all")}>
-          <option value="all">全部阅读状态</option>{Object.entries(readingCatalogStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </Select>
-        <Select aria-label="筛选分类" value={filters.collection} onChange={(_, data) => updateFilter("collection", data.value)}>
-          <option value="">全部分类</option>{collections.map((value) => <option key={value} value={value}>{value}</option>)}
-        </Select>
-        <Select aria-label="筛选发表年份" value={filters.year} onChange={(_, data) => updateFilter("year", data.value)}>
-          <option value="">全部年份</option>{years.map((value) => <option key={value} value={String(value)}>{value}</option>)}<option value="unknown">年份未提供</option>
-        </Select>
-        <Select aria-label="文件排序" value={filters.sort} onChange={(_, data) => updateFilter("sort", data.value as ReadingCatalogSort)}>
-          <option value="added">最近添加</option><option value="title">标题 A–Z</option><option value="author">作者 A–Z</option><option value="year-desc">发表时间：新到旧</option><option value="year-asc">发表时间：旧到新</option>
-        </Select>
-        {hasFilters ? <Button appearance="subtle" onClick={() => setFilters(defaultFilters)}>重置筛选</Button> : null}
-      </div>
+      <FilterPopover label="文件筛选" activeCount={[filters.format !== "all", filters.status !== "all", !!filters.collection, !!filters.year].filter(Boolean).length}>
+        <label>文件格式<OptionPicker aria-label="筛选文件格式" value={filters.format} onValueChange={value => updateFilter("format", value as ReadingCatalogFormat | "all")} options={[{ value: "all", label: "全部格式" }, ...Object.entries(readingCatalogFormatLabels).map(([value, label]) => ({ value, label }))]} /></label>
+        <label>阅读状态<OptionPicker aria-label="筛选阅读状态" value={filters.status} onValueChange={value => updateFilter("status", value as ReadingCatalogStatus | "all")} options={[{ value: "all", label: "全部阅读状态" }, ...Object.entries(readingCatalogStatusLabels).map(([value, label]) => ({ value, label }))]} /></label>
+        <label>分类<OptionPicker aria-label="筛选分类" value={filters.collection} onValueChange={value => updateFilter("collection", value)} options={[{ value: "", label: "全部分类" }, ...collections.map(value => ({ value, label: value }))]} /></label>
+        <label>发表年份<OptionPicker aria-label="筛选发表年份" value={filters.year} onValueChange={value => updateFilter("year", value)} options={[{ value: "", label: "全部年份" }, ...years.map(value => ({ value: String(value), label: String(value) })), { value: "unknown", label: "年份未提供" }]} /></label>
+      </FilterPopover>
+      <OptionPicker density="compact" aria-label="文件排序" value={filters.sort} onValueChange={value => updateFilter("sort", value as ReadingCatalogSort)} options={[{ value: "added", label: "最近添加" }, { value: "title", label: "标题 A–Z" }, { value: "author", label: "作者 A–Z" }, { value: "year-desc", label: "发表时间：新到旧" }, { value: "year-asc", label: "发表时间：旧到新" }]} />
+      {hasFilters ? <Button appearance="subtle" onClick={() => setFilters(defaultFilters)}>重置筛选</Button> : null}
     </div>
     <div className="reading-catalog-summary"><span aria-live="polite">{loading ? "正在读取文件库…" : `${results.length} / ${entries.length} 项`}</span><span>单击查看信息 · 双击或 Enter 阅读</span></div>
     {message || actionMessage ? <p className="reading-catalog-message" role="status">{actionMessage || message}</p> : null}

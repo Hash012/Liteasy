@@ -1,8 +1,10 @@
+import { DisclosureSection } from "../../../shared/ui/productPrimitives";
+import { OptionPicker } from "../../../shared/ui/productPrimitives";
 import { ActionButton as Button } from "../../../shared/ui/productPrimitives";
 import { ContentView } from "../../markdown/ContentView";
 import { legacyContent } from "../../markdown/contentFragment";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Select, Tooltip } from "@fluentui/react-components";
+import { Tooltip } from "@fluentui/react-components";
 import { ArrowLeft20Regular, ChevronDown16Regular, ChevronRight16Regular, Dismiss20Regular, DocumentSearch20Regular, Open20Regular, Info16Regular, CheckmarkCircle16Regular, Warning16Regular, SubtractCircle16Regular, DocumentText16Regular } from "@fluentui/react-icons";
 import { useUiTranslation } from "../../../shared/i18n/useUiTranslation";
 import { evidenceCounts, type ClaimAssessment, type EvidenceClaim, type EvidencePassage, type EvidenceReportV1 } from "../evidenceReport";
@@ -69,8 +71,8 @@ function VerificationDetails({ report, claim }: { report: EvidenceReportV1; clai
   const independentlyReviewed = records.some(record => record.origin === "independent_verifier" && record.status === "completed");
   const briefKey = timedOut ? "timeout" : failed ? "failed" : independentlyReviewed ? "reviewed" : "unverified";
   const brief = timedOut ? "检查超时 · 未核验" : failed ? "检查失败 · 未核验" : independentlyReviewed ? "查看核验记录" : "未进行独立语义核验";
-  return <details className="evidence-lens__checks">
-    <summary><Info16Regular aria-hidden="true" /><span>{t("evidence.verificationDetails", "核验说明")}</span><span>{t(`evidence.checkBrief.${briefKey}`, brief)}</span></summary>
+  return <DisclosureSection className="evidence-lens__checks" title={<><Info16Regular aria-hidden="true" /><span>{t("evidence.verificationDetails", "核验说明")}</span><span>{t(`evidence.checkBrief.${briefKey}`, brief)}</span></>}>
+
     <div className="evidence-lens__check-records">{records.length === 0 ? <p>{t("evidence.noVerifier", "尚无独立核验记录。引用存在不代表结论成立。")}</p> : records.map(record => <div key={record.id}>
       <span>{record.origin !== "independent_verifier" ? t("evidence.noSemanticReview", "未进行独立语义核验")
         : t(`evidence.checker.${record.checkerKind}`, record.checkerKind === "human" ? "人工核验" : record.checkerKind === "model" ? "独立模型核验" : "结构检查")}</span>
@@ -78,7 +80,7 @@ function VerificationDetails({ report, claim }: { report: EvidenceReportV1; clai
       {record.checkerIdentity ? <p>{record.checkerIdentity}</p> : null}
       {record.finding ? <p>{record.finding}</p> : null}
     </div>)}</div>
-  </details>;
+  </DisclosureSection>;
 }
 
 function PassageCard({ report, passage, claim, onOpenPassage, canOpenPassage, streaming }: LensProps & { passage: EvidencePassage; claim?: EvidenceClaim }) {
@@ -152,9 +154,7 @@ export function EvidenceInspector({ onBack, ...props }: LensProps & { onBack: ()
     <header><Button ref={backRef} appearance="subtle" size="small" icon={<ArrowLeft20Regular />} onClick={onBack}>{t("evidence.back", "返回证据摘要")}</Button>
       <strong>{t("evidence.inspectorTitle", "证据详情")}</strong></header>
     {props.report.claims.length > 0 ? <label className="evidence-lens__filter">{t("evidence.filter", "筛选论断")}
-      <Select size="small" aria-label={t("evidence.filter", "筛选论断")} value={filter} onChange={(_, data) => { setFilter(data.value as ClaimAssessment | "all"); setLimit(12); }}>
-        <option value="all">{t("evidence.all", "全部")}</option>{Object.entries(assessments).map(([status, label]) => <option key={status} value={status}>{t(`evidence.assessment.${status}`, label)}</option>)}
-      </Select></label> : null}
+      <OptionPicker density="compact" aria-label={t("evidence.filter", "筛选论断")} value={String(filter ?? "")} onValueChange={nextValue => { setFilter(nextValue as ClaimAssessment | "all"); setLimit(12); }} options={[{ value: String("all"), label: String(t("evidence.all", "全部")) }, ...(Object.entries(assessments).map(([status, label]) => ({ value: String(status), label: String(t(`evidence.assessment.${status}`, label)) })))]} /></label> : null}
     <div className="evidence-lens__inspector-body">
       {claims.slice(0, limit).map(claim => <section className="evidence-lens__claim-detail" key={claim.id}>
         <h4>{claim.text}</h4><AssessmentBadge status={props.streaming ? "unverified" : claim.assessment} />

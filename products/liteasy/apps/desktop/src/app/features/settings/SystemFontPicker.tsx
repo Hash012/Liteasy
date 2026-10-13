@@ -1,4 +1,4 @@
-import { ActionButton as Button } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, InfoPopover } from "../../shared/ui/productPrimitives";
 import { message } from "../../shared/i18n/i18n";
 import { useUiTranslation } from "../../shared/i18n/useUiTranslation";
 import { useEffect, useRef, useState } from "react";
@@ -43,10 +43,10 @@ export function SystemFontPicker({ label, value, options, onChange }: { label: s
       {matches.slice(0, 100).map((font) => <Option key={font.value} value={font.value} style={{ fontFamily: font.value }}>{font.label}</Option>)}
       {custom && !choices.some((font) => font.label === query.trim()) ? <Option text={message("view.fonts.use", { font: query.trim() })} value={fontFamilyCss(query.trim())}>{message("view.fonts.use", { font: query.trim() })}</Option> : null}
     </Combobox>
-    <details className="system-font-options"><summary>{message("view.fonts.manual")}</summary>
+    <InfoPopover label={message("view.fonts.manual")}>
     <Button size="small" appearance="subtle" disabled={busy} onClick={() => { cached = undefined; void load(); }}>{busy ? message("view.fonts.loading") : message("view.fonts.load")}</Button>
     {matches.length > 100 ? <small>{message("view.fonts.count", { count: fonts.length })}</small> : null}
+    </InfoPopover>
     {error ? <small role="status">{error}</small> : null}
-    </details>
   </div>;
 }

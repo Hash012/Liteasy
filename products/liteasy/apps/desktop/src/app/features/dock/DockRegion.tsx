@@ -1,3 +1,5 @@
+import { layoutTabs } from "./layoutTabs";
+import { SurfaceErrorBoundary, SurfaceRenderer } from "../../shared/ui/SurfaceErrorBoundary";
 import {
   Button,
   Menu,
@@ -165,12 +167,30 @@ export function DockRegion({
   const [dropActive, setDropActive] = useState(false);
   const regionElement = useRef<HTMLElement>(null);
   const tabStrip = useRef<HTMLDivElement>(null);
-  const [tabsOverflow, setTabsOverflow] = useState(false);
+  const [tabBudget, setTabBudget] = useState<ReturnType<typeof layoutTabs>>();
+  const tabsOverflow = Boolean(tabBudget?.overflowIds.length);
+  const tabWidths = new Map(tabBudget?.visible.map(tab => [tab.id, tab.width]));
   const tabSignature = JSON.stringify([layout.itemIds, itemTitles, dynamicTabs.map(({ id, title }) => [id, title])]);
   const selectedTabId = dynamicTabs.find((tab) => tab.selected)?.id ?? layout.activeItemId;
   function measureOverflow() {
     const strip = tabStrip.current;
-    setTabsOverflow(!!strip && strip.scrollWidth > strip.clientWidth + 1);
+    const row = strip?.parentElement;
+    if (!strip || !row || row.clientWidth === 0) return;
+    const actions = row.querySelector<HTMLElement>(".dock-region-actions");
+    const overflow = row.querySelector<HTMLElement>("[data-tab-overflow]");
+    const overflowWidth = overflow?.getBoundingClientRect().width ?? 0;
+    const utilityWidth = (actions?.getBoundingClientRect().width ?? 0) - overflowWidth + Math.max(44, overflowWidth);
+    const font = getComputedStyle(strip.querySelector(".dock-tab") ?? strip);
+    const measure = document.createElement("span");
+    measure.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;pointer-events:none";
+    measure.style.font = font.font;
+    row.appendChild(measure);
+    const entries = [...layout.itemIds.map(id => ({ id, title: itemTitles[id] ?? dockItemRegistry[id].title })), ...dynamicTabs];
+    const ratio = Math.max(1, parseFloat(font.fontSize) / 13 || 1);
+    const tabs = entries.map(tab => { measure.textContent = tab.title; return { id: tab.id, preferredWidth: Math.min(320 * ratio, measure.getBoundingClientRect().width + 64), minimumWidth: (tab.id === selectedTabId ? 120 : 88) * ratio }; });
+    measure.remove();
+    const budget = layoutTabs({ availableWidth: row.clientWidth - 10, utilityWidth, tabs, activeId: selectedTabId ?? undefined });
+    setTabBudget(previous => JSON.stringify(previous) === JSON.stringify(budget) ? previous : budget);
   }
   function revealTab(tab: HTMLElement | null) {
     const strip = tabStrip.current;
@@ -189,7 +209,9 @@ export function DockRegion({
     };
     update();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
-    observer?.observe(strip);
+    observer?.observe(strip.parentElement ?? strip);
+    const actions = strip.parentElement?.querySelector(".dock-region-actions");
+    if (actions) observer?.observe(actions);
     return () => observer?.disconnect();
   }, [selectedTabId, tabSignature]);
   useEffect(() => {
@@ -288,9 +310,12 @@ export function DockRegion({
     if (next < 0) return;
     event.preventDefault();
     tabOptions[next].activate();
-    const button = tabStrip.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next];
-    button?.focus({ preventScroll: true });
-    revealTab(button ?? null);
+    const focusTarget = () => {
+      const button = document.getElementById(`dock-tab-${regionId}-${tabOptions[next].id}`);
+      button?.focus({ preventScroll: true }); revealTab(button);
+      return Boolean(button);
+    };
+    if (!focusTarget()) requestAnimationFrame(focusTarget);
   }
 
   function handleDynamicTabKeyDown(
@@ -369,6 +394,7 @@ export function DockRegion({
               role="tablist"
             >
               {layout.itemIds.map((itemId) => {
+                if (tabBudget && !tabWidths.has(itemId)) return null;
                 const descriptor = { ...dockItemRegistry[itemId], title: itemTitles[itemId] ?? dockItemRegistry[itemId].title };
                 const active =
                   !activeDynamicTab && layout.activeItemId === itemId;
@@ -377,7 +403,7 @@ export function DockRegion({
                     ? `${descriptor.title} · 可拖动到其他区域`
                     : descriptor.title;
                 return (
-                  <div className={`dock-dynamic-tab has-close ${active ? "is-active" : ""}`} key={itemId}>
+                  <div className={`dock-dynamic-tab has-close ${active ? "is-active" : ""}`} key={itemId} style={tabWidths.has(itemId) ? { width: tabWidths.get(itemId), minWidth: 0, maxWidth: "none" } : undefined}>
                     <Tooltip
                       content={tooltipContent}
                       positioning="below"
@@ -424,8 +450,8 @@ export function DockRegion({
                   </div>
                 );
               })}
-              {dynamicTabs.map((tab) => (
-                <div className={`dock-dynamic-tab ${tab.onClose ? "has-close" : ""} ${tab.selected ? "is-active" : ""} ${tab.kind === "document" ? "is-document" : ""}`} key={tab.id}>
+              {dynamicTabs.filter(tab => !tabBudget || tabWidths.has(tab.id)).map((tab) => (
+                <div className={`dock-dynamic-tab ${tab.onClose ? "has-close" : ""} ${tab.selected ? "is-active" : ""} ${tab.kind === "document" ? "is-document" : ""}`} key={tab.id} style={tabWidths.has(tab.id) ? { width: tabWidths.get(tab.id), minWidth: 0, maxWidth: "none" } : undefined}>
                   <button
                     aria-selected={tab.selected}
                     className={`dock-tab ${tab.kind === "document" ? "dock-document-tab" : ""} ${tab.selected ? "active" : ""}`}
@@ -485,7 +511,7 @@ export function DockRegion({
               <Menu>
                 <MenuTrigger disableButtonEnhancement>
                   <Tooltip content="所有标签页" relationship="label">
-                    <Button appearance="subtle" size="small" aria-label={`${regionLabel}所有标签页`} icon={<ChevronDownRegular />} />
+                    <Button appearance="subtle" size="small" aria-label={`${regionLabel}所有标签页`} data-tab-overflow icon={<ChevronDownRegular />}>{tabBudget?.overflowIds.length}</Button>
                   </Tooltip>
                 </MenuTrigger>
                 <MenuPopover className="dock-tabs-menu">
@@ -561,11 +587,13 @@ export function DockRegion({
                   aria-labelledby={`dock-tab-${regionId}-${itemId}`}
                   className="dock-item-host"
                   data-tour-page={itemId}
+                  data-error-surface={itemId}
+                  data-error-instance={`${regionId}:${itemId}`}
                   hidden={!active}
                   key={itemId}
                   role="tabpanel"
                 >
-                  {renderItem(itemId, regionId)}
+                  <SurfaceErrorBoundary surface={itemId} instance={`${regionId}:${itemId}`} onClose={() => onCloseItem(itemId)}><SurfaceRenderer render={() => renderItem(itemId, regionId)} /></SurfaceErrorBoundary>
                 </div>
               );
             })}
@@ -574,10 +602,12 @@ export function DockRegion({
                 aria-labelledby={`dock-tab-${regionId}-${tab.id}`}
                 className="dock-item-host"
                 hidden={!tab.selected}
+                data-error-surface={tab.kind ?? "document"}
+                data-error-instance={`${regionId}:${tab.id}`}
                 key={tab.id}
                 role="tabpanel"
               >
-                {tab.kind === "document" && !tab.selected ? null : tab.render()}
+                <SurfaceErrorBoundary surface={tab.kind ?? "document"} instance={`${regionId}:${tab.id}`} onClose={tab.onClose}><SurfaceRenderer render={() => tab.kind === "document" && !tab.selected ? null : tab.render()} /></SurfaceErrorBoundary>
               </div>
             ))}
           </>

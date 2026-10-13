@@ -25,7 +25,8 @@ test("AI guide uses real PDF geometry, persists, and shares clickable dashed exp
   const dialog = page.getByRole("dialog", { name: "AI 标注", exact: true });
   await dialog.getByRole("button", { name: "讲解重点", exact: false }).click();
   await expect(dialog.getByRole("textbox", { name: "本次系统提示词" })).toHaveCount(0);
-  await dialog.getByRole("combobox", { name: "生成风格" }).selectOption("intuitive");
+  await dialog.getByRole("combobox", { name: "生成风格" }).click();
+  await page.getByRole("option", { name: "直觉", exact: true }).click();
   await dialog.getByRole("button", { name: "自定义系统提示词", exact: true }).click();
   await expect(dialog.getByRole("textbox", { name: "本次系统提示词" })).toHaveValue(/先建立直观理解/);
   await dialog.getByRole("textbox", { name: "本次系统提示词" }).fill("请关注字形定位的误差来源。");

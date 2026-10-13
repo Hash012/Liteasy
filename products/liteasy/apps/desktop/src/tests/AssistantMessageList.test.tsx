@@ -83,7 +83,8 @@ describe("AssistantMessageList", () => {
     expect(screen.queryByText(/paper-1/)).not.toBeInTheDocument();
     expect(screen.queryByText(/审计评分|0.91|审计模型/)).not.toBeInTheDocument();
     expect(screen.getByText("未逐条核验")).toBeInTheDocument();
-    expect(screen.getByText(/使用模型：/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "生成信息" }));
+  expect(screen.getByText(/使用模型：/)).toBeInTheDocument();
   });
 
   test("uses compact unlabelled conversation rows and keeps message actions outside their content", () => {

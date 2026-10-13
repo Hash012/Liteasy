@@ -1,10 +1,11 @@
+import { artifactMetadataIssueCount, projectArtifactMetadata } from "./artifactMetadataProjection";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { AgentArtifactResult } from "./artifact.types";
 import { isArtifactResult, type ArtifactResultClient } from "./artifactResultClient";
 
 const key = "liteasy.local-agent-artifacts.v1";
 type Transport = {
-  list(): Promise<AgentArtifactResult[]>;
+  list(): Promise<unknown>;
   save(document: AgentArtifactResult): Promise<string>;
   delete(artifactId: string): Promise<void>;
 };
@@ -47,21 +48,35 @@ export function createLocalArtifactResultClient(transport?: Transport): Artifact
     save: (document) => invoke("save_local_agent_artifact", { document }),
     delete: (artifactId) => invoke("delete_local_agent_artifact", { artifactId })
   } : browserTransport());
+  let readStatus = { issueCount: 0, readOnly: false };
   return {
+    getReadStatus: () => ({ ...readStatus }),
     async list(signal) {
       signal?.throwIfAborted();
       const documents = await storage.list();
       signal?.throwIfAborted();
-      return documents.filter(isArtifactResult);
+      if (!Array.isArray(documents)) throw new Error("本地产物目录格式不可读；原始记录未修改。");
+      let issueCount = 0;
+      const projection = documents.flatMap((raw: unknown) => {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) { issueCount += 1; return []; }
+        const projected = projectArtifactMetadata(raw);
+        if (!isArtifactResult(projected)) { issueCount += 1; return []; }
+        issueCount += artifactMetadataIssueCount(projected);
+        return [projected];
+      });
+      readStatus = { issueCount, readOnly: issueCount > 0 };
+      return projection;
     },
     delete: storage.delete,
     async save(document, signal) {
       signal?.throwIfAborted();
+      if (artifactMetadataIssueCount(document) > 0) throw new Error("只读元数据投影不能覆盖原始产物。");
       if (!isArtifactResult(document)) throw new Error("产物格式无效，无法保存。");
       return storage.save(document);
     },
     async rename(artifactId, title) {
-      const document = (await storage.list()).find((item) => item.artifactId === artifactId);
+      const documents = await storage.list();
+      const document: unknown = Array.isArray(documents) ? documents.find((item) => item?.artifactId === artifactId) : undefined;
       if (!document || !isArtifactResult(document)) throw new Error("本地产物不存在或格式无效。");
       const renamed = { ...document, title };
       await storage.save(renamed);

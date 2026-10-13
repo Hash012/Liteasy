@@ -1,4 +1,4 @@
-import { ActionButton as Button } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, DisclosureSection } from "../../shared/ui/productPrimitives";
 import { Avatar, Badge, ProgressBar } from "@fluentui/react-components";
 import { BookOpenRegular, PeopleRegular, AlertRegular, StorageRegular } from "@fluentui/react-icons";
 import type { OrganizationSummary } from "./organization.types";
@@ -29,10 +29,10 @@ export function OrganizationOverview({ summary, onOpenSharedLibrary, onMarkNotif
       <p>{library.name}</p>
       <Button appearance="primary" size="small" icon={<BookOpenRegular />} disabled={!libraryReady || !onOpenSharedLibrary}
         onClick={() => onOpenSharedLibrary?.(summary)}>打开共享文献库</Button>
+      {!libraryReady || !onOpenSharedLibrary ? <p className="organization-muted">{library.status === "syncing" ? "文献库正在同步，请稍后再试。" : library.status === "unavailable" ? "文献库暂不可用，请刷新组织空间后重试。" : !library.documentCount ? "文献库暂无文献。" : "共享文献库入口尚未就绪。"}</p> : null}
     </section>
     <OrganizationAccessDetails snapshot={summary.accessSnapshot} />
-    <details className="organization-surface organization-disclosure">
-      <summary><PeopleRegular /><span>成员</span><span className="organization-count">{summary.memberCount}</span></summary>
+    <DisclosureSection className="organization-surface organization-disclosure" icon={<PeopleRegular />} title={<>成员<span className="organization-count">{summary.memberCount}</span></>}>
       <ul className="organization-member-list">
         {summary.members.map((member) => <li key={member.id}>
           <Avatar name={member.name} size={28} /><span>{member.name}</span>
@@ -40,9 +40,8 @@ export function OrganizationOverview({ summary, onOpenSharedLibrary, onMarkNotif
         </li>)}
       </ul>
       {!summary.members.length ? <p className="organization-muted">暂无成员信息</p> : null}
-    </details>
-    <details className="organization-surface organization-disclosure" open>
-      <summary><AlertRegular /><span>通知</span><span className="organization-count">{readNotificationIds ? (unreadCount ? `${unreadCount} 条未读` : "全部已读") : `${summary.notifications.length} 条`}</span></summary>
+    </DisclosureSection>
+    <DisclosureSection className="organization-surface organization-disclosure" defaultOpen icon={<AlertRegular />} title={<>通知<span className="organization-count">{readNotificationIds ? (unreadCount ? `${unreadCount} 条未读` : "全部已读") : `${summary.notifications.length} 条`}</span></>}>
       {onMarkNotificationsRead && summary.notifications.length ? <Button appearance="subtle" size="small" disabled={!unreadCount}
         onClick={() => onMarkNotificationsRead(summary)}>全部标记已读</Button> : null}
       <p className="organization-muted">已读状态仅保存在此设备；标记已读不会处理邀请或任务。</p>
@@ -55,7 +54,7 @@ export function OrganizationOverview({ summary, onOpenSharedLibrary, onMarkNotif
         </li>)}
       </ul>
       {!summary.notifications.length ? <p className="organization-muted">暂无通知</p> : null}
-    </details>
+    </DisclosureSection>
     <section className="organization-surface" aria-label="组织存储用量">
       <div className="organization-section-heading"><StorageRegular /><h3>存储空间</h3></div>
       <p>{summary.quota.storageUsedGb} {summary.quota.configured ? `/ ${summary.quota.storageLimitGb}` : ""} GB
@@ -64,10 +63,9 @@ export function OrganizationOverview({ summary, onOpenSharedLibrary, onMarkNotif
         value={Math.min(1, Math.max(0, summary.quota.storageUsedGb / summary.quota.storageLimitGb))} /> : null}
       {summary.quota.periodEndsAt ? <small className="organization-muted">到期 {summary.quota.periodEndsAt}</small> : null}
     </section>
-    {summary.taskSummary || summary.auditEvents.length ? <details className="organization-surface organization-disclosure">
-      <summary>近期活动</summary>
+    {summary.taskSummary || summary.auditEvents.length ? <DisclosureSection className="organization-surface organization-disclosure" title="近期活动">
       {summary.taskSummary ? <p>运行任务 {summary.taskSummary.running} 个 · 失败任务 {summary.taskSummary.failed} 个</p> : null}
       {summary.auditEvents.slice(0, 5).map((event) => <p key={event.id}>{event.actor} {event.description}</p>)}
-    </details> : null}
+    </DisclosureSection> : null}
   </div>;
 }

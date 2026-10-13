@@ -1,3 +1,5 @@
+import { DisclosureSection } from "../../shared/ui/productPrimitives";
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { ActionButton as Button, IconAction, ContextualActions } from "../../shared/ui/productPrimitives";
 import { DocumentExportDialog } from "../document-export/DocumentExportDialog";
 import { useDocumentExportPort } from "../document-export/documentExportPort";
@@ -9,7 +11,7 @@ import { NotesInlineEditor } from "./NotesInlineEditor";
 import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
 import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationButton";
 import { useEffect, useMemo, useState } from "react";
-import { MenuItemCheckbox, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Select, Tooltip,  } from "@fluentui/react-components";
+import { MenuItemCheckbox, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip,  } from "@fluentui/react-components";
 import {
   AddRegular,
   ArrowClockwiseRegular,
@@ -238,18 +240,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
                   .catch(() => undefined);
               }}
             >
-              <Select
-                aria-label="复制引用到目录"
-                value={destination}
-                onChange={(_, data) => setDestination(data.value)}
-              >
-                <option value={NOTES_ROOT}>Note</option>
-                {folders.map((item) => (
-                  <option key={item.folderId} value={item.folderId}>
-                    Note/{path(item)}
-                  </option>
-                ))}
-              </Select>
+              <OptionPicker aria-label="复制引用到目录" value={String(destination ?? "")} onValueChange={nextValue => setDestination(nextValue)} options={[{ value: String(NOTES_ROOT), label: String("Note") }, ...(folders.map((item) => ({ value: String(item.folderId), label: String(["Note/", path(item)].join(" ")) })))]} />
               <Button size="small" type="submit" icon={<CopyRegular />}>
                 复制引用
               </Button>
@@ -419,10 +410,10 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
                     : <ReferenceSourceContext.Provider value={liteasyPath(model.scopeId ?? "local", item.target)}>{preference.mode === "live" && item.editable && item.object?.kind === "content.note" ? <NotesInlineEditor key={item.key} item={item} model={model} path={liteasyPath(model.scopeId ?? "local", item.target)} /> : <ContentView content={legacyContent(item.text)} paperAnchors={item.paperAnchors ?? item.object?.paperAnchors} />}</ReferenceSourceContext.Provider>}
                   <PaperAnchorReferences anchors={item.paperAnchors ?? item.object?.paperAnchors ?? []} />
                   {quote && !item.text.includes(quote) && (
-                    <details>
-                      <summary>原文</summary>
+                    <DisclosureSection  title={<>原文</>}>
+
                       <blockquote><ContentView content={legacyContent(quote)} /></blockquote>
-                    </details>
+                    </DisclosureSection>
                   )}
                   <div className="notes-item-actions">
                     <IconButton

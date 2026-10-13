@@ -1,5 +1,6 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { useEffect, useRef, useState } from "react";
-import { Button, Field, Select, Spinner } from "@fluentui/react-components";
+import { Button, Field, Spinner } from "@fluentui/react-components";
 import * as pdfjs from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { ArtifactExportPayload } from "../artifacts/artifactExport.types";
@@ -84,7 +85,7 @@ export function ExportPdfPreview({ payload }: { payload: ArtifactExportPayload }
   }, [current, page, size, mode, zoom, geometryIdentity]);
   return <section className="export-pdf-preview" aria-label="实际 PDF 预览" aria-busy={!visible && !error}>
     <div className="export-preview-toolbar"><Button disabled={!current || page <= 1} onClick={() => setPage(value => value - 1)}>上一页</Button><span>第 {page} / {current?.document.numPages ?? 0} 页</span><Button disabled={!current || page >= current.document.numPages} onClick={() => setPage(value => value + 1)}>下一页</Button>
-      <Field label="预览缩放"><Select value={mode === "custom" ? String(zoom) : mode} onChange={event => { const value = event.target.value; if (/^\d+$/.test(value)) { setMode("custom"); setZoom(Number(value)); } else setMode(value as ExportPreviewMode); }}><option value="fit-page">适合整页</option><option value="fit-width">适合页宽</option><option value="actual-size">100%（纸张原尺寸，96 CSS px/in）</option>{[50, 75, 125, 150, 200, 300].map(value => <option key={value} value={value}>{value}%（相对纸张）</option>)}</Select></Field>
+      <Field label="预览缩放"><OptionPicker aria-label="预览缩放" value={mode === "custom" ? String(zoom) : mode} onValueChange={(value) => { if (/^\d+$/.test(value)) { setMode("custom"); setZoom(Number(value)); } else setMode(value as ExportPreviewMode); }} options={[{ value: "fit-page", label: "适合整页" }, { value: "fit-width", label: "适合页宽" }, { value: "actual-size", label: "100%（纸张原尺寸，96 CSS px/in）" }, ...[50, 75, 125, 150, 200, 300].map(value => ({ value: String(value), label: `${value}%（相对纸张）` }))]} /></Field>
     </div>
     <div className="export-preview-status">{error ? <p role="alert">{error}</p> : !visible ? <Spinner label={size.width > 0 && size.height > 0 ? "正在读取 PDF 页面…" : "等待预览区域显示…"} /> : null}
     {visible && limited ? <p role="status">为控制内存，当前预览分辨率已降低；保存的 PDF 字节不受影响。</p> : null}</div>

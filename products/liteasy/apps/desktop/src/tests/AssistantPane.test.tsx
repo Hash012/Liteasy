@@ -146,8 +146,8 @@ test.each([false, true])("creates a background thin-reading session without chan
     artifactSessionOpenRequest={{ requestId: "details-1", taskId: task.id }} />);
   await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("生成：薄读"));
   expect(screen.getAllByText(/正在规划薄读路径与证据范围/).length).toBeGreaterThan(0);
-  expect(screen.getByText("运行日志").closest("details")).not.toHaveAttribute("open");
-  await user.click(screen.getByText("运行日志"));
+  expect(screen.getByRole("button", { name: "运行详情" })).toHaveAttribute("aria-expanded", "false");
+  await user.click(screen.getByRole("button", { name: "运行详情" }));
   expect(screen.getByRole("button", { name: "中断薄读" })).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "查看 Agent 执行过程" }));
   await user.click(screen.getByRole("button", { name: "正文草稿" }));
@@ -605,7 +605,8 @@ test("queues a follow-up and interrupts at the next SDK tool boundary", async ()
   const thinkingRules = await screen.findByRole("region", { name: "思考规矩" });
   expect(within(thinkingRules).getByRole("combobox", { name: "生成风格" })).toBeInTheDocument();
   fireEvent.change(screen.getByRole("slider", { name: "思考深度" }), { target: { value: "2" } });
-  await user.selectOptions(screen.getByRole("combobox", { name: "生成风格" }), "deep");
+  await user.click(screen.getByRole("combobox", { name: "生成风格" }));
+  await user.click(screen.getByRole("option", { name: "深入" }));
   await user.keyboard("{Escape}");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
@@ -614,7 +615,8 @@ test("queues a follow-up and interrupts at the next SDK tool boundary", async ()
   expect(send).toHaveBeenCalledTimes(1);
 
   await user.click(screen.getByRole("button", { name: "调整思考深度：熟虑" }));
-  await user.selectOptions(await screen.findByRole("combobox", { name: "生成风格" }), "hint");
+  await user.click(screen.getByRole("combobox", { name: "生成风格" }));
+  await user.click(screen.getByRole("option", { name: "点拨" }));
   await user.keyboard("{Escape}");
   await user.type(composer, "准备撤回的第三条消息");
   await user.click(screen.getByRole("button", { name: "发送" }));
@@ -1137,6 +1139,7 @@ test("routes qa generation through the cloud-governed model gateway by default",
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(await screen.findByText(/云端回答：这篇综述如何定义向量数据库系统？/)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "生成信息" }));
   expect(screen.getByText(/使用模型：云端模型能力 -> 云端服务/)).toBeInTheDocument();
 });
 

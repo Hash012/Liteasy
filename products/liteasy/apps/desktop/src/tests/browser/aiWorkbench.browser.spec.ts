@@ -27,7 +27,8 @@ test("launches AI from the top bar with current, opened, and directory papers in
   await expect(dialog.getByRole("button", { name: "生成 PPT", exact: true })).toBeEnabled();
   await dialog.getByRole("button", { name: "生成 PPT", exact: true }).click();
   await expect(dialog.getByRole("textbox", { name: "本次系统提示词" })).toHaveCount(0);
-  await dialog.getByRole("combobox", { name: "生成风格" }).selectOption("concise");
+  await dialog.getByRole("combobox", { name: "生成风格" }).click();
+  await page.getByRole("option", { name: "精简", exact: true }).click();
   await dialog.getByRole("button", { name: "自定义系统提示词", exact: true }).click();
   await expect(dialog.getByRole("textbox", { name: "本次系统提示词" })).toHaveValue(/尽量少的文字/);
   await dialog.getByRole("button", { name: "自定义系统提示词", exact: true }).click();

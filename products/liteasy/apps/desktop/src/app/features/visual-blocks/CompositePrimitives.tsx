@@ -1,3 +1,4 @@
+import { DisclosureSection } from "../../shared/ui/productPrimitives";
 import { VisualPreviewContext } from "./visualPreviewContext";
 import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
@@ -81,7 +82,7 @@ function ResourceEditor({ path }: { path: string }) {
   return <ReferenceSourceContext.Provider value={path}><section className="extension-markdown-editor">
     <div className="extension-toolbar"><Button disabled={!assets || busy} onClick={() => void read()}>读取笔记</Button><Button disabled={!assets || !revision || !writable || busy || text === saved} onClick={() => void save()}>保存修改</Button></div>
     <MarkdownEditor documentKey={path} label="扩展中的 Markdown 笔记" value={text} readOnly={!writable} onChange={(value) => { setText(value); try { rememberDraft(path, value, revision); } catch (e) { setError(String(e)); } }} />
-    {preference.mode === "manual" ? <details><summary>预览</summary><RichTextBlock text={text} /></details> : null}
+    {preference.mode === "manual" ? <DisclosureSection title="预览"><RichTextBlock text={text} /></DisclosureSection> : null}
     <p role="status">{busy ? "正在保存或读取…" : error ? preference.mode === "live" ? "自动保存已暂停 · 草稿保留" : "未保存 · 草稿保留" : text !== saved && writable && preference.autosave && preference.mode === "live" ? "等待自动保存…" : message}</p>{error ? <p role="alert">{error}</p> : null}
   </section></ReferenceSourceContext.Provider>;
 }

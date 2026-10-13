@@ -8,6 +8,10 @@ import { GenerationPromptSettingsPanel } from "../app/features/settings/Generati
 import { createSettingsStore } from "../app/features/settings/settings.store";
 
 afterEach(() => localStorage.clear());
+function pick(label: string, option: string) {
+  fireEvent.click(screen.getByRole("combobox", { name: label }));
+  fireEvent.click(screen.getByRole("option", { name: option, exact: true }));
+}
 
 test("keeps prompt text collapsed, fills every preset, permits edits and restores the global prompt", () => {
   function Harness() {
@@ -18,21 +22,21 @@ test("keeps prompt text collapsed, fills every preset, permits edits and restore
   }
   render(<Harness />);
   expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-  fireEvent.change(screen.getByRole("combobox", { name: "生成风格" }), { target: { value: "deep" } });
+  pick("生成风格", "深入");
   expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "自定义系统提示词" }));
   const editor = screen.getByRole("textbox", { name: "本次系统提示词" });
   for (const style of generationPromptStyles) {
-    fireEvent.change(screen.getByRole("combobox", { name: "生成风格" }), { target: { value: style.id } });
+    pick("生成风格", style.label);
     expect(editor).toHaveValue(presetGenerationPrompt("thin_reading", style.id));
   }
   fireEvent.change(editor, { target: { value: "用直觉解释，并关注假设" } });
-  expect(screen.getByRole("combobox", { name: "生成风格" })).toHaveValue("custom");
+  expect(screen.getByRole("combobox", { name: "生成风格" })).toHaveTextContent("自定义");
   fireEvent.click(screen.getByRole("button", { name: "自定义系统提示词" }));
   expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "自定义系统提示词" }));
   expect(screen.getByRole("textbox")).toHaveValue("用直觉解释，并关注假设");
-  fireEvent.change(screen.getByRole("combobox", { name: "生成风格" }), { target: { value: "default" } });
+  pick("生成风格", "使用全局设置");
   expect(screen.getByRole("textbox")).toHaveValue("全局薄读偏好");
 });
 
@@ -45,14 +49,14 @@ test("saves per-task prompts across restarts and restores the built-in default",
     }} />;
   }
   render(<Harness />);
-  fireEvent.change(screen.getByRole("combobox", { name: "提示词用途" }), { target: { value: "thin_reading" } });
-  fireEvent.change(screen.getByRole("combobox", { name: "生成风格" }), { target: { value: "question" } });
+  pick("提示词用途", generationPromptTasks.thin_reading.label);
+  pick("生成风格", "提问");
   expect(createSettingsStore().getState()["ai.prompts.thin_reading"]).toBe(presetGenerationPrompt("thin_reading", "question"));
   expect(createSettingsStore().getState()["ai.prompts.selection_explanation"]).toBe(generationPromptTasks.selection_explanation.prompt);
   fireEvent.click(screen.getByRole("button", { name: "自定义系统提示词" }));
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "关注推理与证据" } });
   expect(createSettingsStore().getState()["ai.prompts.thin_reading"]).toBe("关注推理与证据");
-  fireEvent.change(screen.getByRole("combobox", { name: "生成风格" }), { target: { value: "default" } });
+  pick("生成风格", "内置默认");
   expect(createSettingsStore().getState()["ai.prompts.thin_reading"]).toBe(generationPromptTasks.thin_reading.prompt);
 });
 

@@ -1,7 +1,8 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { ExtensionMetadataSections } from "../extensions/ExtensionMetadata";
 import { useEffect, useState, type ReactNode } from "react";
-import { Field, Input, Select, Tooltip } from "@fluentui/react-components";
+import { Field, Input, Tooltip } from "@fluentui/react-components";
 import { ArrowDownloadRegular, CopyRegular, DeleteRegular, EditRegular, FolderOpenRegular, OpenRegular } from "@fluentui/react-icons";
 import { bibliographicFields } from "./bibliographicFields";
 import { assetTypeLabels } from "./libraryAssetMetadata";
@@ -120,9 +121,7 @@ export function ReadingCatalogDetails({ entry, ...actions }: { entry: ReadingCat
         <Input aria-label="文件标签" maxLength={1600} value={tags} disabled={busy || !actions.onMetadataChange} onChange={(_, data) => { setTags(data.value); setDirty(true); }} />
       </Field>
       <Field label="阅读状态">
-        <Select aria-label="文件阅读状态" value={status} disabled={busy || !actions.onMetadataChange} onChange={(_, data) => { setStatus(data.value as ReadingCatalogStatus); setDirty(true); }}>
-          {Object.entries(readingCatalogStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </Select>
+        <OptionPicker aria-label="文件阅读状态" value={String(status ?? "")} disabled={busy || !actions.onMetadataChange} onValueChange={nextValue => { setStatus(nextValue as ReadingCatalogStatus); setDirty(true); }} options={[...(Object.entries(readingCatalogStatusLabels).map(([value, label]) => ({ value: String(value), label: String(label) })))]} />
       </Field>
       {actions.onMetadataChange ? <Button disabled={!dirty || busy} onClick={() => void save()}>{busy ? "保存中…" : "保存整理信息"}</Button> : null}
     </section>

@@ -186,21 +186,26 @@
 }
 
 .artifact-library-saved-row {
-  grid-template-columns: minmax(0, 1fr) 32px 32px;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .artifact-library-toolbar, .artifact-library-filters { flex: 0 0 auto; }
 .artifact-library-filters { display: grid; gap: 8px; padding: 12px 10px 8px; }
 .artifact-library-filter-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
-.artifact-library-filters .fui-Select { min-width: 0; max-width: 100%; }
-.artifact-library-filters select { min-width: 0; width: 100%; text-overflow: ellipsis; }
 .artifact-library-filter-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; color: var(--colorNeutralForeground3); font-size: 12px; }
 .artifact-library-filter-summary > span { margin-right: auto; }
 .artifact-library-results { min-height: 0; overflow: auto; flex: 1; padding: 0 6px; }
 .artifact-library-group { min-width: 0; margin-bottom: 8px; }
-.artifact-library-group > details > summary { cursor: pointer; padding: 8px 4px; color: var(--colorNeutralForeground2); border-bottom: 1px solid var(--colorNeutralStroke2); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
-.artifact-library-group summary svg { vertical-align: middle; margin: 0 6px; }
-.artifact-library-group summary small { margin-left: 6px; color: var(--colorNeutralForeground3); }
+ .artifact-library-search-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.artifact-library-search-row .artifact-library-search { flex: 1; }
+.artifact-library-filter-options { display: grid; gap: 10px; min-width: 0; }
+.artifact-library-filter-options label { display: grid; gap: 4px; min-width: 0; }
+.artifact-library-group .fui-AccordionHeader { border-bottom: 1px solid var(--colorNeutralStroke2); }
+.artifact-library-group small { margin-inline-start: 6px; color: var(--colorNeutralForeground3); font-weight: 400; }
+.artifact-library-row-actions { display: flex; min-width: 32px; gap: 2px; }
+@media (pointer: coarse), (hover: none) {
+  .artifact-library-row-actions > .fui-Button { min-width: 44px; min-height: 44px; }
+}
 .artifact-library-source-links { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; grid-column: 1 / -1; padding: 0 4px 4px 24px; }
 .artifact-library-source-links button { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; padding: 2px 6px; border: 0; border-radius: 4px; background: var(--colorNeutralBackground3); color: var(--colorNeutralForeground2); font-size: 11px; cursor: pointer; }
 .artifact-library-source-links button:hover { color: var(--colorBrandForeground1); background: var(--colorBrandBackground2); }

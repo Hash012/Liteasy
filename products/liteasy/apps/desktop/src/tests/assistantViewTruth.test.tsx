@@ -1,3 +1,4 @@
+import userEvent from "@testing-library/user-event";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { AssistantSessionController } from "../app/controllers/assistant/AssistantSessionController";
@@ -99,7 +100,8 @@ test("A02-03 selecting either run of task A cannot project task B's events", asy
   await screen.findByRole("combobox", { name: "选择运行记录" });
   expect(screen.getByText("薄读未完成：A 的第 2 次诊断")).toBeInTheDocument();
   expect(screen.queryByText(/B 的第/)).not.toBeInTheDocument();
-  fireEvent.change(screen.getByRole("combobox", { name: "选择运行记录" }), { target: { value: "run-A-1" } });
+  await userEvent.click(screen.getByRole("combobox", { name: "选择运行记录" }));
+  await userEvent.click(screen.getByRole("option", { name: "第 1 次 · 失败" }));
   expect(screen.getByText("薄读未完成：A 的第 1 次诊断")).toBeInTheDocument();
   rendered.rerender(<AssistantSessionController {...props} artifactTasks={[{ ...tasks[0], message: "B 的迟到更新" }, ...tasks.slice(1)]} artifactSessionOpenRequest={{ requestId: "open-a", taskId: "A-2" }} />);
   expect(screen.getByText("薄读未完成：A 的第 1 次诊断")).toBeInTheDocument();
@@ -119,7 +121,9 @@ test("A02-05 a failed later run preserves the prior saved result and frozen refe
   await act(async () => {});
   rendered.rerender(wrap([{ ...first, id: "second", agentRunId: "run-2", status: "failed", stage: "failed", message: "新运行失败" }, first]));
   expect(await screen.findByText("本次失败 · 已保存结果可用")).toBeInTheDocument();
-  expect(screen.getByRole("combobox", { name: "选择运行记录" }).querySelectorAll("option")).toHaveLength(2);
+  await userEvent.click(screen.getByRole("combobox", { name: "选择运行记录" }));
+  expect(screen.getAllByRole("option")).toHaveLength(2);
+  await userEvent.keyboard("{Escape}");
   fireEvent.click(screen.getByRole("button", { name: "围绕此结果提问" }));
   await waitFor(() => expect(screen.getByPlaceholderText("输入你的问题或命令")).toBeInTheDocument());
   await waitFor(() => expect(active.mock.calls.at(-1)?.[0].resultRefs).toEqual([ref]));

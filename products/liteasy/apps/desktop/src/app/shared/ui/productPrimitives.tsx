@@ -1,6 +1,6 @@
-import { forwardRef, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Popover, PopoverSurface, Spinner, Textarea, Tooltip, type ButtonProps } from "@fluentui/react-components";
-import { DismissRegular } from "@fluentui/react-icons";
+import { forwardRef, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject, type ButtonHTMLAttributes, type KeyboardEvent } from "react";
+import { Accordion, AccordionItem, AccordionHeader, AccordionPanel, Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Dropdown, Option, Popover, PopoverTrigger, PopoverSurface, Spinner, Textarea, Tooltip, type ButtonProps } from "@fluentui/react-components";
+import { DismissRegular, FilterRegular, InfoRegular, TextBulletListLtrRegular } from "@fluentui/react-icons";
 import "./productPrimitives.css";
 
 export type ControlDensity = "compact" | "default";
@@ -23,7 +23,54 @@ export function GenerationComposer({ value, onChange, label = "补充指令（�
   return <Textarea className="product-generation-composer" aria-label={label} rows={2} resize="vertical" value={value} placeholder={placeholder} disabled={disabled} onKeyDown={event => { if (onSubmit && !disabled && !event.nativeEvent.isComposing && event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); onSubmit(); } }} onChange={(_, data) => onChange(data.value)} />;
 }
 export function ContextSummary({ children }: { children: ReactNode }) { return <div className="product-context-summary">{children}</div>; }
-export function SourceDisclosure({ summary, children }: { summary: ReactNode; children: ReactNode }) { return <details className="product-source-disclosure"><summary>{summary}</summary><div>{children}</div></details>; }
+/** Sections preserve their children while collapsed so drafts and task effects survive. */
+export function DisclosureSection({ title, children, icon = <TextBulletListLtrRegular />, open, defaultOpen = false, onOpenChange, headerButton, className = "" }: { title: ReactNode; children: ReactNode; icon?: ReactNode; open?: boolean; defaultOpen?: boolean; onOpenChange?: (open: boolean) => void; headerButton?: Pick<ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "aria-label">; className?: string }) {
+  const [expanded, setExpanded] = useState(defaultOpen);
+  const shown = open ?? expanded;
+  const id = useId();
+  return <Accordion collapsible className={`product-disclosure-section ${className}`} openItems={shown ? [id] : []} onToggle={(_, data) => { const next = data.openItems.includes(id); setExpanded(next); onOpenChange?.(next); }}><AccordionItem value={id}><AccordionHeader expandIconPosition="end" icon={icon ? { children: icon } : undefined} button={{ ...headerButton, "aria-controls": `${id}-panel` }}>{title}</AccordionHeader><div id={`${id}-panel`} hidden={!shown}><AccordionPanel collapseMotion={{ children: (Motion, props) => <Motion {...props} unmountOnExit={false} /> }}>{children}</AccordionPanel></div></AccordionItem></Accordion>;
+}
+/** Compatibility for existing semantic source sections; callers choose their actual use. */
+export function SourceDisclosure({ summary, children }: { summary: ReactNode; children: ReactNode }) { return <DisclosureSection title={summary}>{children}</DisclosureSection>; }
+function useLocalPopover() {
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  function escape(event: KeyboardEvent<HTMLElement>) {
+    if (!open || event.key !== "Escape") return;
+    // A child picker consumes its first Escape; keep that event inside this layer.
+    event.stopPropagation();
+    if (event.defaultPrevented) return;
+    event.preventDefault(); setOpen(false); trigger.current?.focus({ preventScroll: true });
+  }
+  function changeOpen(next: boolean, escapeKey: boolean) {
+    setOpen(next);
+    // Reading selection tools suppress mousedown focus to preserve the excerpt.
+    // Explicit focus gives a text-only popover a local keyboard dismissal target.
+    if (next || escapeKey) trigger.current?.focus({ preventScroll: true });
+  }
+  return { open, trigger, escape, changeOpen };
+}
+export function InfoPopover({ label, children }: { label: string; children: ReactNode }) {
+  const local = useLocalPopover();
+  return <Popover open={local.open} onOpenChange={(event, data) => local.changeOpen(data.open, "key" in event && event.key === "Escape")} positioning={{ position: "below", align: "start", autoSize: "always" }}><PopoverTrigger disableButtonEnhancement><IconAction ref={local.trigger} onKeyDown={local.escape} label={label} density="compact" appearance="subtle" icon={<InfoRegular />} /></PopoverTrigger><PopoverSurface className="product-info-popover" aria-label={label} onKeyDown={event => { if (event.key === "Escape") event.stopPropagation(); }}><div style={{ display: "contents" }} onKeyDown={local.escape}>{children}</div></PopoverSurface></Popover>;
+}
+export function FilterPopover({ label = "筛选", activeCount = 0, children }: { label?: string; activeCount?: number; children: ReactNode }) {
+  const local = useLocalPopover();
+  return <Popover open={local.open} onOpenChange={(event, data) => local.changeOpen(data.open, "key" in event && event.key === "Escape")} positioning={{ position: "below", align: "end", autoSize: "always" }}><PopoverTrigger disableButtonEnhancement><ActionButton ref={local.trigger} onKeyDown={local.escape} density="compact" appearance={activeCount ? "primary" : "subtle"} icon={<FilterRegular />} aria-label={label}>{label}{activeCount > 0 ? ` (${activeCount})` : ""}</ActionButton></PopoverTrigger><PopoverSurface className="product-filter-popover" aria-label={label} onKeyDown={event => { if (event.key === "Escape") event.stopPropagation(); }}><div style={{ display: "contents" }} onKeyDown={local.escape}>{children}</div></PopoverSurface></Popover>;
+}
+export type PickerOption = { value: string; label: string; description?: string; icon?: ReactNode; disabled?: boolean };
+export type OptionPickerProps = { value: string; onValueChange(value: string): void; options: readonly PickerOption[]; "aria-label"?: string; "aria-labelledby"?: string; "aria-describedby"?: string; id?: string; name?: string; form?: string; required?: boolean; disabled?: boolean; className?: string; density?: ControlDensity; placeholder?: string; autoFocus?: boolean; title?: string; onBlur?: () => void };
+/** Business values never depend on translated labels or Dropdown's event target. */
+export function OptionPicker({ value, onValueChange, options, "aria-label": label, "aria-labelledby": labelledBy, "aria-describedby": describedBy, id, name, form, required, disabled, className = "", density = "default", placeholder = "请选择", autoFocus, title, onBlur }: OptionPickerProps) {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const [invalid, setInvalid] = useState(false);
+  const errorId = useId();
+  useEffect(() => { if (value) setInvalid(false); }, [value]);
+  const selected = options.find(option => option.value === value);
+  return <span className={`product-option-picker-field ${className}`}><Dropdown id={id} title={title} button={{ ref: trigger, autoFocus }} className="product-option-picker" data-density={density} aria-label={label} aria-labelledby={labelledBy} aria-describedby={[describedBy, invalid ? errorId : undefined].filter(Boolean).join(" ") || undefined} aria-required={required} aria-invalid={invalid || undefined} disabled={disabled} value={selected?.label ?? value} selectedOptions={selected ? [value] : []} placeholder={placeholder} onBlur={onBlur} onOptionSelect={(_, data) => { if (data.optionValue !== undefined) { setInvalid(Boolean(required && !data.optionValue)); onValueChange(data.optionValue); } }} listbox={{ className: "product-option-listbox" }}>
+    {options.map(option => <Option key={option.value} value={option.value} data-option-value={option.value} text={option.label} disabled={option.disabled}>{option.icon}<span className="product-option-text">{option.label}{option.description ? <small>{option.description}</small> : null}</span></Option>)}
+  </Dropdown>{name ? <input type="hidden" name={name} form={form} value={value} disabled={disabled} /> : null}{required ? <input className="product-validation-proxy" tabIndex={-1} aria-label={label ? `${label}验证` : "选项验证"} value={value} onChange={() => {}} required disabled={disabled} form={form} onInvalid={event => { event.preventDefault(); setInvalid(true); trigger.current?.focus(); }} /> : null}{invalid ? <span id={errorId} role="alert" className="product-field-error">请选择一个选项。</span> : null}</span>;
+}
 export function InlineNotice({ intent = "info", message, action }: { intent?: "normal" | "info" | "warning" | "error" | "success" | "busy"; message: string; action?: ReactNode }) {
   return <div className="product-inline-notice" data-intent={intent} role={intent === "error" ? "alert" : "status"}>{intent === "busy" ? <Spinner size="tiny" /> : null}<span>{message}</span>{action}</div>;
 }

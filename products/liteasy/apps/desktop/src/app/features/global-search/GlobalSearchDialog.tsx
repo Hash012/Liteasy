@@ -1,7 +1,9 @@
+import { DisclosureSection } from "../../shared/ui/productPrimitives";
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { ContextualActions, IconAction } from "../../shared/ui/productPrimitives";
 import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
 import { useEffect, useRef } from "react";
-import { Button, Dialog, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Select, Spinner, Tooltip } from "@fluentui/react-components";
+import { Button, Dialog, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Spinner, Tooltip } from "@fluentui/react-components";
 import { ArrowClockwiseRegular, BookmarkAddRegular, DismissRegular, SearchRegular, DeleteRegular } from "@fluentui/react-icons";
 import type { GlobalSearchController } from "../../controllers/useGlobalSearchController";
 import { searchGroups, type SearchGroup } from "./globalSearch.types";
@@ -16,7 +18,7 @@ export function GlobalSearchDialog({ model }: { model: GlobalSearchController })
       <DialogContent className="global-search-content">
         <div className="global-search-tools">
           <Input ref={input} aria-label="搜索词或引号短语" placeholder={'搜索文献、笔记、批注… 支持 "完整短语"'} value={model.query} contentBefore={<SearchRegular />} onChange={(_, data) => model.setQuery(data.value)} />
-          <Select aria-label="搜索范围" value={model.group ?? "all"} onChange={(_, data) => model.setGroup(data.value === "all" ? undefined : data.value as SearchGroup)}><option value="all">全部内容</option>{Object.entries(searchGroups).map(([key, title]) => <option key={key} value={key}>{title}</option>)}</Select>
+          <OptionPicker aria-label="搜索范围" value={String(model.group ?? "all")} onValueChange={nextValue => model.setGroup(nextValue === "all" ? undefined : nextValue as SearchGroup)} options={[{ value: String("all"), label: String("\u5168\u90E8\u5185\u5BB9") }, ...(Object.entries(searchGroups).map(([key, title]) => ({ value: String(key), label: String(title) })))]} />
           <Tooltip content="刷新来源与索引" relationship="label"><Button icon={<ArrowClockwiseRegular />} aria-label="刷新来源与索引" onClick={model.refresh} disabled={model.busy} /></Tooltip>
           <Tooltip content="保存查询" relationship="label"><Button icon={<BookmarkAddRegular />} aria-label="保存查询" onClick={() => void model.saveQuery()} disabled={!model.query.trim()} /></Tooltip>
         </div>
@@ -25,7 +27,7 @@ export function GlobalSearchDialog({ model }: { model: GlobalSearchController })
         {model.error ? <p role="alert">{model.error}</p> : null}
         <div className="global-search-status" role="status">{model.busy ? <><Spinner size="tiny" /> 正在检索 · 已检查 {model.progress} 项 <Button size="small" appearance="subtle" onClick={model.cancel}>取消</Button></> : model.coverage ? <>{model.coverage.indexed} 项已索引{model.coverage.partial ? ` · ${model.coverage.partial} 项部分正文` : ""}{model.coverage.metadata ? ` · ${model.coverage.metadata} 项仅元信息` : ""}{model.coverage.failed ? ` · ${model.coverage.failed} 项读取失败` : ""}</> : "搜索仅使用当前工作区可访问的本地内容。"}</div>
         {model.coverage?.limited ? <p role="status">本次达到检索容量上限，仅覆盖已索引内容。</p> : null}
-        {model.coverage?.details.length ? <details className="global-search-coverage"><summary>查看索引覆盖情况</summary><ul>{model.coverage.details.map((item, index) => <li key={index}><strong>{item.title}</strong>：{item.detail}</li>)}</ul></details> : null}
+        {model.coverage?.details.length ? <DisclosureSection className="global-search-coverage" title={<>查看索引覆盖情况</>}><ul>{model.coverage.details.map((item, index) => <li key={index}><strong>{item.title}</strong>：{item.detail}</li>)}</ul></DisclosureSection> : null}
         <div className="global-search-results" aria-label="搜索结果">
           {Object.entries(searchGroups).map(([group, label]) => {
             const hits = model.hits.filter((hit) => hit.group === group);

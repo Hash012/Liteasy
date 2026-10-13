@@ -1,5 +1,6 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { useEffect, useRef, useState } from "react";
-import { Button, Input, Select } from "@fluentui/react-components";
+import { Button, Input } from "@fluentui/react-components";
 import { ArrowDownloadRegular } from "@fluentui/react-icons";
 import type { LocalLibrarySnapshot } from "../library/localLibrary.types";
 import { displayPath } from "../resource-filesystem/displayPath";
@@ -20,13 +21,7 @@ export function RecommendationDownload({ item, locations, onDownload }: {
   const [failed, setFailed] = useState(false);
   return <section className="recommendation-download" aria-label="保存推荐论文">
     {locations ? <>
-      <label>保存到<Select aria-label="论文保存目录" value={target} disabled={busy} onChange={(event) => { setTarget(event.target.value); setFolder(""); }}>
-        <option value="">文献库 / Download（默认）</option>
-        <option value={locations.rootPath}>文献库根目录</option>
-        {[...locations.folders].sort((a, b) => a.path.localeCompare(b.path)).map((entry) => <option value={entry.path} key={entry.path}>
-          {displayPath(entry.path).replace(displayPath(locations.rootPath).replace(/\/$/, "") + "/", "文献库 / ")}
-        </option>)}
-      </Select></label>
+      <label>保存到<OptionPicker aria-label="论文保存目录" value={String(target ?? "")} disabled={busy} onValueChange={nextValue => { setTarget(nextValue); setFolder(""); }} options={[{ value: String(""), label: String("\u6587\u732E\u5E93 / Download\uFF08\u9ED8\u8BA4\uFF09") }, { value: String(locations.rootPath), label: String("\u6587\u732E\u5E93\u6839\u76EE\u5F55") }, ...([...locations.folders].sort((a, b) => a.path.localeCompare(b.path)).map((entry) => ({ value: String(entry.path), label: String(displayPath(entry.path).replace(displayPath(locations.rootPath).replace(/\/$/, "") + "/", "文献库 / ")) })))]} /></label>
       {target ? <Input aria-label="新建论文保存子目录" placeholder="在所选目录下新建文件夹（可选）" value={folder} disabled={busy}
         onChange={(_, data) => setFolder(data.value)} /> : null}
     </> : null}

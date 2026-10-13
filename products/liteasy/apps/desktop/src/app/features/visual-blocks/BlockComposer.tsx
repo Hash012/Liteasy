@@ -1,7 +1,8 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { useExtensionWorkbench } from "../extensions/extensionWorkbenchContext";
 import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import { useEffect, useRef, useState } from "react";
-import { Button, Field, Input, Select, Textarea } from "@fluentui/react-components";
+import { Button, Field, Input, Textarea } from "@fluentui/react-components";
 import type { WorkbenchViewModel } from "../boards/ObjectWorkbench";
 import { refOf } from "../objects/object.types";
 import { projectBlockText } from "./blockRegistry";
@@ -30,7 +31,7 @@ export function BlockComposer({ model }: { model: WorkbenchViewModel }) {
     finally { setBusy(false); }
   }
   return <div className="block-composer">
-    <Field label="内容类型"><Select aria-label="内容类型" value={`${type.id}@${type.version}`} onChange={(_, next) => setTypeKey(next.value)}>{types.map((item) => <option key={`${item.id}@${item.version}`} value={`${item.id}@${item.version}`}>{item.title}</option>)}</Select></Field>
+    <Field label="内容类型"><OptionPicker aria-label="内容类型" value={`${type.id}@${type.version}`} onValueChange={setTypeKey} options={types.map((item) => ({ value: `${item.id}@${item.version}`, label: item.title }))} /></Field>
     <Field label="名称"><Input value={title} onChange={(_, next) => setTitle(next.value)} /></Field>
     <Field label="内容字段"><Textarea aria-label="组件内容字段" resize="vertical" value={data} onChange={(_, next) => setData(next.value)} /></Field>
     <small>所有类型继承字体、Markdown/公式、图片、拖放与上下文操作。</small>

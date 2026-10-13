@@ -1,3 +1,4 @@
+import { DisclosureSection } from "../../shared/ui/productPrimitives";
 import { useEffect, useRef, useState } from "react";
 import { Button, Field, Input, Switch } from "@fluentui/react-components";
 import { clearSemanticScope } from "../semantic-index/semanticIndexClient";
@@ -43,8 +44,8 @@ export function RecommendationIntelligenceSettings() {
     <Switch label="结合已确认的用户画像" checked={preferences.useProfile} onChange={(_, data) => save({ ...preferences, useProfile: data.checked })} />
     <Switch label="允许向外部服务发送笔记、批注和画像" checked={preferences.sendPrivateText} onChange={(_, data) => save({ ...preferences, sendPrivateText: data.checked })} />
     <p>关闭时，这些内容只在本机匹配；公开题录仍可用于联网检索。使用本机模型无需向外部发送。</p>
-    {(["embedding", "reranker"] as const).map((provider) => <details key={provider}>
-      <summary>{provider === "embedding" ? "语义检索服务" : "精细重排服务"}（可选）</summary>
+    {(["embedding", "reranker"] as const).map((provider) => <DisclosureSection key={provider} title={<>{provider === "embedding" ? "语义检索服务" : "精细重排服务"}（可选）</>}>
+
       <div className="recommendation-service-fields">
         <Field label={provider === "embedding" ? "向量 API 基础地址" : "重排 API 基础地址"}><Input value={draft[provider].endpoint} placeholder="https://example.com/v1" onChange={(_, data) => setDraft({ ...draft, [provider]: { ...draft[provider], endpoint: data.value, dimensions: undefined } })} /></Field>
         <Field label={provider === "embedding" ? "向量模型" : "重排模型"}><Input value={draft[provider].model} onChange={(_, data) => setDraft({ ...draft, [provider]: { ...draft[provider], model: data.value, dimensions: undefined } })} /></Field>
@@ -56,7 +57,7 @@ export function RecommendationIntelligenceSettings() {
             } catch (error) { setMessage(String(error)); }
           })(); }}>停用服务</Button></div>
       </div>
-    </details>)}
+    </DisclosureSection>)}
     {busy ? <Button appearance="subtle" onClick={() => { request.current?.abort(); setBusy(false); setMessage("服务检查已取消。"); }}>取消检查</Button> : null}
     <Button appearance="subtle" disabled={busy} onClick={() => { void (async () => {
       try {

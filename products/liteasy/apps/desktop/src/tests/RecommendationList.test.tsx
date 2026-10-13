@@ -1,3 +1,4 @@
+import { selectPickerValue } from "./helpers/selectPickerValue";
 import { useState } from "react";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -66,11 +67,11 @@ test("narrows recommendations by author, year and available full text without re
   expect(screen.queryByRole("button", { name: `查看推荐 ${item.title}` })).not.toBeInTheDocument();
   await user.clear(screen.getByRole("textbox", { name: "搜索推荐论文" }));
   await user.click(screen.getByRole("button", { name: "推荐筛选" }));
-  await user.selectOptions(screen.getByRole("combobox", { name: "推荐排序" }), "newest");
+  await selectPickerValue(screen.getByRole("combobox", { name: "推荐排序" }), "newest");
   expect(screen.getAllByRole("button", { name: /^查看推荐/ })[0]).toHaveAccessibleName("查看推荐 New memory systems");
   await user.click(screen.getByRole("checkbox", { name: "可下载 PDF" }));
   expect(await screen.findAllByRole("button", { name: /^查看推荐/ })).toHaveLength(1);
-  await user.selectOptions(screen.getByRole("combobox", { name: "推荐发表年份" }), "2024");
+  await selectPickerValue(screen.getByRole("combobox", { name: "推荐发表年份" }), "2024");
   expect(await screen.findByText(/暂未发现符合筛选条件的全文链接/)).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "清除筛选" }));
   expect(screen.getAllByRole("button", { name: /^查看推荐/ })).toHaveLength(2);
@@ -88,7 +89,7 @@ test("shows a readable paper page and saves to the chosen library directory", as
   const user = userEvent.setup();
   expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(item.title);
   expect(screen.getByRole("link", { name: "打开论文网站" })).toHaveAttribute("href", item.sourceUrl);
-  await user.selectOptions(screen.getByRole("combobox", { name: "论文保存目录" }), "D:/Library/Research");
+  await selectPickerValue(screen.getByRole("combobox", { name: "论文保存目录" }), "D:/Library/Research");
   await user.type(screen.getByRole("textbox", { name: "新建论文保存子目录" }), "Memory");
   await user.click(screen.getByRole("button", { name: "下载 PDF 并保存" }));
   expect(download).toHaveBeenCalledExactlyOnceWith(available, expect.objectContaining({ targetFolderPath: "D:/Library/Research", newFolderName: "Memory", signal: expect.any(AbortSignal), onProgress: expect.any(Function) }));

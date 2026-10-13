@@ -1,3 +1,4 @@
+import { projectArtifactExportRecords } from "./artifactExportProjection";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { downloadArtifactPayload } from "./artifactDocumentExport";
 import type {
@@ -121,9 +122,7 @@ export function createArtifactExportClient({
       export: async (payload) => (
         desktopInvoke("export_artifact_document", { input: payload }) as Promise<ArtifactExportOutcome>
       ),
-      list: async () => (
-        desktopInvoke("list_artifact_exports") as Promise<ArtifactExportRecord[]>
-      ),
+      list: async () => projectArtifactExportRecords(await desktopInvoke("list_artifact_exports")),
       open: async (recordId) => (
         desktopInvoke("open_artifact_export", { recordId }) as Promise<ArtifactExportRecord>
       ),

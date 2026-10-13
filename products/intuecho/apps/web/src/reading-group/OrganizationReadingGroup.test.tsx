@@ -298,8 +298,10 @@ test("personal reflection survives contribution success and switching packs with
   await user.click(screen.getByRole("button", { name: "确认提交" }));
   await screen.findByText("已保存到组织讨论。");
   expect(JSON.stringify(vi.mocked(communityApi.createReply).mock.calls[0])).not.toContain("MY_PRIVATE_REFLECTION");
-  await user.selectOptions(screen.getByRole("combobox", { name: "选择读书包" }), "pack_2");
-  await user.selectOptions(screen.getByRole("combobox", { name: "选择读书包" }), "pack_1");
+  await user.click(screen.getByRole("combobox", { name: "选择读书包" }));
+  await user.click(screen.getByRole("option", { name: "Another round" }));
+  await user.click(screen.getByRole("combobox", { name: "选择读书包" }));
+  await user.click(screen.getByRole("option", { name: "Synthetic reading pack" }));
   const { draftRecords } = await import("../communityPersistence");
   expect(draftRecords<{ reflection: string }>(owner, "reading-group:org_x:pack_1").some((draft) => draft.value.reflection === "MY_PRIVATE_REFLECTION")).toBe(true);
   view.unmount();

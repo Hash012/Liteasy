@@ -1,3 +1,4 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { displayBibliographicTitle } from "../metadata/displayBibliographicTitle";
 import { IconAction, SourceDisclosure } from "../../shared/ui/productPrimitives";
 import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
@@ -7,7 +8,7 @@ import { recommendationKeywords } from "./recommendationKeywords";
 import { useRecommendationFullText } from "./useRecommendationFullText";
 import type { PaperServiceConfig } from "../paper-services/paperServiceTransport";
 import { useMemo, useState } from "react";
-import { Button, Checkbox, Input, Select, Tooltip, Popover, PopoverTrigger, PopoverSurface } from "@fluentui/react-components";
+import { Button, Checkbox, Input, Tooltip, Popover, PopoverTrigger, PopoverSurface } from "@fluentui/react-components";
 import { BookmarkRegular, DeleteRegular, DocumentRegular, SearchRegular, FilterRegular, OpenRegular } from "@fluentui/react-icons";
 import type { RecommendationItem } from "./recommendation.types";
 import { filterRecommendations, recommendationDateLabel, type RecommendationSort } from "./recommendationPresentation";
@@ -44,8 +45,8 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
       <Popover open={filtersOpen} onOpenChange={(_, data) => setFiltersOpen(data.open)} positioning="below-end"><PopoverTrigger disableButtonEnhancement><Button size="small" icon={<FilterRegular />} aria-label="推荐筛选" aria-pressed={filterCount > 0}>筛选{filterCount ? ` · ${filterCount}` : ""}</Button></PopoverTrigger><PopoverSurface className="recommendation-filter-panel" aria-label="推荐筛选条件">
         <SearchOptions query={query} onChange={setQuery} tags={[...tags.values()].flatMap(items => items.map(tag => tag.label))} />
         <div className="recommendation-filter-row">
-          <Select aria-label="推荐排序" value={sort} onChange={event => setSort(event.target.value as RecommendationSort)}><option value="recommended">推荐顺序</option><option value="newest">最新发表</option><option value="citations">引用最多</option></Select>
-          <Select aria-label="推荐发表年份" value={year} onChange={event => setYear(event.target.value)}><option value="">全部年份</option>{years.map(value => <option key={value}>{value}</option>)}{year && !years.includes(year) ? <option value={year}>{year}</option> : null}</Select>
+          <OptionPicker aria-label="推荐排序" value={String(sort ?? "")} onValueChange={nextValue => setSort(nextValue as RecommendationSort)} options={[{ value: String("recommended"), label: String("\u63A8\u8350\u987A\u5E8F") }, { value: String("newest"), label: String("\u6700\u65B0\u53D1\u8868") }, { value: String("citations"), label: String("\u5F15\u7528\u6700\u591A") }]} />
+          <OptionPicker aria-label="推荐发表年份" value={String(year ?? "")} onValueChange={nextValue => setYear(nextValue)} options={[{ value: String(""), label: String("\u5168\u90E8\u5E74\u4EFD") }, ...(years.map(value => ({ value: String(value), label: String(value) }))), ...(year && !years.includes(year) ? [{ value: String(year), label: String(year) }] : [])]} />
         </div>
         <Checkbox label="可下载 PDF" checked={access} onChange={(_, data) => setAccess(data.checked === true)} />
         <Checkbox label="已收藏" checked={savedOnly} onChange={(_, data) => setSavedOnly(data.checked === true)} />

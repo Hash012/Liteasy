@@ -1,3 +1,4 @@
+import { artifactMetadataIssueCount, isArtifactPaperRef, projectArtifactMetadata } from "./artifactMetadataProjection";
 import type { AgentArtifactResult } from "./artifact.types";
 import { IntuitionGraphDocumentSchema } from "../intuition-graph/intuitionGraph.schema";
 import { getAccountSessionGeneration, loadStoredAccountSession } from "../account/accountSessionStorage";
@@ -50,7 +51,7 @@ export function isArtifactResult(value: unknown): value is AgentArtifactResult {
     typeof candidate.createdAt === "string" &&
     typeof candidate.title === "string" &&
     typeof candidate.answer === "string" &&
-    Array.isArray(candidate.papers) &&
+    Array.isArray(candidate.papers) && candidate.papers.every(isArtifactPaperRef) &&
     Array.isArray(candidate.citations) &&
     (candidate.mineruTextChunks === undefined || Array.isArray(candidate.mineruTextChunks)) &&
     (candidate.uiDsl === undefined || Boolean(candidate.uiDsl)) &&
@@ -64,7 +65,7 @@ export function createArtifactResultClient(input: {
   getAccessToken?: () => string | undefined;
   getBaseEndpoint: () => string;
   transport?: ArtifactResultTransport;
-}) {
+}): ArtifactResultClient {
   const transport = input.transport ?? fetch;
   const getAccessToken = input.getAccessToken ?? (() => loadStoredAccountSession()?.sessionId);
   function captureRequest() {
@@ -77,7 +78,9 @@ export function createArtifactResultClient(input: {
       }
     } };
   }
+  let listIssueCount = 0;
   return {
+    getReadStatus: () => ({ issueCount: listIssueCount, readOnly: listIssueCount > 0 }),
     async delete(artifactId: string) {
       const request = captureRequest();
       const response = await transport(
@@ -108,10 +111,20 @@ export function createArtifactResultClient(input: {
       if (!response.ok) {
         throw new Error(`加载 Agent 产物失败：HTTP ${response.status}`);
       }
-      const payload = await response.json() as { artifacts?: unknown[] };
+      const payload = await response.json() as { artifacts?: unknown };
       request.assertCurrent();
       signal?.throwIfAborted();
-      return (payload.artifacts ?? []).filter(isArtifactResult);
+      listIssueCount = 0;
+      if (!Array.isArray(payload?.artifacts)) {
+        throw new Error("产物目录格式不可读；原始记录未修改。");
+      }
+      return payload.artifacts.flatMap((raw: unknown) => {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) { listIssueCount += 1; return []; }
+        const projected = projectArtifactMetadata(raw);
+        if (!isArtifactResult(projected)) { listIssueCount += 1; return []; }
+        listIssueCount += artifactMetadataIssueCount(projected);
+        return [projected];
+      });
     },
 
     async rename(artifactId: string, title: string) {
@@ -135,6 +148,7 @@ export function createArtifactResultClient(input: {
     async save(document: AgentArtifactResult, signal?: AbortSignal) {
       const request = captureRequest();
       signal?.throwIfAborted();
+      if (artifactMetadataIssueCount(document) > 0) throw new Error("只读元数据投影不能覆盖原始产物。");
       if (!isArtifactResult(document)) throw new Error("产物格式无效，无法保存。");
       const response = await transport(endpoint(request.base), {
         body: JSON.stringify(document),
@@ -152,4 +166,10 @@ export function createArtifactResultClient(input: {
   };
 }
 
-export type ArtifactResultClient = ReturnType<typeof createArtifactResultClient>;
+export type ArtifactResultClient = {
+  delete: (artifactId: string) => Promise<void>;
+  list: (signal?: AbortSignal) => Promise<AgentArtifactResult[]>;
+  rename: (artifactId: string, title: string) => Promise<AgentArtifactResult>;
+  save: (document: AgentArtifactResult, signal?: AbortSignal) => Promise<string>;
+  getReadStatus?: () => { issueCount: number; readOnly: boolean };
+};

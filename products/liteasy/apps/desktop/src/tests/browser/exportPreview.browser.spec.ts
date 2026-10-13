@@ -26,7 +26,8 @@ for (const dpr of [1, 1.25, 1.5, 2]) test(`real PDF.js text and backing dimensio
     const canvas = page.getByLabel("本次实际生成的 PDF 页面"), text = page.getByLabel("第 1 页文字");
     await expect(text).toContainText("SOURCE_A_PAGE_1");
     for (const mode of ["fit-width", "actual-size", "200"]) {
-      await page.getByRole("combobox", { name: "预览缩放" }).selectOption(mode);
+      await page.getByRole("combobox", { name: "预览缩放" }).click();
+      await page.getByRole("option", { name: ({ "fit-width": "适合页宽", "actual-size": "100%（纸张原尺寸，96 CSS px/in）", "200": "200%（相对纸张）" } as Record<string, string>)[mode], exact: true }).click();
       await expect(page.getByRole("region", { name: "实际 PDF 预览" })).toHaveAttribute("aria-busy", "false");
       await expect(canvas).toBeVisible();
       await expect(text).toContainText("SOURCE_A_PAGE_1");
@@ -43,7 +44,8 @@ for (const dpr of [1, 1.25, 1.5, 2]) test(`real PDF.js text and backing dimensio
     await page.getByRole("button", { name: "下一页" }).click();
     await expect(page.getByLabel("第 2 页文字")).toContainText("SOURCE_A_PAGE_2");
     if (dpr === 2) {
-      await page.getByRole("combobox", { name: "预览缩放" }).selectOption("300");
+      await page.getByRole("combobox", { name: "预览缩放" }).click();
+      await page.getByRole("option", { name: "300%（相对纸张）", exact: true }).click();
       await expect(page.getByRole("status").filter({ hasText: "分辨率已降低" })).toBeVisible();
       expect(await canvas.evaluate(e => (e as HTMLCanvasElement).width * (e as HTMLCanvasElement).height)).toBeLessThanOrEqual(16 * 1024 * 1024);
     }

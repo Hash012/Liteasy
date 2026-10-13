@@ -1,3 +1,4 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { downloadExtensionJson } from "./ExtensionViews";
 import { useEffect, useState } from "react";
@@ -45,7 +46,7 @@ function ExtensionSettingsGroup({ pkg, id }: { pkg: ValidatedExtension; id: stri
     finally { setBusy(false); }
   }
   return <div>
-    <div className="extension-toolbar"><label>配置范围 <Select aria-label={`${pkg.manifest.name}配置范围`} disabled={dirty || busy} value={level} onChange={(_, data) => setLevel(data.value as ConfigurationLevel)}><option value="profile">当前用户配置</option><option value="global">全局默认</option></Select></label></div>
+    <div className="extension-toolbar"><label>配置范围 <OptionPicker aria-label={`${pkg.manifest.name}配置范围`} disabled={dirty || busy} value={level} onValueChange={(value) => setLevel(value as ConfigurationLevel)} options={[{ value: "profile", label: "当前用户配置" }, { value: "global", label: "全局默认" }]} /></label></div>
     {loaded ? <SchemaFields schema={schema} value={value} onChange={(value) => { setValue(value); setDirty(true); }} onValidityChange={setValid} /> : null}
     <p className="extension-settings-note">{Object.values(source).some((entry) => entry === "profile") ? "包含当前用户覆盖值" : "继承默认值"} · 来自 {pkg.manifest.name}</p>
     <div className="extension-toolbar"><Button appearance="primary" disabled={!loaded || busy || !valid} onClick={() => void save()}>应用设置</Button><Button disabled={!loaded || busy} onClick={() => void save(true)}>恢复继承</Button><Button onClick={() => void navigator.clipboard.writeText(`liteasy://extensions/${pkg.manifest.id}/settings/${id}`).catch((e) => setMessage(String(e)))}>复制设置链接</Button></div>

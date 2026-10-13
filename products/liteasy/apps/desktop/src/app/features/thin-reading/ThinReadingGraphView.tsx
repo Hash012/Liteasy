@@ -1,3 +1,4 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { Background, Controls, Handle, Position, ReactFlow, type Edge, type Node, type NodeChange, type NodeMouseHandler, type NodeProps } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation } from "d3-force";
@@ -153,9 +154,7 @@ export function ThinReadingGraphView({
           </div>
           <label className="thin-reading__graph-level">
             <span>显示层级</span>
-            <select aria-label="选择要聚焦的薄读层级" onChange={(event) => setSelectedLevel(Number(event.target.value))} value={normalizedLevel}>
-              {levels.map((level) => <option key={level} value={level}>第 {level + 1} 层</option>)}
-            </select>
+            <OptionPicker aria-label="选择要聚焦的薄读层级" onValueChange={nextValue => setSelectedLevel(Number(nextValue))} value={String(normalizedLevel ?? "")} options={[...(levels.map((level) => ({ value: String(level), label: String(["\u7B2C", level + 1, "\u5C42"].join(" ")) })))]} />
           </label>
           {onOpenInTab ? <button className="thin-reading__graph-expand" onClick={onOpenInTab} type="button">放大查看</button> : null}
           {onClose ? <button className="thin-reading__graph-expand" onClick={onClose} type="button">收起结构图</button> : null}

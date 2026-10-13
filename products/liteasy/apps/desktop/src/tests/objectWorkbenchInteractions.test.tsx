@@ -316,7 +316,7 @@ test("annotation cards show their original quote once, start expanded and keep s
     />,
   );
   expect(screen.getByText("不可改动的论文原文")).toBeVisible();
-  expect(container.querySelector("details")).toHaveAttribute("open");
+  expect(screen.getByRole("button", { name: "展开或收起原文" })).toHaveAttribute("aria-expanded", "true");
   fireEvent.click(screen.getByLabelText("展开或收起原文"));
   expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   fireEvent.doubleClick(screen.getByRole("button", { name: "编辑摘录为笔记" }));
@@ -581,7 +581,8 @@ test("whiteboard questions use the selected prompt once and keep the editor coll
   fireEvent.click(screen.getByRole("button", { name: "白板对话", exact: true }));
   expect(screen.queryByRole("textbox", { name: "本次系统提示词" })).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole("textbox", { name: "针对所选内容提问" }), { target: { value: "解释这段笔记" } });
-  fireEvent.change(screen.getByRole("combobox", { name: "生成风格" }), { target: { value: "hint" } });
+  fireEvent.click(screen.getByRole("combobox", { name: "生成风格" }));
+  fireEvent.click(screen.getByRole("option", { name: "点拨" }));
   fireEvent.click(screen.getByRole("button", { name: "自定义系统提示词", exact: true }));
   fireEvent.change(screen.getByRole("textbox", { name: "本次系统提示词" }), { target: { value: "只给一个提示。" } });
   fireEvent.click(screen.getByRole("button", { name: "提问", exact: true }));

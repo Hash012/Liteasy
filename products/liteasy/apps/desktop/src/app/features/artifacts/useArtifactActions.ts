@@ -1,3 +1,4 @@
+import { artifactMetadataIssueCount, projectArtifactMetadata } from "./artifactMetadataProjection";
 import { artifactPromptTask, getGenerationPrompt } from "../ai-prompts/generationPrompts";
 import { getAccountSessionGeneration } from "../account/accountSessionStorage";
 import { createArtifactResourceService, artifactResourceScope } from "../resource-filesystem/artifactResourceProvider";
@@ -1160,7 +1161,7 @@ export function useArtifactActions({
     const existing = artifactStore
       .getCatalog()
       .find((tab) => tab.artifactId === request.artifactId);
-    if (!existing || existing.type === "skill_doc") {
+    if (!existing || existing.type === "skill_doc" || artifactMetadataIssueCount(existing) > 0) {
       const message = "找不到可重新生成的论文分析产物。";
       onAnalysisHint(message);
       return message;
@@ -1250,6 +1251,12 @@ export function useArtifactActions({
   }
 
   function openArtifact(artifactId: string) {
+    const entry = artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId);
+    if (entry && artifactMetadataIssueCount(entry) > 0) {
+      const message = "此产物的来源元数据不可读，已保留原始记录；暂时仅显示目录信息。";
+      onAnalysisHint(message);
+      return message;
+    }
     const opened = artifactStore.openCatalogEntry(artifactId);
     if (!opened) {
       const message = "找不到已保存的多模态产物。";
@@ -1260,7 +1267,14 @@ export function useArtifactActions({
     return "已打开保存的多模态产物。";
   }
 
-  function restoreArtifactResult(result: Awaited<ReturnType<ArtifactResultClient["list"]>>[number]) {
+  function restoreArtifactResult(raw: Awaited<ReturnType<ArtifactResultClient["list"]>>[number], options: { commit?: boolean } = {}) {
+    const result = projectArtifactMetadata(raw);
+    if (artifactMetadataIssueCount(result) > 0) {
+      const tab: ArtifactTab = { artifactId: result.artifactId, title: result.title, type: result.artifactType,
+        createdAt: result.createdAt, papers: result.papers };
+      if (options.commit !== false) { artifactStore.upsertCatalogEntry(tab); syncArtifacts(); }
+      return tab;
+    }
     const outlineNodes = result.outlineNodes ?? (result.analysis
       ? buildArtifactOutline({
           analysis: result.analysis,
@@ -1281,7 +1295,7 @@ export function useArtifactActions({
           title: result.title
         })
       : result.uiDsl;
-    artifactStore.upsertCatalogEntry({
+    const tab: ArtifactTab = {
       agentRunId: result.agent.runId,
       analysis: result.analysis,
       answer: result.answer,
@@ -1306,8 +1320,9 @@ export function useArtifactActions({
       supplementalContext: result.supplementalContext,
       uiDsl,
       verification: result.verification
-    });
-    syncArtifacts();
+    };
+    if (options.commit !== false) { artifactStore.upsertCatalogEntry(tab); syncArtifacts(); }
+    return tab;
   }
 
   function openSkillDocument(entry: AgentCoreCatalogEntry) {

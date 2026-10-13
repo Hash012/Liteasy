@@ -1,3 +1,4 @@
+import { DisclosureSection } from "../../shared/ui/productPrimitives";
 import { ReferenceSourceContext } from "../resource-links/ResourceReferencesContext";
 import { AssetImage } from "../visual-blocks/AssetImage";
 import { liteasyPath } from "../resource-filesystem/liteasyPath";
@@ -139,15 +140,9 @@ export function ObjectSurface({
         ) : null)}
       {object.lifecycle !== "tombstoned" ? <PaperAnchorReferences anchors={object.paperAnchors ?? []} /> : null}
       {sourceText ? (
-        <details className="object-source-quote" open>
-          <summary
-            aria-label="展开或收起原文"
-            onClick={(event) => event.stopPropagation()}
-          >
-            原文
-          </summary>
+        <DisclosureSection className="object-source-quote" defaultOpen title="原文" headerButton={{ "aria-label": "展开或收起原文", onClick: event => event.stopPropagation() }}>
           <blockquote><ContentView content={legacyContent(sourceText)} /></blockquote>
-        </details>
+        </DisclosureSection>
       ) : null}
       {presentation !== "canvas" ? (
         <div className="object-toolbar">
@@ -305,14 +300,13 @@ export function ObjectDetails({
         ))
       )}
       {run ? (
-        <details>
-          <summary>执行记录</summary>
+        <DisclosureSection title="执行记录">
           <p>{run.question}</p>
           <p>
             {new Date(run.createdAt).toLocaleString()} ·{" "}
             {run.status === "completed" ? "已完成" : "未完成"}
           </p>
-        </details>
+        </DisclosureSection>
       ) : null}
       <p>修改记录</p>
       {history.map((version) => (

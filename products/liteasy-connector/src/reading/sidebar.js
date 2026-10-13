@@ -4,6 +4,11 @@
   'use strict';
   const $=id=>document.getElementById(id), N=CGRNotes;
   const uuid=()=>crypto.randomUUID();
+  $('source-toggle').onclick=()=>{
+    const expanded=$('source-toggle').getAttribute('aria-expanded')!=='true';
+    $('source-toggle').setAttribute('aria-expanded',String(expanded));
+    $('source-panel').hidden=!expanded;
+  };
   const preview=new CGRMarkdown.Preview($('preview'));
   let context=null, tabId=null, sourceFilter=null, lastContextNonce='';
   let current=null, mode='split', dirty=false, editToken='', draftId=uuid(), durableToken='';

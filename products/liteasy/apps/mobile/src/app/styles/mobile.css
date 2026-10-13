@@ -125,3 +125,13 @@ h1 { font-size: 22px; color: #242424; }
   .library-document { overflow: auto; padding: 0 8px env(safe-area-inset-bottom); }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+
+/* Native selects retain the mobile OS picker and labelled Field semantics. */
+.tasks-view .fui-Select { min-width: 0; max-width: 100%; border-radius: 6px; }
+.tasks-view .fui-Select select { min-height: 44px; min-width: 0; width: 100%; font-weight: 400; }
+.tasks-view .fui-Button, .tasks-view .fui-Input { min-height: 44px; }
+.tasks-view .task-create, .tasks-view .task-pair { min-width: 0; }
+.tasks-view li { overflow-wrap: anywhere; }
+
+/* Library facets also use the mobile system popup; values stay controlled. */
+.library-filters select { min-height: 44px; border-radius: 6px; min-width: 0; max-width: 100%; font-weight: 400; }

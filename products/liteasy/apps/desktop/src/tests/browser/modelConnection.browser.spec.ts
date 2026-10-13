@@ -27,7 +27,9 @@ test("configures a personal API and generates a chat answer without signing in",
   });
   await page.goto("/");
   await page.getByRole("button", { name: "设置", exact: true }).click();
-  await page.getByLabel("AI 接入方式").selectOption("direct");
+  await page.getByRole("button", { name: "AI 与助手", exact: true }).click();
+  await page.getByLabel("AI 接入方式").click();
+  await page.getByRole("option", { name: /^自备 API key/ }).click();
   await page.getByLabel("模型 ID", { exact: true }).fill("gpt-5-mini");
   await page.getByLabel("API key", { exact: true }).fill("browser-test-only-key");
   await page.getByRole("button", { name: "保存并测试", exact: true }).click();
@@ -50,7 +52,8 @@ test("configures a personal API and generates a chat answer without signing in",
   await expect(page.getByPlaceholder("输入你的问题或命令")).toHaveValue("请继续解释论文方法");
   expect(modelRequests).toHaveLength(requestCount);
   await page.getByRole("button", { name: "设置", exact: true }).click();
-  await expect(page.getByLabel("AI 接入方式")).toHaveValue("direct");
+  await page.getByRole("button", { name: "AI 与助手", exact: true }).click();
+  await expect(page.getByLabel("AI 接入方式")).toHaveText("自备 API key");
   await expect(page.getByRole("dialog", { name: "轻量登录面板" })).toHaveCount(0);
   await page.getByRole("button", { name: "保存并测试", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("请填写 API key");
@@ -88,8 +91,11 @@ test("composer expands thinking control and switches between separately verified
   await expect(slider).toHaveCount(0);
   await expect(page.getByRole("button", { name: "调整思考深度：快速" })).toBeVisible();
   await page.getByRole("button", { name: "设置", exact: true }).click();
-  await page.getByLabel("AI 接入方式").selectOption("direct");
-  await page.getByLabel("API 服务商").selectOption("custom");
+  await page.getByRole("button", { name: "AI 与助手", exact: true }).click();
+  await page.getByLabel("AI 接入方式").click();
+  await page.getByRole("option", { name: /^自备 API key/ }).click();
+  await page.getByLabel("API 服务商").click();
+  await page.getByRole("option", { name: /^自定义/ }).click();
   for (const name of ["fast", "careful"]) {
     await page.getByLabel("API 基础地址").fill(`https://${name}.example.test/v1`);
     await page.getByLabel("模型 ID", { exact: true }).fill(`research-${name}`);

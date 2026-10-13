@@ -1,4 +1,4 @@
-import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle } from "@fluentui/react-components";
+import { Button, Popover, PopoverTrigger, PopoverSurface, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle } from "@fluentui/react-components";
 import { useEffect, useRef, useState } from "react";
 import { communityApi } from "./communityApi";
 import { CommunityRequestError, recoverCommand } from "./communityCommands";
@@ -110,7 +110,7 @@ export function CommunityOperationCenter({ owner, accountName, onRestoreOperatio
     {!records.length && <p>暂无社区发送记录。</p>}
     {records.map((record) => <article className="annotation-card" key={record.operationId}>
       <strong>{record.operationType === "create_reply" ? "回复" : "批注或读书包"} · {labels[record.state]}</strong>
-      <details className="operation-identifier"><summary>操作标识</summary><code>{record.operationId}</code></details>
+      <Popover positioning="below"><PopoverTrigger disableButtonEnhancement><Button appearance="subtle">操作标识</Button></PopoverTrigger><PopoverSurface aria-label="操作标识"><code>{record.operationId}</code></PopoverSurface></Popover>
       <div className="operation-actions">
         {(record.state === "outcome_unknown" || record.state === "prepared") && <Button disabled={Boolean(pending)} onClick={() => void check(record)}>{pending === record.operationId ? "正在核实" : "核实原操作（只读）"}</Button>}
         {record.payload && onRestoreOperation && <Button disabled={Boolean(pending)} onClick={() => setRestore(record)}>打开原稿</Button>}

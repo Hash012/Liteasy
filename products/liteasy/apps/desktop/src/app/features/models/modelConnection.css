@@ -14,8 +14,8 @@
 }
 .model-connection-description { color: var(--colorNeutralForeground2, #616161); }
 .model-connection-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.model-connection-panel details > summary { cursor: pointer; margin-bottom: 8px; }
-.model-connection-panel details > div + div { margin-top: 8px; }
+
+.model-connection-panel .product-disclosure-section .workbench-setting-row + .workbench-setting-row { margin-top: 8px; }
 .model-connection-panel input { min-width: 0; }
 
 .model-provider-docs {

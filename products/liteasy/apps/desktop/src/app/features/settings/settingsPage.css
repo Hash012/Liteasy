@@ -28,8 +28,8 @@
   background: var(--colorNeutralBackground1);
 }
 
-.settings-page h1 { margin: 0; font-size: 24px; font-weight: 600; line-height: 1.4; }
-.settings-page h2 { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.5; }
+.settings-page h1 { margin: 0; font-size: var(--fontSizeBase400); font-weight: 600; line-height: 1.4; }
+.settings-page h2 { margin: 0; font-size: var(--fontSizeBase400); font-weight: 600; line-height: 1.5; }
 .settings-page p { margin: 0; line-height: 1.6; overflow-wrap: anywhere; }
 .settings-page-header p { margin-top: 4px; color: var(--colorNeutralForeground3); font-size: 12px; }
 .settings-page .settings-search { flex: 1; min-width: 220px; max-width: 440px; margin-left: auto; }
@@ -45,14 +45,19 @@
 .settings-card-header { padding: 16px 0; border-bottom: 1px solid var(--colorNeutralStroke2); }
 .settings-card-header p { margin-top: 4px; font-size: 12px; color: var(--colorNeutralForeground3); }
 .settings-card-content { padding: 12px 0 24px; }
-.settings-card-content > * { max-width: 820px; }
+.settings-card-content > * { min-width: 0; }
+.settings-card-header > h2 { display: inline; }
+.settings-card-header > .product-icon-action { margin-inline-start: 4px; vertical-align: middle; }
+.settings-card-content .fui-Field > .fui-Input,
+.settings-card-content .fui-Field > .fui-Combobox,
+.settings-card-content .fui-Field > .product-option-picker-field { width: 100%; max-width: 20rem; }
 .settings-card-content p { font-size: 12px; color: var(--colorNeutralForeground2); }
 .settings-card-content .sidebar-section-content { display: flex; flex-direction: column; align-items: stretch; gap: 12px; padding: 0; }
 .settings-card-content .sidebar-section-content > button { align-self: flex-start; }
 .settings-card-content .model-policy-card { margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
 .settings-page .model-provider-docs { color: var(--colorBrandForegroundLink); font-size: 12px; font-weight: 400; }
 .settings-details { border-top: 1px solid var(--colorNeutralStroke2); padding-top: 12px; }
-.settings-page summary { cursor: pointer; color: var(--colorNeutralForeground2); font-size: 12px; font-weight: 600; padding: 4px 0; }
+
 .settings-details > .agent-settings-section { margin-top: 16px; }
 .settings-policy-list { margin: 8px 0 0; padding-left: 20px; font-size: 12px; line-height: 1.8; color: var(--colorNeutralForeground2); }
 .settings-metadata-sync { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }

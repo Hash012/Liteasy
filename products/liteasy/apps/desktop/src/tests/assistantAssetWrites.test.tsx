@@ -29,7 +29,8 @@ test("opens a saved asset from its actual write receipt", async () => {
 test("keeps existing custom context limits selectable and saves a new budget", async () => {
   const update = vi.fn();
   render(<AgentSettingsPanel settings={{ "assistant.context_window": "48000" }} onUpdateSetting={update} />);
-  expect(screen.getByRole("combobox", { name: "Agent 上下文上限" })).toHaveValue("48000");
-  await userEvent.setup().selectOptions(screen.getByRole("combobox", { name: "Agent 上下文上限" }), "65536");
+  expect(screen.getByRole("combobox", { name: "Agent 上下文上限" })).toHaveTextContent("48,000 tokens");
+  await userEvent.click(screen.getByRole("combobox", { name: "Agent 上下文上限" }));
+  await userEvent.click(screen.getByRole("option", { name: "65,536 tokens" }));
   expect(update).toHaveBeenCalledWith({ intent: "update_setting", target: "assistant.context_window", value: "65536" });
 });

@@ -41,9 +41,10 @@ test("reading preferences are optional and persist without changing legacy or ot
   const onSave = vi.fn((profile) => saveAcademicProfile(profile, "user:reader"));
   render(<AcademicProfileForm academicProfile={defaultAcademicProfile} onSave={onSave} />);
   const summary = screen.getByText("阅读讲解（可选）");
-  expect(summary.closest("details")).not.toHaveAttribute("open");
+  expect(screen.getByRole("button", { name: "阅读讲解（可选）" })).toHaveAttribute("aria-expanded", "false");
   await user.click(summary);
-  await user.selectOptions(screen.getByLabelText("自动标注的讲解深度"), "advanced");
+  await user.click(screen.getByRole("combobox", { name: "自动标注的讲解深度" }));
+  await user.click(screen.getByRole("option", { name: "高阶 · 评析精妙之处" }));
   await user.type(screen.getByLabelText("领域熟悉度"), "熟悉数据库，机器学习刚入门");
   await user.click(screen.getByRole("button", { name: "保存学术档案" }));
   expect(loadAcademicProfile("user:reader")).toMatchObject({ readingExplanation: "advanced", researchFamiliarity: "熟悉数据库，机器学习刚入门" });

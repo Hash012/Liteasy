@@ -622,7 +622,7 @@ describe("ReaderPane", () => {
       />
     );
 
-    await user.click(screen.getByText("批注选项"));
+    await user.click(screen.getByRole("button", { name: "批注选项" }));
     const autoPublic = screen.getByRole("checkbox", { name: "新批注自动公开到论坛" });
     expect(autoPublic).not.toBeChecked();
     await user.click(autoPublic);

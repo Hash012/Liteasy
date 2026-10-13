@@ -1,4 +1,4 @@
-import { ActionButton as Button } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, DisclosureSection } from "../../shared/ui/productPrimitives";
 import { useEffect, useRef, useState } from "react";
 import { Checkbox } from "@fluentui/react-components";
 import { AlertRegular } from "@fluentui/react-icons";
@@ -43,14 +43,12 @@ function BoundInbox({ session, endpoint, generation, storageKey }: { session: Ac
     } catch (error) { if (current()) setStatus(error instanceof Error ? error.message : "组织动态暂不可用。"); }
     finally { if (current()) setBusy(false); }
   }
-  return <details className="organization-surface organization-disclosure">
-    <summary><AlertRegular /><span>我的组织动态</span></summary>
+  return <div><DisclosureSection className="organization-surface organization-disclosure" icon={<AlertRegular />} title="我的组织动态">
     <Checkbox label="查看我的权限与加入结果" checked={preference.enabled} onChange={(_, data) => { epoch.current += 1; setItems([]); setBusy(false); save({ ...preference, enabled: data.checked === true }); }} />
     <p>仅在你刷新时读取，已读记录保存在本机；不收集阅读活动。</p>
     {preference.enabled && <><Button disabled={busy} onClick={() => void refresh()}>刷新我的动态</Button>{items.map((item) => <div key={item.id}>
       <p>{item.available ? `${item.organizationName} · ${item.kind === "invitation_accepted" ? "加入结果已更新" : "成员权限已变化"}` : "相关组织当前不可访问。"}</p>
       {preference.read.includes(item.id) ? <span>已读</span> : <Button onClick={() => save({ ...preference, read: [...new Set([...preference.read, item.id])].slice(-100) })}>标为已读</Button>}
     </div>)}</>}
-    {status && <p role="status">{status}</p>}
-  </details>;
+  </DisclosureSection>{status && <p role="status">{status}</p>}</div>;
 }

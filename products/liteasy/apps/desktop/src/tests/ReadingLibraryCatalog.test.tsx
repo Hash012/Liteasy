@@ -1,3 +1,5 @@
+import userEvent from "@testing-library/user-event";
+import { selectPickerValue } from "./helpers/selectPickerValue";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { ReadingLibraryCatalog } from "../app/features/library/ReadingLibraryCatalog";
@@ -69,11 +71,12 @@ describe("ReadingLibraryCatalog", () => {
     expect(within(details).getByText("2002-12-31")).toBeInTheDocument();
   });
 
-  test("combines filters and clears a selected detail when it leaves the result set", () => {
+  test("combines filters and clears a selected detail when it leaves the result set", async () => {
     render(<ReadingLibraryCatalog entries={entries} onOpen={vi.fn()} />);
     fireEvent.click(fileRows()[0]);
-    fireEvent.change(screen.getByRole("combobox", { name: "筛选文件格式" }), { target: { value: "epub" } });
-    fireEvent.change(screen.getByRole("combobox", { name: "筛选阅读状态" }), { target: { value: "reading" } });
+    await userEvent.click(screen.getByRole("button", { name: "文件筛选" }));
+    await selectPickerValue(screen.getByRole("combobox", { name: "筛选文件格式" }), "epub");
+    await selectPickerValue(screen.getByRole("combobox", { name: "筛选阅读状态" }), "reading");
     expect(fileRows()).toHaveLength(1);
     expect(fileRows()[0]).toHaveTextContent("自然语言处理");
     expect(within(screen.getByRole("complementary", { name: "文件元信息" })).getByText("查看元信息")).toBeInTheDocument();
@@ -87,7 +90,7 @@ describe("ReadingLibraryCatalog", () => {
     fireEvent.click(fileRows()[0]);
     fireEvent.change(screen.getByRole("textbox", { name: "文件分类" }), { target: { value: "  实验室阅读  " } });
     fireEvent.change(screen.getByRole("textbox", { name: "文件标签" }), { target: { value: "经典, 注意力，经典；待读" } });
-    fireEvent.change(screen.getByRole("combobox", { name: "文件阅读状态" }), { target: { value: "finished" } });
+    await selectPickerValue(screen.getByRole("combobox", { name: "文件阅读状态" }), "finished");
     fireEvent.click(screen.getByRole("button", { name: "保存整理信息" }));
     await waitFor(() => expect(onMetadataChange).toHaveBeenCalledWith("paper", { collection: "实验室阅读", tags: ["经典", "注意力", "待读"], readingStatus: "finished" }));
     expect(await screen.findByText("已保存分类、标签和阅读状态。")).toBeInTheDocument();

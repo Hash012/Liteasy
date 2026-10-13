@@ -1,3 +1,7 @@
+import { useState } from "react";
+import { ActionButton } from "../../shared/ui/productPrimitives";
+import { ChevronRightRegular } from "@fluentui/react-icons";
+import "./dynamicOutline.css";
 import { formatPaperAnchorText, paperAnchorsFromCitations, type PaperAnchorEntity } from "../paper-anchors/paperAnchorEntity";
 import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
 import type { UIDslActionRef, UIDslDocument, UIDslNode } from "./generativeUi.types";
@@ -85,6 +89,7 @@ function OutlineBranch({
   variant: "mindmap" | "tree";
   visited: Set<string>;
 }) {
+  const [open, setOpen] = useState(depth < 2);
   if (visited.has(node.id)) {
     return null;
   }
@@ -106,9 +111,9 @@ function OutlineBranch({
       style={{ animationDelay: `${Math.min(depth * 90, 450)}ms` }}
     >
       {children.length > 0 ? (
-        <details open={depth < 2}>
-          <summary>{content}</summary>
-          <ul>
+        <div>
+          <ActionButton className="genui-outline-toggle" appearance="subtle" aria-expanded={open} icon={<ChevronRightRegular />} onClick={() => setOpen(!open)}>{content}</ActionButton>
+          <ul hidden={!open}>
             {children.map((child) => (
               <OutlineBranch
                 byParent={byParent}
@@ -120,7 +125,7 @@ function OutlineBranch({
               />
             ))}
           </ul>
-        </details>
+        </div>
       ) : (
         content
       )}

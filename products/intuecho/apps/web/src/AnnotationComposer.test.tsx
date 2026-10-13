@@ -141,10 +141,11 @@ test("requires an audience for a new draft before any upload", async () => {
     visibility: undefined as never, shareToPlaza: undefined as never
   } }} onClose={vi.fn()} onSaved={vi.fn()} />);
 
-  expect(screen.getByLabelText("可见范围")).toHaveValue("");
+  expect(screen.getByRole("combobox", { name: "可见范围" })).toHaveTextContent("请选择接收范围");
   expect(screen.getByRole("button", { name: "发布" })).toBeDisabled();
   expect(communityApi.createAnnotation).not.toHaveBeenCalled();
-  await user.selectOptions(screen.getByLabelText("可见范围"), "private");
+  await user.click(screen.getByRole("combobox", { name: "可见范围" }));
+  await user.click(screen.getByRole("option", { name: "仅自己" }));
   await user.click(screen.getByRole("button", { name: "发布" }));
   expect(communityApi.createAnnotation).not.toHaveBeenCalled();
   expect(screen.getByRole("region", { name: "发送预览" })).toHaveTextContent("Synthetic private research question");
@@ -159,13 +160,13 @@ test("does not opt an explicitly public new draft into the plaza", () => {
     body: "Synthetic public summary", tags: [], visibility: "public", shareToPlaza: undefined as never,
     targets: [{ kind: "whole_document", literature: { literatureId: "literature-parent" } }]
   } }} onClose={vi.fn()} onSaved={vi.fn()} />);
-  expect(screen.getByLabelText("可见范围")).toHaveValue("public");
+  expect(screen.getByRole("combobox", { name: "可见范围" })).toHaveTextContent("公开");
   expect(screen.getByRole("checkbox", { name: "发布到广场" })).not.toBeChecked();
 });
 
 test("preserves an existing public annotation audience and plaza choice", () => {
   render(<AnnotationComposer context={{ edit: publicParent }} onClose={vi.fn()} onSaved={vi.fn()} />);
-  expect(screen.getByLabelText("可见范围")).toHaveValue("public");
+  expect(screen.getByRole("combobox", { name: "可见范围" })).toHaveTextContent("公开");
   expect(screen.getByRole("checkbox", { name: "发布到广场" })).toBeChecked();
 });
 
@@ -500,8 +501,9 @@ test("selects a named organization and invalidates preview when content changes"
     targets: [{ kind: "whole_document", literature: { literatureId: "literature-parent" } }]
   } }} onClose={vi.fn()} onSaved={vi.fn()} />);
   expect(screen.queryByLabelText("组织 ID")).not.toBeInTheDocument();
-  await screen.findByRole("option", { name: "Synthetic Reading Group · 成员" });
-  await user.selectOptions(screen.getByRole("combobox", { name: "接收组织" }), "org-x");
+  await waitFor(() => expect(screen.getByRole("combobox", { name: "接收组织" })).not.toBeDisabled());
+  await user.click(screen.getByRole("combobox", { name: "接收组织" }));
+  await user.click(screen.getByRole("option", { name: "Synthetic Reading Group · 成员" }));
   await user.click(screen.getByRole("button", { name: "发布" }));
   expect(screen.getByRole("region", { name: "发送预览" })).toHaveTextContent("Synthetic Reading Group");
   expect(communityApi.createAnnotation).not.toHaveBeenCalled();
@@ -537,8 +539,10 @@ test("previews contributor origin and invalidates source review after text chang
     body: "Synthetic source analysis", tags: [], visibility: "private", shareToPlaza: false,
     targets: [{ kind: "whole_document", literature: { literatureId: "literature-parent" } }]
   } }} onClose={vi.fn()} onSaved={vi.fn()} />);
-  await user.selectOptions(screen.getByLabelText("用途"), "replication");
-  await user.selectOptions(screen.getByLabelText("撰写方式"), "ai_assisted");
+  await user.click(screen.getByRole("combobox", { name: "用途" }));
+  await user.click(screen.getByRole("option", { name: "复现观察" }));
+  await user.click(screen.getByRole("combobox", { name: "撰写方式" }));
+  await user.click(screen.getByRole("option", { name: "AI 辅助" }));
   await user.click(screen.getByRole("checkbox", { name: "我已对照原文核查引用" }));
   await user.type(screen.getByLabelText("批注内容"), " corrected");
   expect(screen.getByRole("checkbox", { name: "我已对照原文核查引用" })).not.toBeChecked();
@@ -587,7 +591,8 @@ test("expanding private content requires a fresh frozen preview and conflicts re
   updateAnnotation.mockRejectedValueOnce(new Error("ANNOTATION_REVISION_CONFLICT currentRevision=5"));
   const saved = vi.fn();
   render(<AnnotationComposer owner="actor-a" actorBinding="a:1" context={{ edit: original }} onClose={vi.fn()} onSaved={saved} />);
-  await user.selectOptions(screen.getByLabelText("可见范围"), "public");
+  await user.click(screen.getByRole("combobox", { name: "可见范围" }));
+  await user.click(screen.getByRole("option", { name: "公开" }));
   await user.type(screen.getByLabelText("批注内容"), " My edit");
   await user.click(screen.getByRole("button", { name: "保存修改" }));
   expect(updateAnnotation).not.toHaveBeenCalled();

@@ -263,3 +263,9 @@ h2 { margin-bottom: 0; font-family: var(--serif); font-size: clamp(34px, 4vw, 57
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+/* Keep native required/name/form semantics and the mobile system picker. */
+[data-waitlist-form] select[name="role"] {
+  min-height: 44px; width: 100%; min-width: 0; border-radius: 6px;
+  font-weight: 400; line-height: 1.5; padding-inline: 12px 28px;
+}

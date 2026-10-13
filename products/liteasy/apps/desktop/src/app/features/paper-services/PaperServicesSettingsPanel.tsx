@@ -1,6 +1,7 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { useEffect, useState } from "react";
-import { Field, Input, Radio, RadioGroup, Select } from "@fluentui/react-components";
+import { Field, Input, Radio, RadioGroup } from "@fluentui/react-components";
 import type { SettingsState, UpdateSettingCommand } from "../settings/settings.types";
 import { deletePaperServiceKey, hasPaperServiceKey, savePaperServiceKey, validatePaperService, type PaperServiceConfig } from "./paperServiceTransport";
 
@@ -57,19 +58,13 @@ export function PaperServicesSettingsPanel({ settings, onUpdateSetting }: {
     </Field>
     <p>快速模式直接生成讲解；严谨模式加强原文依据并补充核验提示。两种模式均不限固定字数，局部证据不足会注明，不阻止生成。进行中的任务继续使用原模式。</p>
     <Field label="扫描 PDF OCR 语言" hint="用于没有文字层的 PDF，可离线识别；识别结果支持页级定位。">
-      <Select aria-label="扫描 PDF OCR 语言" value={settings?.["import.ocr_language"] ?? "eng"}
-        onChange={(_, data) => update("import.ocr_language", data.value)}>
-        <option value="eng">English</option><option value="chi_sim">中文（简体）</option><option value="eng+chi_sim">中文 + English</option>
-      </Select>
+      <OptionPicker aria-label="扫描 PDF OCR 语言" value={String(settings?.["import.ocr_language"] ?? "eng")} onValueChange={nextValue => update("import.ocr_language", nextValue)} options={[{ value: String("eng"), label: String("English") }, { value: String("chi_sim"), label: String("\u4E2D\u6587\uFF08\u7B80\u4F53\uFF09") }, { value: String("eng+chi_sim"), label: String("\u4E2D\u6587 + English") }]} />
     </Field>
     <Field label="文献元信息服务">
-      <Select aria-label="文献元信息服务" value={provider} onChange={(_, data) => {
-        update("papers.metadata_provider", data.value);
-        update("papers.metadata_endpoint", endpoints[data.value as keyof typeof endpoints]);
-      }}>
-        <option value="crossref">Crossref</option><option value="openalex">OpenAlex</option>
-        <option value="semantic-scholar">Semantic Scholar</option><option value="cloud">Liteasy 云端</option>
-      </Select>
+      <OptionPicker aria-label="文献元信息服务" value={String(provider ?? "")} onValueChange={nextValue => {
+        update("papers.metadata_provider", nextValue);
+        update("papers.metadata_endpoint", endpoints[nextValue as keyof typeof endpoints]);
+      }} options={[{ value: String("crossref"), label: String("Crossref") }, { value: String("openalex"), label: String("OpenAlex") }, { value: String("semantic-scholar"), label: String("Semantic Scholar") }, { value: String("cloud"), label: String("Liteasy \u4E91\u7AEF") }]} />
     </Field>
     {provider !== "cloud" ? <>
       <Field label="元信息 API 地址"><Input aria-label="元信息 API 地址" value={settings?.["papers.metadata_endpoint"] ?? endpoints[provider]} onChange={(_, data) => update("papers.metadata_endpoint", data.value)} /></Field>
@@ -77,13 +72,11 @@ export function PaperServicesSettingsPanel({ settings, onUpdateSetting }: {
       <p>元信息与关联推荐共用此文献服务，无需 Liteasy 登录。Crossref 公共服务无需配置密钥。右键论文可获取元信息或确认文献身份。</p>
     </> : <p>使用当前 Liteasy 云端连接查询文献身份。</p>}
     <Field label="论文内容解析">
-      <Select aria-label="论文内容解析" value={mode} onChange={(_, data) => {
-        update("papers.mineru_mode", data.value);
-        if (data.value === "official") update("papers.mineru_endpoint", "https://mineru.net");
-        if (data.value === "custom") update("papers.mineru_endpoint", "http://127.0.0.1:8787");
-      }}>
-        <option value="local">本地 PDF 提取</option><option value="official">MinerU 官方 API</option><option value="custom">MinerU 兼容服务</option>
-      </Select>
+      <OptionPicker aria-label="论文内容解析" value={String(mode ?? "")} onValueChange={nextValue => {
+        update("papers.mineru_mode", nextValue);
+        if (nextValue === "official") update("papers.mineru_endpoint", "https://mineru.net");
+        if (nextValue === "custom") update("papers.mineru_endpoint", "http://127.0.0.1:8787");
+      }} options={[{ value: String("local"), label: String("\u672C\u5730 PDF \u63D0\u53D6") }, { value: String("official"), label: String("MinerU \u5B98\u65B9 API") }, { value: String("custom"), label: String("MinerU \u517C\u5BB9\u670D\u52A1") }]} />
     </Field>
     {mode !== "local" ? <>
       <Field label="MinerU API 地址"><Input aria-label="MinerU API 地址" value={settings?.["papers.mineru_endpoint"] ?? "https://mineru.net"} onChange={(_, data) => update("papers.mineru_endpoint", data.value)} /></Field>

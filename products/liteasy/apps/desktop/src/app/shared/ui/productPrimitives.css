@@ -40,16 +40,16 @@
   --button-hover-background: var(--surface-hover);
   --space-control: 8px;
   --space-group: 16px;
-  --radius-control: 4px;
+  --radius-control: 6px;
   --radius-surface: 8px;
 }
 .product-action { min-height: 32px; white-space: normal; overflow-wrap: anywhere; }
 .product-icon-action { min-width: 32px; min-height: 32px; }
-.product-action[data-density="compact"], .product-icon-action[data-density="compact"] { min-height: 28px; height: 28px; white-space: nowrap; }
+.product-action[data-density="compact"], .product-icon-action[data-density="compact"] { min-height: 28px; height: auto; line-height: 1.4; }
 .product-icon-action[data-density="compact"] { min-width: 28px; width: 28px; padding: 4px; }
 .product-contextual-actions { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; opacity: 0; pointer-events: none; }
-.product-contextual-owner:hover .product-contextual-actions,
-.product-contextual-owner:focus-within .product-contextual-actions,
+.product-contextual-owner:hover:not(:has(.product-contextual-owner:hover)) > .product-contextual-actions,
+.product-contextual-owner:focus-within:not(:has(.product-contextual-owner:focus-within)) > .product-contextual-actions,
 .product-contextual-actions:focus-within,
 .product-contextual-actions[data-revealed="true"] { opacity: 1; pointer-events: auto; }
 @media (hover: none), (pointer: coarse) { .product-contextual-actions { opacity: 1; pointer-events: auto; } }
@@ -60,9 +60,24 @@
 .product-action-chips > * { min-width: 0; }
 .product-generation-composer { width: 100%; min-width: 0; }
 .product-context-summary { color: var(--text-secondary); font-size: var(--fontSizeBase200); line-height: 1.5; overflow-wrap: anywhere; }
-.product-source-disclosure { color: var(--text-secondary); font-size: var(--fontSizeBase200); }
-.product-source-disclosure summary { cursor: pointer; padding: var(--space-control) 0; }
-.product-source-disclosure summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* Chrome sections and pickers use Fluent portals and theme tokens. */
+.product-disclosure-section { min-width: 0; font-size: var(--fontSizeBase200); }
+.product-disclosure-section .fui-AccordionHeader > button { min-block-size: 32px; height: auto; padding: 6px 8px; font: inherit; font-weight: 600; border-radius: var(--radius-control); }
+.product-disclosure-section .fui-AccordionPanel { margin-inline: 8px; padding-block: 8px; }
+.product-disclosure-section [hidden] { display: none; }
+.product-info-popover, .product-filter-popover { max-width: min(360px, calc(100vw - 24px)); max-height: min(600px, calc(100dvh - 24px)); overflow: auto; border-radius: 8px; font-size: var(--fontSizeBase300); line-height: 1.5; overflow-wrap: anywhere; }
+.product-filter-popover { display: grid; gap: 12px; }
+.product-option-picker-field { display: inline-flex; flex-direction: column; min-width: 0; max-width: 100%; position: relative; }
+.product-option-picker.fui-Dropdown { min-width: min(12rem, 100%); max-width: 100%; width: auto; min-block-size: 32px; border-radius: var(--radius-control); font-size: var(--fontSizeBase300); line-height: 1.5; }
+.product-option-picker.fui-Dropdown:where(:has(> button[data-density="compact"])) { min-block-size: 28px; }
+.product-option-picker > button { min-width: 0; height: auto; font: inherit; font-weight: 400; white-space: normal; overflow-wrap: anywhere; padding-block: 4px; }
+.product-option-listbox { max-height: min(320px, calc(100dvh - 24px)); overflow-y: auto; border-radius: 8px; max-width: calc(100vw - 24px); }
+.product-option-text { display: flex; flex-direction: column; overflow-wrap: anywhere; min-width: 0; font-weight: 400; }
+.product-option-text small { color: var(--text-secondary); font-size: var(--fontSizeBase200); }
+.product-validation-proxy { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; inset: 0; }
+.product-field-error { color: var(--status-danger); font-size: var(--fontSizeBase200); }
+@media (pointer: coarse) { .product-option-picker.fui-Dropdown, .product-option-picker > button, .product-disclosure-section .fui-AccordionHeader > button { min-block-size: 44px; } .product-option-listbox .fui-Option { min-block-size: 44px; } }
+@media (forced-colors: active) { .product-option-picker { border-color: ButtonText; } }
 .product-inline-notice { display: flex; align-items: start; gap: var(--space-control); padding: var(--space-control); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); color: var(--text-primary); background: var(--surface-base); overflow-wrap: anywhere; }
 .product-inline-notice[data-intent="error"] { border-color: var(--status-danger); }
 .product-inline-notice[data-intent="warning"] { border-color: var(--status-warning); }
@@ -85,3 +100,6 @@
 .quick-ask-excerpt-full { display: block; -webkit-line-clamp: unset; white-space: pre-wrap; max-height: 30vh; overflow: auto; }
 .quick-ask-surface .content-view, .quick-ask-surface .markdown-content { min-width: 0; max-width: 100%; }
 .quick-ask-surface pre, .quick-ask-surface table { max-width: 100%; overflow: auto; }
+
+.product-error-surface { display:contents; }
+.product-surface-failure { padding:16px; color:var(--text-primary); overflow-wrap:anywhere; }

@@ -1,5 +1,6 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Dialog, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Select, Spinner, Tooltip } from "@fluentui/react-components";
+import { Button, Dialog, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Spinner, Tooltip } from "@fluentui/react-components";
 import { DismissRegular } from "@fluentui/react-icons";
 import { CitationGraphCanvas } from "./CitationGraphCanvas";
 import { citationKey, citationRecommendation, projectCitationGraph, type CitationDirection, type CitationEdge, type CitationNode, type CitationPaper, type CitationWork } from "./citationGraph";
@@ -69,10 +70,8 @@ export default function CitationGraphDialog({ papers, client, onClose, onOpenPap
       <DialogContent className="citation-graph-content">
         <div className="citation-graph-toolbar">
           <Button onClick={load} disabled={busy || !working.some(citationKey)}>{loaded ? "重新加载关系" : "加载引用关系"}</Button>
-          <label>向外探索<Select aria-label="引用方向" value={direction} onChange={(_, data) => setDirection(data.value as CitationDirection)}>
-            <option value="both">参考与被引论文</option><option value="references">本文的参考文献</option><option value="citations">引用本文的论文</option>
-          </Select></label>
-          <label>引用量 Top K<Select aria-label="引用量 Top K" value={topK} onChange={(_, data) => setTopK(data.value)}>{[5, 10, 20, 50].map((k) => <option key={k} value={k}>{k}</option>)}</Select></label>
+          <label>向外探索<OptionPicker aria-label="引用方向" value={String(direction ?? "")} onValueChange={nextValue => setDirection(nextValue as CitationDirection)} options={[{ value: String("both"), label: String("\u53C2\u8003\u4E0E\u88AB\u5F15\u8BBA\u6587") }, { value: String("references"), label: String("\u672C\u6587\u7684\u53C2\u8003\u6587\u732E") }, { value: String("citations"), label: String("\u5F15\u7528\u672C\u6587\u7684\u8BBA\u6587") }]} /></label>
+          <label>引用量 Top K<OptionPicker aria-label="引用量 Top K" value={String(topK ?? "")} onValueChange={nextValue => setTopK(nextValue)} options={[...([5, 10, 20, 50].map((k) => ({ value: String(k), label: String(k) })))]} /></label>
           <Button appearance="primary" disabled={busy || !focus?.work || !focus.localIds.length} onClick={expand}>向外搜索一圈</Button>
           {busy ? <><Spinner size="tiny" label="正在查询" /><Button onClick={() => { task.current?.abort(); task.current = undefined; setBusy(false); setMessage("已取消查询，保留现有关系图。"); }}>取消</Button></> : null}
         </div>

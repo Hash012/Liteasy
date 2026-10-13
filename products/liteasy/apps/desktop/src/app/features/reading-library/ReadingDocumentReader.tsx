@@ -1,3 +1,5 @@
+import { DisclosureSection } from "../../shared/ui/productPrimitives";
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { ContentView } from "../markdown/ContentView";
 import { legacyContent } from "../markdown/contentFragment";
 import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
@@ -7,7 +9,7 @@ import { useResourceReveal } from "../resource-links/resourceReveal";
 import { SystemFontPicker } from "../settings/SystemFontPicker";
 import { defaultReadingFontCss, readingFontOptions } from "../settings/readingFonts";
 import { memo, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Button, Field, Input, Popover, PopoverSurface, PopoverTrigger, Select, Slider, Tooltip } from "@fluentui/react-components";
+import { Button, Field, Input, Popover, PopoverSurface, PopoverTrigger, Slider, Tooltip } from "@fluentui/react-components";
 import { ArrowLeftRegular, ArrowRightRegular, BookOpenRegular, DismissRegular, FullScreenMaximizeRegular, SearchRegular, TextFontSizeRegular } from "@fluentui/react-icons";
 import {  safeMarkdownUrl } from "../markdown/MarkdownContent";
 import type { ParsedReadingDocument, ReadingChapter } from "./readingDocument.types";
@@ -213,9 +215,9 @@ function ReaderSession({ searchMetadata, document, documentId, storageScope, onP
               options={[{ label: "跟随阅读设置", value: "" }, ...readingFontOptions]}
               onChange={(fontFamily) => setPreferences((current) => ({ ...current, fontFamily: fontFamily || undefined }))} /></Field>
             <Field label={`字号 ${preferences.fontSize}`}><Slider aria-label="阅读字号" min={14} max={30} step={1} value={preferences.fontSize} onChange={(_, data) => setPreferences((current) => ({ ...current, fontSize: data.value }))} /></Field>
-            <Field label="行距"><Select aria-label="阅读行距" value={preferences.lineHeight} onChange={(_, data) => setPreferences((current) => ({ ...current, lineHeight: Number(data.value) }))}><option value="1.5">紧凑</option><option value="1.85">舒适</option><option value="2.1">宽松</option><option value="2.4">疏朗</option></Select></Field>
-            <Field label="页面宽度"><Select aria-label="页面宽度" value={preferences.width} onChange={(_, data) => setPreferences((current) => ({ ...current, width: Number(data.value) }))}><option value="640">窄</option><option value="760">适中</option><option value="960">宽</option></Select></Field>
-            <Field label="阅读主题"><Select aria-label="阅读主题" value={preferences.theme} onChange={(_, data) => setPreferences((current) => ({ ...current, theme: data.value as ReadingPreferences["theme"] }))}><option value="auto">跟随应用</option><option value="paper">纸白</option><option value="warm">暖纸</option><option value="night">夜读</option></Select></Field>
+            <Field label="行距"><OptionPicker aria-label="阅读行距" value={String(preferences.lineHeight ?? "")} onValueChange={nextValue => setPreferences((current) => ({ ...current, lineHeight: Number(nextValue) }))} options={[{ value: String("1.5"), label: String("\u7D27\u51D1") }, { value: String("1.85"), label: String("\u8212\u9002") }, { value: String("2.1"), label: String("\u5BBD\u677E") }, { value: String("2.4"), label: String("\u758F\u6717") }]} /></Field>
+            <Field label="页面宽度"><OptionPicker aria-label="页面宽度" value={String(preferences.width ?? "")} onValueChange={nextValue => setPreferences((current) => ({ ...current, width: Number(nextValue) }))} options={[{ value: String("640"), label: String("\u7A84") }, { value: String("760"), label: String("\u9002\u4E2D") }, { value: String("960"), label: String("\u5BBD") }]} /></Field>
+            <Field label="阅读主题"><OptionPicker aria-label="阅读主题" value={String(preferences.theme ?? "")} onValueChange={nextValue => setPreferences((current) => ({ ...current, theme: nextValue as ReadingPreferences["theme"] }))} options={[{ value: String("auto"), label: String("\u8DDF\u968F\u5E94\u7528") }, { value: String("paper"), label: String("\u7EB8\u767D") }, { value: String("warm"), label: String("\u6696\u7EB8") }, { value: String("night"), label: String("\u591C\u8BFB") }]} /></Field>
           </PopoverSurface>
         </Popover>
         <Tooltip content={focus ? "退出专注阅读" : "专注阅读"} relationship="label"><Button appearance="transparent" aria-label={focus ? "退出专注阅读" : "专注阅读"} aria-pressed={focus} icon={focus ? <DismissRegular /> : <FullScreenMaximizeRegular />} onClick={() => setFocus(!focus)} /></Tooltip>
@@ -226,7 +228,7 @@ function ReaderSession({ searchMetadata, document, documentId, storageScope, onP
         {sidebar === "contents" ? <><div className="reading-document__section-label">目录 <span>{document.chapters.length} 节</span></div><nav aria-label="章节目录">{document.toc.map((item) => <button aria-current={item.chapterId === chapter.id ? "location" : undefined} className="reading-document__toc-entry" key={item.id} onClick={() => goTo(item.chapterId, item.anchor)} style={{ paddingInlineStart: 12 + item.depth * 12 }}>{item.label}</button>)}</nav></> : <>
           <SearchOptions query={query} onChange={setQuery} tags={searchMetadata?.tags} />
           <Input autoFocus aria-label="搜索书内文字" placeholder="搜索书内文字" contentBefore={<SearchRegular />} value={query} onChange={(_, data) => setQuery(data.value)} />
-          <Select aria-label="搜索范围" value={searchScope} onChange={(_, data) => setSearchScope(data.value)}><option value="book">整本文档</option><option value="chapter">当前章节</option></Select>
+          <OptionPicker aria-label="搜索范围" value={String(searchScope ?? "")} onValueChange={nextValue => setSearchScope(nextValue)} options={[{ value: String("book"), label: String("\u6574\u672C\u6587\u6863") }, { value: String("chapter"), label: String("\u5F53\u524D\u7AE0\u8282") }]} />
           <p className="reading-document__search-count" role="status">{deferredQuery.trim() ? matches.length ? `${matches.length >= 100 ? "前 " : ""}${matches.length} 处匹配` : "没有找到匹配的文字" : "输入关键词，在正文中快速定位"}</p>
           <div className="reading-document__search-results">{matches.map((match, index) => <button aria-label={`${match.chapterTitle} ${match.excerpt}`} key={`${match.chapterId}-${index}`} onClick={() => goTo(match.chapterId, undefined, match.occurrence)}><strong>{match.chapterTitle}</strong><span><SearchHighlight text={match.excerpt} query={deferredQuery} /></span></button>)}</div>
         </>}
@@ -247,7 +249,7 @@ function ReaderSession({ searchMetadata, document, documentId, storageScope, onP
         }}>
           <div className="reading-document__chapter-caption">{label} · {chapterIndex + 1} / {document.chapters.length}</div>
           {chapter.format === "html" ? <EpubContent chapter={chapter} document={document} key={chapter.id} /> : chapter.format === "markdown" ? <ContentView content={legacyContent(chapter.content)} urlTransform={(url, key) => key === "src" && /^data:image\/(?:png|jpeg|gif|webp|avif);base64,[a-z0-9+/=]+$/i.test(url) ? url : safeMarkdownUrl(url, key) ?? ""} /> : <div className="reading-document__plain-text">{chapter.content}</div>}
-          {document.warnings.length ? <details className="reading-document__notes"><summary>文件说明</summary>{document.warnings.map((warning) => <p key={warning}>{warning}</p>)}</details> : null}
+          {document.warnings.length ? <DisclosureSection className="reading-document__notes" title={<>文件说明</>}>{document.warnings.map((warning) => <p key={warning}>{warning}</p>)}</DisclosureSection> : null}
           <div className="reading-document__chapter-end"><span>{chapterIndex + 1 === document.chapters.length ? "已到文末" : "本节结束"}</span>{chapterIndex + 1 < document.chapters.length ? <Button appearance="subtle" icon={<ArrowRightRegular />} iconPosition="after" onClick={() => goTo(document.chapters[chapterIndex + 1].id)}>下一节</Button> : <Button appearance="subtle" onClick={() => updatePosition({ chapterId: chapter.id, ratio: 1 })}>标记读完</Button>}</div>
         </article>
       </div>

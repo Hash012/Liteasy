@@ -9,10 +9,12 @@ describe("SettingsPane", () => {
     const onUpdateSetting = vi.fn();
     render(<SettingsPane documentMetadataSyncResult={null} documentMetadataSyncStatus="idle" settings={{ "view.theme": "system" }} onUpdateSetting={onUpdateSetting} />);
     const appearance = screen.getByRole("combobox", { name: "外观" });
-    expect(appearance).toHaveValue("system");
-    await user.selectOptions(appearance, "dark");
+    expect(appearance).toHaveTextContent("跟随系统");
+    await user.click(appearance);
+    await user.click(screen.getByRole("option", { name: "深色" }));
     expect(onUpdateSetting).toHaveBeenLastCalledWith({ intent: "update_setting", target: "view.theme", value: "dark" });
-    await user.selectOptions(appearance, "light");
+    await user.click(appearance);
+    await user.click(screen.getByRole("option", { name: "浅色" }));
     expect(onUpdateSetting).toHaveBeenLastCalledWith({ intent: "update_setting", target: "view.theme", value: "light" });
   });
 
@@ -27,9 +29,10 @@ describe("SettingsPane", () => {
     />);
     await user.click(screen.getByRole("button", { name: "论文与推荐", exact: true }));
     const panel = within(screen.getByRole("region", { name: "论文推荐设置" }));
-    expect(panel.getByRole("combobox", { name: "推荐风格" })).toHaveValue("classic");
+    expect(panel.getByRole("combobox", { name: "推荐风格" })).toHaveTextContent("经典基础");
     expect(panel.getByText("侧重与研究主题相关、积累引用的基础文献。")).toBeInTheDocument();
-    await user.selectOptions(panel.getByRole("combobox", { name: "推荐风格" }), "frontier");
+    await user.click(panel.getByRole("combobox", { name: "推荐风格" }));
+    await user.click(screen.getByRole("option", { name: /前沿/ }));
     expect(onUpdateSetting).toHaveBeenLastCalledWith({
       intent: "update_setting", target: "network.recommendation.style", value: "frontier"
     });
@@ -235,7 +238,8 @@ describe("SettingsPane", () => {
     expect(screen.getByText("工具连接（MCP）")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "论文与推荐" }));
     expect(screen.getByRole("textbox", { name: "搜索设置" })).toHaveValue("");
-    await user.selectOptions(screen.getByRole("combobox", { name: "扫描 PDF OCR 语言" }), "chi_sim");
+    await user.click(screen.getByRole("combobox", { name: "扫描 PDF OCR 语言" }));
+    await user.click(screen.getByRole("option", { name: "中文（简体）" }));
     expect(onUpdateSetting).toHaveBeenLastCalledWith({ intent: "update_setting", target: "import.ocr_language", value: "chi_sim" });
     expect(screen.queryByRole("textbox", { name: "Intuecho 同步端点" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "同步与备份" }));
@@ -243,4 +247,32 @@ describe("SettingsPane", () => {
     expect(onUpdateSetting).toHaveBeenLastCalledWith({ intent: "update_setting", target: "thin_reading.intuecho_endpoint", value: "https://sync.example.test" });
   });
 
+});
+
+
+test("lookup connection and secret drafts survive categories, search and security disclosure", async () => {
+  const user = userEvent.setup();
+  const update = vi.fn();
+  render(<SettingsPane documentMetadataSyncResult={null} documentMetadataSyncStatus="idle" onUpdateSetting={update}
+    settings={{ "lookup.translation_service": "libretranslate" }} />);
+  const address = screen.getByRole("textbox", { name: "LibreTranslate 地址" });
+  await user.clear(address); await user.type(address, "https://translate.example.test");
+  await user.click(screen.getByRole("button", { name: "配置可选密钥" }));
+  await user.type(screen.getByLabelText("翻译服务密钥"), "synthetic-draft-key");
+  await user.click(screen.getByRole("button", { name: "配置可选密钥" }));
+  await user.click(screen.getByRole("button", { name: "AI 与助手" }));
+  await user.type(screen.getByRole("textbox", { name: "搜索设置" }), "LibreTranslate");
+  expect(screen.getByLabelText("翻译服务密钥")).toBeVisible();
+  expect(screen.getByLabelText("翻译服务密钥")).toHaveValue("synthetic-draft-key");
+  expect(screen.getByRole("textbox", { name: "LibreTranslate 地址" })).toHaveValue("https://translate.example.test");
+  await user.keyboard("{Escape}");
+  expect(screen.getByRole("textbox", { name: "搜索设置" })).toHaveFocus();
+  await user.click(screen.getByRole("button", { name: "外观与阅读" }));
+  await user.click(screen.getByRole("button", { name: "配置可选密钥" }));
+  expect(screen.getByLabelText("翻译服务密钥")).toHaveValue("synthetic-draft-key");
+  await user.click(screen.getByRole("button", { name: "保存翻译连接" }));
+  await screen.findByText("翻译服务连接设置已保存。");
+  expect(update).toHaveBeenLastCalledWith({ intent: "update_setting", target: "lookup.libretranslate_endpoint", value: "https://translate.example.test" });
+  expect(screen.getByLabelText("翻译服务密钥")).toHaveValue("");
+  expect(JSON.stringify(update.mock.calls)).not.toContain("synthetic-draft-key");
 });

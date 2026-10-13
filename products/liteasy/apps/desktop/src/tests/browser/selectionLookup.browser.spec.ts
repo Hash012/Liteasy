@@ -82,7 +82,7 @@ test("looks up a PDF selection, expands senses and persists the result as a shar
   await page.reload();
   await expect(page.locator(".pdf-annotation-item")).toHaveCount(1);
   await page.locator(".pdf-annotation-summary").first().click();
-  await expect(page.getByLabel("补充批注笔记")).toHaveValue(/首个查询释义[\s\S]*来源：必应词典/);
+  await expect(page.getByRole("textbox", { name: "补充批注笔记" })).toContainText(/首个查询释义[\s\S]*来源：必应词典/);
 });
 
 test("opens an AI translation only after confirmation and sends the customized prompt", async ({ page }, testInfo) => {
@@ -99,10 +99,11 @@ test("opens an AI translation only after confirmation and sends the customized p
   await expect(card.getByText("未找到词典释义，可翻译这个选段。")).toBeVisible();
   expect(modelRequests).toHaveLength(0);
   await expect(card.getByRole("textbox", { name: "本次系统提示词" })).toHaveCount(0);
-  await card.getByRole("combobox", { name: "生成风格" }).selectOption("concise");
+  await card.getByRole("combobox", { name: "生成风格" }).click();
+  await page.getByRole("option", { name: "精简", exact: true }).click();
   await card.getByRole("button", { name: "自定义系统提示词" }).click();
   await card.getByRole("textbox", { name: "本次系统提示词" }).fill("保留论文中的缩写，只给出译文");
-  await card.getByRole("button", { name: "翻译选段", exact: true }).click();
+  await card.getByRole("button", { name: "确认翻译选段", exact: true }).click();
   await expect(card.getByText("上下文译文", { exact: true })).toBeVisible();
   expect(modelRequests).toHaveLength(1);
   expect(JSON.stringify(modelRequests[0])).toContain("保留论文中的缩写，只给出译文");
@@ -119,10 +120,11 @@ test("finds centralized settings and restores automatic lookup preferences after
     return settings;
   }
   let settings = await openSettings();
-  await settings.getByRole("combobox", { name: "词典服务" }).selectOption("youdao");
+  await settings.getByRole("combobox", { name: "词典服务" }).click();
+  await page.getByRole("option", { name: /^有道词典/ }).click();
   await settings.getByRole("switch", { name: "自动查询选区" }).check();
   await page.reload(); settings = await openSettings();
-  await expect(settings.getByRole("combobox", { name: "词典服务" })).toHaveValue("youdao");
+  await expect(settings.getByRole("combobox", { name: "词典服务" })).toHaveText("有道词典");
   await expect(settings.getByRole("switch", { name: "自动查询选区" })).toBeChecked();
 });
 
@@ -142,7 +144,8 @@ test("automatically queries a reading-mode word with its sentence and shares the
   await openReader(page, "importable");
   await page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "设置", exact: true }).click();
   await page.getByRole("region", { name: "应用设置" }).getByRole("button", { name: "论文与推荐" }).click();
-  await page.getByLabel("论文内容解析").selectOption("custom");
+  await page.getByLabel("论文内容解析").click();
+  await page.getByRole("option", { name: "MinerU 兼容服务", exact: true }).click();
   await page.getByLabel("MinerU API 地址").fill("https://lookup-reading.example.test");
   await page.getByLabel("mineru API key", { exact: true }).fill("lookup-reading-test-key");
   await page.getByRole("button", { name: "保存密钥", exact: true }).last().click();
@@ -151,24 +154,33 @@ test("automatically queries a reading-mode word with its sentence and shares the
   await page.getByRole("button", { name: "MinerU 解析", exact: true }).click();
   await page.getByRole("button", { name: "阅读模式", exact: true }).click();
   const reading = page.getByRole("region", { name: "论文阅读模式", exact: true });
-  await reading.locator(".mineru-markdown p").filter({ hasText: sentence }).evaluate((element) => {
+  const paragraph = reading.locator(".mineru-markdown p").filter({ hasText: sentence });
+  await paragraph.dblclick({ trial: true });
+  // Markdown can replace its initial paragraph while the reading view settles.
+  // Use an actionable browser click, not a range on a previously resolved node.
+  const wordPosition = await paragraph.evaluate((element) => {
     const node = element.firstChild!;
     const start = node.textContent!.indexOf("regularization");
-    const range = document.createRange(); range.setStart(node, start); range.setEnd(node, start + "regularization".length);
-    const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
-    element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    const range = element.ownerDocument.createRange();
+    range.setStart(node, start); range.setEnd(node, start + "regularization".length);
+    const word = range.getBoundingClientRect(), paragraph = element.getBoundingClientRect();
+    return { x: word.x - paragraph.x + word.width / 2, y: word.y - paragraph.y + word.height / 2 };
   });
+  await paragraph.dblclick({ position: wordPosition });
   const card = reading.getByRole("region", { name: "查词与翻译结果" });
+  await expect(card.locator("header > strong")).toHaveText("regularization");
   await expect(card.getByText("正则化", { exact: true })).toBeVisible();
   expect(requests).toEqual(["regularization"]);
-  await card.getByText("翻译选段", { exact: true }).first().click();
-  await card.getByText("所在句子", { exact: true }).click();
-  await expect(card.getByText(sentence, { exact: true })).toBeVisible();
+  await card.getByRole("button", { name: "翻译选段", exact: true }).click();
+  await card.getByRole("button", { name: "所在句子", exact: true }).click();
+  await expect(page.getByRole("group", { name: "所在句子", exact: true }).getByText(sentence, { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(card).toBeVisible();
   await card.getByRole("button", { name: "保存为批注" }).click();
   await expect(card.getByRole("status")).toHaveText("查询结果已保存为批注。");
   await reading.getByRole("button", { name: "PDF 模式", exact: true }).click();
   const annotation = page.locator(".pdf-annotation-item");
   await expect(annotation).toHaveCount(1);
   await annotation.locator(".pdf-annotation-summary").click();
-  await expect(annotation.getByLabel("补充批注笔记")).toHaveValue("n. 正则化\n来源：必应词典");
+  await expect(annotation.getByRole("textbox", { name: "补充批注笔记" })).toContainText(/n\. 正则化\s*来源：必应词典/);
 });

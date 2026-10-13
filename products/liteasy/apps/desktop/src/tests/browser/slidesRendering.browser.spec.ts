@@ -53,7 +53,8 @@ test("renders slide Markdown and source entities in Chromium while mounting only
   await expect(page.getByLabel("演讲备注", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("slides-rendering-page-2.png"), fullPage: true });
 
-  await page.getByRole("combobox", { name: "选择幻灯片" }).selectOption("0");
+  await page.getByRole("combobox", { name: "选择幻灯片" }).click();
+  await page.getByRole("option").first().click();
   await expect(firstPage).toBeVisible();
   await expect(page.getByRole("article")).toHaveCount(1);
   await expect(page.getByRole("button", { name: "上一页幻灯片" })).toBeDisabled();

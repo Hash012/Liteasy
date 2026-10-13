@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { createLocalArtifactResultClient } from "../app/features/artifacts/localArtifactResultClient";
 import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
 import { createThinReadingFixture } from "./fixtures/thinReadingFixtures";
@@ -24,4 +24,17 @@ test("saves and reopens a paper-bound thin-reading document without an account, 
   expect((await first.list())[0].title).toBe("方法薄读");
   await reopened.delete(document.artifactId);
   expect(await first.list()).toEqual([]);
+});
+
+
+test("local result admission never saves the isolated metadata projection", async () => {
+  const raw = { version: "liteasy.agent-artifact/v1", artifactId: "invalid-papers", artifactType: "tree", title: "Preserved", answer: "Synthetic", createdAt: "2026-10-13", citations: [], papers: [null], agent: { status: "completed" } };
+  const bytes = JSON.stringify(raw);
+  const save = vi.fn(async () => "local-path");
+  const client = createLocalArtifactResultClient({ list: async () => [raw], save, delete: vi.fn() });
+  const [projected] = await client.list();
+  expect(projected.papers).toEqual([]);
+  await expect(client.save(projected)).rejects.toThrow("只读");
+  expect(save).not.toHaveBeenCalled();
+  expect(JSON.stringify(raw)).toBe(bytes);
 });

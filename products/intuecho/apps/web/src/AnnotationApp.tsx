@@ -5,6 +5,10 @@ import { OrganizationReadingGroup } from "./reading-group/OrganizationReadingGro
 import { getIdentitySessionGeneration } from "./identitySessionGeneration";
 import { intuechoApiBaseUrl } from "./runtimeConfig";
 import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
   Badge,
   Button,
   Checkbox,
@@ -535,11 +539,12 @@ export function AnnotationCard({ annotation, onCompose, onConversation, session,
       {current.viewerCanModerate && <Button appearance="subtle" icon={current.withdrawnAt ? <Open20Regular /> : <Delete20Regular />} onClick={() => { setModerationAction(current.withdrawnAt ? "restore" : "withdraw"); setModerationReason(""); }}>{current.withdrawnAt ? "恢复" : "治理撤回"}</Button>}
       <Tooltip content="打开批注详情" relationship="label"><a className="annotation-detail-link" href={`/annotations/${encodeURIComponent(current.id)}`} aria-label="打开批注详情"><Open20Regular /></a></Tooltip>
     </footer>
-    {session && governance && <details className="community-governance-menu"><summary>订阅与内容设置</summary>
+    {session && governance && <CommunitySettingsSection title="我的订阅与内容偏好"><h3>我的订阅</h3>
       <SubscriptionControls api={governance.api} actorBinding={governance.actorBinding} preference={preferenceFor(governance.preferences, "thread", current.id)} label="此讨论" onChanged={governance.refresh} />
       {[...new Set(current.targets.map((target) => target.literature.literatureId).filter(Boolean))].map((id) => <SubscriptionControls key={id} api={governance.api} actorBinding={governance.actorBinding} preference={preferenceFor(governance.preferences, "literature", id)} label="此文献的讨论" onChanged={governance.refresh} />)}
+      <h3>内容偏好与举报</h3>
       <AnnotationGovernanceControls annotation={current} api={governance.api} actorBinding={governance.actorBinding} preferences={governance.preferences} onPreferencesChanged={governance.refresh} />
-    </details>}
+    </CommunitySettingsSection>}
     {status && <p className="inline-status" role="status">{status}</p>}
     {repliesOpen && <ReplyThread annotation={current} session={session} onCompose={onCompose} />}
     <Dialog open={Boolean(appealTag)} onOpenChange={(_, data) => !data.open && setAppealTag(null)}>
@@ -734,9 +739,9 @@ export function OrganizationAnnotations({ onCompose, refresh, session }: { onCom
       if (!access?.allowedActions.includes("read_body")) return null;
       return <section className="organization-group" key={organization.organizationId}>
         <header><div><strong>{organization.name}</strong><span>{access.role === "owner" ? "负责人" : access.role === "admin" ? "管理员" : "成员"}</span></div><small>{organization.annotations.length} 条</small></header>
-        {governance && <details><summary>组织讨论提醒</summary><SubscriptionControls api={governance.api} actorBinding={actorBinding} preference={preferenceFor(governance.preferences, "organization", organization.organizationId)} label="此组织的讨论" onChanged={governance.refresh} /></details>}
+        {governance && <CommunitySettingsSection title="组织讨论提醒"><SubscriptionControls api={governance.api} actorBinding={actorBinding} preference={preferenceFor(governance.preferences, "organization", organization.organizationId)} label="此组织的讨论" onChanged={governance.refresh} /></CommunitySettingsSection>}
         <OrganizationReadingGroup owner={draftOwner(session)} organization={organization} viewerId={session.userId} actorBinding={actorBinding} access={access} onChanged={() => setLocalRefresh((value) => value + 1)} />
-        {organization.annotations.length ? <details><summary>全部组织批注 · {organization.annotations.length}</summary><div className="annotation-list">{organization.annotations.map((annotation) => <AnnotationCard key={`${annotation.id}-${annotation.updatedAt}`} annotation={annotation} onCompose={onCompose} session={session} />)}</div></details> : <EmptyState text="该组织还没有可见批注" />}
+        {organization.annotations.length ? <CommunitySettingsSection title={`全部组织批注 · ${organization.annotations.length}`}><div className="annotation-list">{organization.annotations.map((annotation) => <AnnotationCard key={`${annotation.id}-${annotation.updatedAt}`} annotation={annotation} onCompose={onCompose} session={session} />)}</div></CommunitySettingsSection> : <EmptyState text="该组织还没有可见批注" />}
       </section>;
     })}</div> : <EmptyState text="当前没有可访问的组织" />}
   </section>;
@@ -800,3 +805,14 @@ function SignedOut({ onLogin }: { onLogin: () => void }) { return <section class
 function Loading() { return <div className="loading-v2"><Spinner size="small" /><span>正在加载</span></div>; }
 function EmptyState({ icon = <Library20Regular />, text }: { icon?: ReactNode; text: string }) { return <div className="empty-v2">{icon}<span>{text}</span></div>; }
 function ErrorNotice({ message }: { message: string }) { return <div className="error-v2" role="alert">{message}</div>; }
+
+
+function CommunitySettingsSection({ title, children }: { title: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return <Accordion collapsible className="community-governance-menu" openItems={open ? ["settings"] : []}
+    onToggle={(_, data) => setOpen(data.openItems.includes("settings"))}>
+    <AccordionItem value="settings"><AccordionHeader expandIconPosition="end" icon={<ShieldTask20Regular />}>{title}</AccordionHeader>
+      <div hidden={!open}><AccordionPanel collapseMotion={{ children: (Motion, props) => <Motion {...props} unmountOnExit={false} /> }}>{children}</AccordionPanel></div>
+    </AccordionItem>
+  </Accordion>;
+}

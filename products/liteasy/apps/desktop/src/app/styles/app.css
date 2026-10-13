@@ -1619,29 +1619,6 @@ body {
   border-top: 1px solid rgba(63, 116, 137, 0.3);
 }
 
-.genui-outline-node details > summary {
-  cursor: pointer;
-  list-style: none;
-}
-
-.genui-outline-node details > summary::-webkit-details-marker {
-  display: none;
-}
-
-.genui-outline-node details > summary::before {
-  content: "›";
-  display: inline-block;
-  width: 14px;
-  color: #51809a;
-  font-weight: 900;
-  transform: rotate(0deg);
-  transition: transform 160ms ease;
-}
-
-.genui-outline-node details[open] > summary::before {
-  transform: rotate(90deg);
-}
-
 .genui-outline-label {
   display: inline-flex;
   align-items: flex-start;
@@ -1656,27 +1633,27 @@ body {
   box-shadow: 0 5px 14px rgba(54, 78, 88, 0.06);
 }
 
-.kind-root > details > summary > .genui-outline-label,
+.kind-root > div > .genui-outline-toggle > .genui-outline-label,
 .kind-root > .genui-outline-label {
-  border-color: rgba(23, 126, 106, 0.32);
-  background: linear-gradient(135deg, #e8f6f1, #f5fbf8);
-  color: #206858;
+  border-color: var(--colorPaletteGreenBorder1);
+  background: var(--colorPaletteGreenBackground1);
+  color: var(--colorPaletteGreenForeground1);
   font-weight: 800;
 }
 
-.kind-paper > details > summary > .genui-outline-label,
+.kind-paper > div > .genui-outline-toggle > .genui-outline-label,
 .kind-paper > .genui-outline-label {
-  border-color: rgba(27, 102, 179, 0.25);
-  background: #f1f7fd;
-  color: #315f89;
+  border-color: var(--colorPaletteBlueBorder1);
+  background: var(--colorPaletteBlueBackground1);
+  color: var(--colorPaletteBlueForeground2);
   font-weight: 700;
 }
 
-.kind-section > details > summary > .genui-outline-label,
+.kind-section > div > .genui-outline-toggle > .genui-outline-label,
 .kind-section > .genui-outline-label {
-  background: #f7f5ff;
-  border-color: rgba(102, 83, 161, 0.2);
-  color: #62528d;
+  background: var(--colorPalettePurpleBackground1);
+  border-color: var(--colorPalettePurpleBorder1);
+  color: var(--colorPalettePurpleForeground2);
   font-weight: 700;
 }
 
@@ -6241,3 +6218,8 @@ button.pdf-overlay-mark:focus-visible {
 
 .assistant-message-actions.product-contextual-actions { transform: none; }
 @media (hover: none), (pointer: coarse) { .assistant-message-actions.product-contextual-actions { opacity: 1; pointer-events: auto; } }
+
+/* Strip budgets use this region's measured width; document renderers remain stable. */
+.dock-region-actions > button[data-tab-overflow] { width:auto; min-width:40px; padding-inline:4px; }
+.dock-tab { font-size:var(--fontSizeBase300, 13px); }
+@media (pointer: coarse) { .dock-tab, .dock-region-actions > button { min-height:44px; } .dock-tab-close { min-width:44px; min-height:44px; right:0; } .dock-dynamic-tab.has-close > .dock-tab { padding-right:48px; } }

@@ -1,8 +1,9 @@
-import { IconAction, SourceDisclosure } from "../../shared/ui/productPrimitives";
+import { OptionPicker } from "../../shared/ui/productPrimitives";
+import { IconAction, InfoPopover } from "../../shared/ui/productPrimitives";
 import { MoreHorizontalRegular, ArrowClockwiseRegular } from "@fluentui/react-icons";
 import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
 import { useContext, useEffect, useMemo, useState } from "react";
-import { Button, Select, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
+import { Button, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
 import { BookOpenRegular, EditRegular, SaveRegular } from "@fluentui/react-icons";
 import { ContentView } from "../markdown/ContentView";
 import { legacyContent } from "../markdown/contentFragment";
@@ -45,7 +46,7 @@ export function ExternalNoteEditor({ model }: { model: ExternalNoteModel }) {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void model.save(); }
   }}>
     <header>
-      <div><strong>{session.snapshot.name}{dirty ? " · 未保存" : ""}</strong><SourceDisclosure summary="文件位置"><small>{session.snapshot.path}</small></SourceDisclosure></div>
+      <div><strong>{session.snapshot.name}{dirty ? " · 未保存" : ""}</strong><InfoPopover label="文件位置"><small>{session.snapshot.path}</small></InfoPopover></div>
       <MarkdownFontControl {...font} />
       {!live && <Button icon={session.editing ? <BookOpenRegular /> : <EditRegular />} onClick={() => model.setEditing(!session.editing)}>{session.editing ? "阅读" : "编辑"}</Button>}
       <Button appearance="primary" icon={<SaveRegular />} disabled={model.busy || !dirty} onClick={() => void model.save()}>保存</Button>
@@ -64,9 +65,7 @@ export function ExternalNoteEditor({ model }: { model: ExternalNoteModel }) {
       <Button onClick={() => setConfirmReload(false)}>保留草稿</Button></div> : null}
     {live || session.editing ? <MarkdownEditor className="external-note-source" value={session.draft}
       documentKey={`${session.snapshot.mountId}:${session.snapshot.path}`} onChange={model.setDraft} /> : <>
-      {preview.chapters.length > 1 ? <Select aria-label="Markdown 章节" value={selectedPart} onChange={(_, data) => setPart(Number(data.value))}>
-        {preview.chapters.map((chapter, index) => <option key={chapter.id} value={index}>{chapter.title}</option>)}
-      </Select> : null}
+      {preview.chapters.length > 1 ? <OptionPicker aria-label="Markdown 章节" value={String(selectedPart ?? "")} onValueChange={nextValue => setPart(Number(nextValue))} options={[...(preview.chapters.map((chapter, index) => ({ value: String(index), label: String(chapter.title) })))]} /> : null}
       <article className="external-note-preview" key={`${session.snapshot.mountId}:${session.snapshot.path}:${selectedPart}`}>
         {preview.error ? <p role="alert">{preview.error}</p> : <ContentView content={legacyContent(preview.chapters[selectedPart]?.content ?? "")} />}
       </article>

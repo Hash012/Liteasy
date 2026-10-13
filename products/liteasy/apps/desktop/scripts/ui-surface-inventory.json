@@ -21,7 +21,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -114,16 +117,18 @@
       ],
       "interactions": [
         "AssistantComposer",
-        "button",
-        "select"
+        "button"
       ],
       "styles": [
         "../../features/assistant/assistantView.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -153,10 +158,13 @@
         "DialogTitle"
       ],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -189,7 +197,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -216,7 +227,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -239,7 +253,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -263,7 +280,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -285,7 +305,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -314,7 +337,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -335,10 +361,13 @@
       "styles": [
         "./generationPrompts.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -367,10 +396,13 @@
       "styles": [
         "./aiWorkbench.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -400,7 +432,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -433,6 +468,7 @@
         "DialogContent",
         "DialogSurface",
         "DialogTitle",
+        "FilterPopover",
         "Menu",
         "MenuItem",
         "MenuList",
@@ -446,8 +482,11 @@
       ],
       "migration": "product-primitives",
       "disclosure": {
-        "contextualActions": false,
-        "explicitDetails": true,
+        "contextualActions": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": true,
+        "optionPicker": true,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -478,10 +517,13 @@
         "textarea"
       ],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -506,7 +548,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -542,7 +587,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -570,7 +618,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -599,7 +650,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": true,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -621,7 +675,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -642,6 +699,7 @@
         "ResumeReadingButton"
       ],
       "interactions": [
+        "InfoPopover",
         "Menu",
         "MenuItem",
         "MenuList",
@@ -653,7 +711,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": true,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": true,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -673,10 +734,13 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "inherited-semantic-surface",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -707,7 +771,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -730,7 +797,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -767,7 +837,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -793,7 +866,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -815,7 +891,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -844,7 +923,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -866,7 +948,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -905,7 +990,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -932,8 +1020,7 @@
         "MenuList",
         "MenuPopover",
         "MenuTrigger",
-        "button",
-        "select"
+        "button"
       ],
       "styles": [
         "./objectWorkbench.css"
@@ -941,7 +1028,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -966,7 +1056,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -993,10 +1086,13 @@
       "styles": [
         "./citationGraph.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1026,7 +1122,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1048,7 +1147,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1086,7 +1188,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1109,7 +1214,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1134,7 +1242,8 @@
         "DialogBody",
         "DialogContent",
         "DialogSurface",
-        "DialogTitle"
+        "DialogTitle",
+        "InfoPopover"
       ],
       "styles": [
         "./documentExport.css"
@@ -1142,7 +1251,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": false,
+        "infoPopover": true,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1163,10 +1275,13 @@
       "styles": [
         "./documentExport.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1198,7 +1313,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1220,7 +1338,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1242,7 +1363,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1262,10 +1386,13 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "inherited-semantic-surface",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1290,7 +1417,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1324,7 +1454,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1346,7 +1479,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1366,10 +1502,13 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1398,7 +1537,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1417,6 +1559,7 @@
         "preferredIdentifier",
         "claimEvidenceLabel",
         "defaultCopyText",
+        "LiteratureInformation",
         "LiteratureVersionRelations",
         "copyCitation",
         "acquireVersion"
@@ -1432,7 +1575,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1463,7 +1609,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1491,11 +1640,16 @@
       "interactions": [
         "button"
       ],
-      "styles": [],
-      "migration": "inherited-semantic-surface",
+      "styles": [
+        "./dynamicOutline.css"
+      ],
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1526,7 +1680,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1548,10 +1705,13 @@
       "styles": [
         "./slideDeckView.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1582,7 +1742,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": true,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1612,7 +1775,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1636,7 +1802,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1660,7 +1829,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1698,6 +1870,7 @@
         "DialogContent",
         "DialogSurface",
         "DialogTitle",
+        "InfoPopover",
         "Menu",
         "MenuItem",
         "MenuList",
@@ -1707,10 +1880,13 @@
       "styles": [
         "./paperResource.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": false,
+        "infoPopover": true,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1738,7 +1914,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1764,7 +1943,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1783,10 +1965,13 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1816,7 +2001,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1854,7 +2042,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1879,7 +2070,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -1907,10 +2101,13 @@
         "form"
       ],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2007,7 +2204,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": true,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2030,7 +2230,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2056,7 +2259,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2077,14 +2283,19 @@
         "open",
         "navigateRows"
       ],
-      "interactions": [],
+      "interactions": [
+        "FilterPopover"
+      ],
       "styles": [
         "./readingCatalog.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": true,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2107,10 +2318,13 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2131,10 +2345,13 @@
       "styles": [
         "./local-diagnostics.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2154,10 +2371,13 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2179,7 +2399,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2203,7 +2426,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2225,7 +2451,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2255,7 +2484,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2288,7 +2520,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2310,7 +2545,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2341,7 +2579,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2366,7 +2607,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2390,7 +2634,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2428,7 +2675,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2451,7 +2701,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2480,7 +2733,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2508,7 +2764,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2526,6 +2785,7 @@
         "ExternalNoteEditor"
       ],
       "interactions": [
+        "InfoPopover",
         "Menu",
         "MenuItem",
         "MenuList",
@@ -2538,7 +2798,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": false,
+        "infoPopover": true,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2564,10 +2827,13 @@
       "styles": [
         "./noteLabelFilter.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2596,7 +2862,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2620,7 +2889,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2658,7 +2930,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": true,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2681,7 +2956,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2703,7 +2981,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2724,10 +3005,13 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2757,7 +3041,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2776,10 +3063,13 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2805,7 +3095,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2830,7 +3123,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2858,7 +3154,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2883,7 +3182,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2910,7 +3212,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2929,14 +3234,16 @@
       ],
       "interactions": [
         "button",
-        "input",
-        "select"
+        "input"
       ],
       "styles": [],
-      "migration": "inherited-semantic-surface",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2961,7 +3268,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -2985,7 +3295,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3011,7 +3324,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3036,7 +3352,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3064,7 +3383,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3083,10 +3405,13 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3109,7 +3434,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3130,10 +3458,13 @@
       "styles": [
         "./paperAnchors.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3163,7 +3494,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3191,10 +3525,13 @@
       "styles": [
         "./literatureGuide.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3218,7 +3555,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3260,10 +3600,13 @@
         "./paperReading.css",
         "./literatureGuide.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3289,7 +3632,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3313,7 +3659,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3328,15 +3677,25 @@
       "batch": "M1",
       "owner": "M1 surface owner / shared UI review",
       "symbols": [
-        "PaperReviewSharePanel",
-        "share"
+        "usePaperReviewShare",
+        "share",
+        "PaperReviewShareStatus",
+        "PaperReviewShareControl",
+        "PaperReviewSharePanel"
       ],
-      "interactions": [],
+      "interactions": [
+        "Popover",
+        "PopoverSurface",
+        "PopoverTrigger"
+      ],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3360,7 +3719,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3384,7 +3746,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3407,7 +3772,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3430,7 +3798,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3452,7 +3823,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3471,10 +3845,13 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3498,10 +3875,13 @@
         "input"
       ],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3523,7 +3903,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3560,7 +3943,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3579,14 +3965,15 @@
         "navigate",
         "renderItems"
       ],
-      "interactions": [
-        "button"
-      ],
+      "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3609,7 +3996,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3631,7 +4021,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3766,7 +4159,11 @@
       ],
       "interactions": [
         "GenerationPromptDialog",
+        "InfoPopover",
         "PdfSelectionMenu",
+        "Popover",
+        "PopoverSurface",
+        "PopoverTrigger",
         "ResponsiveOverlay",
         "button",
         "input"
@@ -3778,7 +4175,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": true,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3807,7 +4207,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3829,7 +4232,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3853,7 +4259,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3876,7 +4285,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3901,7 +4313,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3944,7 +4359,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3968,7 +4386,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3990,14 +4411,16 @@
       ],
       "interactions": [
         "input",
-        "select",
         "textarea"
       ],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4021,7 +4444,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4045,7 +4471,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4064,13 +4493,17 @@
         "renderEntry"
       ],
       "interactions": [
+        "InfoPopover",
         "form"
       ],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": false,
+        "infoPopover": true,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4096,10 +4529,13 @@
       "styles": [
         "./quickAskPresets.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4120,10 +4556,13 @@
       "styles": [
         "./quickAskPresets.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4155,10 +4594,13 @@
       "styles": [
         "./readingDocumentReader.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4180,7 +4622,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4204,7 +4649,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4223,10 +4671,13 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4246,10 +4697,13 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4277,7 +4731,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4296,10 +4753,13 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4325,7 +4785,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4352,7 +4815,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4381,7 +4847,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4411,7 +4880,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4438,7 +4910,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4464,7 +4939,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4486,7 +4964,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4504,12 +4985,17 @@
         "FacetPicker",
         "SearchFilterFields"
       ],
-      "interactions": [],
+      "interactions": [
+        "InfoPopover"
+      ],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": false,
+        "infoPopover": true,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4538,7 +5024,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4556,14 +5045,19 @@
         "SelectionLookupCard",
         "query"
       ],
-      "interactions": [],
+      "interactions": [
+        "InfoPopover"
+      ],
       "styles": [
         "./selectionLookup.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": true,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4585,10 +5079,13 @@
       "styles": [
         "./selectionLookup.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4610,7 +5107,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4633,7 +5133,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4652,10 +5155,13 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4674,10 +5180,13 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4699,7 +5208,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4718,14 +5230,19 @@
         "loadFonts",
         "SystemFontPicker"
       ],
-      "interactions": [],
+      "interactions": [
+        "InfoPopover"
+      ],
       "styles": [
         "./systemFontPicker.css"
       ],
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": false,
+        "infoPopover": true,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4746,10 +5263,13 @@
         "input"
       ],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4773,7 +5293,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4799,7 +5322,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4826,7 +5352,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4850,7 +5379,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4873,16 +5405,18 @@
         "persistDraggedNodePositions"
       ],
       "interactions": [
-        "button",
-        "select"
+        "button"
       ],
       "styles": [
         "@xyflow/react/dist/style.css"
       ],
-      "migration": "inherited-semantic-surface",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4911,7 +5445,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4940,7 +5477,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4965,7 +5505,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5031,7 +5574,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5054,7 +5600,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5076,7 +5625,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5098,7 +5650,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5120,10 +5675,13 @@
         "input"
       ],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5145,7 +5703,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5175,10 +5736,13 @@
         "DialogTitle"
       ],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5200,7 +5764,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5222,7 +5789,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5247,7 +5817,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5271,7 +5844,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5293,7 +5869,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5317,7 +5896,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5349,7 +5931,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5374,7 +5959,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5399,7 +5987,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5434,7 +6025,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5470,7 +6064,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5500,7 +6097,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5523,7 +6123,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5557,7 +6160,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5583,7 +6189,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5614,7 +6223,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5640,7 +6252,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5663,7 +6278,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5685,7 +6303,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5714,7 +6335,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5733,14 +6357,19 @@
         "WorkbenchEmptyState",
         "SettingRow"
       ],
-      "interactions": [],
+      "interactions": [
+        "InfoPopover"
+      ],
       "styles": [
         "./workbenchPage.css"
       ],
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": false,
+        "infoPopover": true,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5768,7 +6397,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5790,7 +6422,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5816,7 +6451,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5836,10 +6474,13 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5866,6 +6507,12 @@
         "validate"
       ],
       "interactions": [
+        "InfoPopover",
+        "Menu",
+        "MenuItem",
+        "MenuList",
+        "MenuPopover",
+        "MenuTrigger",
         "input"
       ],
       "styles": [
@@ -5874,8 +6521,11 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
-        "commandMenu": false,
+        "semanticSection": true,
+        "infoPopover": true,
+        "filterPopover": false,
+        "optionPicker": true,
+        "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
       },
@@ -5898,14 +6548,22 @@
         "DialogBody",
         "DialogContent",
         "DialogSurface",
-        "DialogTitle"
+        "DialogTitle",
+        "Menu",
+        "MenuItem",
+        "MenuList",
+        "MenuPopover",
+        "MenuTrigger"
       ],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
-        "commandMenu": false,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
+        "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
       },
@@ -5935,7 +6593,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5957,7 +6618,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5989,7 +6653,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -6056,7 +6723,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -6078,7 +6748,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -6104,7 +6777,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -6134,7 +6810,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -6160,7 +6839,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -6183,7 +6865,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -6205,7 +6890,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -6229,7 +6917,10 @@
       "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -6248,14 +6939,19 @@
         "resetScroll",
         "clearSearch"
       ],
-      "interactions": [],
+      "interactions": [
+        "InfoPopover"
+      ],
       "styles": [
         "../features/settings/settingsPage.css"
       ],
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": true,
+        "semanticSection": false,
+        "infoPopover": true,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -6290,8 +6986,37 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
+      "path": "src/app/shared/ui/SurfaceErrorBoundary.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "symbols": [
+        "AsyncNotice",
+        "SurfaceRenderer"
+      ],
+      "interactions": [],
+      "styles": [],
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
+        "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
       },
@@ -6314,7 +7039,10 @@
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
-        "explicitDetails": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -6335,7 +7063,11 @@
         "ActionChips",
         "GenerationComposer",
         "ContextSummary",
+        "DisclosureSection",
         "SourceDisclosure",
+        "InfoPopover",
+        "FilterPopover",
+        "OptionPicker",
         "InlineNotice",
         "ReadingSurface",
         "ResponsiveOverlay"
@@ -6348,7 +7080,9 @@
         "DialogSurface",
         "DialogTitle",
         "Popover",
-        "PopoverSurface"
+        "PopoverSurface",
+        "PopoverTrigger",
+        "input"
       ],
       "styles": [
         "./productPrimitives.css"
@@ -6356,7 +7090,10 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": true,
-        "explicitDetails": true,
+        "semanticSection": true,
+        "infoPopover": true,
+        "filterPopover": true,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"

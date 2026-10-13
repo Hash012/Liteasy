@@ -1,4 +1,4 @@
-import { ActionButton as Button, IconAction } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, DisclosureSection, IconAction } from "../../shared/ui/productPrimitives";
 import { OrganizationInvitationPanel } from "./OrganizationInvitationPanel";
 import { OrganizationActivityInbox } from "./OrganizationActivityInbox";
 import type { AccountSession } from "../account/account.types";
@@ -112,10 +112,9 @@ export function OrganizationSidebarPanel({
         summary={summary}
       /> : null}
       {summary ? (
-        <details className="organization-surface organization-disclosure" key={summary.organizationId}>
-          <summary><SettingsRegular /><span>文献库权限</span></summary>
+        <DisclosureSection className="organization-surface organization-disclosure" key={summary.organizationId} icon={<SettingsRegular />} title="文献库权限">
           <OrganizationStoragePolicyPanel endpoint={cloudEndpoint} summary={summary} />
-        </details>
+        </DisclosureSection>
       ) : null}
       {accountSession && summary && <OrganizationInvitationPanel session={accountSession} endpoint={cloudEndpoint} summary={summary} onChanged={onOrganizationChanged ?? (() => undefined)} />}
       {accountSession && summary && (summary.myRole === "owner" || summary.myRole === "admin") ? (

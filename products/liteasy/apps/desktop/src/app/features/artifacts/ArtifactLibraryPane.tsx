@@ -1,9 +1,11 @@
-import { ActionButton as Button, SourceDisclosure } from "../../shared/ui/productPrimitives";
+import { projectArtifactExportRecords } from "./artifactExportProjection";
+import { artifactMetadataIssueCount } from "./artifactMetadataProjection";
+import { ActionButton as Button, ContextualActions, DisclosureSection, FilterPopover, OptionPicker } from "../../shared/ui/productPrimitives";
 import { SearchOptions } from "../search/SearchOptions";
 import { compileSearchQuery } from "../search/searchQuery";
 import { ARTIFACT_CONTEXT_MIME } from "../object-transfer/contextTransfer";
 import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationButton";
-import { Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Spinner, Select, Tab, TabList, Tooltip } from "@fluentui/react-components";
+import { Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Spinner, Tab, TabList, Tooltip } from "@fluentui/react-components";
 import {
   ArrowClockwiseRegular,
   DeleteRegular,
@@ -102,6 +104,7 @@ export function ArtifactLibraryPane({
   const [paperFilter, setPaperFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [sort, setSort] = useState("recent");
+  const [closedGroups, setClosedGroups] = useState<Set<string>>(new Set());
   const searchQuery = query;
   const compiled = useMemo(() => compileSearchQuery(query), [query]);
   const visibleCatalog = useMemo(() => accountAvailable ? artifactCatalog : [], [accountAvailable, artifactCatalog]);
@@ -113,13 +116,13 @@ export function ArtifactLibraryPane({
     compiled.matches(artifactSearchText(artifact), { assetType: "artifact", format: "json", tags: [artifact.type, artifactTypeLabels[artifact.type]] })
   ).sort((a, b) => sort === "title" ? a.title.localeCompare(b.title) : artifactDateValue(b.createdAt) - artifactDateValue(a.createdAt)),
   [visibleCatalog, paperFilter, typeFilter, compiled, sort]);
-  const filteredExports = useMemo(() => exportRecords.filter((record) => {
+  const filteredExports = useMemo(() => activeView !== "exported" ? [] : projectArtifactExportRecords(exportRecords).filter((record) => {
     const artifact = catalogById.get(record.artifactId);
     return matchesArtifactPaper(artifact, paperFilter) && (!typeFilter || artifact?.type === typeFilter) &&
       compiled.matches([record.title, record.fileName, formatLabels[record.format],
         record.location === "desktop" ? record.path : "", artifact ? artifactSearchText(artifact) : ""].join(" "), { format: record.format, assetType: "artifact", tags: artifact ? [artifact.type, artifactTypeLabels[artifact.type]] : [] });
   }).sort((a, b) => sort === "title" ? a.fileName.localeCompare(b.fileName) : artifactDateValue(b.exportedAt) - artifactDateValue(a.exportedAt)),
-  [exportRecords, catalogById, paperFilter, typeFilter, compiled, sort]);
+  [activeView, exportRecords, catalogById, paperFilter, typeFilter, compiled, sort]);
 
   function beginRename(artifact: ArtifactTab) {
     setDialogError(undefined);
@@ -188,6 +191,7 @@ export function ArtifactLibraryPane({
         </Tooltip>
       </div>
       <div className="artifact-library-filters">
+      <div className="artifact-library-search-row">
       <Input
         aria-label="搜索产物"
         className="artifact-library-search" size="small"
@@ -198,23 +202,18 @@ export function ArtifactLibraryPane({
         value={query}
       />
 
-      <SourceDisclosure summary={`筛选${filterActive || sort !== "recent" ? " · 已启用" : ""}`}>
-      <SearchOptions query={query} onChange={setQuery} tags={Object.values(artifactTypeLabels)} />
-      <Select aria-label="按来源论文筛选" value={paperFilter} onChange={(_, data) => setPaperFilter(data.value)} size="small">
-        <option value="">全部来源论文</option>
-        {papers.map(({ paper, count }) => <option key={paper.id} value={paper.id}>{paper.title}（{count}）</option>)}
-        <option value={unlinkedPaperFilter}>未关联论文</option>
-      </Select>
-      <div className="artifact-library-filter-row">
-        <Select aria-label="按产物类型筛选" value={typeFilter} onChange={(_, data) => setTypeFilter(data.value)} size="small">
-          <option value="">全部类型</option>
-          {Object.entries(artifactTypeLabels).map(([type, label]) => <option key={type} value={type}>{label}</option>)}
-        </Select>
-        <Select aria-label="产物排序" value={sort} onChange={(_, data) => setSort(data.value)} size="small">
-          <option value="recent">最近生成</option><option value="title">名称排序</option>
-        </Select>
+      <FilterPopover label="筛选产物" activeCount={[Boolean(query), Boolean(paperFilter), Boolean(typeFilter), sort !== "recent"].filter(Boolean).length}>
+        <div className="artifact-library-filter-options">
+          <SearchOptions query={query} onChange={setQuery} tags={Object.values(artifactTypeLabels)} />
+          <label>来源论文<OptionPicker aria-label="按来源论文筛选" value={paperFilter} onValueChange={setPaperFilter}
+            options={[{ value: "", label: "全部来源论文" }, ...papers.map(({ paper, count }) => ({ value: paper.id, label: `${paper.title}（${count}）` })), { value: unlinkedPaperFilter, label: "未关联论文" }]} /></label>
+          <label>产物类型<OptionPicker aria-label="按产物类型筛选" value={typeFilter} onValueChange={setTypeFilter}
+            options={[{ value: "", label: "全部类型" }, ...Object.entries(artifactTypeLabels).map(([value, label]) => ({ value, label }))]} /></label>
+          <label>排序<OptionPicker aria-label="产物排序" value={sort} onValueChange={setSort}
+            options={[{ value: "recent", label: "最近生成" }, { value: "title", label: "名称排序" }]} /></label>
+        </div>
+      </FilterPopover>
       </div>
-      </SourceDisclosure>
       <div className="artifact-library-filter-summary">
         <span role="status">{activeView === "saved" ? filteredArtifacts.length : filteredExports.length} 项</span>
         {activePaperId && papers.some(({ paper }) => paper.id === activePaperId) ? <Button size="small" appearance="subtle"
@@ -224,8 +223,13 @@ export function ArtifactLibraryPane({
       </div>
       </div>
       <div className="artifact-library-results">
+      {accountAvailable && activeView === "saved" && artifactCatalogLoadState.issueCount ? <div role="status" className="artifact-library-inline-error">{artifactCatalogLoadState.issueCount} 项元数据问题已隔离，原始记录已保留；目录只读。</div> : null}
       {activeView === "saved" ? (
         <SavedArtifactList
+          closedGroups={closedGroups}
+          onGroupOpenChange={(id, open) => setClosedGroups((previous) => {
+            const next = new Set(previous); if (open) next.delete(id); else next.add(id); return next;
+          })}
           accountAvailable={accountAvailable}
           artifacts={filteredArtifacts}
           paperFilter={paperFilter}
@@ -333,6 +337,7 @@ export function ArtifactLibraryPane({
 }
 
 function SavedArtifactList({
+  closedGroups, onGroupOpenChange,
   paperFilter, onFilterPaper, onOpenPaper, availablePaperIds,
   accountAvailable,
   artifacts,
@@ -343,6 +348,8 @@ function SavedArtifactList({
   onRetry,
   queryActive
 }: {
+  closedGroups: Set<string>;
+  onGroupOpenChange: (id: string, open: boolean) => void;
   accountAvailable: boolean;
   artifacts: ArtifactTab[];
   paperFilter: string;
@@ -356,6 +363,7 @@ function SavedArtifactList({
   onRetry: () => unknown;
   queryActive: boolean;
 }) {
+  const [locationArtifactId, setLocationArtifactId] = useState<string | null>(null);
   const [openMenuArtifactId, setOpenMenuArtifactId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<{
     artifact: ArtifactTab;
@@ -381,14 +389,14 @@ function SavedArtifactList({
   if (!accountAvailable) {
     return <div className="artifact-library-empty">登录后查看账号中保存的产物</div>;
   }
-  if (loadState.status === "loading" || loadState.status === "idle") {
+  if (!artifacts.length && (loadState.status === "loading" || loadState.status === "idle")) {
     return (
       <div className="artifact-library-loading">
         <Spinner aria-label="正在加载已保存产物" size="tiny" />
       </div>
     );
   }
-  if (loadState.status === "error") {
+  if (loadState.status === "error" && !artifacts.length) {
     return (
       <div className="artifact-library-error" role="alert">
         <span>{loadState.message ?? "加载已保存产物失败。"}</span>
@@ -411,18 +419,22 @@ function SavedArtifactList({
     );
   }
   return (
+    <>
+    {loadState.status === "error" ? <div role="alert" className="artifact-library-error">刷新失败，仍显示上次可用目录。{loadState.message}<Button appearance="subtle" onClick={() => void onRetry()}>重试</Button></div> : null}
+    {loadState.status === "loading" ? <span role="status">正在刷新，上次目录仍可查看</span> : null}
     <ul aria-label="已保存产物" className="artifact-library-list">
       {groupArtifactsByPaper(artifacts, paperFilter).map((group) => <li className="artifact-library-group" key={group.id}>
-        <details open>
-          <summary title={group.title}><DocumentRegular aria-hidden="true" /><span>{group.title}</span><small>{group.artifacts.length}</small></summary>
+        <DisclosureSection title={<><span>{group.title}</span><small>{group.artifacts.length}</small></>} icon={<DocumentRegular />}
+          open={!closedGroups.has(group.id)} onOpenChange={(open) => onGroupOpenChange(group.id, open)}>
           <ul className="artifact-library-list">
       {group.artifacts.map((artifact) => (
-        <li className="artifact-library-row artifact-library-saved-row" key={artifact.artifactId}>
+        <li className="artifact-library-row artifact-library-saved-row product-contextual-owner" key={artifact.artifactId}>
           <Button
             appearance="transparent"
             aria-label={`打开产物：${artifact.title}`}
             className="artifact-library-row-main"
-            draggable
+            disabled={artifactMetadataIssueCount(artifact) > 0}
+            draggable={artifactMetadataIssueCount(artifact) === 0}
             onDragStart={(event) => {
               event.stopPropagation();
               event.dataTransfer.effectAllowed = "copy";
@@ -435,10 +447,11 @@ function SavedArtifactList({
             <span className="artifact-library-row-copy">
               <span className="artifact-library-title">{artifact.title}</span>
               <span className="artifact-library-meta">
-                {artifactTypeLabels[artifact.type]} · {displayDate(artifact.createdAt)}
+                {artifactMetadataIssueCount(artifact) > 0 ? `只读 · ${artifactMetadataIssueCount(artifact)} 项来源问题` : `${artifactTypeLabels[artifact.type]} · ${displayDate(artifact.createdAt)}`}
               </span>
             </span>
           </Button>
+          <ContextualActions className="artifact-library-row-actions" menuOpen={openMenuArtifactId === artifact.artifactId || locationArtifactId === artifact.artifactId}>
           <Menu
             onOpenChange={(_, data) => {
               setOpenMenuArtifactId(data.open ? artifact.artifactId : null);
@@ -458,23 +471,25 @@ function SavedArtifactList({
             </MenuTrigger>
             <MenuPopover>
               <MenuList>
-                <MenuItem icon={<OpenRegular />} onClick={() => onOpen(artifact.artifactId)}>打开</MenuItem>
+                <MenuItem disabled={artifactMetadataIssueCount(artifact) > 0} icon={<OpenRegular />} onClick={() => onOpen(artifact.artifactId)}>打开</MenuItem>
                 {onOpenPaper ? artifact.papers?.filter((paper) => availablePaperIds.includes(paper.id)).map((paper) =>
                   <MenuItem key={paper.id} icon={<BookOpenRegular />} onClick={() => onOpenPaper(paper.id)}>阅读来源：{paper.title}</MenuItem>
                 ) : null}
-                <MenuItem icon={<EditRegular />} onClick={() => scheduleDialog("rename", artifact)}>重命名</MenuItem>
-                <MenuItem icon={<DeleteRegular />} onClick={() => scheduleDialog("delete", artifact)}>删除</MenuItem>
+                <MenuItem disabled={loadState.readOnly || artifactMetadataIssueCount(artifact) > 0} icon={<EditRegular />} onClick={() => scheduleDialog("rename", artifact)}>重命名</MenuItem>
+                <MenuItem disabled={loadState.readOnly || artifactMetadataIssueCount(artifact) > 0} icon={<DeleteRegular />} onClick={() => scheduleDialog("delete", artifact)}>删除</MenuItem>
               </MenuList>
             </MenuPopover>
           </Menu>
-          <ResourceLocationButton target={{ kind: "artifact", artifactId: artifact.artifactId }} />
+          <ResourceLocationButton onOpenChange={(open) => setLocationArtifactId(open ? artifact.artifactId : null)} target={{ kind: "artifact", artifactId: artifact.artifactId }} />
+          </ContextualActions>
           {(artifact.papers?.length ?? 0) > 1 ? <ArtifactSourceLinks artifact={artifact} onFilterPaper={onFilterPaper} /> : null}
         </li>
       ))}
           </ul>
-        </details>
+        </DisclosureSection>
       </li>)}
     </ul>
+    </>
   );
 }
 

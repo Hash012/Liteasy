@@ -1,3 +1,4 @@
+import { selectPickerValue } from "./helpers/selectPickerValue";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -159,7 +160,7 @@ test("edits, displays and filters local papers by category and tags", async () =
   expect(within(metadata).getByText("机器学习")).toBeInTheDocument();
   expect(within(metadata).getByText("向量检索")).toBeInTheDocument();
 
-  await user.selectOptions(screen.getByRole("combobox", { name: "按论文分类筛选" }), "机器学习");
+  await selectPickerValue(screen.getByRole("combobox", { name: "按论文分类筛选" }), "机器学习");
   expect(screen.getByRole("button", { name: paper.title })).toBeInTheDocument();
 
   await user.clear(screen.getByRole("textbox", { name: "搜索文献资源" }));
@@ -246,7 +247,7 @@ test("opens papers on double click while retaining metadata inspection and file 
   expect(screen.queryByRole("button", { name: "选择文件 Field Guide" })).not.toBeInTheDocument();
   await user.clear(screen.getByRole("textbox", { name: "搜索文献资源" }));
   await user.click(screen.getByRole("button", { name: "筛选本地文件" }));
-  await user.selectOptions(screen.getByRole("combobox", { name: "筛选文件格式" }), "epub");
+  await selectPickerValue(screen.getByRole("combobox", { name: "筛选文件格式" }), "epub");
   expect(screen.queryByRole("button", { name: paper.title, exact: true })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "选择文件 Field Guide" })).toBeInTheDocument();
 });
@@ -437,7 +438,7 @@ test("edits semantic facets for an ebook through the same asset editor", async (
   fireEvent.contextMenu(screen.getByRole("button", { name: "选择文件 My Book" }));
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑分类与标签" }));
   const editor = await screen.findByRole("dialog", { name: "编辑资产分类与标签" });
-  expect(within(editor).getByRole("combobox", { name: "资产类别" })).toHaveValue("book");
+  expect(within(editor).getByRole("combobox", { name: "资产类别" })).toHaveTextContent("图书");
   fireEvent.change(within(editor).getByRole("textbox", { name: "资产年份" }), { target: { value: "2024" } });
   fireEvent.change(within(editor).getByRole("textbox", { name: "资产学科" }), { target: { value: "文学, 历史" } });
   fireEvent.change(within(editor).getByRole("textbox", { name: "资产标签" }), { target: { value: "经典, 待读" } });

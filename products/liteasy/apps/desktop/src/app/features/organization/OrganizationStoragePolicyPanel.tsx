@@ -1,6 +1,7 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Field, Select, Spinner, Tooltip } from "@fluentui/react-components";
+import { Field, Spinner, Tooltip } from "@fluentui/react-components";
 import { ArrowSyncRegular, SaveRegular } from "@fluentui/react-icons";
 import { createCloudLibraryStorageClient } from "../library/cloudLibraryStorageClient";
 import type { OrganizationSummary } from "./organization.types";
@@ -121,30 +122,16 @@ export function OrganizationStoragePolicyPanel({
         </Tooltip>
       </div>
       <Field label="允许上传">
-        <Select
-          aria-label="允许上传"
-          disabled={!canEdit || pending || !policy}
-          onChange={(_event, data) => setUploadPolicy(data.value as OrganizationUploadPolicy)}
-          size="small"
-          value={uploadPolicy}
-        >
-          <option value="owner_admins">负责人和管理员</option>
-          <option value="all_members">所有成员</option>
-        </Select>
+        <OptionPicker aria-label="允许上传" disabled={!canEdit || pending || !policy} density="compact" value={uploadPolicy}
+          onValueChange={(value) => setUploadPolicy(value as OrganizationUploadPolicy)}
+          options={[{ value: "owner_admins", label: "负责人和管理员" }, { value: "all_members", label: "所有成员" }]} />
       </Field>
       <Field label="允许复制出库">
-        <Select
-          aria-label="允许复制出库"
-          disabled={!canEdit || pending || !policy}
-          onChange={(_event, data) => setExportPolicy(data.value as OrganizationExportPolicy)}
-          size="small"
-          value={exportPolicy}
-        >
-          <option value="disabled">禁止</option>
-          <option value="admins_only">负责人和管理员</option>
-          <option value="all_members">所有成员</option>
-        </Select>
+        <OptionPicker aria-label="允许复制出库" disabled={!canEdit || pending || !policy} density="compact" value={exportPolicy}
+          onValueChange={(value) => setExportPolicy(value as OrganizationExportPolicy)}
+          options={[{ value: "disabled", label: "禁止" }, { value: "admins_only", label: "负责人和管理员" }, { value: "all_members", label: "所有成员" }]} />
       </Field>
+      {!canEdit ? <p className="organization-muted">仅组织所有者可修改文献库策略。</p> : null}
       {canEdit ? (
         <Button
           appearance="primary"

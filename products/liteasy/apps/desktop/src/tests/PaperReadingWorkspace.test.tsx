@@ -1,3 +1,4 @@
+import { selectPickerValue } from "./helpers/selectPickerValue";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
@@ -53,8 +54,8 @@ test("PDF and reading mode edit and delete the same persisted comment without ch
   const comments = await screen.findByRole("complementary", { name: "阅读模式批注" });
   expect(await within(comments).findByText("PDF 里的原始评论")).toBeInTheDocument();
   await user.click(within(comments).getByRole("button", { name: "编辑", exact: true }));
-  await user.selectOptions(screen.getByRole("combobox", { name: "标记类型" }), "underline");
-  await user.selectOptions(screen.getByRole("combobox", { name: "标记颜色" }), "green");
+  await selectPickerValue(screen.getByRole("combobox", { name: "标记类型" }), "underline");
+  await selectPickerValue(screen.getByRole("combobox", { name: "标记颜色" }), "green");
   await user.clear(screen.getByRole("textbox", { name: "阅读批注内容" }));
   await user.type(screen.getByRole("textbox", { name: "阅读批注内容" }), "从阅读模式补充的评论");
   await user.click(screen.getByRole("button", { name: "保存批注", exact: true }));
@@ -82,9 +83,9 @@ test("selected reading text retains its page and comment across mode changes and
   window.getSelection()?.addRange(range);
   fireEvent.mouseUp(paragraph);
   await user.click(screen.getByText("补充批注与页码"));
-  expect(screen.getByRole("combobox", { name: "批注页码" })).toHaveValue("2");
+  expect(screen.getByRole("combobox", { name: "批注页码" })).toHaveTextContent("第 2 页");
   // This fixture has extracted text but no PDF document/geometry. Keep a page note rather than guess a highlight.
-  await user.selectOptions(screen.getByRole("combobox", { name: "标记类型" }), "note");
+  await selectPickerValue(screen.getByRole("combobox", { name: "标记类型" }), "note");
   await user.type(screen.getByRole("textbox", { name: "阅读批注内容" }), "核对样本量");
   await user.click(screen.getByRole("button", { name: "保存批注", exact: true }));
   await waitFor(() => expect(screen.queryByRole("textbox", { name: "阅读批注内容" })).not.toBeInTheDocument());
@@ -106,8 +107,8 @@ test("reading typography persists locally and malformed preferences are bounded"
   fireEvent.change(screen.getByRole("slider", { name: "阅读字号" }), { target: { value: "24" } });
   await user.click(screen.getByRole("combobox", { name: "阅读字体" }));
   await user.click(screen.getByRole("option", { name: "无衬线 · 黑体" }));
-  await user.selectOptions(screen.getByRole("combobox", { name: "阅读页面宽度" }), "1080");
-  await user.selectOptions(screen.getByRole("combobox", { name: "阅读行距" }), "2.2");
+  await selectPickerValue(screen.getByRole("combobox", { name: "阅读页面宽度" }), "1080");
+  await selectPickerValue(screen.getByRole("combobox", { name: "阅读行距" }), "2.2");
   await user.keyboard("{Escape}");
   view.unmount(); render(<ReaderPane {...props} readingContent={content} />);
   await user.click(screen.getByRole("button", { name: "阅读模式", exact: true }));

@@ -1,9 +1,10 @@
-import { ActionButton as Button } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, DisclosureSection, OptionPicker } from "../../shared/ui/productPrimitives";
 import { OpenRegular } from "@fluentui/react-icons";
 import { rememberVerifiedModel, forgetVerifiedModel, modelProfileId, directModelSettingCommands } from "./verifiedModelProfiles";
 import { useVerifiedModels } from "./useVerifiedModels";
-import { useEffect, useId, useRef, useState } from "react";
-import { Field, Input, Select, Textarea } from "@fluentui/react-components";
+import { useEffect, useRef, useState } from "react";
+import { Combobox, Input, Option, Textarea } from "@fluentui/react-components";
+import { SettingRow } from "../workbench/WorkbenchPage";
 import { isTauri } from "@tauri-apps/api/core";
 import type { SettingsState, UpdateSettingCommand } from "../settings/settings.types";
 import { createDirectModelClient } from "./directModelClient";
@@ -25,7 +26,7 @@ export function ModelConnectionPanel({ settings = {}, onUpdateSetting, expandAdv
   const [reply, setReply] = useState("");
   const requestRef = useRef<AbortController>();
   const mountedRef = useRef(true);
-  const modelListId = useId();
+  const [profileQuery, setProfileQuery] = useState("");
   const { profiles } = useVerifiedModels();
   const preset = getModelProvider(config.provider);
   useEffect(() => {
@@ -103,55 +104,51 @@ export function ModelConnectionPanel({ settings = {}, onUpdateSetting, expandAdv
 
   return <div className="model-connection-panel">
     <p className="model-connection-description">使用自己的 API key 即可开始，无需登录 Liteasy。</p>
-    <Field label="接入方式">
-      <Select aria-label="AI 接入方式" disabled={pending} value={mode} onChange={(_event, data) => { setMode(data.value as typeof mode); setMessage(""); setReply(""); }}>
-        <option value="direct">自备 API key（无需登录）</option>
-        <option value="cloud">Liteasy 云端模型（需要登录）</option>
-      </Select>
-    </Field>
+    <SettingRow title="接入方式">
+      <OptionPicker aria-label="AI 接入方式" disabled={pending} value={mode} onValueChange={(value) => { setMode(value as typeof mode); setMessage(""); setReply(""); }}
+        options={[{ value: "direct", label: "自备 API key", description: "无需登录" }, { value: "cloud", label: "Liteasy 云端模型", description: "需要登录" }]} />
+    </SettingRow>
     {mode === "direct" ? <>
-      {profiles.length ? <Field label="已验证模型" hint="可保留多个服务商、地址与模型；对话输入框可直接切换。">
-        <Select aria-label="载入已验证模型配置" disabled={pending} value="" onChange={(_, data) => {
-          const profile = profiles.find((item) => item.id === data.value);
-          if (profile) update(profile.config);
-        }}>
-          <option value="">选择已保存的模型配置</option>
-          {profiles.map((profile) => <option value={profile.id} key={profile.id}>{profile.config.model} · {getModelProvider(profile.config.provider).label} · {profile.config.endpoint}</option>)}
-        </Select>
-      </Field> : null}
-      <Field label="服务商">
-        <Select aria-label="API 服务商" disabled={pending} value={config.provider} onChange={(_event, data) => update(getModelProvider(data.value))}>
-          {modelProviders.map((entry) => <option value={entry.provider} key={entry.provider}>{entry.label}</option>)}
-        </Select>
-      </Field>
+      {profiles.length ? <SettingRow title="已验证模型" description="可保留多个服务商、地址与模型；对话输入框可直接切换。">
+        <Combobox aria-label="载入已验证模型配置" disabled={pending} value={profileQuery} placeholder="选择已保存的模型配置"
+          onChange={(event) => setProfileQuery(event.target.value)}
+          onOptionSelect={(_, data) => {
+            const profile = profiles.find((item) => item.id === data.optionValue);
+            if (profile) { update(profile.config); setProfileQuery(profile.config.model); }
+          }}>
+          {profiles.filter((profile) => `${profile.config.model} ${profile.config.provider} ${profile.config.endpoint}`.toLowerCase().includes(profileQuery.toLowerCase())).map((profile) =>
+            <Option value={profile.id} key={profile.id} text={profile.config.model}><span className="product-option-text">{profile.config.model}<small>{getModelProvider(profile.config.provider).label} · {profile.config.endpoint}</small></span></Option>)}
+        </Combobox>
+      </SettingRow> : null}
+      <SettingRow title="服务商">
+        <OptionPicker aria-label="API 服务商" disabled={pending} value={config.provider} onValueChange={(value) => update(getModelProvider(value))}
+          options={modelProviders.map((entry) => ({ value: entry.provider, label: entry.label, description: entry.hint }))} />
+      </SettingRow>
       {preset.docs ? <Button as="a" appearance="subtle" size="small" className="model-provider-docs"
         icon={<OpenRegular />} href={preset.docs} rel="noopener noreferrer" target="_blank">查看服务商 API 文档</Button> : null}
-      <Field label="API 基础地址" hint={preset.hint ?? "保留服务商要求的版本路径；无需添加 /chat/completions 或 /messages。"}>
+      <SettingRow title="API 基础地址" description={preset.hint ?? "保留服务商要求的版本路径；无需添加 /chat/completions 或 /messages。"}>
         <Input aria-label="API 基础地址" disabled={pending} value={config.endpoint} onChange={(_event, data) => update({ endpoint: data.value })} placeholder="https://api.example.com/v1" />
-      </Field>
-      <Field label="模型 ID" hint="可选择建议值或填写账号中已开通的模型；Azure / 方舟可填写部署或接入点名称。">
-        <Input aria-label="模型 ID" disabled={pending} list={modelListId} value={config.model} onChange={(_event, data) => update({ model: data.value })} />
-        <datalist id={modelListId}>{preset.models.map((model) => <option key={model} value={model} />)}</datalist>
-      </Field>
-      <Field label="API key" hint={config.provider === "ollama" ? "本机 Ollama 不需要密钥。" : hasKey ? "此 API 地址已有密钥；留空即可保留，填写新值可替换。" : isTauri() ? "保存在此设备的系统凭据库中。" : "浏览器预览仅在当前页面会话保留密钥；关闭或刷新页面后需重新填写。"}>
+      </SettingRow>
+      <SettingRow title="模型 ID" description="可选择建议值或填写账号中已开通的模型；Azure / 方舟可填写部署或接入点名称。">
+        <Combobox aria-label="模型 ID" disabled={pending} freeform value={config.model} selectedOptions={preset.models.includes(config.model) ? [config.model] : []}
+          onChange={(event) => update({ model: event.target.value })}
+          onOptionSelect={(_, data) => { if (data.optionValue !== undefined) update({ model: data.optionValue }); }}>
+          {preset.models.filter((model) => model.toLowerCase().includes(config.model.toLowerCase())).map((model) => <Option key={model} value={model}>{model}</Option>)}
+        </Combobox>
+      </SettingRow>
+      <SettingRow title="API key" description={config.provider === "ollama" ? "本机 Ollama 不需要密钥。" : hasKey ? "此 API 地址已有密钥；留空即可保留，填写新值可替换。" : isTauri() ? "保存在此设备的系统凭据库中。" : "浏览器预览仅在当前页面会话保留密钥；关闭或刷新页面后需重新填写。"}>
         <Input aria-label="API key" autoComplete="off" disabled={pending} type="password" value={apiKey} onChange={(_event, data) => setApiKey(data.value)} placeholder={hasKey ? "已保存，留空保留" : "输入 API key"} />
-      </Field>
-      <details open={expandAdvanced || advancedOpen} onToggle={(event) => { if (!expandAdvanced) setAdvancedOpen(event.currentTarget.open); }}>
-        <summary>高级设置</summary>
-        <Field label="API 协议">
-          <Select aria-label="API 协议" disabled={pending} value={config.protocol} onChange={(_event, data) => update({ protocol: data.value as DirectModelConfig["protocol"] })}>
-            <option value="openai">OpenAI Chat Completions 兼容</option>
-            <option value="anthropic">Anthropic Messages</option>
-          </Select>
-        </Field>
-        {config.protocol === "openai" ? <Field label="结构化输出" hint="论文分析需要 JSON；若服务商拒绝 response_format，可选择按提示生成。">
-          <Select aria-label="结构化输出" disabled={pending} value={config.outputFormat} onChange={(_event, data) => update({ outputFormat: data.value as DirectModelConfig["outputFormat"] })}>
-            <option value="prompt">按提示生成 JSON（兼容性优先）</option>
-            <option value="json_object">JSON 模式</option>
-            <option value="json_schema">JSON Schema</option>
-          </Select>
-        </Field> : null}
-      </details>
+      </SettingRow>
+      <DisclosureSection title="高级设置" open={expandAdvanced || advancedOpen} onOpenChange={(open) => { if (!expandAdvanced) setAdvancedOpen(open); }}>
+        <SettingRow title="API 协议">
+          <OptionPicker aria-label="API 协议" disabled={pending} value={config.protocol} onValueChange={(value) => update({ protocol: value as DirectModelConfig["protocol"] })}
+            options={[{ value: "openai", label: "OpenAI Chat Completions", description: "兼容此协议的服务" }, { value: "anthropic", label: "Anthropic Messages" }]} />
+        </SettingRow>
+        {config.protocol === "openai" ? <SettingRow title="结构化输出" description="论文分析需要 JSON；若服务商拒绝 response_format，可选择按提示生成。">
+          <OptionPicker aria-label="结构化输出" disabled={pending} value={config.outputFormat} onValueChange={(value) => update({ outputFormat: value as DirectModelConfig["outputFormat"] })}
+            options={[{ value: "prompt", label: "按提示生成 JSON", description: "兼容性优先" }, { value: "json_object", label: "JSON 模式" }, { value: "json_schema", label: "JSON Schema" }]} />
+        </SettingRow> : null}
+      </DisclosureSection>
 
     </> : <p className="model-connection-description">使用 Liteasy 账号提供的云端模型与额度。社区与云端同步功能仍需要登录。</p>}
     <div className="model-connection-actions">
@@ -162,6 +159,6 @@ export function ModelConnectionPanel({ settings = {}, onUpdateSetting, expandAdv
     </div>
     {mode === "direct" ? <p className="model-connection-description">测试会发送一条短请求，按服务商的 API 计费规则使用额度。</p> : null}
     {message ? <p className="model-connection-message" role={failed ? "alert" : "status"}>{message}</p> : null}
-    {reply ? <Field label="测试响应"><Textarea aria-label="测试响应" readOnly resize="vertical" value={reply} /></Field> : null}
+    {reply ? <SettingRow title="测试响应"><Textarea aria-label="测试响应" readOnly resize="vertical" value={reply} /></SettingRow> : null}
   </div>;
 }

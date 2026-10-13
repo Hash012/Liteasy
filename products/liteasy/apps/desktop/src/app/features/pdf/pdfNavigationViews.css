@@ -2,13 +2,13 @@
 .pdf-left-sidebar .pdf-sidebar-switcher button { width: 28px; height: 30px; }
 .pdf-overview-sidebar-note { padding: 10px; overflow: auto; color: var(--colorNeutralForeground2); font-size: 12px; }
 .pdf-outline { padding: 10px; overflow: auto; color: var(--colorNeutralForeground1); }
-.pdf-outline ol { list-style: none; padding: 0 0 0 10px; margin: 0; }
-.pdf-outline > ol { padding-left: 0; }
-.pdf-outline li { margin: 4px 0; }
-.pdf-outline summary { cursor: pointer; overflow-wrap: anywhere; padding: 5px 0; }
-.pdf-outline-link { width: 100%; text-align: left; border: 0; border-radius: 4px; padding: 6px; cursor: pointer; color: inherit; background: transparent; overflow-wrap: anywhere; }
-.pdf-outline-link:hover { background: var(--colorSubtleBackgroundHover); }
-.pdf-outline-link:disabled { color: var(--colorNeutralForegroundDisabled); cursor: default; }
+.pdf-outline .fui-TreeItemLayout { min-height: 32px; height: auto; padding-block: 4px; line-height: 1.5; border-radius: 6px; }
+.pdf-outline .fui-TreeItemLayout__main { min-width: 0; white-space: normal; }
+.pdf-outline-title { display: block; overflow-wrap: anywhere; }
+.pdf-outline-page { color: var(--colorNeutralForeground3); font-variant-numeric: tabular-nums; }
+.pdf-outline [aria-current="location"] > .fui-TreeItemLayout { color: var(--colorBrandForeground1); background: var(--colorBrandBackground2); }
+.pdf-outline .fui-TreeItem:focus-visible { outline: 2px solid var(--colorStrokeFocus2); outline-offset: -2px; }
+@media (pointer: coarse) { .pdf-outline .fui-TreeItemLayout { min-height: 44px; } }
 .pdf-stage.is-overview { overflow: hidden; display: flex; padding: 0; }
 .pdf-overview { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; height: 100%; background: var(--colorNeutralBackground2); color: var(--colorNeutralForeground1); }
 .pdf-overview-header { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--colorNeutralStroke2); }
@@ -30,3 +30,12 @@
 .pdf-overview-muted { color: var(--colorNeutralForeground3); }
 
 .pdf-pages-grid .pdf-thumbnail-number { margin: 5px auto 0; }
+
+.pdf-navigation-announcement { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+.pdf-annotation-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.pdf-comment-share-status { order: 5; flex-basis: 100%; display: flex; align-items: flex-start; flex-wrap: wrap; gap: 4px; font-size: var(--fontSizeBase200); }
+.pdf-comment-share-popover, .pdf-annotation-settings-popover { max-width: min(24rem, calc(100vw - 24px)); max-height: min(70vh, 36rem); overflow: auto; font-size: var(--fontSizeBase300); }
+.pdf-comment-share-popover p { margin: 8px 0; overflow-wrap: anywhere; }
+.pdf-comment-share-popover h3 { margin: 0 0 8px; font-size: var(--fontSizeBase400); }
+.pdf-reader > .pdf-comment-share-status { order: 0; flex: 0 0 auto; padding: 4px 8px; border-bottom: 1px solid var(--colorNeutralStroke2); }

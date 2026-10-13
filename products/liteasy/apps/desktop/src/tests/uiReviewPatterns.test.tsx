@@ -1,3 +1,4 @@
+import { selectPickerValue } from "./helpers/selectPickerValue";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vitest";
@@ -34,11 +35,11 @@ test("metadata starts as readable information, pins edits and returns to informa
   await waitFor(() => expect(save).toHaveBeenCalledWith(paper.id, expect.objectContaining({ title: "My revised title" }), 0));
   expect(await screen.findByRole("heading", { name: "My revised title" })).toBeVisible();
   expect(screen.queryByRole("textbox", { name: "标题" })).not.toBeInTheDocument();
-  await user.selectOptions(screen.getByRole("combobox", { name: "信息关联方式" }), "follow");
+  await selectPickerValue(screen.getByRole("combobox", { name: "信息关联方式" }), "follow");
   expect(await screen.findByRole("heading", { name: "Other paper" })).toBeVisible();
   act(() => { controller.open(paper); controller.change({ title: "Unsaved again" }); });
   vi.spyOn(window, "confirm").mockReturnValueOnce(false);
-  await user.selectOptions(screen.getByRole("combobox", { name: "信息关联方式" }), "follow");
+  await selectPickerValue(screen.getByRole("combobox", { name: "信息关联方式" }), "follow");
   expect(screen.getByRole("textbox", { name: "标题" })).toHaveValue("Unsaved again");
 });
 

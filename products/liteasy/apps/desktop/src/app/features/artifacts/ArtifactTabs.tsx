@@ -1,3 +1,4 @@
+import { DisclosureSection } from "../../shared/ui/productPrimitives";
 import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
 import { artifactPromptTask } from "../ai-prompts/generationPrompts";
 import { Button } from "@fluentui/react-components";
@@ -466,8 +467,8 @@ export function ArtifactTabs({
             ) : null}
           </div>
           {activeTask.failure && activeFailure ? (
-            <details className="artifact-failure-diagnostic" open>
-              <summary>查看错误信息与恢复建议</summary>
+            <DisclosureSection className="artifact-failure-diagnostic" defaultOpen title={<>查看错误信息与恢复建议</>}>
+
               <dl>
                 <div><dt>错误编号</dt><dd>{activeFailure.code}</dd></div>
                 <div><dt>原因</dt><dd>{activeFailure.message}</dd></div>
@@ -494,7 +495,7 @@ export function ArtifactTabs({
               <ul>
                 {activeTask.failure.recovery.map((item) => <li key={item}>{item}</li>)}
               </ul>
-            </details>
+            </DisclosureSection>
           ) : null}
         </section>
       ) : null}
@@ -600,8 +601,8 @@ export function ArtifactTabs({
             </div>
           ) : null}
           {activeMindmapSources?.externalReferences.length ? (
-            <details className="artifact-external-reference-index" open>
-              <summary>外部补充来源</summary>
+            <DisclosureSection className="artifact-external-reference-index" defaultOpen title={<>外部补充来源</>}>
+
               <ul>
                 {activeMindmapSources.externalReferences.map((reference) => (
                   <li key={reference.refId}>
@@ -610,19 +611,19 @@ export function ArtifactTabs({
                   </li>
                 ))}
               </ul>
-            </details>
+            </DisclosureSection>
           ) : null}
           {activeTab.answer ? (
-            <details className="artifact-agent-answer">
-              <summary>查看原始 Agent 分析记录</summary>
+            <DisclosureSection className="artifact-agent-answer" title={<>查看原始 Agent 分析记录</>}>
+
               <AssistantMarkdown className="artifact-agent-answer-body assistant-markdown" value={activeTab.answer} paperAnchors={paperAnchors} />
-            </details>
+            </DisclosureSection>
           ) : null}
           {activeTab.outlineMarkdown ? (
-            <details className="artifact-outline-markdown">
-              <summary>查看可提交的 Markdown 大纲元数据</summary>
+            <DisclosureSection className="artifact-outline-markdown" title={<>查看可提交的 Markdown 大纲元数据</>}>
+
               <AssistantMarkdown value={activeTab.outlineMarkdown} paperAnchors={paperAnchors} />
-            </details>
+            </DisclosureSection>
           ) : null}
           <PaperAnchorReferences
             anchors={paperAnchors}

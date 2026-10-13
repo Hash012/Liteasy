@@ -1,3 +1,6 @@
+import { AnnotationCard } from "../AnnotationApp";
+import { CommunityGovernanceProvider } from "./CommunityGovernanceProvider";
+import type { IdentitySession } from "../identity.types";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
@@ -17,7 +20,8 @@ test("reports need a material preview and explicit confirmation bound to the dis
   const user = userEvent.setup();
   render(<AnnotationGovernanceControls annotation={annotationFixture({ revision: 3 })} api={api} actorBinding="member1" preferences={[]} />);
   await user.click(screen.getByRole("button", { name: "举报" }));
-  await user.selectOptions(screen.getByRole("combobox", { name: "举报类型" }), "privacy");
+  await user.click(screen.getByRole("combobox", { name: "举报类型" }));
+  await user.click(screen.getByRole("option", { name: "隐私问题" }));
   await user.type(screen.getByRole("textbox", { name: "具体说明" }), report.detail);
   await user.click(screen.getByRole("button", { name: "预览举报" }));
   expect(api.reportAnnotation).not.toHaveBeenCalled();
@@ -108,7 +112,8 @@ test("report history shows status and review records a reason without changing a
   expect(screen.queryByRole("button", { name: "记录处理完成" })).not.toBeInTheDocument();
   rerender(<CommunityReportHistory api={api} actorBinding="moderator" review />);
   await screen.findByRole("button", { name: "记录处理完成" });
-  await user.selectOptions(screen.getByRole("combobox", { name: "处理说明" }), "insufficient_evidence");
+  await user.click(screen.getByRole("combobox", { name: "处理说明" }));
+  await user.click(screen.getByRole("option", { name: "材料不足" }));
   await user.click(screen.getByRole("button", { name: "记录不予采纳" }));
   await waitFor(() => expect(api.resolveReport).toHaveBeenCalledWith("report_1", { status: "dismissed", reason: "insufficient_evidence" }));
 });
@@ -130,4 +135,31 @@ test("available structured events identify their purpose and report results open
   await user.click(screen.getByRole("button", { name: "查看举报记录" }));
   expect(onOpenReports).toHaveBeenCalledTimes(1);
   expect(onOpenAnnotation).not.toHaveBeenCalled();
+});
+
+
+test("personal governance settings support keyboard and keep moderation permissions separate", async () => {
+  const api = apiFixture(); const user = userEvent.setup();
+  const annotation = annotationFixture({ viewerCanModerate: false, viewerIsAuthor: false });
+  const session = { userId: "member1", sessionId: "synthetic", accessToken: "synthetic" } as unknown as IdentitySession;
+  const content = (signedIn: boolean, moderate = false) => <CommunityGovernanceProvider api={api} actorBinding={signedIn ? "member1" : "signed-out"}>
+    <AnnotationCard annotation={{ ...annotation, viewerCanModerate: moderate }} session={signedIn ? session : null} onCompose={vi.fn()} />
+  </CommunityGovernanceProvider>;
+  const { rerender } = render(content(false));
+  expect(screen.queryByRole("button", { name: "我的订阅与内容偏好" })).not.toBeInTheDocument();
+  rerender(content(true));
+  const trigger = screen.getByRole("button", { name: "我的订阅与内容偏好" });
+  trigger.focus(); await user.keyboard("{Enter}");
+  expect(trigger).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByText("订阅此讨论")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "治理撤回" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("checkbox", { name: "订阅此讨论" }));
+  await waitFor(() => expect(api.setPreference).toHaveBeenCalledWith(expect.objectContaining({ targetKind: "thread", targetId: annotation.id, subscribed: true })));
+  await user.click(trigger); await user.click(trigger);
+  expect(screen.getByRole("heading", { name: "内容偏好与举报" })).toBeVisible();
+  // A separate card instance reflects the independently granted moderation role.
+  rerender(<CommunityGovernanceProvider api={api} actorBinding="moderator"><AnnotationCard key="moderator" annotation={{ ...annotation, viewerCanModerate: true }} session={session} onCompose={vi.fn()} /></CommunityGovernanceProvider>);
+  await user.click(screen.getByRole("button", { name: "治理撤回" }));
+  expect(screen.getByRole("dialog")).toHaveTextContent("撤回组织批注");
+  expect(within(screen.getByRole("dialog")).getByRole("button", { name: "确认" })).toBeDisabled();
 });

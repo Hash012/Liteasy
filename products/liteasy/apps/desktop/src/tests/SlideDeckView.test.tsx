@@ -1,3 +1,4 @@
+import userEvent from "@testing-library/user-event";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { SlideDeckView } from "../app/features/generative-ui/SlideDeckView";
@@ -26,10 +27,11 @@ describe("SlideDeckView", () => {
     expect(screen.getByRole("button", { name: "下一页幻灯片" })).toBeDisabled();
   });
 
-  test("preserves bullets from saved decks and clamps page selection when a deck shrinks", () => {
+  test("preserves bullets from saved decks and clamps page selection when a deck shrinks", async () => {
     const view = render(<SlideDeckView title="PPT" slides={[{ title: "一", bullets: ["**重点**"] }, { title: "二", bullets: ["结论"] }]} />);
     expect(screen.getByText("重点").tagName).toBe("STRONG");
-    fireEvent.change(screen.getByRole("combobox", { name: "选择幻灯片" }), { target: { value: "1" } });
+    await userEvent.click(screen.getByRole("combobox", { name: "选择幻灯片" }));
+    await userEvent.click(screen.getByRole("option", { name: "2. 二" }));
     expect(screen.getByText("结论")).toBeInTheDocument();
     view.rerender(<SlideDeckView title="PPT" slides={[{ title: "一", bullets: ["仍然可见"] }]} />);
     expect(screen.getByText("仍然可见")).toBeInTheDocument();

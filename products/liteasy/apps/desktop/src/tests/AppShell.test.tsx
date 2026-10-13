@@ -51,7 +51,7 @@ test("starts behind the real account boundary and keeps the local workbench avai
   await enterLocalWorkbench(user);
 
   expect(screen.queryByRole("dialog", { name: "轻量登录面板" })).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "个人中心" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: /个人中心 ·/ })).toBeEnabled();
 });
 
 test("composes the four independent resource regions in their designed order", async () => {
@@ -182,6 +182,7 @@ test("wires the PDF reader to direct per-annotation publication controls", async
   await user.click(within(library).getByRole("button", { name: "展开Research" }));
   await user.dblClick(within(library).getByRole("button", { name: "Paper" }));
 
+  await user.click(await screen.findByRole("button", { name: "批注选项" }));
   expect(await screen.findByRole("checkbox", { name: "新批注自动公开到论坛" })).not.toBeChecked();
   expect(screen.queryByRole("button", { name: "发到论坛" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "立即同步" })).not.toBeInTheDocument();
@@ -204,7 +205,7 @@ test("persists the local personalization switch from the logged-out personal cen
   const user = userEvent.setup();
   render(<AppShell initialPapers={[]} localLibraryLoader={async () => localLibrarySnapshot} />);
   await enterLocalWorkbench(user);
-  await user.click(screen.getByRole("button", { name: "个人中心", exact: true }));
+  await user.click(screen.getByRole("button", { name: /个人中心 ·/ }));
   const profile = screen.getByRole("region", { name: "个人中心" });
   expect(profile.closest('[data-region="main"]')).not.toBeNull();
   await user.click(within(profile).getByRole("switch", { name: "使用画像个性化" }));

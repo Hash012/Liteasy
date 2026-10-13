@@ -1,7 +1,8 @@
+import { OptionPicker } from "../shared/ui/productPrimitives";
 import type { ObjectRepository } from "../features/objects/objectRepository";
 import { refOf, type ObjectRef } from "../features/objects/object.types";
 import { useEffect, useRef, useState } from "react";
-import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Select, Spinner, Textarea } from "@fluentui/react-components";
+import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Spinner, Textarea } from "@fluentui/react-components";
 import { isTauri } from "@tauri-apps/api/core";
 import { getAccountSessionGeneration } from "../features/account/accountSessionStorage";
 import { parseCommunitySourceLink, communitySourceLink, type CommunitySourceReference, type CommunitySourceRevision } from "../features/forum/communitySourceReference";
@@ -162,12 +163,12 @@ export function useCommunitySourceController(input: {
         {visible.source.historical ? <Button disabled={visible.busy} onClick={() => void open(communitySourceLink({ ...visible.reference, revision: visible.source!.currentRevision }))}>查看当前修订</Button> : null}
       </> : null}
       {visible && (visible.source || reflection) ? <><Field label="带回个人笔记的想法"><Textarea value={reflection} onChange={(_, data) => editReflection(data.value)} /></Field>
-        {recoverable.length > 1 ? <Field label="本机保留的想法草稿"><Select value={copy?.draft.id} onChange={(event) => {
-          const selected = recoverable.find((draft) => draft.id === event.target.value);
+        {recoverable.length > 1 ? <Field label="本机保留的想法草稿"><OptionPicker value={String(copy?.draft.id ?? "")} onValueChange={nextValue => {
+          const selected = recoverable.find((draft) => draft.id === nextValue);
           if (!selected || (copy?.text && !copy.saved && !persistReflection(copy, copy.text))) return;
           drafts.current.set(activeDraftKey.current, { draft: selected, text: selected.text, saved: true });
           setReflection(selected.text); setDraftStatus("已恢复所选草稿，其他版本仍保留。");
-        }}>{recoverable.map((draft) => <option key={draft.id} value={draft.id}>{new Date(draft.updatedAt).toLocaleString()} · 修订 {draft.reference.revision} · {draft.text.slice(0, 24) || "空白想法"}</option>)}</Select></Field> : null}
+        }} options={[...(recoverable.map((draft) => ({ value: String(draft.id), label: String([new Date(draft.updatedAt).toLocaleString(), "\u00B7 \u4FEE\u8BA2", draft.reference.revision, "\u00B7", draft.text.slice(0, 24) || "空白想法"].join(" ")) })))]} /></Field> : null}
         {copy && reflection ? <p>想法引用修订 {copy.draft.reference.revision}；切换预览不会改写引用。</p> : null}
         {copy && visible.source && copy.draft.reference.revision !== visible.source.revision ? <Button disabled={visible.busy} onClick={() => {
           copy.draft = { ...copy.draft, reference: visible.reference };

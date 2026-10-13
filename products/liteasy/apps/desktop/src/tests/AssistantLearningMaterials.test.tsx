@@ -51,7 +51,8 @@ test.each([
   expect(onGenerateArtifact).not.toHaveBeenCalled();
   await user.type(input, "面向初学者，包含对比表");
   await user.click(screen.getByRole("button", { name: "调整思考深度：均衡" }));
-  await user.selectOptions(await screen.findByRole("combobox", { name: "生成风格" }), "concise");
+  await user.click(screen.getByRole("combobox", { name: "生成风格" }));
+  await user.click(screen.getByRole("option", { name: "精简" }));
   await user.keyboard("{Escape}");
   const systemPrompt = presetGenerationPrompt(artifactPromptTask(type), "concise");
   await user.click(screen.getByRole("button", { name: "发送", exact: true }));

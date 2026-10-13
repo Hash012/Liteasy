@@ -93,6 +93,12 @@ test("native capture preserves translated metadata, offline snapshot, PDF, dedup
   await panel.getByLabel("文献标签", { exact: true }).fill("待读, 方法");
   await panel.getByRole("button", { name: "保存到 Liteasy", exact: true }).click();
   await expect(panel.getByText("已保存 1 条文献。", { exact: true })).toBeVisible({ timeout: 90000 });
+  const picker = panel.getByRole("combobox", { name: "筛选分类" });
+  await picker.focus(); await panel.keyboard.press("ArrowDown");
+  await panel.getByRole("option", { name: "阅读研究", exact: true }).click();
+  await expect(picker).toHaveText("阅读研究");
+  await expect(panel.locator(".reference-row")).toHaveCount(1);
+  await picker.click(); await panel.getByRole("option", { name: "全部分类", exact: true }).click();
   const detail = panel.getByRole("region", { name: "文献详情" });
   await expect(detail.getByText("DOI: 10.1234/liteasy")).toBeVisible();
   await expect(detail.getByRole("button", { name: /网页快照/ })).toBeVisible();
@@ -126,11 +132,29 @@ test("real reading controls persist, annotation preview is safe, and edited Canv
   await expect(chat.getByRole("checkbox", { name: "本节已读：事务与恢复" })).toBeChecked();
   const reader = await context.newPage();
   await reader.goto(`chrome-extension://${extension}/sidebar.html`);
+  const scope = reader.getByRole("combobox", { name: "会话范围", exact: true });
+  await scope.focus(); await reader.keyboard.press("End"); await reader.keyboard.press("Enter");
+  await expect(scope).toHaveValue("all");
+  await scope.selectOption("current");
+  expect(await scope.evaluate((element) => element.closest("body")?.classList.contains("liteasy-reading-sidebar"))).toBe(true);
   await reader.locator("#new-note").click();
   await reader.locator("#note-title").fill("自己的理解");
   await reader.locator("#note-body").fill("## 事务\n\n**保留来源**\n\n<script>window.unsafePreview = true</script>\n\n$E=mc^2$");
   await reader.locator("#save-note").click();
   await expect(reader.locator("#save-status")).toContainText("已保存");
+  await reader.evaluate(async () => {
+    const bridge = (globalThis as any).CGRSidebarBridge;
+    const note = bridge.currentNote();
+    const result = await bridge.rpc({ type: "CGR_NOTE_SAVE", expectedRevision: note.revision, op: crypto.randomUUID(),
+      note: { ...note, source: { ...note.source, heading: "合成来源", quote: "Source passage kept for keyboard verification" } } });
+    if (result.conflict) throw new Error("synthetic source fixture conflicted");
+  });
+  await reader.reload();
+  await reader.locator(".note-card").filter({ hasText: "自己的理解" }).first().click();
+  await reader.locator("#source-toggle").focus(); await reader.keyboard.press("Enter");
+  await expect(reader.locator("#source-quote")).toBeVisible();
+  await expect(reader.locator("#source-quote")).toHaveText("Source passage kept for keyboard verification");
+  await reader.keyboard.press("Enter"); await expect(reader.locator("#source-quote")).toBeHidden();
   await reader.locator("#force-preview").click();
   await expect(reader.locator("#preview strong")).toHaveText("保留来源");
   expect(await reader.evaluate(() => (window as any).unsafePreview)).toBeUndefined();

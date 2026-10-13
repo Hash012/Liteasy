@@ -1,3 +1,4 @@
+import { InfoPopover } from "../../shared/ui/productPrimitives";
 import { Menu, MenuTrigger, MenuPopover, MenuList, MenuItem, Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Dropdown, Option, ProgressBar, Tooltip } from "@fluentui/react-components";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
@@ -460,7 +461,7 @@ export function PaperResourceTab({
             {isFigureCollection ? "文献插图" : isMultimodal ? "重排阅读" : "文本阅读"}
           </span>
           <h1>{paper.title}</h1>
-          <details className="paper-resource-tab__source"><summary>解析详情</summary><p>由已导入的论文生成。公式、图表与引用请结合原始 PDF 核对。</p><small>解析来源：{textChunks.some((chunk) => chunk.textExtraction === "mineru") ? "MinerU" : "PDF 文本提取"}</small></details>
+          <InfoPopover label="解析详情"><p>由已导入的论文生成。公式、图表与引用请结合原始 PDF 核对。</p><small>解析来源：{textChunks.some((chunk) => chunk.textExtraction === "mineru") ? "MinerU" : "PDF 文本提取"}</small></InfoPopover>
         </div>
         <div className="paper-resource-tab__actions">
           {!isFigureCollection ? <MarkdownFontControl {...font} /> : null}
@@ -550,10 +551,9 @@ export function PaperResourceTab({
               setTranslationDialogOpen(true);
             }}>{translationError.retryable === false ? "关闭提示" : "重新选择语言"}</Button>
           </div>
-          <details>
-            <summary>技术详情</summary>
+          <InfoPopover label="技术详情">
             <code>{translationError.detail}</code>
-          </details>
+          </InfoPopover>
         </section>
       ) : null}
       <Dialog modalType="modal" onOpenChange={(_, data) => setTranslationDialogOpen(data.open)} open={translationDialogOpen}>

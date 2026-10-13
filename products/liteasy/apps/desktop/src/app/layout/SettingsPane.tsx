@@ -1,4 +1,4 @@
-import { SourceDisclosure } from "../shared/ui/productPrimitives";
+import { InfoPopover } from "../shared/ui/productPrimitives";
 import { message } from "../shared/i18n/i18n";
 import { useUiTranslation } from "../shared/i18n/useUiTranslation";
 import { WorkbenchPageHeader } from "../features/workbench/WorkbenchPage";
@@ -80,7 +80,7 @@ export function SettingsPane(props: SettingsPaneProps) {
   const shared = { settings: props.settings, onUpdateSetting: props.onUpdateSetting };
   const panels: Record<SettingsSectionId, ReactNode> = {
     appearance: <ViewSettingsPanel {...shared} />,
-    "selection-lookup": <SelectionLookupSettingsPanel {...shared} />,
+    "selection-lookup": <SelectionLookupSettingsPanel {...shared} expandSecurity={searching} />,
     models: <ModelConnectionPanel {...shared} expandAdvanced={searching} />,
     assistant: <AgentSettingsPanel {...shared} expandCapabilities={searching} onOpenSkillDocument={props.onOpenSkillDocument} />,
     "generation-prompts": <GenerationPromptSettingsPanel {...shared} />,
@@ -143,7 +143,7 @@ export function SettingsPane(props: SettingsPaneProps) {
           className="settings-card" hidden={!visibleIds.has(section.id)}>
           <header className="settings-card-header">
             <h2 id={`${id}-${section.id}`}>{section.title}</h2>
-            {["appearance", "generation-prompts"].includes(section.id) ? <SourceDisclosure summary="设置说明"><p>{section.description}</p></SourceDisclosure> : <p>{section.description}</p>}
+            {["appearance", "generation-prompts"].includes(section.id) ? <InfoPopover label={`${section.title}说明`}><p>{section.description}</p></InfoPopover> : <p>{section.description}</p>}
           </header>
           <div className="settings-card-content">{panels[section.id]}</div>
         </section>)}

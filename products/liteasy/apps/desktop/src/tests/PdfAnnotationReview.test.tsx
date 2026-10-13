@@ -55,7 +55,8 @@ test("review is saved in the entry, reloads, remains editable, and travels with 
   await openEntry();
   fireEvent.click(screen.getByRole("button", { name: "AI review：Original source passage" }));
   expect(screen.queryByRole("textbox", { name: "本次系统提示词" })).not.toBeInTheDocument();
-  fireEvent.change(screen.getByRole("combobox", { name: "生成风格" }), { target: { value: "deep" } });
+  fireEvent.click(screen.getByRole("combobox", { name: "生成风格" }));
+  fireEvent.click(screen.getByRole("option", { name: "深入" }));
   fireEvent.click(screen.getByRole("button", { name: "自定义系统提示词", exact: true }));
   fireEvent.change(screen.getByRole("textbox", { name: "本次系统提示词" }), { target: { value: "核对原文，并只指出一项改进建议。" } });
   fireEvent.click(await screen.findByRole("button", { name: "开始生成", exact: true }));

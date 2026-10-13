@@ -28,7 +28,8 @@ test("generates reading layers in the background and opens their session only fr
     await page.goto("/?pdf-highlight-fixture#importable");
     await page.getByRole("button", { name: "设置", exact: true }).click();
     await page.getByRole("region", { name: "应用设置" }).getByRole("button", { name: "AI 与助手", exact: true }).click();
-    await page.getByLabel("AI 接入方式").selectOption("direct");
+    await page.getByLabel("AI 接入方式").click();
+    await page.getByRole("option", { name: /^自备 API key/ }).click();
     await page.getByLabel("模型 ID", { exact: true }).fill("background-reading-model");
     await page.getByLabel("API key", { exact: true }).fill("browser-only-key");
     await page.getByRole("button", { name: "保存并测试", exact: true }).click();
@@ -40,7 +41,8 @@ test("generates reading layers in the background and opens their session only fr
     await page.getByRole("button", { name: "AI 薄读", exact: true }).click();
     const rootOptions = page.getByRole("dialog");
     await expect(rootOptions.getByRole("textbox", { name: "本次系统提示词" })).toHaveCount(0);
-    await rootOptions.getByRole("combobox", { name: "生成风格" }).selectOption("concise");
+    await rootOptions.getByRole("combobox", { name: "生成风格" }).click();
+  await page.getByRole("option", { name: "精简", exact: true }).click();
     await rootOptions.getByRole("button", { name: "自定义系统提示词", exact: true }).click();
     await rootOptions.getByRole("textbox", { name: "本次系统提示词" }).fill("先解释外部记忆的核心直觉。");
     await rootOptions.getByRole("button", { name: "开始生成", exact: true }).click();
@@ -63,7 +65,8 @@ test("generates reading layers in the background and opens their session only fr
     await page.getByRole("button", { name: "关闭 Liteasy Chat", exact: true }).click();
     await page.getByRole("button", { name: "深入阅读“外部记忆”", exact: true }).click();
     const branchOptions = page.getByRole("dialog", { name: "深入薄读" });
-    await branchOptions.getByRole("combobox", { name: "生成风格" }).selectOption("intuitive");
+    await branchOptions.getByRole("combobox", { name: "生成风格" }).click();
+  await page.getByRole("option", { name: "直觉", exact: true }).click();
     await expect(branchOptions.getByRole("textbox", { name: "本次系统提示词" })).toHaveCount(0);
     await branchOptions.getByRole("button", { name: "开始生成", exact: true }).click();
     await expect(status).toContainText("生成中");

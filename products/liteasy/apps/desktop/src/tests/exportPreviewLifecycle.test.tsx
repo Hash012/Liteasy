@@ -1,3 +1,4 @@
+import userEvent from "@testing-library/user-event";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { ArtifactExportPayload } from "../app/features/artifacts/artifactExport.types";
@@ -99,7 +100,8 @@ describe("export production component lifecycle", () => {
     const print = vi.spyOn((screen.getByTitle("导出文档结构预览") as HTMLIFrameElement).contentWindow!, "print").mockImplementation(() => undefined);
     fireEvent.click(screen.getByRole("button", { name: "系统打印" }));
     await waitFor(() => expect(print).toHaveBeenCalledTimes(1)); expect(props.publish).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByRole("combobox", { name: "证据篇幅" }), { target: { value: "references" } });
+    await userEvent.click(screen.getByRole("combobox", { name: "证据篇幅" }));
+    await userEvent.click(screen.getByRole("option", { name: "来源索引" }));
     expect(screen.queryByTitle("导出文档结构预览")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "系统打印" })).toBeDisabled();
   });
@@ -110,7 +112,8 @@ describe("export production component lifecycle", () => {
     const acceptance = await screen.findByRole("checkbox", { name: "我已了解缺失资源与格式降级，继续导出" });
     fireEvent.click(acceptance); fireEvent.click(screen.getByRole("button", { name: "生成预览" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "保存本次文档" })).not.toBeDisabled());
-    fireEvent.change(screen.getByRole("combobox", { name: "证据篇幅" }), { target: { value: "references" } });
+    await userEvent.click(screen.getByRole("combobox", { name: "证据篇幅" }));
+    await userEvent.click(screen.getByRole("option", { name: "来源索引" }));
     expect(screen.getByRole("button", { name: "保存本次文档" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "生成预览" }));
     await waitFor(() => expect(screen.getByRole("checkbox", { name: "我已了解缺失资源与格式降级，继续导出" })).not.toBeChecked());
@@ -134,4 +137,22 @@ describe("export production component lifecycle", () => {
     fireEvent.click(screen.getByRole("button", { name: "生成预览" }));
     await waitFor(() => expect(screen.getByTitle("导出文档结构预览").getAttribute("srcdoc")).toContain("SOURCE_B_BODY"));
   });
+});
+
+test("format, paper and orientation pickers feed the exact options into the next export job", async () => {
+  const compile = vi.fn((options: Parameters<typeof compileDocument>[0]["options"], signal: AbortSignal) => compileDocument({ title: "Scoped options", markdown: "Kept original document text", options, signal }));
+  const publish = vi.fn(async (_payload: ArtifactExportPayload, _signal?: AbortSignal) => ({ status: "cancelled" as const }));
+  render(<DocumentExportDialog title="Scoped options" initialFormat="markdown" open allowSpatial compile={compile} publish={publish} onClose={() => undefined} onOutcome={() => undefined} />);
+  const user = userEvent.setup();
+  for (const [field, label] of [["格式", "HTML"], ["版式", "空间图集（PDF/HTML）"], ["纸张", "A3"], ["方向", "横向纸张"]]) {
+    await user.click(screen.getByRole("combobox", { name: field, exact: true }));
+    await user.click(screen.getByRole("option", { name: label, exact: true }));
+  }
+  expect(compile).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "生成预览" }));
+  await waitFor(() => expect(compile).toHaveBeenCalledWith(expect.objectContaining({ paperSize: "A3", orientation: "landscape", profileId: "spatial-atlas/v1" }), expect.any(AbortSignal)));
+  await waitFor(() => expect(screen.getByRole("button", { name: "保存本次文档" })).toBeEnabled());
+  await user.click(screen.getByRole("button", { name: "保存本次文档" }));
+  await waitFor(() => expect(publish).toHaveBeenCalledWith(expect.objectContaining({ format: "html", contentEncoding: "base64", receipt: expect.objectContaining({ profileId: "spatial-atlas/v1" }) }), expect.any(AbortSignal)));
+  expect(atob(publish.mock.calls[0][0].content)).toContain("Kept original document text");
 });

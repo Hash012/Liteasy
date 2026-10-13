@@ -1,3 +1,4 @@
+import userEvent from "@testing-library/user-event";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import {
@@ -51,8 +52,11 @@ describe("OrganizationStoragePolicyPanel", () => {
     );
 
     await waitFor(() => expect(screen.getByLabelText("允许上传")).not.toBeDisabled());
-    fireEvent.change(screen.getByLabelText("允许上传"), { target: { value: "all_members" } });
-    fireEvent.change(screen.getByLabelText("允许复制出库"), { target: { value: "admins_only" } });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("combobox", { name: "允许上传" }));
+    await user.click(screen.getByRole("option", { name: "所有成员" }));
+    await user.click(screen.getByRole("combobox", { name: "允许复制出库" }));
+    await user.click(screen.getByRole("option", { name: "负责人和管理员" }));
     fireEvent.click(screen.getByRole("button", { name: "保存策略" }));
 
     await waitFor(() => expect(client.updateOrganizationStoragePolicy).toHaveBeenCalledWith({
@@ -79,7 +83,7 @@ describe("OrganizationStoragePolicyPanel", () => {
 
     expect(client.getOrganizationStoragePolicy).not.toHaveBeenCalled();
     expect(screen.getByLabelText("允许上传")).toBeDisabled();
-    expect(screen.getByLabelText("允许上传")).toHaveValue("owner_admins");
+    expect(screen.getByRole("combobox", { name: "允许上传" })).toHaveTextContent("负责人和管理员");
     expect(screen.queryByRole("button", { name: "保存策略" })).not.toBeInTheDocument();
   });
 });

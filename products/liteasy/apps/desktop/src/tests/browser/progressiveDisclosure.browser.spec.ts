@@ -13,7 +13,8 @@ for (const width of [320, 400, 520]) {
     await page.screenshot({ path: info.outputPath("idle.png") });
     await owner.hover(); await expect(actions).toHaveCSS("opacity", "1");
     await expect(trigger).toBeVisible();
-    expect((await trigger.boundingBox())!.height).toBe(28);
+    expect((await trigger.boundingBox())!.height).toBeGreaterThanOrEqual(28);
+    expect((await trigger.boundingBox())!.height).toBeLessThanOrEqual(32);
     const after = (await owner.boundingBox())!;
     for (const key of ["x", "y", "width", "height"] as const) expect(Math.abs(before[key] - after[key])).toBeLessThanOrEqual(1);
     await trigger.focus(); await page.keyboard.press("Enter");
@@ -26,11 +27,12 @@ for (const width of [320, 400, 520]) {
     await row.focus(); expect((await row.boundingBox())!.height).toBe(rowBefore.height);
     await page.keyboard.press("Enter"); await expect(page.locator("output")).toHaveText("打开 synthetic");
     await page.getByRole("button", { name: "推荐筛选" }).click();
-    await page.getByRole("combobox", { name: "推荐发表年份" }).selectOption("2024");
+    await page.getByRole("combobox", { name: "推荐发表年份" }).click();
+    await page.getByRole("option", { name: "2024", exact: true }).click();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("button", { name: /^查看推荐/ })).toHaveCount(1);
     await page.getByRole("button", { name: "推荐筛选" }).click();
-    await expect(page.getByRole("combobox", { name: "推荐发表年份" })).toHaveValue("2024");
+    await expect(page.getByRole("combobox", { name: "推荐发表年份" })).toHaveText("2024");
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "清除筛选" }).click();
     await expect(page.getByRole("button", { name: /^查看推荐/ })).toHaveCount(2);

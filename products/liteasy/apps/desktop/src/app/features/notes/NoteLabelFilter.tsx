@@ -1,5 +1,6 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { SearchOptions } from "../search/SearchOptions";
-import { Button, Checkbox, Input, Popover, PopoverSurface, PopoverTrigger, Select, Tooltip } from "@fluentui/react-components";
+import { Button, Checkbox, Input, Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
 import { FilterRegular } from "@fluentui/react-icons";
 import { isAiOnlyNote, noteLabelEntries, type NoteLabel } from "./noteLabels";
 import "./noteLabelFilter.css";
@@ -22,10 +23,7 @@ export function NoteLabelFilter({ value, onChange, query, onQueryChange, compact
       <PopoverSurface aria-label="笔记标签筛选" className="notes-filter-popover">
         {onQueryChange && <Input aria-label="搜索批注内容" placeholder="搜索原文或批注" value={query ?? ""} onChange={(_, data) => onQueryChange(data.value)} />}
         {onQueryChange && <SearchOptions query={query ?? ""} onChange={onQueryChange} tags={noteLabelEntries.map(([, label]) => label)} />}
-        <label>包含标签<Select aria-label="包含笔记标签" value={value.label} onChange={(_, data) => onChange({ ...value, label: data.value as NoteLabel | "" })}>
-          <option value="">全部笔记</option>
-          {noteLabelEntries.map(([id, title]) => <option key={id} value={id}>{title}</option>)}
-        </Select></label>
+        <label>包含标签<OptionPicker aria-label="包含笔记标签" value={String(value.label ?? "")} onValueChange={nextValue => onChange({ ...value, label: nextValue as NoteLabel | "" })} options={[{ value: String(""), label: String("\u5168\u90E8\u7B14\u8BB0") }, ...(noteLabelEntries.map(([id, title]) => ({ value: String(id), label: String(title) })))]} /></label>
         <Checkbox label="隐藏翻译结果" checked={value.hideTranslations} onChange={(_, data) => onChange({ ...value, hideTranslations: data.checked === true })} />
         <Checkbox label="隐藏查词结果" checked={value.hideLookup} onChange={(_, data) => onChange({ ...value, hideLookup: data.checked === true })} />
         <Checkbox label="隐藏纯 AI 内容" checked={value.hideAiOnly} onChange={(_, data) => onChange({ ...value, hideAiOnly: data.checked === true })} />

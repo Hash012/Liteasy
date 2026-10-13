@@ -88,6 +88,15 @@ function hasForeignScope(value: unknown, subject: string, depth = 0): boolean {
   return Object.values(item).some((child) => hasForeignScope(child, subject, depth + 1));
 }
 
+// Export is a separate allowlist projection: optional manuscript metadata is
+// reduced to strings, while source IDs must still pass ownership checks.
+// Do not relax the runtime catalog validator or copy arbitrary nested fields.
+function isExportableArtifact(value: unknown): value is AgentArtifactResult {
+  const candidate = record(value);
+  if (!Array.isArray(candidate.papers) || candidate.papers.some((paper) => typeof record(paper).id !== "string")) return false;
+  return isArtifactResult({ ...candidate, papers: candidate.papers.map((paper) => ({ id: record(paper).id, title: text(record(paper).title) })) });
+}
+
 function artifactExclusion(artifact: AgentArtifactResult, manifest: ReturnType<typeof personalManifest>) {
   if (hasForeignScope(artifact, manifest.scopeId)) return "含组织或其他范围来源";
   if (artifact.sourceContextRefs?.length) return "对象来源尚未核实为本人云文献";
@@ -205,7 +214,7 @@ export function createAccountDataExportClient(input: {
       const manifest = await tree(context, signal);
       const profile = profileProjection(await json(context, "/v1/profile/get", {}, signal));
       const artifacts = array(record(await json(context, "/v1/agent-artifacts", undefined, signal)).artifacts);
-      if (artifacts.length > artifactLimit || !artifacts.every(isArtifactResult)) throw new Error("云产物数量超过 100 项或格式不完整，请先整理资料后重试。");
+      if (artifacts.length > artifactLimit || !artifacts.every(isExportableArtifact)) throw new Error("云产物数量超过 100 项或格式不完整，请先整理资料后重试。");
       const entries = artifacts.map((artifact) => ({ artifactId: artifact.artifactId, title: artifact.title,
         excludedReason: artifactExclusion(artifact, manifest) }));
       if (new Set(entries.map((entry) => entry.artifactId)).size !== entries.length) throw new Error("云产物包含重复标识。");
@@ -242,7 +251,7 @@ export function createAccountDataExportClient(input: {
       const exported = [];
       for (const [index, id] of selected.entries()) {
         const result = record(await json(data, `/v1/agent-artifacts/${encodeURIComponent(id)}`, undefined, signal));
-        if (!isArtifactResult(result.artifact) || result.artifact.artifactId !== id ||
+        if (!isExportableArtifact(result.artifact) || result.artifact.artifactId !== id ||
           fingerprint(result.artifact) !== data.artifacts.get(id)!.hash || artifactExclusion(result.artifact, manifest)) {
           throw new Error("所选产物或来源已变化，请重新预览导出。");
         }

@@ -1,3 +1,4 @@
+import { DisclosureSection } from "../../shared/ui/productPrimitives";
 import { useState, useSyncExternalStore } from "react";
 import { Button, Checkbox, Switch, Textarea } from "@fluentui/react-components";
 import { diagnosticEnvironment, downloadDiagnosticPackage, serializeDiagnosticPackage, type DiagnosticEnvironment } from "./diagnosticPackage";
@@ -17,8 +18,8 @@ export function LocalDiagnosticsPanel() {
   const currentPreview = preview?.generation === snapshot.generation ? preview : undefined;
   const json = currentPreview ? serializeDiagnosticPackage(currentPreview.records, currentPreview.droppedRecords,
     includeEnvironment ? currentPreview.environment : undefined) : "";
-  return <details className="local-diagnostics">
-    <summary>本地诊断</summary>
+  return <DisclosureSection className="local-diagnostics" title={<>本地诊断</>}>
+
     <p>默认关闭。启用后可离开帮助页重现打开原文件的问题，再返回预览。仅保留本次窗口最近 100 条阶段、状态、格式和耗时，不含正文、路径、搜索词、密钥或账号，不会上传。</p>
     <Switch label="记录本次窗口的诊断" checked={snapshot.enabled} onChange={(_, data) => localDiagnostics.setEnabled(data.checked)} />
     <p role="status">{snapshot.enabled ? "正在记录" : "记录已关闭"} · {snapshot.records.length} 条记录{snapshot.droppedRecords ? ` · 已丢弃较早的 ${snapshot.droppedRecords} 条` : ""}</p>
@@ -38,5 +39,5 @@ export function LocalDiagnosticsPanel() {
       <Button onClick={() => { try { downloadDiagnosticPackage(json); setExportError(false); } catch { setExportError(true); } }}>导出已预览的诊断包</Button>
       {exportError ? <p role="alert">无法下载诊断包，请复制上方预览内容保存。</p> : null}
     </section> : null}
-  </details>;
+  </DisclosureSection>;
 }

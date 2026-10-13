@@ -469,3 +469,8 @@ textarea {
     padding: 22px 18px;
   }
 }
+
+.admin-form .fui-Dropdown { min-width: 0; max-width: 20rem; width: 100%; border-radius: 6px; }
+@media (pointer: coarse), (hover: none) {
+  .admin-form .fui-Dropdown { min-height: 44px; }
+}

@@ -1,8 +1,9 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { getGenerationPrompt } from "../ai-prompts/generationPrompts";
 import { useGenerationPromptSettings } from "../ai-prompts/GenerationPromptContext";
 import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
 import { useState } from "react";
-import { Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Select, Spinner, Tooltip } from "@fluentui/react-components";
+import { Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Spinner, Tooltip } from "@fluentui/react-components";
 import { SparkleRegular, DismissRegular, EyeRegular, EyeOffRegular, DeleteRegular, ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { guideCategories, guideModes, type GuideCategory, type GuideMode, type GuideOptions } from "./literatureGuide.types";
 import "./literatureGuide.css";
@@ -31,9 +32,7 @@ export function LiteratureGuideControls({ guide }: { guide: LiteratureGuideState
           <DialogContent className="literature-guide-options">
             <p className="literature-guide-hint">为论文添加简明讲解，点击原文虚线即可查看。关闭此窗口后，任务仍会继续。</p>
             <Field label="讲解深度" hint={modeDescriptions[guide.mode]}>
-              <Select aria-label="AI 标注模式" value={guide.mode} disabled={guide.busy} onChange={(_, data) => guide.setMode(data.value as GuideMode)}>
-                {Object.entries(guideModes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </Select>
+              <OptionPicker aria-label="AI 标注模式" value={String(guide.mode ?? "")} disabled={guide.busy} onValueChange={nextValue => guide.setMode(nextValue as GuideMode)} options={[...(Object.entries(guideModes).map(([value, label]) => ({ value: String(value), label: String(label) })))]} />
             </Field>
             <section className="literature-guide-focus">
               <Button appearance="subtle" icon={focusOpen ? <ChevronDownRegular /> : <ChevronRightRegular />} aria-expanded={focusOpen} onClick={() => setFocusOpen(!focusOpen)}>讲解重点 · 已选 {guide.options.categories.length} 类</Button>
@@ -46,9 +45,7 @@ export function LiteratureGuideControls({ guide }: { guide: LiteratureGuideState
               setPrompt(value); guide.setOptions({ ...guide.options, systemPrompt: value ?? "" });
             }} />
             <Field label="已有标注" hint="只处理所选类别；手动批注、已修改或已发布的讲解始终保留。">
-              <Select aria-label="已有标注处理方式" disabled={guide.busy} value={guide.options.existing} onChange={(_, data) => guide.setOptions({ ...guide.options, existing: data.value as GuideOptions["existing"] })}>
-                <option value="replace">更新已有 AI 标注</option><option value="append">保留已有，仅补充新标注</option>
-              </Select>
+              <OptionPicker aria-label="已有标注处理方式" disabled={guide.busy} value={String(guide.options.existing ?? "")} onValueChange={nextValue => guide.setOptions({ ...guide.options, existing: nextValue as GuideOptions["existing"] })} options={[{ value: String("replace"), label: String("\u66F4\u65B0\u5DF2\u6709 AI \u6807\u6CE8") }, { value: String("append"), label: String("\u4FDD\u7559\u5DF2\u6709\uFF0C\u4EC5\u8865\u5145\u65B0\u6807\u6CE8") }]} />
             </Field>
             <p className="literature-guide-hint">每次最多处理 60 页，可继续或随时停止。无法唯一定位原文的内容会跳过。</p>
             {guide.count ? <div className="literature-guide-management"><span>已有 {guide.count} 处讲解</span>

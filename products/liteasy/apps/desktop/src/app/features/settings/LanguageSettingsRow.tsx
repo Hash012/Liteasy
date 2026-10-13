@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Select } from "@fluentui/react-components";
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { SettingRow } from "../workbench/WorkbenchPage";
 import type { UpdateSettingCommand } from "./settings.types";
 import { useUiLanguagePreference } from "./uiLanguagePreference";
@@ -14,17 +14,13 @@ export function LanguageSettingsRow({ onUpdateSetting }: {
   const [failed, setFailed] = useState(false);
   return <SettingRow title={t("ui.language.label")} description={t("ui.language.description")}>
     <div className="ui-language-setting">
-      <Select aria-label={t("ui.language.label")} value={snapshot.preference} disabled={!onUpdateSetting}
-        onChange={(_, data) => {
-          if (!isUiLanguagePreference(data.value)) return;
+      <OptionPicker aria-label={t("ui.language.label")} value={snapshot.preference} disabled={!onUpdateSetting}
+        onValueChange={(value) => {
+          if (!isUiLanguagePreference(value)) return;
           setFailed(false);
-          try { onUpdateSetting?.({ intent: "update_setting", target: "view.language", value: data.value }); }
+          try { onUpdateSetting?.({ intent: "update_setting", target: "view.language", value: value }); }
           catch { setFailed(true); }
-        }}>
-        <option value="system">{t("ui.language.system")}</option>
-        <option value="zh-CN" lang="zh-CN">简体中文</option>
-        <option value="en-US" lang="en-US">English (United States)</option>
-      </Select>
+        }} options={[{ value: "system", label: t("ui.language.system") }, { value: "zh-CN", label: "简体中文" }, { value: "en-US", label: "English (United States)" }]} />
       <small role="status" aria-live="polite">{t("ui.language.active", {
         language: snapshot.locale === "zh-CN" ? "简体中文" : "English (United States)"
       })}</small>

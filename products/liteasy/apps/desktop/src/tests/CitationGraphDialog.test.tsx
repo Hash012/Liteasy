@@ -1,3 +1,4 @@
+import { selectPickerValue } from "./helpers/selectPickerValue";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import CitationGraphDialog from "../app/features/citation-graph/CitationGraphDialog";
@@ -15,8 +16,8 @@ it("loads on request, sends direction/top K, opens discoveries through the exist
   expect(screen.getByRole("button", { name: "向外搜索一圈" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "加载引用关系" }));
   await waitFor(() => expect(screen.getByRole("button", { name: "向外搜索一圈" })).toBeEnabled());
-  fireEvent.change(screen.getByRole("combobox", { name: "引用方向" }), { target: { value: "references" } });
-  fireEvent.change(screen.getByRole("combobox", { name: "引用量 Top K" }), { target: { value: "20" } });
+  await selectPickerValue(screen.getByRole("combobox", { name: "引用方向" }), "references");
+  await selectPickerValue(screen.getByRole("combobox", { name: "引用量 Top K" }), "20");
   fireEvent.click(screen.getByRole("button", { name: "向外搜索一圈" }));
   await waitFor(() => expect(service.expand).toHaveBeenCalledWith(seed, [seed], "references", 20, expect.any(AbortSignal)));
   expect(await screen.findByText("W1:W2")).toBeInTheDocument();

@@ -1,3 +1,4 @@
+import { OptionPicker } from "./ui/OptionPicker";
 import {
   Button,
   Input,
@@ -109,7 +110,7 @@ export function LiteratureTargetEditor({ onChange, onConfirmed, required, target
   const candidates = result?.status === "ambiguous" ? result.candidates : [];
   return <section className="target-editor literature-target-editor">
     <div className="section-row"><div><strong>关联文献</strong>{required && <span>必填</span>}</div><small>{targets.length} 处</small></div>
-    <label className="field-label">目标范围<select aria-label="目标范围" value={kind} onChange={(event) => setKind(event.target.value as TargetKind)}><option value="whole_document">整篇文献</option><option value="source_passage">原文字句</option></select></label>
+    <label className="field-label">目标范围<OptionPicker label="目标范围" value={kind} onValueChange={(value) => setKind(value as TargetKind)} options={[{ value: "whole_document", label: "整篇文献" }, { value: "source_passage", label: "原文字句" }]} /></label>
     {targets.length > 0 && <div className="selected-targets">{targets.map((target, index) => { const reference = target.literature; const title = "literatureRecord" in reference && reference.literatureRecord ? reference.literatureRecord.title : literatureRecords[reference.literatureId]?.title ?? `文献 ${reference.literatureId}`; return <div key={`${target.kind}-${index}`}><div className="target-chip"><span><strong>{title}</strong><small>{target.kind === "whole_document" ? "整篇文献" : `${"page" in target && target.page ? `第 ${target.page} 页 · ` : ""}${"excerpt" in target ? target.excerpt : "原文摘录"}`}</small></span></div><Tooltip content="移除关联文献" relationship="label"><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="移除关联文献" onClick={() => onChange(targets.filter((_, position) => position !== index))} /></Tooltip></div>; })}</div>}
     <div className="literature-search-row"><Input role="combobox" aria-label="检索关联文献" contentBefore={<Search20Regular />} value={query} onChange={(_, data) => { attemptRef.current += 1; setQuery(data.value); }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void search(); } }} /><Button type="button" appearance="primary" onClick={() => void search()} disabled={loading}>检索</Button></div>
     {loading && <div className="literature-loading" role="status"><Spinner size="tiny" /> 正在检索文献</div>}

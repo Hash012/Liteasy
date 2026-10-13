@@ -1,5 +1,6 @@
+import { DisclosureSection, OptionPicker } from "../../shared/ui/productPrimitives";
 import { useEffect, useRef, useState } from "react";
-import { Button, Checkbox, Field, Input, Select, Textarea } from "@fluentui/react-components";
+import { Button, Checkbox, Field, Input, Textarea } from "@fluentui/react-components";
 import type { QuickAskPresetRepository, QuickAskPresetSaveReceipt } from "../settings/quickAskPresetSettings";
 import { QUICK_ASK_INSTRUCTION_LIMIT, type QuickAskPreset } from "./quickAskPresets";
 import "./quickAskPresets.css";
@@ -42,9 +43,8 @@ function QuickAskPresetManagerBody({ repository, initialInstruction = "", onSave
   const revision = snapshot?.revision ?? "";
   return <section className="quick-ask-preset-manager" aria-label="管理快捷指令" aria-busy={busy}>
     <div className="quick-ask-preset-manager-actions"><strong>快捷指令 · 当前账号</strong>{onClose && <Button size="small" onClick={onClose}>关闭管理</Button>}</div>
-    <Field label="选择要管理的任务"><Select aria-label="管理快捷指令" disabled={busy || !snapshot} value={draft.preset?.id ?? ""} onChange={(_, data) => select(data.value)}>
-      <option value="">新建快捷指令</option>{presets.map(item => <option key={item.id} value={item.id}>{item.name}{item.builtIn ? " · 内置" : ` · ${item.id.slice(-6)}`}{item.pinned ? " · 已置顶" : ""}</option>)}
-    </Select></Field>
+    <Field label="选择要管理的任务"><OptionPicker aria-label="管理快捷指令" disabled={busy || !snapshot} value={draft.preset?.id ?? ""} onValueChange={select}
+      options={[{ value: "", label: "新建快捷指令" }, ...presets.map(item => ({ value: item.id, label: item.name, description: `${item.builtIn ? "内置" : item.id.slice(-6)}${item.pinned ? " · 已置顶" : ""}` }))]} /></Field>
     {draft.preset?.builtIn && <p>内置指令只读，修改后保存为个人副本。</p>}
     <Field label="快捷指令名称"><Input disabled={busy} aria-label="快捷指令名称" value={draft.name} onChange={(_, data) => setDraft(current => ({ ...current, name: data.value }))} /></Field>
     <Field label="完整指令" validationState={draft.instruction.length > QUICK_ASK_INSTRUCTION_LIMIT ? "error" : "none"}
@@ -64,7 +64,7 @@ function QuickAskPresetManagerBody({ repository, initialInstruction = "", onSave
       <Button disabled={busy} onClick={() => { try { const fresh = repository.read(); setDraft(current => ({ ...current, baseRevision: fresh.revision, preset: current.preset ? fresh.presets.find(item => item.id === current.preset?.id) : undefined })); setError(""); setStatus("已刷新版本，当前草稿保留；确认内容后再次保存。"); } catch (cause) { setError(cause instanceof Error ? cause.message : "读取失败，草稿已保留。"); } }}>保留草稿并刷新版本</Button>
     </div>
     {confirmDelete && <div className="quick-ask-preset-manager-actions"><span>删除此快捷指令？已运行的结果不受影响。</span><Button disabled={busy} onClick={() => void run(async () => { const receipt = await repository.remove(draft.preset!.id, revision); setConfirmDelete(false); setDraft(current => ({ ...current, preset: undefined })); return receipt; })}>确认删除</Button><Button onClick={() => setConfirmDelete(false)}>取消</Button></div>}
-    <details><summary>导入与导出</summary>
+    <DisclosureSection title="导入与导出">
       <div className="quick-ask-preset-manager-actions"><Button onClick={() => { try { setExportText(repository.exportJson()); } catch (cause) { setError(String(cause)); } }}>生成导出内容</Button></div>
       {exportText && <><Field label="已导出的版本化设置"><Textarea aria-label="导出的快捷指令" readOnly value={exportText} /></Field>
         <Button onClick={() => { const url = URL.createObjectURL(new Blob([exportText], { type: "application/json" })); const link = document.createElement("a"); link.href = url; link.download = "Liteasy-quick-ask-presets.json"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }}>下载快捷指令</Button></>}
@@ -72,7 +72,7 @@ function QuickAskPresetManagerBody({ repository, initialInstruction = "", onSave
       <input ref={fileInput} hidden aria-label="导入快捷指令文件" type="file" accept="application/json,.json" onChange={async event => { const file = event.target.files?.[0]; event.target.value = ""; if (!file) return; if (file.size > 4_000_000) { setError("导入文件过大；原始文件未修改。"); return; } try { setImportText(await file.text()); } catch { setError("文件读取失败，当前待导入内容已保留。"); } }} />
       <Field label="待导入的完整内容"><Textarea disabled={busy} aria-label="待导入的快捷指令" value={importText} onChange={(_, data) => setImportText(data.value)} /></Field>
       <Button disabled={busy || !snapshot || !importText.trim()} onClick={() => void run(() => repository.importJson(importText, revision))}>验证并导入为个人副本</Button>
-    </details>
+    </DisclosureSection>
     {(error || loadError) && <div role="alert">{error || loadError}</div>}{status && <div role="status">{status}</div>}
   </section>;
 }

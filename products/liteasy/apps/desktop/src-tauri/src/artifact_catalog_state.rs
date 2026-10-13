@@ -104,9 +104,14 @@ pub fn save_artifact_catalog_state(app: AppHandle, snapshot: Value) -> Result<()
     }
 
     let path = catalog_path(&app, false)?;
-    let parent = path
-        .parent()
-        .ok_or_else(|| "Artifact catalog path has no parent".to_string())?;
+    write_catalog_at(&path, &serialized, publish_catalog)
+}
+
+fn write_catalog_at<F>(path: &Path, serialized: &[u8], publish: F) -> Result<(), String>
+where
+    F: FnOnce(&Path, &Path) -> std::io::Result<()>,
+{
+    let parent = path.parent().ok_or("Artifact catalog path has no parent")?;
     fs::create_dir_all(parent)
         .map_err(|error| format!("Could not create artifact catalog directory: {error}"))?;
     let nonce = SystemTime::now()
@@ -117,44 +122,76 @@ pub fn save_artifact_catalog_state(app: AppHandle, snapshot: Value) -> Result<()
         ".artifact-catalog.v1.{}.{nonce}.tmp",
         std::process::id()
     ));
-
-    let save_result = (|| -> Result<(), String> {
-        let mut temporary = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&temporary_path)
-            .map_err(|error| format!("Could not create temporary artifact catalog: {error}"))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            temporary
-                .set_permissions(fs::Permissions::from_mode(0o600))
-                .map_err(|error| format!("Could not secure temporary artifact catalog: {error}"))?;
-        }
-        temporary
-            .write_all(&serialized)
-            .and_then(|_| temporary.sync_all())
-            .map_err(|error| format!("Could not write artifact catalog: {error}"))?;
-
-        #[cfg(windows)]
-        if path.exists() {
-            fs::remove_file(&path)
-                .map_err(|error| format!("Could not replace old artifact catalog: {error}"))?;
-        }
-        fs::rename(&temporary_path, &path)
-            .map_err(|error| format!("Could not publish artifact catalog: {error}"))?;
-        Ok(())
-    })();
-
-    if save_result.is_err() && temporary_path.exists() {
-        let _ = fs::remove_file(&temporary_path);
+    let mut options = OpenOptions::new();
+    options.create_new(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
     }
-    save_result
+    let mut temporary = options
+        .open(&temporary_path)
+        .map_err(|error| format!("Could not create temporary artifact catalog: {error}"))?;
+    temporary
+        .write_all(serialized)
+        .and_then(|_| temporary.sync_all())
+        .map_err(|error| format!("Could not write artifact catalog: {error}"))?;
+    drop(temporary);
+    // Never unlink the only published copy. A failed publication leaves both
+    // the previous catalog and the complete synced temporary file for recovery.
+    publish(&temporary_path, path)
+        .map_err(|error| format!("Could not publish artifact catalog; previous catalog and recovery file retained: {error}"))?;
+    #[cfg(unix)]
+    std::fs::File::open(parent)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| format!("Could not sync artifact catalog directory: {error}"))?;
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn publish_catalog(temporary: &Path, destination: &Path) -> std::io::Result<()> {
+    fs::rename(temporary, destination)
+}
+
+#[cfg(windows)]
+fn publish_catalog(temporary: &Path, destination: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
+    // Same-volume replacement, matching local_library's established Windows
+    // strategy. Canonical parents preserve long-path support for new files.
+    let temporary = fs::canonicalize(temporary)?;
+    let parent = destination.parent().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "missing catalog parent")
+    })?;
+    let name = destination.file_name().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "missing catalog filename")
+    })?;
+    let destination = fs::canonicalize(parent)?.join(name);
+    let source: Vec<u16> = temporary.as_os_str().encode_wide().chain(Some(0)).collect();
+    let target: Vec<u16> = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let result = unsafe {
+        MoveFileExW(
+            source.as_ptr(),
+            target.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if result == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::catalog_path_at;
+    use super::{catalog_path_at, publish_catalog, write_catalog_at};
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -225,5 +262,103 @@ mod tests {
         assert_eq!(catalog_path_at(&root).expect("catalog path"), current);
         assert!(legacy.is_file());
         fs::remove_dir_all(root).expect("remove temporary directory");
+    }
+    fn recovery_files(root: &std::path::Path) -> Vec<PathBuf> {
+        fs::read_dir(root)
+            .unwrap()
+            .filter_map(|entry| {
+                let path = entry.unwrap().path();
+                (path.extension().is_some_and(|extension| extension == "tmp")).then_some(path)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn failed_publication_retains_old_catalog_and_complete_recovery_copy() {
+        let root = temporary_directory("publish-failure");
+        let path = root.join("catalog.v1.json");
+        fs::write(&path, br#"{"artifacts":["old"]}"#).unwrap();
+        let new = br#"{"artifacts":["new"]}"#;
+        let result = write_catalog_at(&path, new, |temporary, destination| {
+            assert_eq!(fs::read(destination).unwrap(), br#"{"artifacts":["old"]}"#);
+            assert_eq!(fs::read(temporary).unwrap(), new);
+            Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
+        });
+        assert!(result.is_err());
+        assert_eq!(fs::read(&path).unwrap(), br#"{"artifacts":["old"]}"#);
+        assert_eq!(recovery_files(&root).len(), 1);
+        assert_eq!(fs::read(&recovery_files(&root)[0]).unwrap(), new);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn successful_publication_reopens_complete_new_json() {
+        let root = temporary_directory("publish-success");
+        let path = root.join("catalog.v1.json");
+        write_catalog_at(&path, br#"{"artifacts":["old"]}"#, publish_catalog).unwrap();
+        write_catalog_at(&path, br#"{"artifacts":["new"]}"#, publish_catalog).unwrap();
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(saved["artifacts"][0], "new");
+        assert!(recovery_files(&root).is_empty());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn interrupted_publication_child() {
+        let Some(root) = std::env::var_os("LITEASY_ARTIFACT_CATALOG_ABORT_TEST_ROOT") else {
+            return;
+        };
+        let path = PathBuf::from(root).join("catalog.v1.json");
+        write_catalog_at(&path, br#"{"artifacts":["new"]}"#, |_, _| {
+            std::process::exit(73)
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn process_exit_before_publication_keeps_both_complete_copies() {
+        let root = temporary_directory("process-exit");
+        let path = root.join("catalog.v1.json");
+        fs::write(&path, br#"{"artifacts":["old"]}"#).unwrap();
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "artifact_catalog_state::tests::interrupted_publication_child",
+                "--nocapture",
+            ])
+            .env("LITEASY_ARTIFACT_CATALOG_ABORT_TEST_ROOT", &root)
+            .status()
+            .unwrap();
+        assert_eq!(status.code(), Some(73));
+        assert_eq!(fs::read(&path).unwrap(), br#"{"artifacts":["old"]}"#);
+        assert_eq!(recovery_files(&root).len(), 1);
+        assert_eq!(
+            fs::read(&recovery_files(&root)[0]).unwrap(),
+            br#"{"artifacts":["new"]}"#
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_sharing_lock_preserves_catalog_and_recovery_copy() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let root = temporary_directory("sharing-lock");
+        let path = root.join("catalog.v1.json");
+        fs::write(&path, br#"{"artifacts":["old"]}"#).unwrap();
+        let lock = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&path)
+            .unwrap();
+        assert!(write_catalog_at(&path, br#"{"artifacts":["new"]}"#, publish_catalog).is_err());
+        drop(lock);
+        assert_eq!(fs::read(&path).unwrap(), br#"{"artifacts":["old"]}"#);
+        assert_eq!(recovery_files(&root).len(), 1);
+        assert_eq!(
+            fs::read(&recovery_files(&root)[0]).unwrap(),
+            br#"{"artifacts":["new"]}"#
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 }

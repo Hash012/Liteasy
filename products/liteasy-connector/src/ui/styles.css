@@ -114,3 +114,9 @@ body.options-shell { max-width: none; }
   .reference-detail { border-top: 0; border-left: 1px solid var(--line); padding: 24px; }
   .reading-shell .workspace { grid-template-columns: 280px minmax(0, 1fr); }
 }
+
+/* Extension UI only; this stylesheet is never injected into the read page. */
+.connector-main .connector-collection-picker { min-width: 0; max-width: 100%; min-height: 32px; border-radius: 6px; }
+@media (pointer: coarse), (hover: none) {
+  .connector-main .connector-collection-picker { min-height: 44px; }
+}

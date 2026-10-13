@@ -75,9 +75,10 @@ test("reader preset management stays usable in a narrow overlay without generati
   await expect(page.getByRole("button", { name: "解释选段", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "管理快捷指令", exact: true }).click();
   const select = dialog.getByRole("combobox", { name: "管理快捷指令", exact: true });
-  const option = select.locator("option").filter({ hasText: "合成指令" });
+  await select.click();
+  const option = page.getByRole("option", { name: /^合成指令/ });
   await expect(option).toHaveCount(1);
-  await select.selectOption(await option.getAttribute("value") as string);
+  await option.click();
   await expect(dialog.getByRole("textbox", { name: "完整快捷指令", exact: true })).toHaveValue("保留术语，解释选段。");
   expect(await page.evaluate(() => (window as any).quickAskFixture.requests.length)).toBe(0);
   await page.screenshot({ path: info.outputPath("quick-ask-reader-presets.png") });

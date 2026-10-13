@@ -1,4 +1,5 @@
-import { Field, Select, Spinner } from "@fluentui/react-components";
+import { OptionPicker } from "../../shared/ui/productPrimitives";
+import { Field, Spinner } from "@fluentui/react-components";
 import { OrganizationOverview } from "./OrganizationOverview";
 import type { OrganizationList, OrganizationListStatus, OrganizationSummary, OrganizationSummaryStatus } from "./organization.types";
 
@@ -18,10 +19,9 @@ export function OrganizationSpacePanel(props: OrganizationSpacePanelProps) {
   const { list, listStatus, listMessage, summary, status, message } = props;
   return <section className="organization-space-panel" aria-label="组织空间">
     {list?.organizations.length ? <Field label="当前组织">
-      <Select aria-label="切换组织" value={list.activeOrganizationId || summary?.organizationId || ""}
-        disabled={status === "loading"} onChange={(_, data) => props.onSelectOrganization?.(data.value)}>
-        {list.organizations.map((item) => <option key={item.organizationId} value={item.organizationId}>{item.name}{list.organizations.filter((other) => other.name === item.name).length > 1 ? `（${item.organizationId}）` : ""}</option>)}
-      </Select>
+      <OptionPicker aria-label="切换组织" value={list.activeOrganizationId || summary?.organizationId || ""}
+        disabled={status === "loading"} onValueChange={(value) => props.onSelectOrganization?.(value)}
+        options={list.organizations.map((item) => ({ value: item.organizationId, label: `${item.name}${list.organizations.filter((other) => other.name === item.name).length > 1 ? `（${item.organizationId}）` : ""}` }))} />
     </Field> : null}
     {listStatus === "loading" || status === "loading" ? <Spinner label="正在加载组织" size="tiny" /> : null}
     {listStatus === "error" || status === "error" ? <div className="organization-feedback" role="alert">{status === "error" ? message : listMessage}</div> : null}

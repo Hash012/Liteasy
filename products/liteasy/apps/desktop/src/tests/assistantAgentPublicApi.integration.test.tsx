@@ -84,5 +84,6 @@ test("product AssistantSidebar executes chat commands through the injected publi
   await waitFor(() => expect(screen.getByText(/云端回答：总结这篇论文的检索方法/)).toBeInTheDocument());
   expect(screen.getByRole("button", { name: /1 篇来源/ })).toBeInTheDocument();
   expect(screen.queryByText("模型审计")).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "生成信息" }));
   expect(screen.getByText(/使用模型：/)).toBeInTheDocument();
 });

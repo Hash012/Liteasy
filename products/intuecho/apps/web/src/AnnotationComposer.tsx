@@ -1,3 +1,4 @@
+import { OptionPicker } from "./ui/OptionPicker";
 import { Button, Checkbox, Input, Textarea, Tooltip } from "@fluentui/react-components";
 import { Add20Regular, Dismiss20Regular, Send20Regular } from "@fluentui/react-icons";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -232,7 +233,7 @@ function ComposerWorkspace({ context, authorName = "当前登录账号", owner =
         {!isReplyEdit && parent && <ReplyPublicationFields disabled={publicationCanonicalizing} publishAsAnnotation={publishAsAnnotation} targets={targets} visibility={parent.visibility} onEnabledChange={setReplyPublication} onTargetsChange={updateReplyTargets} />}
         {!isReplyEdit && !parent && <>
           <div className="visibility-row">
-            <label>可见范围<select value={visibility} onChange={(event) => { const next = event.target.value as AnnotationVisibility | ""; setVisibility(next); if (next !== "public") setShareToPlaza(false); }}><option value="" disabled>请选择接收范围</option><option value="public">公开</option><option value="private">仅自己</option><option value="organization">指定组织</option><option value="mutual_followers">仅互相关注</option></select></label>
+            <label>可见范围<OptionPicker label="可见范围" value={visibility} onValueChange={(value) => { const next = value as AnnotationVisibility | ""; setVisibility(next); if (next !== "public") setShareToPlaza(false); }} options={[{ value: "", label: "请选择接收范围", disabled: true }, { value: "public", label: "公开" }, { value: "private", label: "仅自己" }, { value: "organization", label: "指定组织" }, { value: "mutual_followers", label: "仅互相关注" }]} /></label>
             {visibility === "organization" && <OrganizationAudienceSelector value={organizationId} onChange={setOrganizationId} onResolvedSelection={setOrganization} />}
           </div>
           {visibility === "public" && <Checkbox checked={shareToPlaza} label="发布到广场" onChange={(_, data) => setShareToPlaza(Boolean(data.checked))} />}

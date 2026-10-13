@@ -1,5 +1,6 @@
+import { OptionPicker } from "../ui/OptionPicker";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Button, Checkbox, Field, Select, Textarea } from "@fluentui/react-components";
+import { Button, Checkbox, Field, Textarea } from "@fluentui/react-components";
 import type { CommunityAnnotation } from "../community.types";
 import type { CommunityGovernanceApi, CommunityNotification, CommunityPreference, CommunityReport, CommunityReportInput, CommunityReportResolution } from "./governance.types";
 import { contentFoldReason, preferenceFor, reportReasonLabels, reportStatusLabels, resolutionLabels } from "./governance";
@@ -62,7 +63,7 @@ function AnnotationControls({ annotation, api, preferences, onPreferencesChanged
     <div className="community-actions"><Button disabled={busy} onClick={() => { setOpen(!open); setPreview(false); }}>举报</Button><Button disabled={busy} onClick={() => void hideAuthor()}>{author.blocked ? "恢复此作者内容" : "隐藏此作者内容"}</Button></div>
     {open && <form onSubmit={(event) => { event.preventDefault(); setPreview(true); }}>
       <p>仅向有权查看原内容的处理人员提交。请描述具体问题，避免添加无关私人信息；举报不会自动判定结论真伪或删除正文。</p>
-      <Field label="举报类型"><Select value={reason} disabled={busy} onChange={(_, data) => { setReason(data.value as CommunityReportInput["reason"]); setPreview(false); }}>{Object.entries(reportReasonLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>
+      <Field label="举报类型"><OptionPicker label="举报类型" value={reason} disabled={busy} onValueChange={(value) => { setReason(value as CommunityReportInput["reason"]); setPreview(false); }} options={Object.entries(reportReasonLabels).map(([value, label]) => ({ value, label }))} /></Field>
       <Field label="具体说明"><Textarea value={detail} minLength={8} maxLength={1000} required disabled={busy} onChange={(_, data) => { setDetail(data.value); setPreview(false); }} /></Field>
       {preview ? <section aria-label="举报确认"><p>{reportReasonLabels[reason]} · 原内容修订 {annotation.revision}</p><p className="community-multiline">{detail.trim()}</p><Button disabled={busy} onClick={() => void submit()}>确认提交举报</Button></section> : <Button type="submit" disabled={busy || detail.trim().length < 8}>预览举报</Button>}
     </form>}
@@ -165,7 +166,7 @@ function Reports({ api, review = false }: ReportsProps) {
 }
 function ReviewDecision({ disabled, onResolve }: { disabled: boolean; onResolve: (resolution: CommunityReportResolution) => void }) {
   const [reason, setReason] = useState<CommunityReportResolution["reason"]>("reviewed");
-  return <div><Field label="处理说明"><Select value={reason} disabled={disabled} onChange={(_, data) => setReason(data.value as CommunityReportResolution["reason"])}>{Object.entries(resolutionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>
+  return <div><Field label="处理说明"><OptionPicker label="处理说明" value={reason} disabled={disabled} onValueChange={(value) => setReason(value as CommunityReportResolution["reason"])} options={Object.entries(resolutionLabels).map(([value, label]) => ({ value, label }))} /></Field>
     <Button disabled={disabled} onClick={() => onResolve({ status: "resolved", reason })}>记录处理完成</Button><Button disabled={disabled} onClick={() => onResolve({ status: "dismissed", reason })}>记录不予采纳</Button>
     <p>此操作仅记录处理结果；原内容治理继续使用已有撤回与恢复操作。</p></div>;
 }

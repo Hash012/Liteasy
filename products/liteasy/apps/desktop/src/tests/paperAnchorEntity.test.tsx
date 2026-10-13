@@ -96,7 +96,7 @@ describe("paper anchor entities", () => {
     expect(paperAnchorOpenRequest(unavailable)).toBeUndefined();
     const onOpen = vi.fn();
     render(<PaperAnchorReferences anchors={[unavailable]} onOpen={onOpen} />);
-    expect(screen.getByRole("button")).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^打开原文证据/ })).toBeDisabled();
     expect(screen.getByText("来源位置未记录，保留原文摘录。")).toBeInTheDocument();
     expect(screen.getByText(evidence.quote)).toBeInTheDocument();
   });

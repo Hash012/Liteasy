@@ -7,9 +7,11 @@ test("remote commands require a supported desktop and carry the selected local P
   const item: LibraryItem = { id: "paper-1", kind: "pdf", contentHash: "a".repeat(64), title: "量子研究", filename: "paper.pdf", mimeType: "application/pdf", size: 1,
     collection: "", tags: [], note: "", createdAt: "now", updatedAt: "now", page: 1, pinned: false, downloaded: true, revision: 1 };
   const controls: TaskControls = { available: true, busy: false, error: "", loadResult: vi.fn(), pair: vi.fn(), unpair: vi.fn(), cancel: vi.fn(), retry: vi.fn(), enqueue: vi.fn(),
-    snapshot: { devices: [{ deviceId: "desktop", name: "办公室", online: false, lastSeen: 0, capabilities: ["open-document"] }], pairs: [], outbox: [], tasks: [] } };
+    snapshot: { devices: [{ deviceId: "desktop", name: "办公室设备 · 用于跨学科论文阅读与批注的超长设备名称", online: false, lastSeen: 0, capabilities: ["open-document"] }], pairs: [], outbox: [], tasks: [] } };
   render(<TasksView controls={controls} items={[item]} />);
   expect(screen.getByRole("button", { name: "发送任务" })).toBeDisabled();
+  expect(screen.getByRole("option", { name: /办公室设备.*超长设备名称/ })).toBeInTheDocument();
+  expect(screen.getByText(/离线，可排队/)).toBeVisible();
   fireEvent.change(screen.getByLabelText("目标桌面"), { target: { value: "desktop" } });
   expect(screen.getByRole("option", { name: "生成文献摘要" })).toBeDisabled();
   fireEvent.change(screen.getByLabelText("文献"), { target: { value: item.id } });

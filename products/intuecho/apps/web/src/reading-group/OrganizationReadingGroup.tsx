@@ -1,3 +1,4 @@
+import { OptionPicker } from "../ui/OptionPicker";
 import { Badge, Button, Checkbox, Input, Textarea } from "@fluentui/react-components";
 import { Add20Regular, BookOpen20Regular, Save20Regular } from "@fluentui/react-icons";
 import { useEffect, useRef, useState } from "react";
@@ -315,10 +316,10 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, owner = "
         <Checkbox label="作为阅读任务提醒已订阅成员" checked={notifyReadingTask} onChange={(_, data) => editInput(() => setNotifyReadingTask(data.checked === true))} />
         <Button disabled={!canComment || pending} onClick={() => void previewPack()}>预览读书包</Button>
       </section>}
-      {!!packs.length && <label className="reading-group-select">选择读书包<select value={pack?.id ?? ""} onChange={(event) => {
-        setSelectedId(event.target.value); setPreview(null); setEditing(null); setContribution(""); setEvidence("");
+      {!!packs.length && <label className="reading-group-select">选择读书包<OptionPicker label="选择读书包" value={pack?.id ?? ""} onValueChange={(value) => {
+        setSelectedId(value); setPreview(null); setEditing(null); setContribution(""); setEvidence("");
         setSummary(""); setUnresolved(""); setReflection(""); setReflectionRevision(null); setExportConfirmed(false); setStatus(""); setDiscussionFilter("all"); setDiscussionQuery("");
-      }}>{packs.map((item) => <option key={item.id} value={item.id}>{readingPackTitle(item)}</option>)}</select></label>}
+      }} options={packs.map((item) => ({ value: item.id, label: readingPackTitle(item) }))} /></label>}
       {!pack ? <p>该组织尚无读书包。可直接选择或确认资料，创建第一个读书包。</p> : <>
         <article className="reading-group-pack"><div className="reading-group-row"><strong>主持人：{pack.author.name}</strong>
           <Badge appearance="tint">{replies.some((reply) => isHostSummary(pack, reply)) ? "已有主持人整理" : "讨论中"}</Badge></div>
@@ -342,7 +343,7 @@ function ReadingGroupWorkspace({ organization, viewerId, actorBinding, owner = "
         {!!participants.length && <fieldset><legend>提及讨论参与者（可选，最多 5 人）</legend><p>仅提醒已订阅且未静音的参与者；输入姓名不会自动提及。</p>
           {participants.map((participant) => <Checkbox key={participant.id} label={`提及 ${participant.name}`} checked={mentionedUserIds.includes(participant.id)} disabled={!canComment || pending || (mentionedUserIds.length >= 5 && !mentionedUserIds.includes(participant.id))} onChange={(_, data) => editInput(() => setMentionedUserIds((current) => data.checked ? [...current, participant.id] : current.filter((id) => id !== participant.id)))} />)}
         </fieldset>}
-        <section className="reading-group-form" aria-label="贡献问题或原文对照"><label>贡献用途<select value={kind} onChange={(event) => editInput(() => setKind(event.target.value as ReadingContributionKind))}><option value="question">问题</option><option value="evidence">原文对照与回应</option></select></label>
+        <section className="reading-group-form" aria-label="贡献问题或原文对照"><label>贡献用途<OptionPicker label="贡献用途" value={kind} onValueChange={(value) => editInput(() => setKind(value as ReadingContributionKind))} options={[{ value: "question", label: "问题" }, { value: "evidence", label: "原文对照与回应" }]} /></label>
           <label>问题或原文对照<Textarea value={contribution} maxLength={6000} onChange={(_, data) => editInput(() => setContribution(data.value))} /></label>
           <label>原文位置（自行核对）<Input value={evidence} maxLength={500} onChange={(_, data) => editInput(() => setEvidence(data.value))} /></label>
           <Button disabled={!canComment || pending} onClick={() => previewContribution(kind)}>预览贡献</Button>

@@ -1,3 +1,5 @@
+import { DisclosureSection } from "../../shared/ui/productPrimitives";
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { DocumentExportDialog } from "../document-export/DocumentExportDialog";
 import { useDocumentExportPort } from "../document-export/documentExportPort";
@@ -808,27 +810,14 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
             </div>
           ) : null}
           <div className="object-toolbar">
-            <select
-              aria-label="选择白板"
-              value={model.board?.objectId ?? ""}
-              onChange={(event) => {
+            <OptionPicker aria-label="选择白板" value={String(model.board?.objectId ?? "")} onValueChange={nextValue => {
                 const object = model.objects.find(
-                  (o) => o.objectId === event.target.value,
+                  (o) => o.objectId === nextValue,
                 );
                 if (object) void model.selectBoard(object).catch(error);
-              }}
-            >
-              <option value="" disabled>
-                选择白板
-              </option>
-              {model.objects
-                .filter((o) => o.kind === "workspace.board")
-                .map((o) => (
-                  <option key={o.objectId} value={o.objectId}>
-                    {o.title}
-                  </option>
-                ))}
-            </select>
+              }} options={[{ value: String(""), label: String("\u9009\u62E9\u767D\u677F"), disabled: true }, ...(model.objects
+    .filter((o) => o.kind === "workspace.board")
+    .map((o) => ({ value: String(o.objectId), label: String(o.title) })))]} />
             <Input
               aria-label="新白板名称"
               value={boardTitle}
@@ -1075,17 +1064,17 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
               查看实际发送内容
             </Button>
             {model.preview ? (
-              <details open>
-                <summary>
+              <DisclosureSection defaultOpen title={<>
                   {model.answer ? "本轮实际使用的内容" : "内容预览"}
-                </summary>
+                </>}>
+
                 {model.preview.entries.map((entry) => (
                   <div key={entry.sha256}>
                     <strong>{entry.title}</strong>
                     <pre>{entry.text}</pre>
                   </div>
                 ))}
-              </details>
+              </DisclosureSection>
             ) : null}
             <Textarea
               aria-label="针对所选内容提问"

@@ -10,6 +10,7 @@ import {
   FolderOpenRegular,
   PeopleRegular,
   PersonRegular,
+  PersonFilled,
   QuestionCircleRegular,
   SettingsRegular,
 } from "@fluentui/react-icons";
@@ -71,21 +72,21 @@ export function ActivityBar({
 
       {activityItems.map((item) => (
         <Tooltip
-          content={item.view === "library" ? message("shell.library.tooltip", { shortcut: commandShortcut("library") }) : item.view === "settings" ? message("shell.settings.tooltip", { shortcut: commandShortcut("settings") }) : item.label}
+          content={item.view === "library" ? message("shell.library.tooltip", { shortcut: commandShortcut("library") }) : item.view === "settings" ? message("shell.settings.tooltip", { shortcut: commandShortcut("settings") }) : item.view === "profile" ? `${item.label} · ${accountSessionAvailable ? "已登录" : "未登录"}` : item.label}
           key={item.view}
           positioning="after"
           relationship="description"
         >
           <Button
             appearance="subtle"
-            aria-label={item.label}
+            aria-label={item.view === "profile" ? `${item.label} · ${accountSessionAvailable ? "已登录" : "未登录"}` : item.label}
             aria-pressed={isViewVisible(item.view)}
             className={
               isViewVisible(item.view)
                 ? "activity-button active"
                 : "activity-button"
             }
-            icon={item.icon}
+            icon={item.view === "profile" && accountSessionAvailable ? <PersonFilled /> : item.icon}
             draggable
             onDragStart={(event) => {
               event.dataTransfer.effectAllowed = "move";
@@ -101,9 +102,7 @@ export function ActivityBar({
             }}
             type="button"
           >
-            {item.view === "profile" && !accountSessionAvailable ? (
-              <span className="activity-login-badge">{message("shell.signedOut")}</span>
-            ) : null}
+
           </Button>
         </Tooltip>
       ))}

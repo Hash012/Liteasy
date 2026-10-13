@@ -2,8 +2,7 @@
 .fui-DialogBody.document-export-body { height: 100%; min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto; }
 .fui-DialogContent.document-export-content { display: grid; grid-template-columns: minmax(220px, 260px) minmax(0, 1fr); gap: 16px; min-height: 0; overflow: hidden; }
 .document-export-options { overflow: auto; padding: 4px; display: flex; flex-direction: column; gap: 12px; }
-.document-export-options summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
-.document-export-options summary:focus-visible { outline: 2px solid var(--colorStrokeFocus2); outline-offset: 2px; }
+.document-export-options h3 { font-size: 14px; margin: 4px 0; }
 .document-export-preview { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow: auto; }
 .document-export-structure { width: 100%; flex: 1; min-height: 320px; border: 1px solid var(--colorNeutralStroke1); background: white; color: black; color-scheme: light; }
 .fui-DialogActions.document-export-actions { display: flex; justify-content: flex-end; position: sticky; bottom: 0; background: var(--colorNeutralBackground1); padding-top: 12px; flex-wrap: wrap; }

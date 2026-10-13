@@ -20,7 +20,6 @@
 .profile-page .discipline-option-list { max-height: 150px; }
 .profile-page .personal-profile-inline-controls { grid-template-columns: 1fr; }
 .profile-page .profile-optional { color: var(--colorNeutralForeground3); font-size: 12px; }
-.profile-page .profile-optional summary { cursor: pointer; padding: 6px 0; }
 .profile-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .profile-memory-toolbar { display: flex; gap: 6px; flex-wrap: wrap; margin: 14px 0; }
 .profile-memory-toolbar > .fui-Input { flex: 1; min-width: 100px; }
@@ -31,8 +30,6 @@
 .profile-memory-kind { color: var(--colorBrandForeground1); font-size: 12px; font-weight: 600; }
 .profile-memory-card p { font-size: 13px; }
 .profile-memory-editor { display: grid; gap: 10px; margin-bottom: 12px; }
-.profile-memory-source { font-size: 12px; color: var(--colorNeutralForeground3); }
-.profile-memory-source summary { cursor: pointer; }
 .profile-memory-card blockquote { margin: 8px 0; padding-left: 8px; border-left: 2px solid var(--colorNeutralStroke2); color: var(--colorNeutralForeground3); font-size: 12px; overflow-wrap: anywhere; }
 .profile-memory-pending { border-left: 2px solid var(--colorBrandStroke1); padding-left: 8px; margin: 12px 0; }
 .profile-stats { display: flex; gap: 24px; margin: 16px 0; }

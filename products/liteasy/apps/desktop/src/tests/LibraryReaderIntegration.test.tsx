@@ -55,6 +55,7 @@ test("opens local PDFs as independent tabs while the selected set remains editab
   expect(screen.getByRole("tab", { name: secondTitle })).toBeInTheDocument();
   expect(within(library).getByRole("checkbox", { name: `选择 ${firstTitle}` })).toBeEnabled();
   expect(within(library).getByRole("checkbox", { name: `选择 ${secondTitle}` })).toBeEnabled();
+  await user.click(await screen.findByRole("button", { name: "批注选项" }));
   expect(screen.getByRole("checkbox", { name: "新批注自动公开到论坛" })).not.toBeChecked();
   expect(screen.queryByRole("button", { name: "发到论坛" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "立即同步" })).not.toBeInTheDocument();

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Badge, Button, Checkbox, Field, Input, MessageBar, MessageBarBody, Spinner, Tooltip } from "@fluentui/react-components";
+import { Accordion, AccordionHeader, AccordionItem, AccordionPanel, Badge, Button, Checkbox, Dropdown, Option, Field, Input, MessageBar, MessageBarBody, Spinner, Tooltip } from "@fluentui/react-components";
 import { ArrowDownload20Regular, ArrowSync20Regular, Save20Regular, Search20Regular, Delete20Regular, Open20Regular, Document20Regular, Library20Regular } from "@fluentui/react-icons";
 import type { PageInfo, SavedItem } from "../shared/types";
 import { rpc } from "../shared/rpc";
@@ -113,7 +113,10 @@ export function App({ popup = false }: { popup?: boolean }) {
       {popup ? <div className="popup-links"><Button icon={<Library20Regular />} onClick={() => openWorkspace()}>文献库</Button><Button onClick={() => openWorkspace("notes")}>阅读批注</Button><Button onClick={() => openWorkspace("whiteboard")}>知识白板</Button></div> : <>
         <section className="library-toolbar" aria-label="文献库工具"><div className="section-caption"><strong>我的文献库</strong><span>{visible.length} 条</span></div>
           <Input contentBefore={<Search20Regular />} placeholder="搜索标题、作者、DOI、标签" aria-label="搜索文献" value={search} onChange={(_, d) => setSearch(d.value)} />
-          <select aria-label="筛选分类" value={filter} onChange={e => setFilter(e.target.value)}><option value="">全部分类</option>{collections.map(c => <option key={c}>{c}</option>)}</select>
+          <Dropdown aria-label="筛选分类" className="connector-collection-picker" selectedOptions={[filter]} value={filter || "全部分类"}
+            onOptionSelect={(_, data) => { if (data.optionValue !== undefined) setFilter(data.optionValue); }}>
+            <Option value="" text="全部分类">全部分类</Option>{collections.map(c => <Option key={c} value={c} text={c}>{c}</Option>)}
+          </Dropdown>
           <div className="export-actions">{(["zip", "bib", "ris", "json"] as const).map(format => <Button key={format} size="small" disabled={busy || !visible.length} icon={format === "zip" ? <ArrowDownload20Regular /> : undefined} onClick={() => run(async () => {
             await exportLibrary(visible, format); setNotice(`已导出 ${visible.length} 条文献${format === "zip" ? "及其附件" : "的元数据"}。`);
           })}>{format === "zip" ? "完整归档" : format === "bib" ? "BibTeX" : format.toUpperCase()}</Button>)}</div>
@@ -130,7 +133,7 @@ export function App({ popup = false }: { popup?: boolean }) {
           <div className="detail-actions"><Button size="small" icon={<Open20Regular />} onClick={() => void chrome.tabs.create({ url: current.item.url })}>原文</Button>
           <Button size="small" icon={<Delete20Regular />} onClick={() => { if (confirm(`删除“${current.item.title}”及其本地附件？`)) void run(async () => { await rpc("LITEASY_REMOVE", { id: current.id }); setSelected(""); await refresh(); }); }}>删除</Button></div>
           <MetadataEditor key={`${current.id}:${current.updatedAt}`} item={current} save={(c, t) => run(async () => { await rpc("LITEASY_EDIT", { id: current.id, collection: c, tags: tagsFrom(t) }); await refresh(); setNotice("分类与标签已保存。"); })} />
-          {current.item.abstractNote && <details><summary>摘要</summary><p>{current.item.abstractNote}</p></details>}
+          {current.item.abstractNote && <Accordion collapsible><AccordionItem value="abstract"><AccordionHeader>摘要</AccordionHeader><AccordionPanel><p>{current.item.abstractNote}</p></AccordionPanel></AccordionItem></Accordion>}
           <h3>已保存附件</h3>{!current.attachments.length && <p className="muted">此条目仅保存了文献信息。</p>}
           {current.attachments.map(file => <Button key={file.id} appearance="subtle" icon={<ArrowDownload20Regular />} onClick={() => run(async () => {
             const stored = await getFile(file.id); if (!stored) throw new Error("附件不存在。");

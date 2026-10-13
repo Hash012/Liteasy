@@ -130,7 +130,7 @@ test.each(["高亮", "划线"])("creates %s privately by default", async (comman
 
   expect(screen.queryByRole("button", { name: "发到论坛" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "立即同步" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByText("批注选项"));
+  fireEvent.click(screen.getByRole("button", { name: "批注选项" }));
   expect(screen.getByRole("checkbox", { name: "新批注自动公开到论坛" })).not.toBeChecked();
   selectPdfText(`private ${command}`);
   await userEvent.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: command }));
@@ -156,7 +156,7 @@ test("does not auto-publish a duplicate selection that was not saved locally", a
       zoom={100}
     />
   );
-  await user.click(screen.getByText("批注选项"));
+  await user.click(screen.getByRole("button", { name: "批注选项" }));
   await user.click(screen.getByRole("checkbox", { name: "新批注自动公开到论坛" }));
   selectPdfText("first duplicate candidate");
   await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "高亮" }));

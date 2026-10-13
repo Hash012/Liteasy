@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>阅读批注 · ChatGPT</title><link rel="stylesheet" href="sidebar.css"><link rel="stylesheet" href="whiteboard.css"></head>
-<body>
+<body class="liteasy-reading-sidebar">
 <header class="topbar"><div><p class="eyebrow">READ · REFLECT · REMEMBER</p><h1>阅读批注 <span class="version">0.5</span></h1></div><button id="settings" class="icon-button" title="进度备份与设置" aria-label="进度备份与设置">设置</button></header>
 <div class="context-bar"><span class="dot"></span><span id="context-title">正在连接当前会话…</span></div>
 <nav class="app-modes" role="tablist" aria-label="工作区模式"><button id="app-notes" role="tab" aria-selected="true">批注 · Notes</button><button id="app-whiteboard" role="tab" aria-selected="false">Whiteboard · 白板</button></nav>
@@ -17,7 +17,7 @@
 <div class="editor-heading"><span id="editor-kind" class="eyebrow">章节批注</span><span id="save-status-top" class="save-mini" title="保存状态"></span><button id="pin-note" aria-pressed="false">置顶</button><button id="locate-note">回到原文</button><button id="note-to-board" title="把当前编辑的 Markdown 快照放入白板">放入白板</button></div>
 <label class="sr-only" for="note-title">批注标题</label><input id="note-title" class="title-input" maxlength="300" placeholder="给这段理解起个名字">
 <label class="sr-only" for="note-tags">标签，用逗号分隔</label><input id="note-tags" class="tags-input" placeholder="标签：例如 数据库, 待验证（最多 12 个）">
-<details id="source-details" class="source"><summary id="source-heading">原文摘录</summary><p id="source-conversation"></p><blockquote id="source-quote"></blockquote></details>
+<section id="source-details" class="source"><button id="source-toggle" type="button" aria-expanded="false" aria-controls="source-panel"><span id="source-heading">原文摘录</span><span class="source-chevron" aria-hidden="true"></span></button><div id="source-panel" hidden><p id="source-conversation"></p><blockquote id="source-quote"></blockquote></div></section>
 <div class="mode-bar" role="group" aria-label="编辑模式"><button data-mode="write">编辑</button><button data-mode="split" class="selected">编辑 + 预览</button><button data-mode="preview">阅读</button><button id="force-preview" title="手动重新渲染，包括超长批注">刷新预览</button></div>
 <div id="write-area"><div class="format-bar" aria-label="插入 Markdown"><button data-format="bold" title="粗体" aria-label="粗体">B</button><button data-format="italic" title="斜体" aria-label="斜体">I</button><button data-format="code" title="行内代码">` `</button><button data-format="fence" title="代码块">代码</button><button data-format="task" title="任务列表">任务</button><button data-format="link" title="链接">链接</button><button data-format="table" title="表格">表格</button><button data-format="math" title="数学公式">公式</button></div><label class="sr-only" for="note-body">Markdown 批注正文</label><textarea id="note-body" spellcheck="false" maxlength="262144" placeholder="我理解的核心是……&#10;&#10;## 自己的例子&#10;&#10;## 还没有想明白的地方"></textarea></div>
 <div id="preview-area"><p class="preview-label">MARKDOWN PREVIEW</p><article id="preview" class="markdown-body" aria-label="Markdown 渲染预览"></article></div>

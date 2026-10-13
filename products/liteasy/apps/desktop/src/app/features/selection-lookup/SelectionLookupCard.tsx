@@ -1,3 +1,4 @@
+import { DisclosureSection, InfoPopover } from "../../shared/ui/productPrimitives";
 import { useEffect, useRef, useState } from "react";
 import { Button, Spinner, Tooltip } from "@fluentui/react-components";
 import { CopyRegular, DismissRegular, Speaker2Regular, SparkleRegular } from "@fluentui/react-icons";
@@ -12,6 +13,7 @@ export function SelectionLookupCard({ lookup, text, context, paperId, paperTitle
   initialMode?: "auto" | "explain";
   onClose(): void; onExplain?(): void; onSave?(note: string, kind?: Exclude<SelectionLookupResult["kind"], "missing">): Promise<void>;
 }) {
+  const [translationOpen, setTranslationOpen] = useState(false);
   const [result, setResult] = useState<SelectionLookupResult>();
   const [pending, setPending] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -46,7 +48,7 @@ export function SelectionLookupCard({ lookup, text, context, paperId, paperTitle
   }, [lookup.query, lookup.configurationKey, text, context, paperId, paperTitle, lookup.translationUsesAi, initialMode]);
   const available = result && result.kind !== "missing";
   return <section className="selection-lookup-card" aria-label="查词与翻译结果" onKeyDown={(event) => {
-    if (event.key === "Escape") { event.stopPropagation(); onClose(); }
+    if (event.key === "Escape" && !event.defaultPrevented) { event.stopPropagation(); onClose(); }
   }}>
     <header><strong title={text}>{text}</strong>
       <Tooltip content="关闭查词与翻译" relationship="description"><Button appearance="subtle" size="small" icon={<DismissRegular />}
@@ -92,15 +94,14 @@ export function SelectionLookupCard({ lookup, text, context, paperId, paperTitle
       }}>{saving ? "正在保存…" : "保存为批注"}</Button> : null}
       {onExplain ? <Button size="small" disabled={pending} onClick={onExplain}>结合本句解释</Button> : null}
     </div>
-    <details className="selection-lookup-translation" open={mode !== "explain" && Boolean(error || result?.kind === "missing")}>
-      <summary>翻译选段</summary>
-      {context ? <details><summary>所在句子</summary><p>{context}</p></details> : null}
+    <DisclosureSection title="翻译选段" className="selection-lookup-translation" open={translationOpen || (mode !== "explain" && Boolean(error || result?.kind === "missing"))} onOpenChange={setTranslationOpen}>
+      {context ? <InfoPopover label="所在句子"><p>{context}</p></InfoPopover> : null}
       {lookup.translationUsesAi ? <GenerationPromptEditor task="selection_translation" value={systemPrompt} onChange={setSystemPrompt} disabled={pending} /> : null}
       <div className="selection-lookup-actions">
-        <Button size="small" appearance="primary" disabled={pending} onClick={() => void query("translate")}>翻译选段</Button>
+        <Button size="small" appearance="primary" aria-label="确认翻译选段" disabled={pending} onClick={() => void query("translate")}>翻译选段</Button>
         <Button size="small" disabled={pending} onClick={() => void query("auto")}>重新查词</Button>
       </div>
-    </details>
+    </DisclosureSection>
     {message ? <p role="status">{message}</p> : null}
   </section>;
 }

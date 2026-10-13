@@ -266,9 +266,12 @@ test("links multi-paper artifacts to each source without duplicating rows and op
     activePaperId="paper-other" availablePaperIds={["paper-other"]} onOpenPaper={onOpenPaper} />);
   expect(screen.getAllByRole("button", { name: "打开产物：两篇论文对比" })).toHaveLength(1);
   await user.click(screen.getByRole("button", { name: "当前论文" }));
-  expect(screen.getByRole("combobox", { name: "按来源论文筛选" })).toHaveValue("paper-other");
+  await user.click(screen.getByRole("button", { name: "筛选产物" }));
+  expect(screen.getByRole("combobox", { name: "按来源论文筛选" })).toHaveTextContent("Other Paper");
   expect(screen.queryByRole("button", { name: "打开产物：薄读" })).not.toBeInTheDocument();
-  await user.selectOptions(screen.getByRole("combobox", { name: "按产物类型筛选" }), "comparison_table");
+  await user.click(screen.getByRole("combobox", { name: "按产物类型筛选" }));
+  await user.click(screen.getByRole("option", { name: "文献对比" }));
+  await user.keyboard("{Escape}");
   expect(screen.queryByRole("button", { name: "打开产物：Other Paper Map" })).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "产物操作：两篇论文对比" }));
   expect(screen.queryByRole("menuitem", { name: "阅读来源：Attention Is All You Need" })).not.toBeInTheDocument();
@@ -295,8 +298,43 @@ test("searches saved and exported artifacts through their source metadata and pr
   await user.click(screen.getByRole("button", { name: "查看原产物" }));
   expect(paneProps.onOpenArtifact).toHaveBeenCalledWith("artifact-thin-reading");
   await user.click(screen.getByRole("button", { name: "清除筛选" }));
-  await user.selectOptions(screen.getByRole("combobox", { name: "按来源论文筛选" }), "__unlinked__");
+  await user.click(screen.getByRole("button", { name: "筛选产物" }));
+  await user.click(screen.getByRole("combobox", { name: "按来源论文筛选" }));
+  await user.click(screen.getByRole("option", { name: "未关联论文" }));
+  await user.keyboard("{Escape}");
   expect(screen.getByText("独立导出.md")).toBeInTheDocument();
   expect(screen.queryByText("薄读.md")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "查看原产物" })).not.toBeInTheDocument();
+});
+
+
+test.each([false, true])("saved view remains available with invalid export transport data (signed in: %s)", async (accountAvailable) => {
+  const user = userEvent.setup();
+  render(<ArtifactLibraryPane {...props()} accountAvailable={accountAvailable} exportRecords={[null, { id: "broken" }] as never} />);
+  expect(screen.getByRole("searchbox", { name: "搜索产物" })).toBeInTheDocument();
+  if (!accountAvailable) expect(screen.getByText("登录后查看账号中保存的产物")).toBeInTheDocument();
+  await user.click(screen.getByRole("tab", { name: "已导出" }));
+  expect(screen.getAllByText(/不可读的导出记录/)).toHaveLength(2);
+  expect(screen.getAllByRole("button", { name: /移除导出记录/ }).every((button) => button.hasAttribute("disabled"))).toBe(true);
+});
+
+test("failed refresh keeps saved rows alongside its retry message", () => {
+  render(<ArtifactLibraryPane {...props()} artifactCatalogLoadState={{ status: "error", message: "offline" }} />);
+  expect(screen.getByRole("button", { name: "打开产物：薄读" })).toBeInTheDocument();
+  expect(screen.getByRole("alert")).toHaveTextContent("仍显示上次可用目录");
+});
+
+test("group collapse survives twenty saved/exported view transitions", async () => {
+  const user = userEvent.setup();
+  render(<ArtifactLibraryPane {...props()} />);
+  const group = screen.getByRole("button", { name: /Attention Is All You Need/ });
+  await user.click(group);
+  for (let index = 0; index < 20; index += 1) {
+    await user.click(screen.getByRole("tab", { name: "已导出" }));
+    await user.click(screen.getByRole("tab", { name: "已保存" }));
+  }
+  expect(screen.getByRole("button", { name: /Attention Is All You Need/ })).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryByRole("button", { name: "打开产物：薄读" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: /Attention Is All You Need/ }));
+  expect(screen.getByRole("button", { name: "打开产物：薄读" })).toBeInTheDocument();
 });

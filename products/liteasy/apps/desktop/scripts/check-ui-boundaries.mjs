@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { checkUiControls } from "./check-ui-controls.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
@@ -95,6 +96,7 @@ export function checkUiFindings(findings, exceptions) {
   return errors;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  checkUiControls();
   const policy = JSON.parse(fs.readFileSync(path.join(root, "scripts/ui-exceptions.json"), "utf8"));
   for (const entry of policy.exceptions) if (!entry.owner || !entry.reason || !entry.reviewBy || !entry.surface) throw new Error(`Unowned UI exception: ${entry.file}`);
   const findings = collectUiFindings(), errors = checkUiFindings(findings, policy.exceptions);

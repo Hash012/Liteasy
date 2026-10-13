@@ -1,9 +1,10 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { BookOpenRegular, EditRegular, SaveRegular } from "@fluentui/react-icons";
 import { IconAction, SourceDisclosure } from "../../shared/ui/productPrimitives";
 import { MoreHorizontalRegular, ArrowClockwiseRegular } from "@fluentui/react-icons";
 import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
 import { useContext, useEffect, useMemo, useState } from "react";
-import { Button, Select, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
+import { Button, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
 import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { ReferenceSourceContext, ResourceReferencesContext } from "../resource-links/ResourceReferencesContext";
 import { liteasyPath } from "../resource-filesystem/liteasyPath";
@@ -42,7 +43,7 @@ export function PaperNoteEditor({ model }: { model: Model }) {
     {confirm ? <div role="group" aria-label="放弃草稿确认"><p>重新载入会放弃此笔记未保存的修改。</p><Button onClick={() => { setConfirm(false); void model.reload(); }}>放弃修改并载入</Button><Button onClick={() => setConfirm(false)}>保留草稿</Button></div> : null}
     {model.error ? <p role="alert">{model.error}</p> : null}
     {live || editing ? <MarkdownEditor documentKey={note.object.objectId} className="external-note-source" label="论文笔记 Markdown 源码" value={note.draft} onChange={model.setDraft} /> : <>
-      {preview.chapters.length > 1 ? <Select aria-label="笔记章节" value={part} onChange={(_, data) => setPart(Number(data.value))}>{preview.chapters.map((chapter, index) => <option key={chapter.id} value={index}>{chapter.title}</option>)}</Select> : null}
+      {preview.chapters.length > 1 ? <OptionPicker aria-label="笔记章节" value={String(part ?? "")} onValueChange={nextValue => setPart(Number(nextValue))} options={[...(preview.chapters.map((chapter, index) => ({ value: String(index), label: String(chapter.title) })))]} /> : null}
       <article className="external-note-preview">{preview.error ? <p role="alert">{preview.error}</p> : <ContentView content={legacyContent(preview.chapters[Math.min(part, preview.chapters.length - 1)]?.content ?? "")} />}</article>
     </>}
   </section></ReferenceSourceContext.Provider>;

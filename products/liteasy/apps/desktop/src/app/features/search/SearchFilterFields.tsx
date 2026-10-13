@@ -1,3 +1,4 @@
+import { InfoPopover } from "../../shared/ui/productPrimitives";
 import { useId, useMemo, useState } from "react";
 import { Button, Combobox, Field, Option, Tooltip } from "@fluentui/react-components";
 import { AddRegular, DismissRegular } from "@fluentui/react-icons";
@@ -65,9 +66,9 @@ export function SearchFilterFields({ query, onChange, tags = [] }: { query: stri
         disabled={Boolean(compiled.error)} onToggle={(value, enabled) => onChange(updateSearchFacet(query, field, value, exclude, enabled))} />))}
     </div>
     <p className="search-filter-hint">包含的标签须同时满足；格式、类别分别匹配任意一项。排除条件始终生效。</p>
-    <details className="search-filter-help"><summary>检索语法与正则表达式</summary>
+    <InfoPopover label="检索语法与正则表达式">
       <p>也可在搜索框直接输入 <code>记忆 tag:精读 -tag:翻译 format:pdf -type:book</code>。</p>
       <p>正则：<code>/memory|记忆/i</code> 或 <code>re:"第[一二三]章"</code>，可与筛选组合。支持 i、m、s，不支持环视与反向引用。</p>
-    </details>
+    </InfoPopover>
   </div>;
 }

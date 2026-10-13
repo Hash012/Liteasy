@@ -21,9 +21,10 @@ test("offers mainstream providers, editable endpoint/model, and password-masked 
   const onUpdateSetting = vi.fn();
   render(<ModelConnectionPanel onUpdateSetting={onUpdateSetting} />);
   expect(screen.getByText(/无需登录 Liteasy/)).toBeInTheDocument();
-  expect(screen.getByRole("option", { name: "Anthropic / Claude" })).toBeInTheDocument();
-  expect(screen.getByRole("option", { name: "Google Gemini" })).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("API 服务商"), { target: { value: "deepseek" } });
+  fireEvent.click(screen.getByRole("combobox", { name: "API 服务商" }));
+  expect(screen.getByRole("option", { name: /^Anthropic \/ Claude/ })).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: /^Google Gemini/ })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("option", { name: /^DeepSeek/ }));
   expect(screen.getByLabelText("API 基础地址")).toHaveValue("https://api.deepseek.com");
   fireEvent.change(screen.getByLabelText("模型 ID"), { target: { value: "custom-deepseek-model" } });
   const key = screen.getByLabelText("API key");

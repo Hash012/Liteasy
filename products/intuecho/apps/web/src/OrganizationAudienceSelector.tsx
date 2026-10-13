@@ -1,4 +1,5 @@
-import { Button, Select } from "@fluentui/react-components";
+import { OptionPicker } from "./ui/OptionPicker";
+import { Button } from "@fluentui/react-components";
 import type { OrganizationChoice } from "@intuecho/contracts";
 import { useEffect, useState } from "react";
 import { communityApi } from "./communityApi";
@@ -29,13 +30,11 @@ export function OrganizationAudienceSelector({ value, onChange, onResolvedSelect
   const selected = state === "ready" ? organizations.find((item) => item.organizationId === value && item.allowedActions.includes("comment")) : undefined;
   useEffect(() => { onResolvedSelection(selected); }, [selected, onResolvedSelection]);
   return <div className="organization-audience">
-    <label>接收组织<Select value={value} disabled={state !== "ready"} onChange={(_, data) => onChange(data.value)}>
-      <option value="">{state === "loading" ? "正在确认组织权限" : "请选择组织"}</option>
-      {value && !organizations.some((item) => item.organizationId === value) && <option value={value} disabled>原组织暂不可用</option>}
-      {organizations.map((item) => <option key={item.organizationId} value={item.organizationId} disabled={!item.allowedActions.includes("comment")}>
-        {item.name} · {roleLabels[item.role]}{item.allowedActions.includes("comment") ? "" : " · 暂不可发布"}
-      </option>)}
-    </Select></label>
+    <label>接收组织<OptionPicker label="接收组织" value={value} disabled={state !== "ready"} onValueChange={onChange} options={[
+      { value: "", label: state === "loading" ? "正在确认组织权限" : "请选择组织" },
+      ...(value && !organizations.some((item) => item.organizationId === value) ? [{ value, label: "原组织暂不可用", disabled: true }] : []),
+      ...organizations.map((item) => ({ value: item.organizationId, disabled: !item.allowedActions.includes("comment"), label: `${item.name} · ${roleLabels[item.role]}${item.allowedActions.includes("comment") ? "" : " · 暂不可发布"}` }))
+    ]} /></label>
     {state === "failed" && <p role="alert" className="form-error">无法确认组织权限，草稿仍保留在本机。</p>}
     {state === "ready" && organizations.length === 0 && <p>当前没有可用的组织。</p>}
     {state === "ready" && value && !selected && <p role="alert" className="form-error">该组织当前不可发布，请重新选择或稍后重试。</p>}

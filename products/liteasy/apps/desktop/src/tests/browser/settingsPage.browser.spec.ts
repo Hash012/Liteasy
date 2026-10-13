@@ -10,19 +10,23 @@ test("centrally saves a generation prompt and restores it after reload with the 
     return settings.getByRole("region", { name: "AI 生成提示词", exact: true });
   }
   let panel = await openPromptSettings();
-  await panel.getByRole("combobox", { name: "提示词用途" }).selectOption("thin_reading");
+  await panel.getByRole("combobox", { name: "提示词用途" }).click();
+  await page.getByRole("option", { name: "薄读与深入", exact: true }).click();
   await expect(panel.getByRole("textbox")).toHaveCount(0);
-  await panel.getByRole("combobox", { name: "生成风格" }).selectOption("question");
+  await panel.getByRole("combobox", { name: "生成风格" }).click();
+  await page.getByRole("option", { name: "提问", exact: true }).click();
   await panel.getByRole("button", { name: "自定义系统提示词" }).click();
   await expect(panel.getByRole("textbox")).toHaveValue(/以启发式问题引导理解/);
   await panel.getByRole("textbox").fill("优先解释隐含假设，给出三个检查理解的问题。");
   await page.reload();
   panel = await openPromptSettings();
-  await panel.getByRole("combobox", { name: "提示词用途" }).selectOption("thin_reading");
+  await panel.getByRole("combobox", { name: "提示词用途" }).click();
+  await page.getByRole("option", { name: "薄读与深入", exact: true }).click();
   await expect(panel.getByRole("textbox")).toHaveCount(0);
   await panel.getByRole("button", { name: "自定义系统提示词" }).click();
   await expect(panel.getByRole("textbox")).toHaveValue("优先解释隐含假设，给出三个检查理解的问题。");
-  await panel.getByRole("combobox", { name: "生成风格" }).selectOption("default");
+  await panel.getByRole("combobox", { name: "生成风格" }).click();
+  await page.getByRole("option", { name: "内置默认", exact: true }).click();
   await expect(panel.getByRole("textbox")).toHaveValue(/你是论文薄读讲解者/);
 });
 
@@ -35,7 +39,8 @@ test("settings opens centrally, searches globally and retains drafts across cate
   await expect(page.locator('[data-region="main"] .settings-page')).toBeVisible();
   await expect(page.locator('[data-region="left"]').getByRole("region", { name: "本地文献库" })).toBeVisible();
   await settings.getByRole("button", { name: "AI 与助手" }).click();
-  await settings.getByLabel("AI 接入方式").selectOption("direct");
+  await settings.getByLabel("AI 接入方式").click();
+  await page.getByRole("option", { name: /^自备 API key/ }).click();
   await settings.getByLabel("模型 ID", { exact: true }).fill("unsaved-model");
   await settings.getByLabel("API key", { exact: true }).fill("unsaved-browser-test-key");
   const docs = settings.getByRole("link", { name: "查看服务商 API 文档" });
@@ -53,7 +58,8 @@ test("settings opens centrally, searches globally and retains drafts across cate
   await expect(settings.getByLabel("模型 ID", { exact: true })).toHaveValue("unsaved-model");
   await expect(settings.getByLabel("API key", { exact: true })).toHaveValue("unsaved-browser-test-key");
   await settings.getByRole("button", { name: "外观与阅读" }).click();
-  await settings.getByRole("combobox", { name: "外观", exact: true }).selectOption("dark");
+  await settings.getByRole("combobox", { name: "外观", exact: true }).click();
+  await page.getByRole("option", { name: "深色", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");
   await expect(settings).toHaveCSS("background-color", "rgb(41, 41, 41)");
   await settings.screenshot({ path: testInfo.outputPath("settings-appearance-dark.png") });

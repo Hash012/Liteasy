@@ -1,3 +1,4 @@
+import { DisclosureSection } from "../../shared/ui/productPrimitives";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Checkbox } from "@fluentui/react-components";
 import { FolderOpenRegular, SaveRegular } from "@fluentui/react-icons";
@@ -92,7 +93,7 @@ export function LocalArchivePanel({ scopeId, service }: { scopeId: string; servi
       <p>新目录：<span>{displayPath(preview.targetPath)}</span></p>
       <p>{preview.manifest.documents.length} 篇原文 · {preview.manifest.notes.length} 篇关联笔记 · {preview.manifest.relations.length} 条来源关系 · {(preview.totalBytes / 1024 / 1024).toFixed(2)} MiB</p>
       <p>不包含：{preview.manifest.exclusions.join("、")}。</p>
-      <details><summary>查看将写入的文件</summary><ul>{preview.manifest.files.map((file) => <li key={file.path}>{file.path} · {file.size} 字节</li>)}</ul></details>
+      <DisclosureSection  title={<>查看将写入的文件</>}><ul>{preview.manifest.files.map((file) => <li key={file.path}>{file.path} · {file.size} 字节</li>)}</ul></DisclosureSection>
       <Button appearance="primary" disabled={busy} onClick={() => void confirm()}>确认写入新目录</Button>
       <Button disabled={busy} onClick={() => void perform(async () => { await api.cancel(preview.planId); pendingPreview.current = null; setPreview(null); })}>取消预览</Button>
     </div> : null}

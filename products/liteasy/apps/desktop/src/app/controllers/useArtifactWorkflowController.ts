@@ -1,3 +1,4 @@
+import { artifactMetadataIssueCount } from "../features/artifacts/artifactMetadataProjection";
 import type { ThinReadingPublicationPreview } from "../features/thin-reading/thinReadingIntuechoSyncQueue";
 import type { PublicationActorBinding } from "../features/forum/publicationActorBinding";
 import { loadDurableEntries, putDurableEntry } from "../features/persistence/durableJsonStore";
@@ -209,6 +210,7 @@ export function useArtifactWorkflowController({
   const resourceScopeIdRef = useRef(resourceScope.id);
   resourceScopeIdRef.current = resourceScope.id;
   const catalogRequestRef = useRef(0);
+  const catalogScopeRef = useRef<string>();
   const localRepositoryRef = useRef<ArtifactLocalRepository | null>(null);
   const persistenceReadyRef = useRef(false);
   const persistenceQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -364,32 +366,47 @@ export function useArtifactWorkflowController({
 
   async function reloadArtifactCatalog() {
     const requestId = ++catalogRequestRef.current;
-    setArtifactCatalogLoadState({ status: "loading" });
+    const scopeId = resourceScope.id;
+    const scopeChanged = catalogScopeRef.current !== scopeId;
+    catalogScopeRef.current = scopeId;
+    const entriesBeforeRefresh = new Map(artifactStore.getCatalog().map((entry) => [entry.artifactId, entry]));
+    setArtifactCatalogLoadState((previous) => scopeChanged ? { status: "loading" } : { ...previous, status: "loading" });
     persistenceReadyRef.current = false;
-    thinReadingVisualization.dispose("workflow_disposed", { resetStatuses: true });
-    artifactStore.clearAccountArtifacts();
-    thinReadingVisualization.hydrateReadyArtifacts([], { replace: true });
-    artifactActions.syncArtifacts();
-
+    if (scopeChanged) {
+      thinReadingVisualization.dispose("workflow_disposed", { resetStatuses: true });
+      artifactStore.clearAccountArtifacts();
+      thinReadingVisualization.hydrateReadyArtifacts([], { replace: true });
+      artifactActions.syncArtifacts();
+    }
+    const current = () => requestId === catalogRequestRef.current && scopeId === resourceScopeIdRef.current;
     try {
+      let entries: ArtifactTab[];
+      let readStatus: { issueCount: number; readOnly: boolean } | undefined;
       if (artifactResultScopeKey) {
-        const results = await artifactResultClientRef.current.list();
-        if (requestId !== catalogRequestRef.current) {
-          return;
-        }
-        results.forEach(artifactActions.restoreArtifactResult);
+        const client = artifactResultClientRef.current;
+        const results = await client.list();
+        if (!current()) return;
+        entries = results.map((result) => artifactActions.restoreArtifactResult(result, { commit: false }));
+        readStatus = client.getReadStatus?.();
       } else {
         const cachedArtifacts = await localRepositoryRef.current?.list() ?? [];
-        if (requestId !== catalogRequestRef.current) {
-          return;
-        }
-        cachedArtifacts.forEach(artifactStore.upsertCatalogEntry);
+        if (!current()) return;
         const localResults = await loadLocalArtifactResults?.() ?? [];
-        if (requestId !== catalogRequestRef.current) return;
-        localResults.forEach(artifactActions.restoreArtifactResult);
-        persistenceReadyRef.current = true;
+        if (!current()) return;
+        entries = [...cachedArtifacts, ...localResults.map((result) => artifactActions.restoreArtifactResult(result, { commit: false }))];
+        const cachedStatus = localRepositoryRef.current?.getReadStatus?.();
+        const resultStatus = loadLocalArtifactResults ? artifactResultClientRef.current.getReadStatus?.() : undefined;
+        readStatus = { issueCount: (cachedStatus?.issueCount ?? 0) + (resultStatus?.issueCount ?? 0), readOnly: Boolean(cachedStatus?.readOnly || resultStatus?.readOnly) };
       }
+      const issueCount = Math.max(readStatus?.issueCount ?? 0, entries.reduce((count, entry) => count + artifactMetadataIssueCount(entry), 0));
+      readStatus = { issueCount, readOnly: Boolean(readStatus?.readOnly || issueCount) };
+      // Preserve results created or edited while a same-scope request was pending.
+      const concurrentEdits = scopeChanged ? [] : artifactStore.getCatalog().filter((entry) => entriesBeforeRefresh.get(entry.artifactId) !== entry);
+      artifactStore.replaceAccountCatalog([...entries, ...concurrentEdits]);
+      // Reading is never an instruction to replace storage with a display
+      // projection. Synchronize first; only later actual edits may persist.
       artifactActions.syncArtifacts();
+      persistenceReadyRef.current = !artifactResultScopeKey && !readStatus?.readOnly;
       thinReadingVisualization.hydrateReadyArtifacts(
         artifactStore.getCatalog().flatMap((tab) => {
           const document = tab.type === "thin_reading" ? tab.thinReadingDocument : undefined;
@@ -399,18 +416,12 @@ export function useArtifactWorkflowController({
         }),
         { replace: true }
       );
-      setArtifactCatalogLoadState({ status: "ready" });
+      setArtifactCatalogLoadState({ status: "ready", ...(readStatus?.issueCount ? readStatus : {}) });
     } catch (error) {
-      if (requestId !== catalogRequestRef.current) {
-        return;
-      }
+      if (!current()) return;
       const message = error instanceof Error ? error.message : String(error);
-      setArtifactCatalogLoadState({ message, status: "error" });
-      onAnalysisHint(
-        artifactResultScopeKey
-          ? `同步 Agent 产物服务失败：${message}`
-          : `加载本地产物记录失败：${message}`
-      );
+      setArtifactCatalogLoadState((previous) => ({ ...previous, message, status: "error" }));
+      onAnalysisHint(artifactResultScopeKey ? `同步 Agent 产物服务失败：${message}` : `加载本地产物记录失败：${message}`);
     }
   }
 

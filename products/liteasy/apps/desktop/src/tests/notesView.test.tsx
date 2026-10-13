@@ -1,3 +1,4 @@
+import { selectPickerValue } from "./helpers/selectPickerValue";
 import "fake-indexeddb/auto";
 import {
   act,
@@ -292,7 +293,7 @@ describe("Notes reference directories", () => {
     const folder = (await f.notes.listFolders()).find(
       (item) => item.name === "我的专题",
     )!;
-    await user.selectOptions(
+    await selectPickerValue(
       screen.getByRole("combobox", { name: "复制引用到目录" }),
       folder.folderId,
     );
@@ -431,7 +432,7 @@ it("combines note labels and exclusions and keeps personal additions to AI conte
     expect(screen.getByRole("button", { name: "查看笔记 修改过的导读" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "查看笔记 我的观察" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "标签筛选 · 2" }));
-    await user.selectOptions(await screen.findByRole("combobox", { name: "包含笔记标签" }), "user-edited");
+    await selectPickerValue(await screen.findByRole("combobox", { name: "包含笔记标签" }), "user-edited");
     await user.keyboard("{Escape}");
     await screen.findByRole("button", { name: "查看笔记 修改过的导读" });
     expect(screen.queryByRole("button", { name: "查看笔记 我的观察" })).not.toBeInTheDocument();

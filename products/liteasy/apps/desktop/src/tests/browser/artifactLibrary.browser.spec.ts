@@ -4,11 +4,12 @@ for (const viewport of [
   { height: 920, name: "desktop", width: 1440 },
   { height: 844, name: "narrow", width: 390 }
 ]) {
-  test(`artifact library remains usable at ${viewport.name}`, async ({ page }) => {
+  test(`artifact library remains usable at ${viewport.name}`, async ({ page }, info) => {
     await page.setViewportSize(viewport);
     await page.goto("/?artifact-library-fixture");
 
     await expect(page.getByRole("tab", { name: "已保存" })).toBeVisible();
+    await page.getByRole("button", { name: "打开产物：Transformer 论文薄读" }).hover();
     await page.getByRole("button", { name: "产物操作：Transformer 论文薄读" }).click();
     await page.getByRole("menuitem", { name: "重命名" }).click();
     await expect(page.getByRole("menuitem", { name: "重命名" })).toBeHidden();
@@ -28,7 +29,7 @@ for (const viewport of [
 
     await page.screenshot({
       fullPage: true,
-      path: `test-results/artifact-library-${viewport.name}.png`
+      path: info.outputPath(`artifact-library-${viewport.name}.png`)
     });
   });
 }

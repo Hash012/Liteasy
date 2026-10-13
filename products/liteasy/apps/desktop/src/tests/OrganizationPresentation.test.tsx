@@ -11,7 +11,8 @@ test("switches organizations, opens the shared library and marks scoped notifica
   const props = { list, listMessage: "", listStatus: "success" as const, message: "", summary, status: "success" as const,
     onSelectOrganization, onOpenSharedLibrary, onMarkNotificationsRead, readNotificationIds: ["another:welcome"] };
   const { rerender } = render(<OrganizationSpacePanel {...props} />);
-  await user.selectOptions(screen.getByRole("combobox", { name: "切换组织" }), "systems");
+  await user.click(screen.getByRole("combobox", { name: "切换组织" }));
+  await user.click(screen.getByRole("option", { name: "数据库系统小组" }));
   expect(onSelectOrganization).toHaveBeenCalledWith("systems");
   await user.click(screen.getByRole("button", { name: "打开共享文献库" }));
   expect(onOpenSharedLibrary).toHaveBeenCalledWith(summary);
@@ -45,8 +46,12 @@ test("same-name organizations retain distinct choices and owner export is narrow
   const onSelectOrganization = vi.fn();
   render(<OrganizationSpacePanel list={{ ...list, organizations: list.organizations.map((item) => ({ ...item, name: "同名研究组" })) }}
     listMessage="" listStatus="success" message="" status="success" summary={{ ...summary, accessSnapshot: { allowedActions: ["export_original"], authorizationRevision: 3, policyRevision: 2, policyExceptions: ["owner_export"], denialReasons: { publish_public: "organization_external_sharing_disabled", run_external_model: "organization_external_model_disabled" }, actionConstraints: { inviteRoles: [] } } }} readNotificationIds={[]} onSelectOrganization={onSelectOrganization} />);
-  await userEvent.selectOptions(screen.getByRole("combobox", { name: "切换组织" }), "systems");
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("combobox", { name: "切换组织" }));
+  const option = screen.getByRole("option", { name: "同名研究组（systems）" });
+  await user.click(option);
   expect(onSelectOrganization).toHaveBeenCalledWith("systems");
-  expect(screen.getByRole("option", { name: "同名研究组（systems）" })).toHaveValue("systems");
+  expect(option).toHaveAttribute("aria-selected", "false"); // Controlled value changes only after the caller updates the organization.
+  await user.click(screen.getByRole("button", { name: "我的组织权限" }));
   expect(screen.getByText(/此例外仅适用于原文件导出，不授予公开发布或外部 AI 使用权限/)).toBeInTheDocument();
 });

@@ -32,7 +32,7 @@ for (const theme of ["深色主题", "浅色主题"]) test(`recommendations pres
     await page.getByRole("combobox", { name: "推荐区域宽度" }).selectOption(String(width));
     const row = panel.getByRole("button", { name: /^查看推荐 很长/ });
     await row.focus();
-    for (const detail of await panel.locator("details").all()) { if (!await detail.getAttribute("open").then(value => value !== null)) await detail.locator("summary").click(); }
+    for (const detail of await panel.getByRole("button", { name: "推荐详情", exact: true }).all()) { if (await detail.getAttribute("aria-expanded") !== "true") await detail.click(); }
     await expect(panel.getByText("来源提供的理由：主题与并发控制有关")).toBeVisible();
     await expect(panel.getByText("未提供个别推荐理由")).toBeVisible();
     expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);

@@ -1,3 +1,4 @@
+import { projectArtifactMetadata } from "./artifactMetadataProjection";
 import type {
   ArtifactTab,
   ArtifactTask,
@@ -62,10 +63,12 @@ export function createArtifactStore(taskNamespace = "") {
       delete task.thinReadingBranchRecovery;
       delete task.partialAnswer;
       delete task.partialOutlineNodes;
+      payload = projectArtifactMetadata(payload);
       catalog.set(payload.artifactId, payload);
       upsertOpenTab(payload);
     },
     upsertTab(payload: ArtifactTab) {
+      payload = projectArtifactMetadata(payload);
       catalog.set(payload.artifactId, payload);
       upsertOpenTab(payload);
     },
@@ -74,6 +77,7 @@ export function createArtifactStore(taskNamespace = "") {
       upsertOpenTab(payload);
     },
     upsertCatalogEntry(payload: ArtifactTab) {
+      payload = projectArtifactMetadata(payload);
       catalog.set(payload.artifactId, payload);
     },
     renameCatalogEntry(artifactId: string, title: string) {
@@ -104,6 +108,10 @@ export function createArtifactStore(taskNamespace = "") {
       if (tabIndex >= 0) {
         tabs.splice(tabIndex, 1);
       }
+    },
+    replaceAccountCatalog(entries: ArtifactTab[]) {
+      for (const [id, entry] of catalog) if (entry.type !== "skill_doc") catalog.delete(id);
+      for (const entry of entries) catalog.set(entry.artifactId, projectArtifactMetadata(entry));
     },
     clearAccountArtifacts() {
       tasks.clear();

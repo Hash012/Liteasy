@@ -42,9 +42,10 @@ describe("ActivityBar", () => {
     expect(within(activityBar).getByRole("button", { name: "文献库" })).toBeInTheDocument();
     expect(within(activityBar).getByRole("button", { name: "产物库" })).toBeInTheDocument();
     expect(within(activityBar).getByRole("button", { name: "组织" })).toHaveClass("active");
-    const profileButton = within(activityBar).getByRole("button", { name: "个人中心" });
+    const profileButton = within(activityBar).getByRole("button", { name: /个人中心 ·/ });
     expect(profileButton).toBeInTheDocument();
-    expect(within(profileButton).getByText("未登录")).toBeInTheDocument();
+    expect(profileButton).toHaveAccessibleName("个人中心 · 未登录");
+    expect(profileButton.querySelector(".activity-login-badge")).toBeNull();
     expect(within(activityBar).getByRole("button", { name: "设置" })).toBeInTheDocument();
 
     await user.click(within(activityBar).getByRole("button", { name: "设置" }));
@@ -67,8 +68,9 @@ describe("ActivityBar", () => {
       />
     );
 
-    const profileButton = screen.getByRole("button", { name: "个人中心" });
+    const profileButton = screen.getByRole("button", { name: /个人中心 ·/ });
     expect(profileButton).toHaveClass("active");
+    expect(profileButton).toHaveAccessibleName("个人中心 · 已登录");
     expect(within(profileButton).queryByText("未登录")).not.toBeInTheDocument();
   });
 

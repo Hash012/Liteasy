@@ -1,5 +1,6 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { useState } from "react";
-import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Select, Textarea } from "@fluentui/react-components";
+import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Textarea } from "@fluentui/react-components";
 import type { ReadingCatalogEntry, ReadingCatalogMetadataPatch } from "./readingCatalog.types";
 import { assetTypeLabels, inferAssetType } from "./libraryAssetMetadata";
 
@@ -29,9 +30,7 @@ export function LibraryMetadataEditor({ entry, onSave, onClose }: { entry: Readi
       <DialogBody><DialogTitle>分类与标签</DialogTitle><DialogContent className="library-metadata-editor">
         <strong>{entry.title}</strong>
         <div className="library-metadata-fields">
-          <Field label="类别"><Select autoFocus aria-label="资产类别" value={type} disabled={pending} onChange={(_, data) => setType(data.value)}>
-            <option value="">未分类</option>{Object.entries(assetTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </Select></Field>
+          <Field label="类别"><OptionPicker autoFocus aria-label="资产类别" value={String(type ?? "")} disabled={pending} onValueChange={nextValue => setType(nextValue)} options={[{ value: String(""), label: String("\u672A\u5206\u7C7B") }, ...(Object.entries(assetTypeLabels).map(([value, label]) => ({ value: String(value), label: String(label) })))]} /></Field>
           <Field label="年份"><Input aria-label="资产年份" value={year} disabled={pending} onChange={(_, data) => setYear(data.value)} maxLength={4} placeholder="例如 2024" /></Field>
         </div>
         <Field label="作者"><Input aria-label="资产作者" value={authors} disabled={pending} onChange={(_, data) => setAuthors(data.value)} placeholder="多位作者用分号分隔" maxLength={2000} /></Field>

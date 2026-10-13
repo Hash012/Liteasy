@@ -514,3 +514,6 @@ a { color: inherit; text-decoration: none; }
 .operation-storage-summary, .operation-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .operation-storage-summary { justify-content: space-between; padding: 12px 0; color: var(--intuecho-muted); font-size: 13px; }
 .operation-identifier { margin: 10px 0; color: var(--intuecho-muted); font-size: 12px; overflow-wrap: anywhere; }
+
+.community-option-picker { min-width: 0; max-width: 100%; min-height: 32px; border-radius: 6px; }
+@media (pointer: coarse), (hover: none) { .community-option-picker { min-height: 44px; } }

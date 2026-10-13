@@ -8,6 +8,7 @@ test("queries all system font families only after a browser gesture and filters 
   const update = vi.fn();
   render(<FluentProvider theme={webLightTheme}><SystemFontPicker label="测试字体" options={[]} value="system-ui" onChange={update} /></FluentProvider>);
   expect(fonts).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "系统字体与手动输入" }));
   fireEvent.click(screen.getByRole("button", { name: "读取系统字体" }));
   await waitFor(() => expect(screen.getByRole("button", { name: "读取系统字体" })).toBeEnabled());
   const input = screen.getByRole("combobox", { name: "测试字体" });

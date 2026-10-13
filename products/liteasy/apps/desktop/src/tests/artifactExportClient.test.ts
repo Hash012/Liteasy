@@ -157,3 +157,16 @@ describe("artifact export client", () => {
     expect(download).toHaveBeenCalledOnce();
   });
 });
+
+
+test.each([null, {}, [null, { ...desktopRecord, fileName: undefined }, { ...desktopRecord, id: "future", format: "future-format" }]])("projects invalid native export history as preserved read-only rows: %j", async (raw) => {
+  const bytes = JSON.stringify(raw);
+  const invoke = vi.fn(async () => raw);
+  const client = createArtifactExportClient({ invoke });
+  const records = await client.list();
+  expect(records.length).toBe(Array.isArray(raw) ? raw.length : 1);
+  expect(records.every((record) => record.status === "unsupported" && typeof record.fileName === "string")).toBe(true);
+  expect(JSON.stringify(raw)).toBe(bytes);
+  expect(invoke).toHaveBeenCalledTimes(1);
+  expect(invoke).toHaveBeenCalledWith("list_artifact_exports");
+});

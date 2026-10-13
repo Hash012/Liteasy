@@ -1,3 +1,4 @@
+import { SurfaceErrorBoundary, SurfaceRenderer } from "../shared/ui/SurfaceErrorBoundary";
 import { projectLibraryPaperInventory } from "../controllers/libraryPaperInventory";
 import { DocumentExportContext } from "../features/document-export/documentExportPort";
 import { useCommunitySourceController } from "../controllers/useCommunitySourceController";
@@ -342,6 +343,7 @@ export function AppShell({
     const local = localArtifactResultClientRef.current;
     const client = () => settingsStoreRef.current.getState()["models.connection_mode"] === "direct" || !loadStoredAccountSession()?.sessionId ? local : cloud;
     artifactResultClientRef.current = {
+      getReadStatus: () => client().getReadStatus?.() ?? { issueCount: 0, readOnly: false },
       list: (signal) => client().list(signal), save: (document, signal) => client().save(document, signal),
       delete: (id) => client().delete(id), rename: (id, title) => client().rename(id, title)
     };
@@ -2939,7 +2941,7 @@ export function AppShell({
           onExport: readingLibrary.exportFile, onDelete: readingLibrary.remove,
           renderLocation: (entry) => readingLibrary.entries.some((item) => item.id === entry.id) ? <ResourceLocationButton target={readingLibrary.target(entry)} /> : null }} />
     </div>
-    {createPortal(renderAssistantSurface(dock.findItemRegion("assistant") ?? "right"), assistantSurfaceHost)}
+    {createPortal(<SurfaceErrorBoundary surface="assistant"><SurfaceRenderer render={() => renderAssistantSurface(dock.findItemRegion("assistant") ?? "right")} /></SurfaceErrorBoundary>, assistantSurfaceHost)}
     </MarkdownEditingContext.Provider>
     </ResourceReferencesContext.Provider>
     </VisualAssetContext.Provider>

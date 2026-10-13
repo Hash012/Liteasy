@@ -1,3 +1,4 @@
+import { DisclosureSection } from "../../shared/ui/productPrimitives";
 import { Button, Checkbox, MessageBar, MessageBarBody, Spinner } from "@fluentui/react-components";
 import type { NoteFileEntry, NoteFileMount } from "../note-files/noteFileService";
 import type { CopyItemStatus, LocalCopyTask } from "./localFileOperations";
@@ -76,9 +77,9 @@ export function LocalFileOperationsPanel({ model }: { model: LocalFileOperations
         </div>}
       </div>}
       {model.running && <><Spinner size="tiny" label="逐项处理并保存回执" /><Button onClick={model.cancel}>取消后续文件</Button><p>取消后不启动下一项；当前临界提交按回执保留。</p></>}
-      {model.history.length > 0 && <details><summary>最近文件任务（最多 50 项）</summary>
+      {model.history.length > 0 && <DisclosureSection  title={<>最近文件任务（最多 50 项）</>}>
         <ul>{model.history.map((previous) => <li key={previous.id}><Button disabled={model.busy} onClick={() => model.open(previous)}>{previous.outputDirectory} · {statuses[previous.status]}</Button></li>)}</ul>
-      </details>}
+      </DisclosureSection>}
     </>}
     {model.error && <MessageBar intent="error"><MessageBarBody>{model.error}</MessageBarBody></MessageBar>}
   </section>;

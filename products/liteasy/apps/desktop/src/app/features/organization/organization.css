@@ -17,8 +17,6 @@
 .organization-surface p { font-size: 13px; line-height: 1.5; margin: 8px 0; overflow-wrap: anywhere; }
 .organization-section-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .organization-section-heading h3 { font-size: 13px; font-weight: 600; flex: 1; margin: 0; }
-.organization-disclosure > summary { cursor: pointer; font-size: 13px; font-weight: 600; line-height: 24px; overflow-wrap: anywhere; }
-.organization-disclosure > summary svg { margin: 0 6px; vertical-align: middle; }
 .organization-count { float: right; margin-left: 8px; font-size: 12px; font-weight: 400; color: var(--colorNeutralForeground3); }
 .organization-member-list, .organization-notice-list { list-style: none; padding: 0; margin: 8px 0 0; }
 .organization-member-list li { display: flex; gap: 8px; align-items: center; padding: 6px 0; }

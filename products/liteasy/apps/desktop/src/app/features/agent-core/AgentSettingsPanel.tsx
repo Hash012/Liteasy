@@ -1,4 +1,4 @@
-import { ActionButton as Button } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, DisclosureSection, OptionPicker } from "../../shared/ui/productPrimitives";
 import {
   defaultAgentCoreConfig,
   getAgentEntryStatusLabel,
@@ -6,7 +6,7 @@ import {
   type AgentCoreConfig
 } from "./agentCoreConfig";
 import { useState } from "react";
-import { Field, Select, Switch } from "@fluentui/react-components";
+import { Field, Switch } from "@fluentui/react-components";
 import type { SettingsState, UpdateSettingCommand } from "../settings/settings.types";
 
 type AgentSettingsPanelProps = {
@@ -69,24 +69,21 @@ export function AgentSettingsPanel({
     .sort((left, right) => Number(left) - Number(right));
   return <div className="view-settings-panel">
     <Field label="薄读生成语言" hint="用于后续生成；已有回答保持原样。跟随系统时使用浏览器语言。">
-      <Select aria-label="薄读生成语言" value={settings?.["assistant.language"] ?? "zh-CN"}
-        onChange={(_, data) => onUpdateSetting?.({ intent: "update_setting", target: "assistant.language", value: data.value })}>
-        <option value="zh-CN">中文</option><option value="en-US">English</option><option value="system">跟随系统</option>
-      </Select>
+      <OptionPicker aria-label="薄读生成语言" value={settings?.["assistant.language"] ?? "zh-CN"}
+        onValueChange={(value) => onUpdateSetting?.({ intent: "update_setting", target: "assistant.language", value })}
+        options={[{ value: "zh-CN", label: "中文" }, { value: "en-US", label: "English" }, { value: "system", label: "跟随系统" }]} />
     </Field>
     <Field label="Agent 上下文上限" hint="限制每次请求的上下文容量；请勿超过所用模型支持的容量。长篇资料按需分段读取，输入框会显示估算占用。">
-      <Select aria-label="Agent 上下文上限" value={contextLimit}
-        onChange={(_, data) => onUpdateSetting?.({ intent: "update_setting", target: "assistant.context_window", value: data.value })}>
-        {contextLimits.map((value) => <option key={value} value={value}>{Number(value).toLocaleString()} tokens</option>)}
-      </Select>
+      <OptionPicker aria-label="Agent 上下文上限" value={contextLimit}
+        onValueChange={(value) => onUpdateSetting?.({ intent: "update_setting", target: "assistant.context_window", value })}
+        options={contextLimits.map((value) => ({ value, label: `${Number(value).toLocaleString()} tokens` }))} />
     </Field>
     <Field hint="在回答或产物旁展示安全摘要，不展示内部推理和个人画像细节。">
       <Switch label="显示公开审计过程" checked={Boolean(settings?.["assistant.public_audit.enabled"])}
         onChange={(_, data) => onUpdateSetting?.({ intent: "update_setting", target: "assistant.public_audit.enabled", value: data.checked })} />
     </Field>
-    <details className="settings-details" open={expandCapabilities || capabilitiesOpen}
-      onToggle={(event) => { if (!expandCapabilities) setCapabilitiesOpen(event.currentTarget.open); }}>
-      <summary>扩展能力与安全策略</summary>
+    <DisclosureSection className="settings-details" title="扩展能力与安全策略" open={expandCapabilities || capabilitiesOpen}
+      onOpenChange={(open) => { if (!expandCapabilities) setCapabilitiesOpen(open); }}>
       <AgentCatalogList entries={config.skills} onOpenSkillDocument={onOpenSkillDocument} title="技能" />
       <AgentCatalogList entries={config.plugins} title="插件" />
       <AgentCatalogList entries={config.mcpServers} title="工具连接（MCP）" />
@@ -98,6 +95,6 @@ export function AgentSettingsPanel({
           <li>{config.safety.namespaceIsolation ? "记忆按命名空间隔离" : "记忆未启用命名空间隔离"}</li>
         </ul>
       </div>
-    </details>
+    </DisclosureSection>
   </div>;
 }

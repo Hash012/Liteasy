@@ -1,7 +1,9 @@
+import userEvent from "@testing-library/user-event";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test } from "vitest";
 import { createPaperReviewShareStore, paperReviewShareStore } from "../app/features/pdf/paperReviewShare";
-import { PaperReviewSharePanel } from "../app/features/pdf/PaperReviewSharePanel";
+import { useState } from "react";
+import { PaperReviewSharePanel, PaperReviewShareControl, PaperReviewShareStatus, usePaperReviewShare } from "../app/features/pdf/PaperReviewSharePanel";
 import { resolvePaperIdentity } from "../app/features/paper-identity/paperIdentity";
 import type { PdfAnnotationV2 } from "../app/features/pdf/pdfAnnotationStorage";
 import { clearStoredAccountSession, storeAccountSession } from "../app/features/account/accountSessionStorage";
@@ -76,7 +78,7 @@ test("old continuations cannot retarget a newly shared paper and account changes
 
 test("UI shares only after click and revokes on scope change, close, and account switch", () => {
   const view = render(<PaperReviewSharePanel scopeKey="a" ready hostAvailable source={source()} />);
-  fireEvent.click(screen.getByText("共享评论"));
+  fireEvent.click(screen.getByRole("button", { name: "共享评论" }));
   expect(() => paperReviewShareStore.read({ operation: "current" })).toThrow();
   fireEvent.click(screen.getByRole("button", { name: "共享本篇评论" }));
   expect(paperReviewShareStore.read({ operation: "current" }).totalComments).toBe(1);
@@ -103,4 +105,44 @@ test("empty text extraction and nontext material are disclosed, not invented", (
     comments: [{ quote: "", hasNonTextContent: true, pageTextAvailable: false }],
   });
   expect(store.read({ operation: "page", reviewId, page: 3 })).toMatchObject({ available: false, text: "" });
+});
+
+
+test("closing sharing details preserves the explicit snapshot and its stop control", async () => {
+  const user = userEvent.setup();
+  const view = render(<PaperReviewSharePanel scopeKey="paper" ready hostAvailable source={source()} />);
+  const trigger = screen.getByRole("button", { name: "共享评论" });
+  expect(screen.queryByText(/图片与手绘不包含/)).not.toBeInTheDocument();
+  await user.click(trigger);
+  expect(screen.getByText(/图片与手绘不包含/)).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "共享本篇评论" }));
+  const id = paperReviewShareStore.getId();
+  await user.keyboard("{Escape}");
+  expect(paperReviewShareStore.getId()).toBe(id);
+  expect(screen.getByRole("button", { name: "停止共享" })).toBeVisible();
+  expect(trigger).toHaveFocus();
+  await user.click(screen.getByRole("button", { name: "停止共享" }));
+  expect(() => paperReviewShareStore.read({ operation: "current" })).toThrow();
+  view.unmount();
+});
+
+
+test("reader-owned sharing survives hiding the annotation controls and still stops explicitly", () => {
+  function ReaderOwner() {
+    const [visible, setVisible] = useState(true);
+    const controller = usePaperReviewShare({ scopeKey: "reader", ready: true, source: source() });
+    return <><button onClick={() => setVisible(!visible)}>切换批注栏</button><PaperReviewShareStatus controller={controller} />
+      {visible ? <PaperReviewShareControl controller={controller} hostAvailable /> : null}</>;
+  }
+  const view = render(<ReaderOwner />);
+  fireEvent.click(screen.getByRole("button", { name: "共享评论" }));
+  fireEvent.click(screen.getByRole("button", { name: "共享本篇评论" }));
+  const sharedId = paperReviewShareStore.getId();
+  fireEvent.click(screen.getByRole("button", { name: "切换批注栏" }));
+  expect(screen.queryByRole("button", { name: "共享评论" })).not.toBeInTheDocument();
+  expect(paperReviewShareStore.getId()).toBe(sharedId);
+  expect(screen.getByRole("button", { name: "停止共享" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "停止共享" }));
+  expect(() => paperReviewShareStore.read({ operation: "current" })).toThrow();
+  view.unmount();
 });

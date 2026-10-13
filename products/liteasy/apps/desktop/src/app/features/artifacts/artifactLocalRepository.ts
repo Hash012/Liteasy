@@ -1,3 +1,4 @@
+import { artifactMetadataIssueCount, projectArtifactMetadata } from "./artifactMetadataProjection";
 import { invoke } from "@tauri-apps/api/core";
 import type { ArtifactTab, ArtifactType } from "./artifact.types";
 import { IntuitionGraphDocumentSchema } from "../intuition-graph/intuitionGraph.schema";
@@ -105,25 +106,23 @@ function isCachedArtifact(value: unknown): value is ArtifactTab {
   );
 }
 
-function normalizeSnapshot(value: unknown): ArtifactTab[] {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return [];
+export type ArtifactCatalogReadStatus = { issueCount: number; readOnly: boolean };
+
+function normalizeSnapshot(value: unknown): { artifacts: ArtifactTab[]; status: ArtifactCatalogReadStatus } {
+  if (value === null || value === undefined) return { artifacts: [], status: { issueCount: 0, readOnly: false } };
+  if (!isRecord(value) || value.version !== "liteasy.artifact-catalog/v1" || !Array.isArray(value.artifacts)) {
+    return { artifacts: [], status: { issueCount: 1, readOnly: true } };
   }
-  const snapshot = value as Partial<ArtifactCatalogSnapshot>;
-  if (snapshot.version !== "liteasy.artifact-catalog/v1" || !Array.isArray(snapshot.artifacts)) {
-    return [];
-  }
-  return snapshot.artifacts
-    .map((artifact) => {
-      if (!isRecord(artifact) || artifact.type !== "thin_reading") {
-        return artifact;
-      }
-      return {
-        ...artifact,
-        thinReadingDocument: normalizeCachedThinReadingDocument(artifact.thinReadingDocument)
-      };
-    })
-    .filter(isCachedArtifact);
+  let issueCount = 0;
+  const artifacts = value.artifacts.flatMap((raw: unknown) => {
+    const artifact = isRecord(raw) && raw.type === "thin_reading"
+      ? { ...raw, thinReadingDocument: normalizeCachedThinReadingDocument(raw.thinReadingDocument) } : raw;
+    if (!isCachedArtifact(artifact)) { issueCount += 1; return []; }
+    const projected = projectArtifactMetadata(artifact);
+    issueCount += artifactMetadataIssueCount(projected);
+    return [projected];
+  });
+  return { artifacts, status: { issueCount, readOnly: issueCount > 0 } };
 }
 
 function createTauriTransport(): ArtifactCatalogTransport {
@@ -239,21 +238,34 @@ function createDefaultTransport(): ArtifactCatalogTransport {
   return createLocalStorageTransport();
 }
 
-export function createArtifactLocalRepository(transport?: ArtifactCatalogTransport) {
+export type ArtifactLocalRepository = {
+  list: () => Promise<ArtifactTab[]>;
+  replace: (artifacts: ArtifactTab[]) => Promise<void>;
+  getReadStatus?: () => ArtifactCatalogReadStatus;
+};
+
+export function createArtifactLocalRepository(transport?: ArtifactCatalogTransport): ArtifactLocalRepository {
   const activeTransport = transport ?? createDefaultTransport();
+  let readStatus: ArtifactCatalogReadStatus = { issueCount: 0, readOnly: false };
+  // Keep the complete snapshot, including unknown records, until the next read.
+  let sourceSnapshot: unknown;
   return {
+    getReadStatus: () => ({ ...readStatus }),
     async list() {
-      return normalizeSnapshot(await activeTransport.load());
+      sourceSnapshot = await activeTransport.load();
+      const projection = normalizeSnapshot(sourceSnapshot);
+      readStatus = projection.status;
+      return projection.artifacts;
     },
     async replace(artifacts: ArtifactTab[]) {
-      const persistentArtifacts = artifacts.filter(isCachedArtifact);
-      await activeTransport.save({
-        artifacts: persistentArtifacts,
-        savedAt: new Date().toISOString(),
-        version: "liteasy.artifact-catalog/v1"
-      });
+      if (readStatus.readOnly || artifacts.some((artifact) => artifactMetadataIssueCount(artifact) > 0)) {
+        throw new Error("目录中存在不可读记录，已保留原始资料；当前列表为只读，未覆盖保存。");
+      }
+      const persistentArtifacts = artifacts.filter((artifact) => artifact.type !== "skill_doc");
+      if (persistentArtifacts.some((artifact) => !isCachedArtifact(artifact) || artifactMetadataIssueCount(projectArtifactMetadata(artifact)) > 0)) {
+        throw new Error("产物元数据无效，未覆盖已有目录。");
+      }
+      await activeTransport.save({ artifacts: persistentArtifacts, savedAt: new Date().toISOString(), version: "liteasy.artifact-catalog/v1" });
     }
   };
 }
-
-export type ArtifactLocalRepository = ReturnType<typeof createArtifactLocalRepository>;

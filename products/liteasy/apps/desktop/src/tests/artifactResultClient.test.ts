@@ -207,3 +207,17 @@ test("does not return a prior account's artifact response after an account or en
   complete({ artifacts: [document] });
   await expect(pending).rejects.toThrow("账号或服务已变化");
 });
+
+
+test.each([{}, [null], [{ id: "valid", title: "Readable" }, { id: "invalid", title: 42 }]])("cloud list admission keeps bad metadata read-only: %j", async (papers) => {
+  const raw = { ...document, papers };
+  const bytes = JSON.stringify(raw);
+  const transport = vi.fn(async () => ({ json: async () => ({ artifacts: [raw] }), ok: true, status: 200 }));
+  const client = createArtifactResultClient({ getAccessToken: () => "synthetic-token", getBaseEndpoint: () => "https://synthetic.invalid", transport });
+  const results = await client.list();
+  expect(results).toHaveLength(1);
+  expect(client.getReadStatus?.()).toEqual({ issueCount: 1, readOnly: true });
+  await expect(client.save(results[0])).rejects.toThrow("只读");
+  expect(transport).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(raw)).toBe(bytes);
+});

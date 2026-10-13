@@ -5,13 +5,10 @@
   overflow: auto;
   flex: 1;
 }
-details.assistant-transcript-surface:not([open]) { flex: 0 0 auto; overflow: visible; }
-.assistant-transcript-surface > summary {
-  padding: 8px;
-  cursor: pointer;
-  color: var(--colorNeutralForeground1);
-  background: var(--colorNeutralBackground2);
-}
+.assistant-task-run-details { flex: 0 1 auto; }
+.assistant-task-run-details > .fui-AccordionItem { min-height: 0; }
+.assistant-run-origin { padding: 4px 0; overflow-wrap: anywhere; }
+.assistant-run-origin p, .assistant-run-origin h4 { margin: 4px 0; }
 .assistant-pane > section[aria-label="助手首页"],
 .assistant-pane > section[aria-label="任务详情"] {
   padding: 8px;

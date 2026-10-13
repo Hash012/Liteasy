@@ -1,3 +1,4 @@
+import { DisclosureSection, OptionPicker } from "../../shared/ui/productPrimitives";
 import { Button } from "@fluentui/react-components";
 import { useMemo, useState } from "react";
 import disciplineCatalog from "../../../../../../packages/shared/disciplineCatalog.json";
@@ -72,18 +73,7 @@ export function AcademicProfileForm({ academicProfile, onSave }: AcademicProfile
     <div className="personal-profile-form" aria-label="学术档案编辑表单">
       <label className="personal-profile-field">
         研究阶段
-        <select
-          className="personal-profile-control"
-          onChange={(event) => updateDraftProfile("stage", event.target.value)}
-          value={draftProfile.stage}
-        >
-          <option value="未设置">未设置</option>
-          <option value="本科生">本科生</option>
-          <option value="硕士研究生">硕士研究生</option>
-          <option value="博士研究生">博士研究生</option>
-          <option value="教师/研究员">教师/研究员</option>
-          <option value="产业研发">产业研发</option>
-        </select>
+        <OptionPicker aria-label="研究阶段" value={draftProfile.stage} onValueChange={(value) => updateDraftProfile("stage", value)} options={[{ value: "未设置", label: "未设置" }, { value: "本科生", label: "本科生" }, { value: "硕士研究生", label: "硕士研究生" }, { value: "博士研究生", label: "博士研究生" }, { value: "教师/研究员", label: "教师/研究员" }, { value: "产业研发", label: "产业研发" }]} />
       </label>
       <label className="personal-profile-field">
         研究主题
@@ -128,16 +118,8 @@ export function AcademicProfileForm({ academicProfile, onSave }: AcademicProfile
         <div className="personal-profile-inline-controls">
           <label className="personal-profile-field">
             学科门类
-            <select
-              className="personal-profile-control"
-              onChange={(event) => setCategoryCode(event.target.value)}
-              value={categoryCode}
-            >
-              <option value="">全部门类</option>
-              {categories.map(([code, name]) => (
-                <option key={code} value={code}>{`${code} · ${name}`}</option>
-              ))}
-            </select>
+            <OptionPicker aria-label="学科门类" value={categoryCode} onValueChange={setCategoryCode}
+              options={[{ value: "", label: "全部门类" }, ...categories.map(([code, name]) => ({ value: code, label: `${code} · ${name}` }))]} />
           </label>
           <label className="personal-profile-field">
             搜索二级学科
@@ -182,33 +164,22 @@ export function AcademicProfileForm({ academicProfile, onSave }: AcademicProfile
           </div>
         ) : null}
       </div>
-      <details className="profile-optional"><summary>阅读讲解（可选）</summary>
+      <DisclosureSection className="profile-optional" title="阅读讲解（可选）">
         <label className="personal-profile-field">自动标注的讲解深度
-          <select className="personal-profile-control" value={draftProfile.readingExplanation ?? "auto"}
-            onChange={(event) => updateDraftProfile("readingExplanation", event.target.value as AcademicProfile["readingExplanation"])}>
-            <option value="auto">根据领域熟悉度调整</option><option value="detailed">详细 · 补足背景与推理</option>
-            <option value="balanced">均衡 · 讲清关键概念</option><option value="advanced">高阶 · 评析精妙之处</option>
-          </select>
+          <OptionPicker aria-label="自动标注的讲解深度" value={draftProfile.readingExplanation ?? "auto"}
+            onValueChange={(value) => updateDraftProfile("readingExplanation", value as AcademicProfile["readingExplanation"])}
+            options={[{ value: "auto", label: "根据领域熟悉度调整" }, { value: "detailed", label: "详细 · 补足背景与推理" }, { value: "balanced", label: "均衡 · 讲清关键概念" }, { value: "advanced", label: "高阶 · 评析精妙之处" }]} />
         </label>
         <label className="personal-profile-field">领域熟悉度
           <textarea className="personal-profile-control personal-profile-textarea" rows={2} maxLength={600}
             placeholder="例如：熟悉数据库并发控制；机器学习还在入门。留空时默认均衡讲解。"
             value={draftProfile.researchFamiliarity ?? ""} onChange={(event) => updateDraftProfile("researchFamiliarity", event.target.value)} />
         </label>
-      </details>
-      <details className="profile-optional"><summary>其他个人信息（可选）</summary>
+      </DisclosureSection>
+      <DisclosureSection className="profile-optional" title="其他个人信息（可选）">
       <label className="personal-profile-field">
         性别
-        <select
-          className="personal-profile-control"
-          onChange={(event) => updateDraftProfile("gender", event.target.value)}
-          value={draftProfile.gender}
-        >
-          <option value="未设置">未设置</option>
-          <option value="女">女</option>
-          <option value="男">男</option>
-          <option value="非二元/不便透露">非二元/不便透露</option>
-        </select>
+        <OptionPicker aria-label="性别" value={draftProfile.gender} onValueChange={(value) => updateDraftProfile("gender", value)} options={[{ value: "未设置", label: "未设置" }, { value: "女", label: "女" }, { value: "男", label: "男" }, { value: "非二元/不便透露", label: "非二元/不便透露" }]} />
       </label>
       <label className="personal-profile-field">
         年龄
@@ -220,7 +191,7 @@ export function AcademicProfileForm({ academicProfile, onSave }: AcademicProfile
           value={draftProfile.age === "未设置" ? "" : draftProfile.age}
         />
       </label>
-      </details>
+      </DisclosureSection>
       <Button appearance="primary" onClick={saveAcademicProfile} type="button">
         保存学术档案
       </Button>

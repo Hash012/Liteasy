@@ -7,12 +7,7 @@
 .studio-header [role="status"], .studio-overview-hint { color: var(--colorNeutralForeground2); font-size: 12px; }
 .studio-taskbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .studio-taskbar [role="tablist"] { flex-wrap: wrap; }
-.studio-more { position: relative; }
-.studio-more > summary, .studio-tutorial > summary { cursor: pointer; padding: 6px; border-radius: 4px; }
-.studio-more > summary:hover, .studio-tutorial > summary:hover { background: var(--colorNeutralBackground1Hover); }
-.studio-more > summary:focus-visible, .studio-tutorial > summary:focus-visible { outline: 2px solid var(--colorStrokeFocus2); outline-offset: 2px; }
-.studio-more-content { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; background: var(--colorNeutralBackground2); border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; }
-.studio-more[open] { flex-basis: 100%; }
+.studio-mode-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; color: var(--colorNeutralForeground2); font-size: 12px; }
 .studio-tutorial { border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; padding: 4px; }
 .studio-tutorial p { margin: 6px; }
 .studio-editor { flex: 1 0 auto; min-height: 360px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 32%); gap: 12px; }

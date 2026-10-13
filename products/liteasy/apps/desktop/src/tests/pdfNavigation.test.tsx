@@ -46,7 +46,7 @@ describe("PDF bookmarks", () => {
     const first = documentMock({ getOutline: vi.fn().mockResolvedValue([item("Chapter", [0], [item("Section", "slow")])]), getDestination: () => destination.promise });
     const onNavigate = vi.fn();
     const { rerender } = render(<PdfOutline document={first} onNavigate={onNavigate} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Section" }));
+    fireEvent.click(await screen.findByRole("treeitem", { name: "Section" }));
     expect(first.getPage).not.toHaveBeenCalled();
     rerender(<PdfOutline document={documentMock()} onNavigate={onNavigate} />);
     await screen.findByText(/此 PDF 没有内置书签/);
@@ -57,7 +57,7 @@ describe("PDF bookmarks", () => {
     const doc = documentMock({ getOutline: vi.fn().mockRejectedValueOnce(new Error("load")).mockResolvedValue([item("Recovered", [0])]) });
     render(<PdfOutline document={doc} onNavigate={vi.fn()} />);
     fireEvent.click(await screen.findByRole("button", { name: "重试读取目录" }));
-    expect(await screen.findByRole("button", { name: "Recovered" })).toBeVisible();
+    expect(await screen.findByRole("treeitem", { name: "Recovered" })).toBeVisible();
   });
 });
 
@@ -106,10 +106,32 @@ test("all-annotation view covers each kind, deduplicates team copies, filters, a
     paperIdentity={paperIdentity} onNavigate={onNavigate} onClose={vi.fn()} />);
   expect(screen.getAllByRole("listitem")).toHaveLength(6);
   expect(screen.getByText("text note").tagName).toBe("STRONG");
-  fireEvent.change(screen.getByLabelText("筛选批注类型"), { target: { value: "text" } });
+  fireEvent.click(screen.getByRole("combobox", { name: "筛选批注类型" }));
+  fireEvent.click(screen.getByRole("option", { name: "文本框" }));
   expect(screen.getAllByRole("listitem")).toHaveLength(1);
   fireEvent.click(screen.getByRole("button", { name: /定位第 4 页文本框/ }));
   expect(onNavigate).toHaveBeenCalledWith(annotations[3]);
   fireEvent.change(screen.getByLabelText("搜索全部批注"), { target: { value: "missing" } });
   expect(screen.getByText("没有匹配的批注。")).toBeVisible();
+});
+
+test("outline separates arrow expansion, Enter navigation, page labels and current location", async () => {
+  const onNavigate = vi.fn();
+  const document = documentMock({ getOutline: vi.fn().mockResolvedValue([item("Chapter", [0], [item("Section", [1])])]) });
+  render(<PdfOutline document={document} onNavigate={onNavigate} />);
+  const chapter = await screen.findByRole("treeitem", { name: "Chapter" });
+  expect(chapter).toHaveAttribute("aria-expanded", "true");
+  fireEvent.keyDown(chapter, { key: "ArrowLeft" });
+  expect(chapter).toHaveAttribute("aria-expanded", "false");
+  expect(onNavigate).not.toHaveBeenCalled();
+  fireEvent.keyDown(chapter, { key: "ArrowRight" });
+  expect(chapter).toHaveAttribute("aria-expanded", "true");
+  const section = screen.getByRole("treeitem", { name: "Section" });
+  expect(within(section).getByLabelText("第 2 页")).toBeVisible();
+  fireEvent.focus(section);
+  expect(section).not.toHaveAttribute("aria-current");
+  fireEvent.keyDown(section, { key: "Enter" });
+  await waitFor(() => expect(onNavigate).toHaveBeenCalledWith({ page: 2 }));
+  expect(section).toHaveAttribute("aria-current", "location");
+  expect(chapter).toHaveAttribute("aria-expanded", "true");
 });

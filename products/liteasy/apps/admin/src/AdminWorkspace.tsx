@@ -8,12 +8,13 @@ import {
   DialogContent,
   DialogSurface,
   DialogTitle,
+  Dropdown,
+  Option,
   Field,
   Input,
   MessageBar,
   MessageBarBody,
   MessageBarTitle,
-  Select,
   Spinner,
   Switch,
   Table,
@@ -133,6 +134,19 @@ function Section({ children, title }: { children: ReactNode; title: string }) {
 
 function Empty({ children }: { children: ReactNode }) {
   return <div className="admin-empty">{children}</div>;
+}
+
+// FormData remains the submission owner. The visible current label and named
+// input are derived from one value; opening the list does not commit anything.
+function AdminFormPicker({ name, label, defaultValue, disabled, options }: {
+  name: string; label: string; defaultValue: string; disabled: boolean; options: { value: string; label: string }[];
+}) {
+  const [value, setValue] = useState(defaultValue);
+  return <><Dropdown aria-label={label} disabled={disabled} selectedOptions={[value]}
+    value={options.find((option) => option.value === value)?.label ?? value}
+    onOptionSelect={(_, data) => { if (data.optionValue !== undefined) setValue(data.optionValue); }}>
+    {options.map((option) => <Option key={option.value} value={option.value} text={option.label}>{option.label}</Option>)}
+  </Dropdown><input type="hidden" name={name} value={value} disabled={disabled} /></>;
 }
 
 function ReasonField({ minimum = 8 }: { minimum?: number }) {
@@ -691,14 +705,25 @@ function AccountsView({ busy, governance, identity, onAccountStatus, onRoleGrant
   onRoleGrant: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   onRoleRevoke: (event: FormEvent<HTMLFormElement>) => Promise<void>;
 }) {
+  const [status, setStatus] = useState("");
+  const [statusError, setStatusError] = useState(false);
+  const statusOptions = [{ value: "active", label: "启用" }, { value: "disabled", label: "禁用" }, { value: "deleted", label: "删除" }];
   return (
     <div className="admin-view admin-two-columns">
       <Section title="账号状态">
-        <form className="admin-form" onSubmit={onAccountStatus}>
+        <form className="admin-form" onSubmit={(event) => {
+          if (!status || busy) { event.preventDefault(); setStatusError(!status); return; }
+          void onAccountStatus(event);
+        }}>
           <Field label="Subject ID" required><Input name="subjectId" required /></Field>
-          <Field label="目标状态" required>
-            <Select name="status"><option value="active">启用</option><option value="disabled">禁用</option><option value="deleted">删除</option></Select>
+          <Field label="目标状态" required validationState={statusError ? "error" : "none"} validationMessage={statusError ? "请选择目标状态后再提交。" : undefined}>
+            <Dropdown aria-label="目标状态" aria-required="true" disabled={busy} selectedOptions={status ? [status] : []}
+              placeholder="请选择目标状态" value={statusOptions.find((option) => option.value === status)?.label ?? ""}
+              onOptionSelect={(_, data) => { if (data.optionValue) { setStatus(data.optionValue); setStatusError(false); } }}>
+              {statusOptions.map((option) => <Option key={option.value} value={option.value} text={option.label}>{option.label}</Option>)}
+            </Dropdown>
           </Field>
+          <input type="hidden" name="status" value={status} disabled={busy} />
           <ReasonField />
           <Button appearance="primary" disabled={busy} icon={<PersonSettingsRegular />} type="submit">提交变更</Button>
         </form>
@@ -707,7 +732,7 @@ function AccountsView({ busy, governance, identity, onAccountStatus, onRoleGrant
         <form className="admin-form" onSubmit={onRoleGrant}>
           <Field label="Subject ID" required><Input name="subjectId" required /></Field>
           <Field label="角色" required>
-            <Select name="role"><option value="platform_admin">platform_admin</option><option value="developer_diagnostics">developer_diagnostics</option></Select>
+            <AdminFormPicker name="role" label="角色" defaultValue="platform_admin" disabled={busy} options={[{ value: "platform_admin", label: "platform_admin" }, { value: "developer_diagnostics", label: "developer_diagnostics" }]} />
           </Field>
           <ReasonField />
           <Button appearance="primary" disabled={busy} icon={<SaveRegular />} type="submit">授予角色</Button>
@@ -780,7 +805,7 @@ function QuotaView({ busy, onLoad, onSave, quota }: {
     <div className="admin-view admin-two-columns">
       <Section title="查询配额">
         <form className="admin-form" onSubmit={onLoad}>
-          <Field label="作用域" required><Select name="scopeType"><option value="user">用户</option><option value="organization">组织</option></Select></Field>
+          <Field label="作用域" required><AdminFormPicker name="scopeType" label="作用域" defaultValue="user" disabled={busy} options={[{ value: "user", label: "用户" }, { value: "organization", label: "组织" }]} /></Field>
           <Field label="作用域 ID" required><Input name="scopeId" required /></Field>
           <Button appearance="primary" disabled={busy} type="submit">查询</Button>
         </form>
@@ -818,7 +843,7 @@ function SupportView({ busy, grants, onDownload, onGrant, onRevoke }: {
       <Section title="授予限时访问">
         <form className="admin-form" onSubmit={onGrant}>
           <Field label="管理员 Subject" required><Input name="granteeSubject" required /></Field>
-          <Field label="作用域" required><Select name="scopeType"><option value="user">用户</option><option value="organization">组织</option></Select></Field>
+          <Field label="作用域" required><AdminFormPicker name="scopeType" label="作用域" defaultValue="user" disabled={busy} options={[{ value: "user", label: "用户" }, { value: "organization", label: "组织" }]} /></Field>
           <Field label="作用域 ID" required><Input name="scopeId" required /></Field>
           <Field label="文献 ID" required><Input name="documentId" required /></Field>
           <Field label="分钟" required><Input defaultValue="15" max="60" min="1" name="durationMinutes" required type="number" /></Field>
@@ -885,9 +910,9 @@ function ModelsView({
       <Section title={sourceDraft ? "编辑检索源" : "新增检索源"}>
         <form className="admin-form admin-form-horizontal" key={sourceDraft?.sourceId ?? "new"} onSubmit={onSaveSource}>
           <Field label="名称" required><Input defaultValue={sourceDraft?.name ?? ""} maxLength={120} name="name" required /></Field>
-          <Field label="类型" required><Select defaultValue={sourceDraft?.sourceKind ?? "database"} name="sourceKind"><option value="website">网站</option><option value="database">数据库</option></Select></Field>
-          <Field label="连接器" required><Select defaultValue={sourceDraft?.connectorType ?? "crossref"} name="connectorType"><option value="crossref">Crossref</option><option value="openalex">OpenAlex</option><option value="semantic_scholar">Semantic Scholar</option></Select></Field>
-          <Field label="状态"><Select defaultValue={String(sourceDraft?.enabled ?? true)} name="enabled"><option value="true">启用</option><option value="false">停用</option></Select></Field>
+          <Field label="类型" required><AdminFormPicker defaultValue={sourceDraft?.sourceKind ?? "database"} name="sourceKind" label="类型" disabled={busy} options={[{ value: "website", label: "网站" }, { value: "database", label: "数据库" }]} /></Field>
+          <Field label="连接器" required><AdminFormPicker defaultValue={sourceDraft?.connectorType ?? "crossref"} name="connectorType" label="连接器" disabled={busy} options={[{ value: "crossref", label: "Crossref" }, { value: "openalex", label: "OpenAlex" }, { value: "semantic_scholar", label: "Semantic Scholar" }]} /></Field>
+          <Field label="状态"><AdminFormPicker defaultValue={String(sourceDraft?.enabled ?? true)} name="enabled" label="状态" disabled={busy} options={[{ value: "true", label: "启用" }, { value: "false", label: "停用" }]} /></Field>
           <ReasonField />
           <div className="admin-form-actions">
             <Button appearance="primary" disabled={busy} icon={<SaveRegular />} type="submit">保存</Button>

@@ -32,7 +32,10 @@ test("isolated AppShell keeps paper, note, Studio draft, assistant view and brow
   await studio.getByRole("button", { name: "校验与预览", exact: true }).click();
   await expect(studio.locator(".studio-preview")).toContainText("PR07_SYNTHETIC_CARD");
   await studio.getByRole("button", { name: "保存草稿", exact: true }).click();
-  await expect(studio.getByText("演示已完成", { exact: true })).toBeVisible();
+  await expect(studio.getByText("离线示例", { exact: true })).toBeVisible();
+  await studio.getByRole("button", { name: "制作工作台帮助" }).click();
+  await expect(page.getByText("已修改 · 已预览 · 已保存", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   const assistant = page.locator(".assistant-pane");
   await assistant.getByRole("button", { name: "新建", exact: true }).click();
@@ -52,7 +55,8 @@ test("isolated AppShell keeps paper, note, Studio draft, assistant view and brow
   await expect(notes.getByRole("region", { name: "打开的笔记" })).toContainText("PR07_SYNTHETIC_NOTE");
   await notes.getByRole("button", { name: "导出阅读文档", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: /导出：联合验收笔记/ });
-  await dialog.getByRole("combobox", { name: "格式", exact: true }).selectOption("pdf");
+  await dialog.getByRole("combobox", { name: "格式", exact: true }).click();
+  await page.getByRole("option", { name: "PDF", exact: true }).click();
   await dialog.getByRole("button", { name: "生成预览", exact: true }).click();
   await expect(dialog.getByText("文档结构预览；尚未生成可核验 PDF，保存由系统打印管理。")).toBeVisible();
   await expect(dialog.frameLocator('iframe[title="导出文档结构预览"]').locator("body")).toContainText("PR07_SYNTHETIC_NOTE");
@@ -67,8 +71,8 @@ test("isolated AppShell keeps paper, note, Studio draft, assistant view and brow
   await expect(notes.getByRole("region", { name: "打开的笔记" })).toContainText("PR07_SYNTHETIC_NOTE");
   await page.getByRole("button", { name: "扩展", exact: true }).click();
   await page.getByRole("button", { name: "制作扩展", exact: true }).click();
-  await page.locator(".studio-more > summary").click();
-  await page.getByLabel("选择扩展草稿").selectOption({ label: "离线演示：四张研究卡片" });
+  await page.getByRole("combobox", { name: "选择扩展草稿" }).click();
+  await page.getByRole("option", { name: "离线演示：四张研究卡片", exact: true }).click();
   await studio.getByRole("button", { name: "研究问题", exact: true }).click();
   await expect(studio.getByRole("textbox", { name: "卡片正文", exact: true })).toHaveValue("## 联合验收研究问题\n\nPR07_SYNTHETIC_CARD：比较保存后的真实预览。");
   await expect(studio.locator(".studio-card-list button")).toHaveCount(4);

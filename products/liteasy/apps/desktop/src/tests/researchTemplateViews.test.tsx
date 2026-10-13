@@ -61,11 +61,12 @@ test.each(["queued", "running", "waiting_input", "paused", "succeeded", "failed"
   expect(Boolean(screen.queryByRole("button", { name: "暂停", exact: true }))).toBe(status === "running");
   expect(Boolean(screen.queryByRole("button", { name: "取消", exact: true }))).toBe(!["succeeded", "cancelled"].includes(status));
   expect(execute).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByText("更多运行操作"));
+  fireEvent.click(screen.getByRole("button", { name: "更多运行操作" }));
   const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
   try {
-    fireEvent.click(screen.getByRole("button", { name: "清理正文快照" })); expect(clearSnapshots).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "清理正文快照" })); expect(clearSnapshots).toHaveBeenCalledWith("state-run");
+    fireEvent.click(screen.getByRole("menuitem", { name: "清理正文快照" })); expect(clearSnapshots).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "更多运行操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "清理正文快照" })); expect(clearSnapshots).toHaveBeenCalledWith("state-run");
     expect(execute).not.toHaveBeenCalled();
   } finally { confirm.mockRestore(); view.unmount(); }
 });

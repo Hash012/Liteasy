@@ -191,7 +191,8 @@ test("looks up and creates a quota policy with an explicit timezone", async () =
   await user.type(screen.getByLabelText("配额用户 ID"), "user-outside-page");
   await user.click(screen.getByRole("button", { name: "查询配额" }));
   await screen.findByLabelText("user-outside-page 每日配额");
-  await user.selectOptions(screen.getByLabelText("user-outside-page 时区"), "Asia/Shanghai");
+  await user.click(screen.getByRole("combobox", { name: "user-outside-page 时区" }));
+  await user.click(screen.getByRole("option", { name: "Asia/Shanghai" }));
   await user.click(screen.getByRole("button", { name: "保存 user-outside-page 配额" }));
   await waitFor(() => expect(api.setVisualizationQuotaPolicy).toHaveBeenCalledWith(expect.objectContaining({
     expectedRevision: 0, subjectId: "user-outside-page", timezone: "Asia/Shanghai"

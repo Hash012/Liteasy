@@ -69,7 +69,9 @@ try {
   await page.getByRole("button", { name: "聚焦关联" }).click();
   assert.equal(await page.locator("[data-association-title]").textContent(), "聚焦关联");
 
+  let waitlistPayload;
   await page.route("**/api/waitlist", async (route) => {
+    waitlistPayload = route.request().postDataJSON();
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({ ok: true, message: "体验申请已提交。安装包准备完成后，我们将通过邮件通知你。" })
@@ -78,9 +80,15 @@ try {
   await page.getByRole("link", { name: "Download" }).click();
   await page.getByText("安装包面向已提交体验申请的用户开放").waitFor();
   await page.locator('[data-waitlist-form] input[name="email"]').fill("reader@example.com");
-  await page.locator('[data-waitlist-form] select[name="role"]').selectOption({ label: "研究生" });
+  const role = page.locator('[data-waitlist-form] select[name="role"]');
+  assert.equal(await role.evaluate((element) => element.validity.valueMissing), true);
+  await page.locator("[data-waitlist-form]").evaluate((form) => form.requestSubmit());
+  assert.equal(waitlistPayload, undefined);
+  await role.selectOption({ label: "研究生" });
   await page.locator("[data-waitlist-form]").evaluate((form) => form.requestSubmit());
   await page.getByText("体验申请已提交").waitFor();
+  assert.equal(waitlistPayload.role, "研究生");
+  assert.equal(waitlistPayload.email, "reader@example.com");
   for (const image of await page.locator('img[src][loading="lazy"]').all()) {
     await image.scrollIntoViewIfNeeded();
     await image.evaluate((element) => element.decode());
@@ -93,6 +101,7 @@ try {
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload({ waitUntil: "networkidle" });
+  assert.ok((await page.locator('[data-waitlist-form] select[name="role"]').boundingBox()).height >= 44);
   await page.locator("[data-menu-toggle]").click();
   await page.getByRole("link", { name: "加入体验计划" }).first().click();
   assert.equal(await page.locator("[data-menu-toggle]").getAttribute("aria-expanded"), "false");

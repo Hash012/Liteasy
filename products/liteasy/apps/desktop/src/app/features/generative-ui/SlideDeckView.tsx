@@ -1,4 +1,5 @@
-import { Button, Select, Tooltip } from "@fluentui/react-components";
+import { OptionPicker } from "../../shared/ui/productPrimitives";
+import { Button, Tooltip } from "@fluentui/react-components";
 import { ChevronLeftRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { useState } from "react";
 import { ContentView } from "../markdown/ContentView";
@@ -37,11 +38,8 @@ export function SlideDeckView({ onOpenPaperAnchor, paperAnchors, slides, title }
           <Tooltip content="上一页" relationship="label">
             <Button appearance="subtle" aria-label="上一页幻灯片" disabled={index === 0} icon={<ChevronLeftRegular />} onClick={() => setSelected(index - 1)} size="small" />
           </Tooltip>
-          <Select aria-label="选择幻灯片" value={String(index)} onChange={(_, data) => setSelected(Number(data.value))}>
-            {slides.map((item, itemIndex) => <option key={itemIndex} value={itemIndex}>
-              {itemIndex + 1}. {formatPaperAnchorText(text(item, "title", `第 ${itemIndex + 1} 页`), paperAnchors)}
-            </option>)}
-          </Select>
+          <OptionPicker aria-label="选择幻灯片" value={String(index)} onValueChange={(value) => setSelected(Number(value))}
+            options={slides.map((item, itemIndex) => ({ value: String(itemIndex), label: `${itemIndex + 1}. ${formatPaperAnchorText(text(item, "title", `第 ${itemIndex + 1} 页`), paperAnchors)}` }))} />
           <span role="status">{index + 1} / {slides.length}</span>
           <Tooltip content="下一页" relationship="label">
             <Button appearance="subtle" aria-label="下一页幻灯片" disabled={index === slides.length - 1} icon={<ChevronRightRegular />} onClick={() => setSelected(index + 1)} size="small" />

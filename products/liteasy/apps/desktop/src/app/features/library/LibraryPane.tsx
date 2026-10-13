@@ -1,3 +1,4 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { ActionButton as Button, IconAction, ContextualActions } from "../../shared/ui/productPrimitives";
 import { citationPaper, normalizeCitationDoi, type CitationPaper } from "../citation-graph/citationGraph";
 import { createCitationGraphClient } from "../citation-graph/citationGraphClient";
@@ -31,7 +32,7 @@ import {
   type ReactElement,
   type ReactNode
 } from "react";
-import { Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Field, Popover, PopoverSurface, PopoverTrigger, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Select, Textarea, Tooltip, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Field, Popover, PopoverSurface, PopoverTrigger, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Textarea, Tooltip, useRestoreFocusTarget } from "@fluentui/react-components";
 import {
   AddRegular,
   MoreHorizontalRegular,
@@ -1550,31 +1551,16 @@ function LibraryPaneContent({
         <Popover positioning="below-start">
           <PopoverTrigger disableButtonEnhancement><Tooltip content="筛选本地文件" relationship="description"><Button appearance="subtle" size="small" aria-label="筛选本地文件" icon={<FilterRegular />} /></Tooltip></PopoverTrigger>
           <PopoverSurface className="library-file-filters">
-            <Field label="检索字段"><Select aria-label="文件检索字段" value={fileFilters.scope ?? "metadata"} onChange={(_, data) => setFileFilters((value) => ({ ...value, scope: data.value as "metadata" | "name" }))}><option value="metadata">标题与元信息</option><option value="name">仅名称</option></Select></Field>
-            <Field label="格式"><Select aria-label="筛选文件格式" value={fileFilters.format} onChange={(_, data) => setFileFilters((value) => ({ ...value, format: data.value as ReadingCatalogFilters["format"] }))}>
-              <option value="all">全部格式</option>{Object.entries(readingCatalogFormatLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </Select></Field>
-            <Field label="阅读状态"><Select aria-label="筛选阅读状态" value={fileFilters.status} onChange={(_, data) => setFileFilters((value) => ({ ...value, status: data.value as ReadingCatalogFilters["status"] }))}>
-              <option value="all">全部状态</option>{Object.entries(readingCatalogStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </Select></Field>
+            <Field label="检索字段"><OptionPicker aria-label="文件检索字段" value={String(fileFilters.scope ?? "metadata")} onValueChange={nextValue => setFileFilters((value) => ({ ...value, scope: nextValue as "metadata" | "name" }))} options={[{ value: String("metadata"), label: String("\u6807\u9898\u4E0E\u5143\u4FE1\u606F") }, { value: String("name"), label: String("\u4EC5\u540D\u79F0") }]} /></Field>
+            <Field label="格式"><OptionPicker aria-label="筛选文件格式" value={String(fileFilters.format ?? "")} onValueChange={nextValue => setFileFilters((value) => ({ ...value, format: nextValue as ReadingCatalogFilters["format"] }))} options={[{ value: String("all"), label: String("\u5168\u90E8\u683C\u5F0F") }, ...(Object.entries(readingCatalogFormatLabels).map(([value, label]) => ({ value: String(value), label: String(label) })))]} /></Field>
+            <Field label="阅读状态"><OptionPicker aria-label="筛选阅读状态" value={String(fileFilters.status ?? "")} onValueChange={nextValue => setFileFilters((value) => ({ ...value, status: nextValue as ReadingCatalogFilters["status"] }))} options={[{ value: String("all"), label: String("\u5168\u90E8\u72B6\u6001") }, ...(Object.entries(readingCatalogStatusLabels).map(([value, label]) => ({ value: String(value), label: String(label) })))]} /></Field>
             <Field label="年份"><Input aria-label="筛选发表年份" placeholder="例如 2024" value={fileFilters.year} onChange={(_, data) => setFileFilters((value) => ({ ...value, year: data.value }))} /></Field>
             <LibraryFacetFilters entries={catalogEntries} filters={fileFilters} onChange={setFileFilters} />
             <Button appearance="subtle" onClick={resetFilters}>重置筛选</Button>
           </PopoverSurface>
         </Popover>
         {categories.length > 0 ? (
-          <Select
-            aria-label="按论文分类筛选"
-            className="library-category-filter"
-            onChange={(event) => setSelectedCategory(event.currentTarget.value)}
-            size="small"
-            value={selectedCategory}
-          >
-            <option value="">全部分类</option>
-            {categories.map((category) => (
-              <option key={category} value={category}>{category}</option>
-            ))}
-          </Select>
+          <OptionPicker aria-label="按论文分类筛选" className="library-category-filter" onValueChange={nextValue => setSelectedCategory(nextValue)} density="compact" value={String(selectedCategory ?? "")} options={[{ value: String(""), label: String("\u5168\u90E8\u5206\u7C7B") }, ...(categories.map((category) => ({ value: String(category), label: String(category) })))]} />
         ) : null}
       </div>
       {hasFilters ? <div className="library-active-filters" role="status">筛选结果：{filteredIds?.size ?? 0} 个资产

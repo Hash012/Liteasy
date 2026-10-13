@@ -23,7 +23,6 @@
 .selection-lookup-translation .generation-prompt-toolbar { flex-direction: column; align-items: stretch; }
 .selection-lookup-translation .generation-prompt-editor { margin: 6px 0; }
 .selection-lookup-settings, .selection-lookup-connection { display: grid; gap: 12px; }
-.selection-lookup-language-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.selection-lookup-connection summary { cursor: pointer; margin-bottom: 8px; }
+
+
 .selection-lookup-settings small { color: var(--colorNeutralForeground2); }
-@media (max-width: 480px) { .selection-lookup-language-fields { grid-template-columns: 1fr; } }

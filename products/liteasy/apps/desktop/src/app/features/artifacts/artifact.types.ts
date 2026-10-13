@@ -129,6 +129,8 @@ export type ArtifactPreview = {
 };
 
 export type ArtifactCatalogLoadState = {
+  issueCount?: number;
+  readOnly?: boolean;
   message?: string;
   status: "error" | "idle" | "loading" | "ready";
 };

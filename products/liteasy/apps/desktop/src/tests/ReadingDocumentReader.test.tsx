@@ -1,3 +1,4 @@
+import { selectPickerValue } from "./helpers/selectPickerValue";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { defaultReadingFontCss, readingFonts } from "../app/features/settings/readingFonts";
@@ -53,9 +54,9 @@ describe("ReadingDocumentReader", () => {
     fireEvent.click(screen.getByRole("button", { name: "搜索正文" }));
     fireEvent.change(screen.getByRole("textbox", { name: "搜索书内文字" }), { target: { value: "新发现" } });
     expect(await screen.findByText("1 处匹配")).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("combobox", { name: "搜索范围" }), { target: { value: "chapter" } });
+    await selectPickerValue(screen.getByRole("combobox", { name: "搜索范围" }), "chapter");
     expect(screen.getByText("没有找到匹配的文字")).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("combobox", { name: "搜索范围" }), { target: { value: "book" } });
+    await selectPickerValue(screen.getByRole("combobox", { name: "搜索范围" }), "book");
     fireEvent.click(screen.getByRole("button", { name: /发现 第二节包含新发现/ }));
     expect(screen.getByRole("heading", { name: "发现" })).toBeInTheDocument();
   });
@@ -63,7 +64,7 @@ describe("ReadingDocumentReader", () => {
   test("persists appearance and per-book progress, isolated by account", async () => {
     const view = render(reader());
     fireEvent.click(screen.getByRole("button", { name: "阅读外观" }));
-    fireEvent.change(screen.getByRole("combobox", { name: "阅读主题" }), { target: { value: "night" } });
+    await selectPickerValue(screen.getByRole("combobox", { name: "阅读主题" }), "night");
     fireEvent.change(screen.getByRole("slider", { name: "阅读字号" }), { target: { value: "25" } });
     fireEvent.click(screen.getByRole("button", { name: "发现" }));
     const scroll = screen.getByLabelText("文档阅读区域");

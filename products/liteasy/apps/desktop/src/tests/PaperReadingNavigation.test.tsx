@@ -1,3 +1,4 @@
+import { selectPickerValue } from "./helpers/selectPickerValue";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
@@ -74,8 +75,8 @@ test("focus, search shortcuts and reading themes preserve comment editing and pr
   expect(screen.getByRole("textbox", { name: "查找阅读正文" })).toHaveFocus();
   await user.keyboard("{Escape}");
   await user.click(screen.getByRole("button", { name: "阅读排版", exact: true }));
-  await user.selectOptions(screen.getByRole("combobox", { name: "阅读主题" }), "night");
-  await user.selectOptions(screen.getByRole("combobox", { name: "阅读段间距" }), "1.5");
+  await selectPickerValue(screen.getByRole("combobox", { name: "阅读主题" }), "night");
+  await selectPickerValue(screen.getByRole("combobox", { name: "阅读段间距" }), "1.5");
   await user.keyboard("{Escape}");
   view.unmount(); render(reader());
   expect(document.querySelector(".paper-reading-workspace")).toHaveAttribute("data-reading-theme", "night");

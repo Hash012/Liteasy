@@ -1,3 +1,5 @@
+import { DisclosureSection } from "../../shared/ui/productPrimitives";
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
 import { SelectionLookupCard } from "../selection-lookup/SelectionLookupCard";
@@ -9,7 +11,7 @@ import { useReadingHighlights } from "./useReadingHighlights";
 import { ReadingMarginComments } from "./ReadingMarginComments";
 import type { PdfAnnotationV2 } from "../pdf/pdfAnnotationStorage";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Button, Field, Popover, PopoverSurface, PopoverTrigger, Select, Slider, Textarea, Tooltip, useFocusFinders, useModalAttributes } from "@fluentui/react-components";
+import { Button, Field, Popover, PopoverSurface, PopoverTrigger, Slider, Textarea, Tooltip, useFocusFinders, useModalAttributes } from "@fluentui/react-components";
 import { AddRegular, ArrowUndoRegular, BookOpenRegular, BookmarkRegular, CommentRegular, CommentNoteRegular, DismissRegular, FullScreenMaximizeRegular, FullScreenMinimizeRegular, SearchRegular, TextFontSizeRegular } from "@fluentui/react-icons";
 import { guideCategories } from "./literatureGuide.types";
 import type { PdfReadingAnnotations, ReadingMarkStyle } from "../pdf/pdfReadingAnnotations";
@@ -272,23 +274,17 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
               <Button type="submit" disabled={busy || !question.trim() || !draft.page}>提问</Button>
               <Button onClick={() => { askAbort.current?.abort(); setAsking(false); }}>取消速问</Button></form> : null}
           </> : null}
-          <details className="paper-reading-selection-details" open={!floatingSelection}>
-          <summary>补充批注与页码</summary>
-          <Field label="PDF 页码"><Select aria-label="批注页码" value={draft.page} disabled={busy || Boolean(draft.id)} onChange={(_, data) => setDraft({ ...draft, page: data.value })}>
-            <option value="">请选择页码</option>{pages.map((page) => <option key={page} value={page}>第 {page} 页</option>)}
-          </Select></Field>
+          <DisclosureSection className="paper-reading-selection-details" defaultOpen={!floatingSelection} title={<>补充批注与页码</>}>
+
+          <Field label="PDF 页码"><OptionPicker aria-label="批注页码" value={String(draft.page ?? "")} disabled={busy || Boolean(draft.id)} onValueChange={nextValue => setDraft({ ...draft, page: nextValue })} options={[{ value: String(""), label: String("\u8BF7\u9009\u62E9\u9875\u7801") }, ...(pages.map((page) => ({ value: String(page), label: String(["\u7B2C", page, "\u9875"].join(" ")) })))]} /></Field>
           {markStyle ? <>
-            <Field label="标记"><Select aria-label="标记类型" value={markStyle.kind} onChange={(_, data) => setMarkStyle({ ...markStyle, kind: data.value as ReadingMarkStyle["kind"] })}>
-              <option value="highlight">高亮</option><option value="underline">下划线</option>{!draft.id ? <option value="note">页批注</option> : null}
-            </Select></Field>
-            {markStyle.kind !== "note" ? <Field label="颜色"><Select aria-label="标记颜色" value={markStyle.color ?? (markStyle.kind === "underline" ? "blue" : "yellow")} onChange={(_, data) => setMarkStyle({ ...markStyle, color: data.value as ReadingMarkStyle["color"] })}>
-              <option value="yellow">黄色</option><option value="red">红色</option><option value="blue">蓝色</option><option value="green">绿色</option><option value="pink">粉色</option>
-            </Select></Field> : null}
+            <Field label="标记"><OptionPicker aria-label="标记类型" value={String(markStyle.kind ?? "")} onValueChange={nextValue => setMarkStyle({ ...markStyle, kind: nextValue as ReadingMarkStyle["kind"] })} options={[{ value: String("highlight"), label: String("\u9AD8\u4EAE") }, { value: String("underline"), label: String("\u4E0B\u5212\u7EBF") }, ...(!draft.id ? [{ value: String("note"), label: String("\u9875\u6279\u6CE8") }] : [])]} /></Field>
+            {markStyle.kind !== "note" ? <Field label="颜色"><OptionPicker aria-label="标记颜色" value={String(markStyle.color ?? (markStyle.kind === "underline" ? "blue" : "yellow"))} onValueChange={nextValue => setMarkStyle({ ...markStyle, color: nextValue as ReadingMarkStyle["color"] })} options={[{ value: String("yellow"), label: String("\u9EC4\u8272") }, { value: String("red"), label: String("\u7EA2\u8272") }, { value: String("blue"), label: String("\u84DD\u8272") }, { value: String("green"), label: String("\u7EFF\u8272") }, { value: String("pink"), label: String("\u7C89\u8272") }]} /></Field> : null}
           </> : null}
           <Field label="批注内容"><MarkdownEditor documentKey={draft.id ?? "new-reading-comment"} label="阅读批注内容" value={note} readOnly={busy} onChange={setNote} /></Field>
           <div className="paper-reading-comment-actions"><Button appearance="primary" disabled={busy || !session.ready || !draft.page || (!draft.id && !note.trim() && !draft.excerpt)} onClick={() => void save()}>保存批注</Button>
             <Button disabled={busy} onClick={() => { setDraft(undefined); setNote(""); setError(""); if (preferences.marginComments) setCommentsVisible(false); }}>取消</Button></div>
-          </details>
+          </DisclosureSection>
         </div> : null;
   const fontOverride = preferences.fontFamily ?? (preferences.font === "serif" ? "" : paperReadingFonts[preferences.font].family);
   const styles = { "--paper-reading-font": fontOverride || defaultReadingFontCss, "--paper-reading-size": `${preferences.fontSize}px`,
@@ -326,21 +322,11 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
           <Field label="字体"><SystemFontPicker label="阅读字体" value={fontOverride}
             options={[{ label: "跟随阅读设置", value: "" }, ...readingFontOptions]}
             onChange={(fontFamily) => changePreferences({ ...preferences, fontFamily: fontFamily || undefined, font: "serif" })} /></Field>
-          <Field label="页面宽度"><Select aria-label="阅读页面宽度" value={preferences.width} onChange={(_, data) => changePreferences({ ...preferences, width: Number(data.value) })}>
-            <option value="640">窄版</option><option value="800">适中</option><option value="1080">宽版</option><option value="0">填满窗口</option>
-          </Select></Field>
-          <Field label="行距"><Select aria-label="阅读行距" value={preferences.lineHeight} onChange={(_, data) => changePreferences({ ...preferences, lineHeight: Number(data.value) })}>
-            <option value="1.5">紧凑</option><option value="1.85">舒适</option><option value="2.2">宽松</option>
-          </Select></Field>
-          <Field label="对齐"><Select aria-label="阅读对齐" value={preferences.alignment} onChange={(_, data) => changePreferences({ ...preferences, alignment: data.value as "left" | "justify" })}>
-            <option value="left">左对齐</option><option value="justify">两端对齐</option>
-          </Select></Field>
-          <Field label="段间距"><Select aria-label="阅读段间距" value={preferences.paragraphSpacing} onChange={(_, data) => changePreferences({ ...preferences, paragraphSpacing: Number(data.value) })}>
-            <option value="0.6">紧凑</option><option value="1">舒适</option><option value="1.5">宽松</option>
-          </Select></Field>
-          <Field label="阅读主题"><Select aria-label="阅读主题" value={preferences.theme} onChange={(_, data) => changePreferences({ ...preferences, theme: data.value as PaperReadingPreferences["theme"] })}>
-            <option value="auto">跟随应用</option><option value="paper">纸白</option><option value="warm">暖纸</option><option value="night">夜读</option>
-          </Select></Field>
+          <Field label="页面宽度"><OptionPicker aria-label="阅读页面宽度" value={String(preferences.width ?? "")} onValueChange={nextValue => changePreferences({ ...preferences, width: Number(nextValue) })} options={[{ value: String("640"), label: String("\u7A84\u7248") }, { value: String("800"), label: String("\u9002\u4E2D") }, { value: String("1080"), label: String("\u5BBD\u7248") }, { value: String("0"), label: String("\u586B\u6EE1\u7A97\u53E3") }]} /></Field>
+          <Field label="行距"><OptionPicker aria-label="阅读行距" value={String(preferences.lineHeight ?? "")} onValueChange={nextValue => changePreferences({ ...preferences, lineHeight: Number(nextValue) })} options={[{ value: String("1.5"), label: String("\u7D27\u51D1") }, { value: String("1.85"), label: String("\u8212\u9002") }, { value: String("2.2"), label: String("\u5BBD\u677E") }]} /></Field>
+          <Field label="对齐"><OptionPicker aria-label="阅读对齐" value={String(preferences.alignment ?? "")} onValueChange={nextValue => changePreferences({ ...preferences, alignment: nextValue as "left" | "justify" })} options={[{ value: String("left"), label: String("\u5DE6\u5BF9\u9F50") }, { value: String("justify"), label: String("\u4E24\u7AEF\u5BF9\u9F50") }]} /></Field>
+          <Field label="段间距"><OptionPicker aria-label="阅读段间距" value={String(preferences.paragraphSpacing ?? "")} onValueChange={nextValue => changePreferences({ ...preferences, paragraphSpacing: Number(nextValue) })} options={[{ value: String("0.6"), label: String("\u7D27\u51D1") }, { value: String("1"), label: String("\u8212\u9002") }, { value: String("1.5"), label: String("\u5BBD\u677E") }]} /></Field>
+          <Field label="阅读主题"><OptionPicker aria-label="阅读主题" value={String(preferences.theme ?? "")} onValueChange={nextValue => changePreferences({ ...preferences, theme: nextValue as PaperReadingPreferences["theme"] })} options={[{ value: String("auto"), label: String("\u8DDF\u968F\u5E94\u7528") }, { value: String("paper"), label: String("\u7EB8\u767D") }, { value: String("warm"), label: String("\u6696\u7EB8") }, { value: String("night"), label: String("\u591C\u8BFB") }]} /></Field>
           <Button onClick={() => changePreferences(defaultPaperReadingPreferences)}>恢复默认排版</Button>
         </PopoverSurface>
       </Popover>

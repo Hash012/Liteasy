@@ -1,3 +1,4 @@
+import { createArtifactLocalRepository } from "../app/features/artifacts/artifactLocalRepository";
 vi.mock("../app/features/persistence/durableJsonStore", () => ({
   loadDurableEntries: async (scope: string) => JSON.parse(localStorage.getItem(`liteasy.checkpoints.v1:${scope}`) ?? "{}"),
   putDurableEntry: vi.fn(async (scope: string, key: string, value: unknown) => {
@@ -1291,5 +1292,70 @@ describe("useArtifactWorkflowController", () => {
       expect.objectContaining({ artifactId: "artifact-after-login" }),
       expect.objectContaining({ artifactId: "artifact-account-b" })
     ]));
+  });
+});
+
+
+describe("artifact catalog refresh safety", () => {
+  function controllerInput(client = artifactResultClient()) {
+    return { artifactResultClient: client, artifactStore: createArtifactStore(),
+      getImportedChunksByPaperId: () => ({}), getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+      getSelectedPapers: () => [], onAnalysisHint: vi.fn(), queueImportForPapers: vi.fn(() => "idle" as const),
+      runAgentAnalysis: vi.fn(async () => completedRun()) };
+  }
+
+  test("automatic restore and sync never write an isolated display projection", async () => {
+    const snapshot = { version: "liteasy.artifact-catalog/v1", artifacts: [{ artifactId: "bad", title: "Preserved", type: "tree", papers: [null] }] };
+    const bytes = JSON.stringify(snapshot);
+    const save = vi.fn(async () => undefined);
+    const repository = createArtifactLocalRepository({ load: async () => snapshot, save });
+    const input = controllerInput();
+    const { result } = renderHook(() => useArtifactWorkflowController({ ...input, artifactLocalRepository: repository }));
+    await waitFor(() => expect(result.current.model.artifactCatalogLoadState.status).toBe("ready"));
+    expect(result.current.model.artifactCatalog).toEqual([expect.objectContaining({ artifactId: "bad", papers: [] })]);
+    expect(result.current.model.artifactCatalogLoadState).toEqual({ status: "ready", issueCount: 1, readOnly: true });
+    await act(async () => { await result.current.actions.reloadArtifactCatalog(); });
+    expect(save).not.toHaveBeenCalled();
+    expect(JSON.stringify(snapshot)).toBe(bytes);
+  });
+
+  test("same account refresh failure retains the last usable catalog and open tabs", async () => {
+    const input = controllerInput();
+    input.artifactResultClient.list.mockResolvedValueOnce([persistedArtifact()] as never).mockRejectedValueOnce(new Error("offline"));
+    const { result } = renderHook(() => useArtifactWorkflowController({ ...input, artifactResultScopeKey: "https://cloud.example:user-a" }));
+    await waitFor(() => expect(result.current.model.artifactCatalogLoadState.status).toBe("ready"));
+    act(() => { result.current.actions.openArtifact("artifact-saved"); });
+    await act(async () => { await result.current.actions.reloadArtifactCatalog(); });
+    expect(result.current.model.artifactCatalogLoadState).toEqual({ status: "error", message: "offline" });
+    expect(result.current.model.artifactCatalog[0].artifactId).toBe("artifact-saved");
+    expect(result.current.model.artifactTabs[0].artifactId).toBe("artifact-saved");
+  });
+
+  test("switching accounts immediately removes the previous account while the next load is pending", async () => {
+    const input = controllerInput();
+    let resolveNext!: (value: AgentArtifactResult[]) => void;
+    input.artifactResultClient.list.mockResolvedValueOnce([persistedArtifact()] as never).mockImplementationOnce(() => new Promise((resolve) => { resolveNext = resolve as never; }));
+    const { result, rerender } = renderHook(({ scope }) => useArtifactWorkflowController({ ...input, artifactResultScopeKey: scope }), { initialProps: { scope: "account-a" } });
+    await waitFor(() => expect(result.current.model.artifactCatalog).toHaveLength(1));
+    rerender({ scope: "account-b" });
+    expect(result.current.model.artifactCatalog).toEqual([]);
+    expect(result.current.model.artifactTabs).toEqual([]);
+    await act(async () => { resolveNext([]); });
+    expect(result.current.model.artifactCatalog).toEqual([]);
+  });
+
+  test("an older refresh cannot replace the newer response", async () => {
+    const input = controllerInput();
+    input.artifactResultClient.list.mockResolvedValueOnce([persistedArtifact()] as never);
+    const { result } = renderHook(() => useArtifactWorkflowController({ ...input, artifactResultScopeKey: "account-a" }));
+    await waitFor(() => expect(result.current.model.artifactCatalogLoadState.status).toBe("ready"));
+    let resolveOld!: (value: AgentArtifactResult[]) => void;
+    input.artifactResultClient.list.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve as never; }))
+      .mockResolvedValueOnce([{ ...persistedArtifact(), title: "Latest" }] as never);
+    let oldRequest!: Promise<void>;
+    act(() => { oldRequest = result.current.actions.reloadArtifactCatalog(); });
+    await act(async () => { await result.current.actions.reloadArtifactCatalog(); });
+    await act(async () => { resolveOld([{ ...persistedArtifact(), title: "Stale" }]); await oldRequest; });
+    expect(result.current.model.artifactCatalog[0].title).toBe("Latest");
   });
 });

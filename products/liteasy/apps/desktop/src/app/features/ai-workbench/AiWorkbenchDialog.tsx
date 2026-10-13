@@ -1,3 +1,4 @@
+import { DisclosureSection } from "../../shared/ui/productPrimitives";
 import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
 import { artifactPromptTask } from "../ai-prompts/generationPrompts";
 import { useEffect, useMemo, useState } from "react";
@@ -34,6 +35,7 @@ export function AiWorkbenchDialog(props: AiWorkbenchDialogProps) {
   const [prompt, setPrompt] = useState<string>();
   const [query, setQuery] = useState("");
   const [view, setView] = useState("recent");
+  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
   const [limits, setLimits] = useState<Record<string, number>>({});
   useEffect(() => { if (props.open) { setQuery(""); setView("recent"); setLimits({}); setTask(undefined); setPrompt(undefined); } }, [props.open]);
   const selected = new Set(props.selectedIds);
@@ -52,10 +54,10 @@ export function AiWorkbenchDialog(props: AiWorkbenchDialogProps) {
     </>;
   }
   function folderRows(folder: AiPaperFolder) {
-    return <details className="ai-paper-folder" key={folder.id} open={query ? true : undefined}>
-      <summary><ChevronRightRegular className="ai-folder-chevron" aria-hidden="true" /><FolderRegular aria-hidden="true" />{folder.name}</summary>
-      <div>{folder.children.map(folderRows)}{paperRows(folder.papers, folder.id)}</div>
-    </details>;
+    return <div className="ai-paper-folder" key={folder.id}>
+      <Button appearance="subtle" className="ai-folder-toggle" aria-expanded={Boolean(query) || Boolean(openFolders[folder.id])} onClick={() => setOpenFolders(current => ({ ...current, [folder.id]: !current[folder.id] }))}><ChevronRightRegular className="ai-folder-chevron" aria-hidden="true" /><FolderRegular aria-hidden="true" />{folder.name}</Button>
+      <div hidden={!query && !openFolders[folder.id]}>{folder.children.map(folderRows)}{paperRows(folder.papers, folder.id)}</div>
+    </div>;
   }
   return <Dialog open={props.open} onOpenChange={(_, data) => { if (!data.open) props.onClose(); }}>
     <DialogSurface className="ai-workbench-dialog" style={{ width: "min(940px, calc(100vw - 32px))", maxWidth: "none" }}>
@@ -90,7 +92,7 @@ export function AiWorkbenchDialog(props: AiWorkbenchDialogProps) {
           <section className="ai-workbench-capabilities" aria-label="选择 AI 能力">
             <h3>2. 选择 AI 能力</h3>
             <p className="ai-workbench-muted">{props.confirmed ? `本次任务使用已确认的 ${props.confirmed.length} 篇论文。更改勾选后需重新确认。` : "确认左侧论文后，即可开始。"}</p>
-            {props.confirmed ? <details><summary>已确认 {props.confirmed.length} 篇 · 查看清单</summary><ul className="ai-confirmed-papers" aria-label="已确认的任务论文">{props.confirmed.map((paper) => <li key={paper.id}>{paper.title}</li>)}</ul></details> : null}
+            {props.confirmed ? <DisclosureSection title={`已确认 ${props.confirmed.length} 篇 · 查看清单`}><ul className="ai-confirmed-papers" aria-label="已确认的任务论文">{props.confirmed.map((paper) => <li key={paper.id}>{paper.title}</li>)}</ul></DisclosureSection> : null}
             <div className="ai-capability-list">{capabilities.map((capability) => <Button key={capability.type} className="ai-capability" appearance="outline"
               aria-label={capability.label} disabled={!props.confirmed} icon={capability.icon} aria-pressed={task === capability.type} onClick={() => { setTask(capability.type); setPrompt(undefined); }}>
               <span><strong>{capability.label}</strong>{task === capability.type ? <small>{capability.detail}</small> : null}</span>

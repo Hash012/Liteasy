@@ -244,7 +244,8 @@ describe("LiteratureTargetEditor", () => {
     confirmLiterature.mockResolvedValue({ literature: confirmed });
     const view = renderEditor();
     const { onChange } = view;
-    await user.selectOptions(screen.getByLabelText("目标范围"), "source_passage");
+    await user.click(screen.getByRole("combobox", { name: "目标范围" }));
+    await user.click(screen.getByRole("option", { name: "原文字句" }));
     await user.type(screen.getByRole("combobox", { name: "检索关联文献" }), "paper");
     await user.click(screen.getByRole("button", { name: "检索" }));
     await user.type(screen.getByLabelText("页码"), "3");

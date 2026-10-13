@@ -1,3 +1,4 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { useState } from "react";
 import type { OrganizationRole, OrganizationSummary } from "./organization.types";
 
@@ -48,15 +49,8 @@ export function OrganizationInviteConfirmDialog({
           </label>
           <label className="organization-form-field">
             <span>组织角色</span>
-            <select
-              aria-label="组织角色"
-              className="organization-form-input"
-              onChange={(event) => setRole(event.target.value === "admin" ? "admin" : "member")}
-              value={role}
-            >
-              <option value="member">成员</option>
-              {summary.myRole === "owner" ? <option value="admin">管理员</option> : null}
-            </select>
+            <OptionPicker aria-label="组织角色" disabled={pending} value={role} onValueChange={(value) => setRole(value === "admin" ? "admin" : "member")}
+              options={[{ value: "member", label: "成员" }, ...(summary.myRole === "owner" ? [{ value: "admin", label: "管理员" }] : [])]} />
           </label>
         </div>
         {message ? <div aria-live="polite" className="organization-action-message">{message}</div> : null}

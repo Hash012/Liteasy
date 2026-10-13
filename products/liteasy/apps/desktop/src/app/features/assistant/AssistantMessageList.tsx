@@ -1,4 +1,4 @@
-import { ContextualActions, IconAction } from "../../shared/ui/productPrimitives";
+import { ContextualActions, IconAction, DisclosureSection, InfoPopover } from "../../shared/ui/productPrimitives";
 import { VisuallyHidden } from "../../shared/ui/VisuallyHidden";
 import { copyAnswerWithEvidence } from "../evidence/evidenceCopy";
 import { MessageEvidence } from "../evidence/components/MessageEvidence";
@@ -242,11 +242,12 @@ export function AssistantMessageList({
                   <ExpandableUserMessage value={message.content} contextTokens={message.contextTokens} />
                 )
               ) : null}
-              {message.contextCoverage ? <details className="assistant-context-coverage">
-                <summary>本轮读取范围：{message.contextCoverage.full} 项完整读取{message.contextCoverage.partial ? `，${message.contextCoverage.partial} 项选段` : ""}{message.contextCoverage.omitted ? `，${message.contextCoverage.omitted} 项未覆盖` : ""}</summary>
-                {message.contextCoverage.partial || message.contextCoverage.omitted ? <p>本轮回答基于已读取内容，不能视为对全部资料的完整审阅。可选择具体页面或缩小范围继续提问。</p> : null}
+              {message.contextCoverage ? <div className="assistant-context-coverage">
+                <DisclosureSection title={`本轮读取范围：${message.contextCoverage.full} 项完整读取${message.contextCoverage.partial ? `，${message.contextCoverage.partial} 项选段` : ""}${message.contextCoverage.omitted ? `，${message.contextCoverage.omitted} 项未覆盖` : ""}`}>
                 <ul>{message.contextCoverage.items.map((item, index) => <li key={index}>{item.title} · {{ full: "完整", partial: "部分", omitted: "未读取" }[item.status]}（{item.includedCharacters.toLocaleString()} / {item.totalCharacters.toLocaleString()} 字符）</li>)}</ul>
-              </details> : null}
+                </DisclosureSection>
+                {message.contextCoverage.partial || message.contextCoverage.omitted ? <p>本轮回答基于已读取内容，不能视为对全部资料的完整审阅。可选择具体页面或缩小范围继续提问。</p> : null}
+              </div> : null}
               {message.assetWrites?.length ? <div className="assistant-asset-writes" aria-label="已保存的资产修改">
                 {message.assetWrites.map((write, writeIndex) => <div className="assistant-asset-write" key={`${write.path}-${writeIndex}`}>
                   <DocumentEditRegular aria-hidden="true" />
@@ -302,9 +303,9 @@ export function AssistantMessageList({
               {message.role === "assistant" ? <MessageEvidence message={message} papers={papers}
                 onOpenAsset={onOpenAsset} onOpenCitation={onOpenCitation} /> : null}
               {message.executionTrace ? (
-                <details className="assistant-execution-trace"><summary>生成信息</summary>
+                <InfoPopover label="生成信息">
                   使用模型：{formatModelExecutionLabel(message.executionTrace)}
-                </details>
+                </InfoPopover>
               ) : null}
               {message.confirmation ? (
                 <div className="assistant-confirmation-actions">

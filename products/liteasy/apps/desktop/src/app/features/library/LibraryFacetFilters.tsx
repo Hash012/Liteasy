@@ -1,5 +1,6 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { useMemo, useState } from "react";
-import { Button, Field, Input, Select } from "@fluentui/react-components";
+import { Button, Field, Input } from "@fluentui/react-components";
 import type { ReadingCatalogEntry } from "./readingCatalog.types";
 import type { ReadingCatalogFilters } from "./readingCatalogSearch";
 import { assetTypeLabels } from "./libraryAssetMetadata";
@@ -13,9 +14,7 @@ export function LibraryFacetFilters({ entries, filters, onChange }: { entries: R
   }, [entries]);
   const visible = counts.filter(([tag]) => tag.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
   return <>
-    <Field label="类别"><Select aria-label="筛选资产类别" value={filters.assetType ?? ""} onChange={(_, data) => onChange({ ...filters, assetType: data.value })}>
-      <option value="">全部类别</option>{Object.entries(assetTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-    </Select></Field>
+    <Field label="类别"><OptionPicker aria-label="筛选资产类别" value={String(filters.assetType ?? "")} onValueChange={nextValue => onChange({ ...filters, assetType: nextValue })} options={[{ value: String(""), label: String("\u5168\u90E8\u7C7B\u522B") }, ...(Object.entries(assetTypeLabels).map(([value, label]) => ({ value: String(value), label: String(label) })))]} /></Field>
     <Field label="作者"><Input aria-label="筛选作者" value={filters.author ?? ""} onChange={(_, data) => onChange({ ...filters, author: data.value })} placeholder="按作者姓名筛选" /></Field>
     <Field label="学科"><Input aria-label="筛选学科" value={filters.subject ?? ""} onChange={(_, data) => onChange({ ...filters, subject: data.value })} placeholder="按学科筛选" /></Field>
     <Field label="标签"><Input aria-label="查找标签" value={query} onChange={(_, data) => setQuery(data.value)} placeholder="查找库内标签" /></Field>

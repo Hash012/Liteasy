@@ -1,6 +1,6 @@
-import { ActionButton as Button } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, DisclosureSection, OptionPicker } from "../../shared/ui/productPrimitives";
 import { useEffect, useState } from "react";
-import { Checkbox, Field, Input, Select, Textarea, Tooltip } from "@fluentui/react-components";
+import { Checkbox, Field, Input, Textarea, Tooltip } from "@fluentui/react-components";
 import { AddRegular, ArrowClockwiseRegular, DismissRegular, DocumentSaveRegular, PlayRegular } from "@fluentui/react-icons";
 import { ContentView } from "../markdown/ContentView";
 import { legacyContent } from "../markdown/contentFragment";
@@ -40,17 +40,12 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
         {model.tasks.map(task => <Button key={task.taskId} disabled={model.busy} appearance={model.detail?.task.taskId === task.taskId ? "secondary" : "subtle"} onClick={() => void model.open(task.taskId)}>
           <span>{task.goal}<small>{states[task.state]} · 本机实验 {task.budget.usedRuns}/{task.budget.maxRuns}</small></span>
         </Button>)}
-        <details>
-          <summary>模型连接</summary>
+        <DisclosureSection title="模型连接">
           <p>ChatGPT 订阅与自备 API 分别管理。仅实际完成推理才能确认这次模型可访问。</p>
           <Button disabled={!model.supported || model.busy} onClick={() => void model.login()}>Continue with ChatGPT</Button>
           {model.busy ? <Button onClick={() => void model.cancelLogin()}>取消授权等待</Button> : null}
-          <Field label="ChatGPT 账号"><Select value={model.connections.activeAccount ?? ""} onChange={event => void model.selectAccount(event.target.value)}>
-            <option value="">请选择账号</option>{model.connections.accounts.map(account => <option key={account.id} value={account.id}>{account.name || account.email}</option>)}
-          </Select></Field>
-          <Field label="模型"><Select value={model.model} onChange={event => model.setModel(event.target.value)}>
-            <option value="">请选择模型</option>{model.models.map(item => <option key={item.slug} value={item.slug}>{item.displayName}</option>)}
-          </Select></Field>
+          <Field label="ChatGPT 账号"><OptionPicker aria-label="ChatGPT 账号" value={model.connections.activeAccount ?? ""} onValueChange={(value) => void model.selectAccount(value)} options={[{ value: "", label: "请选择账号" }, ...model.connections.accounts.map(account => ({ value: account.id, label: account.name || account.email }))]} /></Field>
+          <Field label="模型"><OptionPicker aria-label="模型" value={model.model} onValueChange={model.setModel} options={[{ value: "", label: "请选择模型" }, ...model.models.map(item => ({ value: item.slug, label: item.displayName }))]} /></Field>
           <Button disabled={model.busy || !model.model} onClick={() => void model.verifyModel()}>验证所选模型</Button>
           <Button disabled={model.busy || !model.connections.activeAccount} onClick={() => void model.logout()}>断开并移除本机凭据</Button>
           <Field label="研究引擎可执行文件"><Input value={executable} onChange={(_, data) => setExecutable(data.value)} /></Field>
@@ -61,14 +56,12 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
           <Field label="研究校验内核目录"><Input value={harness.kitRoot} onChange={(_, data) => setHarness({ ...harness, kitRoot: data.value })} /></Field>
           <Field label="内核拥有的独立工作区"><Input value={harness.workspace} onChange={(_, data) => setHarness({ ...harness, workspace: data.value })} /></Field>
           <Button disabled={model.busy || !harness.python || !harness.kitRoot || !harness.workspace} onClick={() => void model.configureHarness(harness.python, harness.kitRoot, harness.workspace)}>连接研究校验服务</Button>
-          <Field label="校验类型"><Select value={harness.operation} onChange={event => setHarness({ ...harness, operation: event.target.value })}>
-            <option value="verify">工作区完整性</option><option value="create_packet">生成有界文献 packet</option><option value="literature_audit">文献 packet</option><option value="hypothesis_admission">假设准入</option><option value="execution_preflight">执行前检查</option><option value="claim_audit">主张结构审核</option>
-          </Select></Field>
+          <Field label="校验类型"><OptionPicker aria-label="校验类型" value={harness.operation} onValueChange={(value) => setHarness({ ...harness, operation: value })} options={[{ value: "verify", label: "工作区完整性" }, { value: "create_packet", label: "生成有界文献 packet" }, { value: "literature_audit", label: "文献 packet" }, { value: "hypothesis_admission", label: "假设准入" }, { value: "execution_preflight", label: "执行前检查" }, { value: "claim_audit", label: "主张结构审核" }]} /></Field>
           <Field label="校验记录 ID"><Input value={harness.recordId} onChange={(_, data) => setHarness({ ...harness, recordId: data.value })} /></Field>
           {harness.operation === "create_packet" ? <Field label="Packet（仅引用该工作索引中的既有记录）"><Textarea value={harness.packet} onChange={(_, data) => setHarness({ ...harness, packet: data.value })} /></Field> : null}
           <Button disabled={model.busy} onClick={() => void model.checkHarness(harness.operation, harness.recordId, harness.operation === "create_packet" ? harness.packet : undefined)}>{harness.operation === "create_packet" ? "批准生成文献 packet 并校验" : "读取原内核校验回执"}</Button>
           {model.harnessReceipt ? <pre>{model.harnessReceipt}</pre> : null}
-        </details>
+        </DisclosureSection>
       </aside>
       <main className="research-detail">
         {model.detail ? <>
@@ -78,9 +71,7 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
           {latestClaim ? <p>条件化结论：{states[String(latestClaim.body.status)] ?? "待核对"} · 需核对适用条件与独立检查</p> : null}
           <nav className="research-toolbar" aria-label="研究阶段">{["来源与访问范围", "假设分支", "最小实验与独立检查", "决策与条件化结论", "研究助手"].map(name => <Button key={name} appearance={stage === name ? "primary" : "subtle"} aria-pressed={stage === name} onClick={() => setStage(name)}>{name}</Button>)}</nav>
           <fieldset hidden={stage !== "来源与访问范围"}><legend>来源与访问范围</legend>
-            <Field label="固定来源版本"><Select value={model.source ? JSON.stringify(model.source) : ""} onChange={event => model.setSource(event.target.value ? JSON.parse(event.target.value) : undefined)}>
-              <option value="">请选择来源</option>{model.sources.map(item => <option key={JSON.stringify(item.ref)} value={JSON.stringify(item.ref)}>{item.title} · {item.ref.revision.slice(0, 8)}</option>)}
-            </Select></Field>
+            <Field label="固定来源版本"><OptionPicker aria-label="固定来源版本" value={model.source ? JSON.stringify(model.source) : ""} onValueChange={(value) => model.setSource(value ? JSON.parse(value) : undefined)} options={[{ value: "", label: "请选择来源" }, ...model.sources.map(item => ({ value: JSON.stringify(item.ref), label: `${item.title} · ${item.ref.revision.slice(0, 8)}` }))]} /></Field>
             <Button disabled={model.busy} onClick={() => void model.createSyntheticSource()}>创建 DataLoader 合成条件说明</Button>
             <Button disabled={model.busy || !model.source} onClick={() => void model.readSource()}>读取固定来源</Button>
           </fieldset>
@@ -91,20 +82,14 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
             <Field label="可检查的预测"><Input value={model.hypothesis.prediction} onChange={(_, data) => model.setHypothesis({ ...model.hypothesis, prediction: data.value })} /></Field>
             <Field label="证伪条件"><Textarea value={model.hypothesis.falsification} onChange={(_, data) => model.setHypothesis({ ...model.hypothesis, falsification: data.value })} /></Field>
             <Button disabled={model.busy} onClick={() => void model.saveHypothesis()}>保存推测假设</Button>
-            <Field label="本次检查的假设分支"><Select value={model.hypothesisId || model.detail.records.filter(record => record.kind === "hypothesis").at(-1)?.id || ""}
-              onChange={event => model.setHypothesisId(event.target.value)}>
-              <option value="">请选择假设</option>{model.detail.records.filter(record => record.kind === "hypothesis").map(record =>
-                <option key={record.id} value={record.id}>{String(record.body.question)} · {record.hash.slice(0, 8)}</option>)}
-            </Select></Field>
+            <Field label="本次检查的假设分支"><OptionPicker aria-label="本次检查的假设分支" value={model.hypothesisId || model.detail.records.filter(record => record.kind === "hypothesis").at(-1)?.id || ""} onValueChange={model.setHypothesisId} options={[{ value: "", label: "请选择假设" }, ...model.detail.records.filter(record => record.kind === "hypothesis").map(record => ({ value: record.id, label: `${String(record.body.question)} · ${record.hash.slice(0, 8)}` }))]} /></Field>
             {model.detail.records.filter(record => record.kind === "hypothesis").map(record => <p key={record.id}><strong>推测：</strong>{String(record.body.question)}</p>)}
           </fieldset>
           <fieldset hidden={stage !== "最小实验与独立检查"}><legend>最小实验与独立检查</legend>
             <p>合成 CPU trace 回放；统一缓存与 I/O 预算，先检查样本、顺序与跨模态对齐，再比较等待和读取放大。</p>
-            <Field label="候选方案"><Select value={model.candidate} onChange={event => model.setCandidate(event.target.value as "sequential" | "last_delta")}>
-              <option value="sequential">顺序预取</option><option value="last_delta">最近差值预测</option>
-            </Select></Field>
+            <Field label="候选方案"><OptionPicker aria-label="候选方案" value={model.candidate} onValueChange={(value) => model.setCandidate(value as "sequential" | "last_delta")} options={[{ value: "sequential", label: "顺序预取" }, { value: "last_delta", label: "最近差值预测" }]} /></Field>
             <Button disabled={model.busy} onClick={() => void model.prepareSpec()}>准备实验规格</Button>
-            {latestSpec ? <details><summary>检查固定规格 · {latestSpec.hash.slice(0, 12)}</summary><pre>{JSON.stringify(latestSpec.body, null, 2)}</pre></details> : null}
+            {latestSpec ? <DisclosureSection title={`检查固定规格 · ${latestSpec.hash.slice(0, 12)}`}><pre>{JSON.stringify(latestSpec.body, null, 2)}</pre></DisclosureSection> : null}
             <Checkbox checked={allowExperiment} label="批准本规格的本机小实验：不联网，不执行任意脚本" onChange={(_, data) => setAllowExperiment(Boolean(data.checked))} />
             <Button icon={<PlayRegular />} disabled={model.busy || executing || !allowExperiment || !latestSpec} onClick={() => void model.approveAndRun()}>批准并运行本规格</Button>
             {model.detail.runs.map(run => <article key={run.runId} className="research-run">
@@ -115,14 +100,12 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
                 <table><thead><tr><th>工作负载</th><th>算法</th><th>模拟等待 P95 μs</th><th>读取放大</th><th>缓存峰值字节</th><th>回放耗时 μs</th></tr></thead><tbody>
                   {run.rawResult.outputs.map(output => <tr key={output.workload + output.algorithm}><td>{output.workload}</td><td>{output.algorithm}</td><td>{output.metrics.simulatedWaitP95Us}</td><td>{output.metrics.readAmplification.toFixed(3)}</td><td>{output.metrics.cachePeakBytes}</td><td>{output.metrics.replayWallUs}</td></tr>)}
                 </tbody></table><ul>{run.rawResult.conditions.map(value => <li key={value}>{value}</li>)}</ul>
-                <details><summary>原始结果预览{JSON.stringify(run).length > 32000 ? "（前 32,000 字符）" : ""}</summary><pre>{JSON.stringify(run, null, 2).slice(0, 32000)}</pre></details>
+                <DisclosureSection title={`原始结果预览${JSON.stringify(run).length > 32000 ? "（前 32,000 字符）" : ""}`}><pre>{JSON.stringify(run, null, 2).slice(0, 32000)}</pre></DisclosureSection>
               </> : null}
             </article>)}
           </fieldset>
           <fieldset hidden={stage !== "决策与条件化结论"}><legend>决策与条件化结论</legend>
-            <Field label="本次决策依据的实验"><Select value={latestRun?.runId ?? ""} onChange={event => model.setRunId(event.target.value)}>
-              <option value="">请选择实验</option>{model.detail.runs.map(run => <option key={run.runId} value={run.runId}>{run.runId} · {states[run.status]}</option>)}
-            </Select></Field>
+            <Field label="本次决策依据的实验"><OptionPicker aria-label="本次决策依据的实验" value={latestRun?.runId ?? ""} onValueChange={model.setRunId} options={[{ value: "", label: "请选择实验" }, ...model.detail.runs.map(run => ({ value: run.runId, label: `${run.runId} · ${states[run.status]}` }))]} /></Field>
             <Field label="继续、收缩或停止的依据"><Textarea value={rationale} onChange={(_, data) => setRationale(data.value)} /></Field>
             <Button disabled={model.busy || executing || latestRun?.status !== "completed"} onClick={() => void model.recordDecision("narrow", rationale)}>记录收缩结论</Button>
             <Button disabled={model.busy || executing || !latestRun} onClick={() => void model.recordDecision("stop", rationale)}>记录停止决策</Button>

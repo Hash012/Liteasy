@@ -12,16 +12,6 @@
       "reviewBy": "QAU-10"
     },
     {
-      "file": "src/app/controllers/assistant/AssistantSessionController.tsx",
-      "rule": "native-interaction",
-      "detail": "<select aria-label=\"选择运行记录\" value={selectedTaskRun?.id ?? \"\"} onChange={(event) => setView({ kind: \"task-detail\", taskId: activeSession.id, runId: event.target.value })}>",
-      "count": 1,
-      "surface": "controllers/assistant/AssistantSessionController.tsx",
-      "owner": "Assistant UI (M3)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
-      "reviewBy": "QAU-10"
-    },
-    {
       "file": "src/app/features/account/LightweightLoginDialog.tsx",
       "rule": "native-interaction",
       "detail": "<button aria-pressed={mode === \"login\"} className={`left-rail-button ${mode === \"login\" ? \"active\" : \"muted\"}`} onClick={() => setMode(\"login\")} type=\"button\" >",
@@ -272,16 +262,6 @@
       "reviewBy": "QAU-10"
     },
     {
-      "file": "src/app/features/assistant/AssistantHistoryPanel.tsx",
-      "rule": "native-interaction",
-      "detail": "<button className=\"assistant-history-restore\" onClick={() => openSession?.(session.id)} type=\"button\">",
-      "count": 1,
-      "surface": "features/assistant/AssistantHistoryPanel.tsx",
-      "owner": "Assistant UI (M3)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
-      "reviewBy": "QAU-10"
-    },
-    {
       "file": "src/app/features/assistant/AssistantMessageList.tsx",
       "rule": "native-interaction",
       "detail": "<button className=\"assistant-message-action\" onClick={() => onConfirmRequest?.(message.confirmation!)} type=\"button\" >",
@@ -295,36 +275,6 @@
       "file": "src/app/features/assistant/AssistantMessageList.tsx",
       "rule": "native-interaction",
       "detail": "<button className=\"assistant-message-action\" onClick={() => onRejectRequest?.(message.confirmation!)} type=\"button\" >",
-      "count": 1,
-      "surface": "features/assistant/AssistantMessageList.tsx",
-      "owner": "Assistant UI (M3)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/features/assistant/AssistantMessageList.tsx",
-      "rule": "native-interaction",
-      "detail": "<button aria-label={`复制：${message.content}`} className=\"assistant-message-action\" onClick={() => { const tokenText = message.contextTokens?.map((token) => `[${token.label}]`).join(\" \") ?? \"\"; void navigator.clipboard?.writeText( [tokenText, message.content].filter(Boolean).join(\" \") ); }} title=\"复制\" type=\"button\" >",
-      "count": 1,
-      "surface": "features/assistant/AssistantMessageList.tsx",
-      "owner": "Assistant UI (M3)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/features/assistant/AssistantMessageList.tsx",
-      "rule": "native-interaction",
-      "detail": "<button aria-label={`编辑：${message.content}`} className=\"assistant-message-action\" onClick={() => onEditMessage?.(message.id)} title=\"编辑\" type=\"button\" >",
-      "count": 1,
-      "surface": "features/assistant/AssistantMessageList.tsx",
-      "owner": "Assistant UI (M3)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/features/assistant/AssistantMessageList.tsx",
-      "rule": "native-interaction",
-      "detail": "<button aria-label={`重试：${message.content}`} className=\"assistant-message-action\" onClick={() => onRetryUserMessage?.(message.id)} title=\"重试\" type=\"button\" >",
       "count": 1,
       "surface": "features/assistant/AssistantMessageList.tsx",
       "owner": "Assistant UI (M3)",
@@ -425,16 +375,6 @@
       "file": "src/app/features/boards/ObjectWorkbench.tsx",
       "rule": "native-interaction",
       "detail": "<button type=\"button\" className=\"object-zoom-value\" aria-label=\"重置画布缩放\" onClick={() => setZoom(1)} >",
-      "count": 1,
-      "surface": "features/boards/ObjectWorkbench.tsx",
-      "owner": "Research/author content adapter (M5)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/features/boards/ObjectWorkbench.tsx",
-      "rule": "native-interaction",
-      "detail": "<select aria-label=\"选择白板\" value={model.board?.objectId ?? \"\"} onChange={(event) => { const object = model.objects.find( (o) => o.objectId === event.target.value, ); if (object) void model.selectBoard(object).catch(error); }} >",
       "count": 1,
       "surface": "features/boards/ObjectWorkbench.tsx",
       "owner": "Research/author content adapter (M5)",
@@ -1904,16 +1844,6 @@
     {
       "file": "src/app/features/organization/OrganizationInviteConfirmDialog.tsx",
       "rule": "native-interaction",
-      "detail": "<select aria-label=\"组织角色\" className=\"organization-form-input\" onChange={(event) => setRole(event.target.value === \"admin\" ? \"admin\" : \"member\")} value={role} >",
-      "count": 1,
-      "surface": "features/organization/OrganizationInviteConfirmDialog.tsx",
-      "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/features/organization/OrganizationInviteConfirmDialog.tsx",
-      "rule": "native-interaction",
       "detail": "<button className=\"left-rail-button subtle\" disabled={pending} onClick={onCancel} type=\"button\">",
       "count": 1,
       "surface": "features/organization/OrganizationInviteConfirmDialog.tsx",
@@ -2152,16 +2082,6 @@
       "reviewBy": "QAU-10"
     },
     {
-      "file": "src/app/features/pdf/PdfOutline.tsx",
-      "rule": "native-interaction",
-      "detail": "<button type=\"button\" className=\"pdf-outline-link\" disabled={!item.dest} title={item.dest ? item.title : \"此条目没有文档内跳转位置\"} onClick={() => void navigate(item)}>",
-      "count": 1,
-      "surface": "features/pdf/PdfOutline.tsx",
-      "owner": "Reading UI (M1)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
-      "reviewBy": "QAU-10"
-    },
-    {
       "file": "src/app/features/pdf/PdfReader.tsx",
       "rule": "native-interaction",
       "detail": "<button aria-label={`${annotation.aiGuide ? \"AI 讲解\" : (annotation.quickAsk ? \"速问\" : getOverlayLabel(annotation.kind))}：第 ${annotation.page} 页：${annotation.excerpt}`} className={`pdf-overlay-mark ${annotation.kind} ${annotation.quickAsk ? \"quick-ask\" : \"\"} ${annotation.aiGuide ? \"ai-guide\" : \"\"}`} draggable={Boolean(onAnnotationDrag) || annotation.kind === \"highlight\" || annotation.kind === \"underline\"} onDragStart={(event) => { if (!activePaper) { event.preventDefault(); return; } event.stopPropagation(); event.dataTransfer.effectAllowed = \"copy\"; event.dataTransfer.setData(readerContextDragMime, JSON.stringify({ excerpt: annotation.excerpt, page: annotation.page, paperId: activePaper.id, paperTitle: activePaper.title, source: \"pdf_selection\" } satisfies ReaderConversationContext)); event.dataTransfer.setData(\"text/plain\", annotation.excerpt); onAnnotationDrag?.(annotation, event.dataTransfer); }} key={`${annotation.id}-${index}`} onClick={(event) => { const pageElement = pageShellRef.current; if (pageElement) { onAnnotationActivate?.(annotation, pageElement, event.currentTarget); } }} onPointerDown={(event) => event.stopPropagation()} style={{ ...getOverlayStyle( annotation.kind, rect, annotation.color ), ...(annotation.quickAsk || annotation.aiGuide ? { borderBottomStyle: \"dashed\" } : {}) }} title={`第 ${annotation.page} 页：${annotation.excerpt}`} type=\"button\" />",
@@ -2215,16 +2135,6 @@
       "file": "src/app/features/pdf/PdfReader.tsx",
       "rule": "native-interaction",
       "detail": "<button aria-label=\"收起 PDF 左侧栏\" className=\"pdf-sidebar-collapse-button\" onClick={() => setSidebarCollapsed(true)} title=\"收起 PDF 左侧栏\" type=\"button\" >",
-      "count": 1,
-      "surface": "features/pdf/PdfReader.tsx",
-      "owner": "Reading UI (M1)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/features/pdf/PdfReader.tsx",
-      "rule": "native-interaction",
-      "detail": "<input checked={autoPublicAnnotations} onChange={(event) => setAutoPublic(event.currentTarget.checked)} type=\"checkbox\" />",
       "count": 1,
       "surface": "features/pdf/PdfReader.tsx",
       "owner": "Reading UI (M1)",
@@ -2604,16 +2514,6 @@
     {
       "file": "src/app/features/profile/AcademicProfileForm.tsx",
       "rule": "native-interaction",
-      "detail": "<select className=\"personal-profile-control\" onChange={(event) => updateDraftProfile(\"stage\", event.target.value)} value={draftProfile.stage} >",
-      "count": 1,
-      "surface": "features/profile/AcademicProfileForm.tsx",
-      "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/features/profile/AcademicProfileForm.tsx",
-      "rule": "native-interaction",
       "detail": "<textarea className=\"personal-profile-control personal-profile-textarea\" onChange={(event) => updateDraftProfile(\"researchTopics\", event.target.value)} placeholder=\"例如：神经信息检索、向量数据库\" rows={2} value={draftProfile.researchTopics} />",
       "count": 1,
       "surface": "features/profile/AcademicProfileForm.tsx",
@@ -2654,16 +2554,6 @@
     {
       "file": "src/app/features/profile/AcademicProfileForm.tsx",
       "rule": "native-interaction",
-      "detail": "<select className=\"personal-profile-control\" onChange={(event) => setCategoryCode(event.target.value)} value={categoryCode} >",
-      "count": 1,
-      "surface": "features/profile/AcademicProfileForm.tsx",
-      "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/features/profile/AcademicProfileForm.tsx",
-      "rule": "native-interaction",
       "detail": "<input className=\"personal-profile-control\" onChange={(event) => setQuery(event.target.value)} placeholder=\"名称或代码，例如 0812\" value={query} />",
       "count": 1,
       "surface": "features/profile/AcademicProfileForm.tsx",
@@ -2694,27 +2584,7 @@
     {
       "file": "src/app/features/profile/AcademicProfileForm.tsx",
       "rule": "native-interaction",
-      "detail": "<select className=\"personal-profile-control\" value={draftProfile.readingExplanation ?? \"auto\"} onChange={(event) => updateDraftProfile(\"readingExplanation\", event.target.value as AcademicProfile[\"readingExplanation\"])}>",
-      "count": 1,
-      "surface": "features/profile/AcademicProfileForm.tsx",
-      "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/features/profile/AcademicProfileForm.tsx",
-      "rule": "native-interaction",
       "detail": "<textarea className=\"personal-profile-control personal-profile-textarea\" rows={2} maxLength={600} placeholder=\"例如：熟悉数据库并发控制；机器学习还在入门。留空时默认均衡讲解。\" value={draftProfile.researchFamiliarity ?? \"\"} onChange={(event) => updateDraftProfile(\"researchFamiliarity\", event.target.value)} />",
-      "count": 1,
-      "surface": "features/profile/AcademicProfileForm.tsx",
-      "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/features/profile/AcademicProfileForm.tsx",
-      "rule": "native-interaction",
-      "detail": "<select className=\"personal-profile-control\" onChange={(event) => updateDraftProfile(\"gender\", event.target.value)} value={draftProfile.gender} >",
       "count": 1,
       "surface": "features/profile/AcademicProfileForm.tsx",
       "owner": "Settings and extensions UI (M6)",
@@ -2757,16 +2627,6 @@
       "detail": "<button className=\"left-rail-button danger\" onClick={onConfirm} type=\"button\">",
       "count": 1,
       "surface": "features/profile/ClearProfileConfirmDialog.tsx",
-      "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/features/quick-ask-presets/QuickAskPresetManager.tsx",
-      "rule": "native-interaction",
-      "detail": "<input aria-label=\"导入快捷指令文件\" type=\"file\" accept=\"application/json,.json\" onChange={async event => { const file = event.target.files?.[0]; if (!file) return; if (file.size > 4_000_000) { setError(\"导入文件过大；原始文件未修改。\"); return; } setImportText(await file.text()); }} />",
-      "count": 1,
-      "surface": "features/quick-ask-presets/QuickAskPresetManager.tsx",
       "owner": "Settings and extensions UI (M6)",
       "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
       "reviewBy": "QAU-10"
@@ -2819,16 +2679,6 @@
       "surface": "features/reading-library/readingDocumentReader.css",
       "owner": "Assets UI (M4)",
       "reason": "Existing legacy declaration outside migrated semantic control roles; exact declaration locked, not whole-file exemption.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/features/recommendations/RecommendationList.tsx",
-      "rule": "native-interaction",
-      "detail": "<button type=\"button\" className=\"recommendation-compact-row\" aria-label={`查看推荐 ${item.title}`} aria-pressed={selectedId === item.id} aria-busy={pendingIds.includes(item.id)} title={`${item.title}\\n单击查看元信息，双击打开论文详情`} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = \"copy\"; if (item.resourcePath) { const scope = new URL(item.resourcePath).searchParams.get(\"scope\"); if (scope) writeAssetContextTransfer(event.dataTransfer, scope, { kind: \"path\", path: item.resourcePath }, item.title); return; } event.dataTransfer.setData(\"application/x-liteasy-library-resource-v2\", JSON.stringify({ area: \"recommendation\", recommendation: item })); }} onClick={() => onInspect?.(item)} onDoubleClick={() => onOpen?.(item)} onKeyDown={(event) => { if (event.key === \"Enter\") { event.preventDefault(); onOpen?.(item); } }}>",
-      "count": 1,
-      "surface": "features/recommendations/RecommendationList.tsx",
-      "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
       "reviewBy": "QAU-10"
     },
     {
@@ -2935,16 +2785,6 @@
       "file": "src/app/features/thin-reading/ThinReadingGraphView.tsx",
       "rule": "native-interaction",
       "detail": "<button aria-pressed={viewMode === \"mindmap\"} onClick={() => onViewModeChange(\"mindmap\")} type=\"button\">",
-      "count": 1,
-      "surface": "features/thin-reading/ThinReadingGraphView.tsx",
-      "owner": "Research/author content adapter (M5)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/features/thin-reading/ThinReadingGraphView.tsx",
-      "rule": "native-interaction",
-      "detail": "<select aria-label=\"选择要聚焦的薄读层级\" onChange={(event) => setSelectedLevel(Number(event.target.value))} value={normalizedLevel}>",
       "count": 1,
       "surface": "features/thin-reading/ThinReadingGraphView.tsx",
       "owner": "Research/author content adapter (M5)",
@@ -4284,16 +4124,6 @@
     {
       "file": "src/app/styles/app.css",
       "rule": "ui-color-literal",
-      "detail": ".genui-outline-node details > summary::before { color: #51809a }",
-      "count": 1,
-      "surface": "styles/app.css",
-      "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing legacy declaration outside migrated semantic control roles; exact declaration locked, not whole-file exemption.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/styles/app.css",
-      "rule": "ui-color-literal",
       "detail": ".genui-outline-label { border: 1px solid rgba(91, 125, 136, 0.2) }",
       "count": 1,
       "surface": "styles/app.css",
@@ -4325,96 +4155,6 @@
       "file": "src/app/styles/app.css",
       "rule": "ui-color-literal",
       "detail": ".genui-outline-label { box-shadow: 0 5px 14px rgba(54, 78, 88, 0.06) }",
-      "count": 1,
-      "surface": "styles/app.css",
-      "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing legacy declaration outside migrated semantic control roles; exact declaration locked, not whole-file exemption.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/styles/app.css",
-      "rule": "ui-color-literal",
-      "detail": ".kind-root > details > summary > .genui-outline-label, .kind-root > .genui-outline-label { border-color: rgba(23, 126, 106, 0.32) }",
-      "count": 1,
-      "surface": "styles/app.css",
-      "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing legacy declaration outside migrated semantic control roles; exact declaration locked, not whole-file exemption.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/styles/app.css",
-      "rule": "ui-color-literal",
-      "detail": ".kind-root > details > summary > .genui-outline-label, .kind-root > .genui-outline-label { background: linear-gradient(135deg, #e8f6f1, #f5fbf8) }",
-      "count": 1,
-      "surface": "styles/app.css",
-      "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing legacy declaration outside migrated semantic control roles; exact declaration locked, not whole-file exemption.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/styles/app.css",
-      "rule": "ui-color-literal",
-      "detail": ".kind-root > details > summary > .genui-outline-label, .kind-root > .genui-outline-label { color: #206858 }",
-      "count": 1,
-      "surface": "styles/app.css",
-      "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing legacy declaration outside migrated semantic control roles; exact declaration locked, not whole-file exemption.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/styles/app.css",
-      "rule": "ui-color-literal",
-      "detail": ".kind-paper > details > summary > .genui-outline-label, .kind-paper > .genui-outline-label { border-color: rgba(27, 102, 179, 0.25) }",
-      "count": 1,
-      "surface": "styles/app.css",
-      "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing legacy declaration outside migrated semantic control roles; exact declaration locked, not whole-file exemption.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/styles/app.css",
-      "rule": "ui-color-literal",
-      "detail": ".kind-paper > details > summary > .genui-outline-label, .kind-paper > .genui-outline-label { background: #f1f7fd }",
-      "count": 1,
-      "surface": "styles/app.css",
-      "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing legacy declaration outside migrated semantic control roles; exact declaration locked, not whole-file exemption.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/styles/app.css",
-      "rule": "ui-color-literal",
-      "detail": ".kind-paper > details > summary > .genui-outline-label, .kind-paper > .genui-outline-label { color: #315f89 }",
-      "count": 1,
-      "surface": "styles/app.css",
-      "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing legacy declaration outside migrated semantic control roles; exact declaration locked, not whole-file exemption.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/styles/app.css",
-      "rule": "ui-color-literal",
-      "detail": ".kind-section > details > summary > .genui-outline-label, .kind-section > .genui-outline-label { background: #f7f5ff }",
-      "count": 1,
-      "surface": "styles/app.css",
-      "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing legacy declaration outside migrated semantic control roles; exact declaration locked, not whole-file exemption.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/styles/app.css",
-      "rule": "ui-color-literal",
-      "detail": ".kind-section > details > summary > .genui-outline-label, .kind-section > .genui-outline-label { border-color: rgba(102, 83, 161, 0.2) }",
-      "count": 1,
-      "surface": "styles/app.css",
-      "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing legacy declaration outside migrated semantic control roles; exact declaration locked, not whole-file exemption.",
-      "reviewBy": "QAU-10"
-    },
-    {
-      "file": "src/app/styles/app.css",
-      "rule": "ui-color-literal",
-      "detail": ".kind-section > details > summary > .genui-outline-label, .kind-section > .genui-outline-label { color: #62528d }",
       "count": 1,
       "surface": "styles/app.css",
       "owner": "Settings and extensions UI (M6)",
@@ -7250,6 +6990,26 @@
       "owner": "M5 authored graphics / shared UI",
       "reason": "Scientific graph/annotation connector paint preserves authored semantics, separate from application control colors.",
       "reviewBy": "QAU-10"
+    },
+    {
+      "file": "src/app/shared/ui/productPrimitives.tsx",
+      "rule": "native-interaction",
+      "detail": "<input type=\"hidden\" name={name} form={form} value={value} disabled={disabled} />",
+      "count": 1,
+      "surface": "OptionPicker HTML form bridge",
+      "owner": "Shared Fluent controls",
+      "reason": "Hidden input preserves native name/form/FormData submission with stable values; visible interaction is Fluent Dropdown.",
+      "reviewBy": "R208 / src/tests/controlContracts.test.tsx"
+    },
+    {
+      "file": "src/app/shared/ui/productPrimitives.tsx",
+      "rule": "native-interaction",
+      "detail": "<input className=\"product-validation-proxy\" tabIndex={-1} aria-label={label ? `${label}验证` : \"选项验证\"} value={value} onChange={() => {}} required disabled={disabled} form={form} onInvalid={event => { event.preventDefault(); setInvalid(true); trigger.current?.focus(); }} />",
+      "count": 1,
+      "surface": "OptionPicker HTML form bridge",
+      "owner": "Shared Fluent controls",
+      "reason": "Native constraint-validation proxy implements required without an extra tab stop; invalid forwards focus to Fluent Dropdown and shows a visible error.",
+      "reviewBy": "R208 / src/tests/controlContracts.test.tsx"
     }
   ]
 }

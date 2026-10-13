@@ -1,3 +1,4 @@
+import { DisclosureSection } from "../../shared/ui/productPrimitives";
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import { Button } from "@fluentui/react-components";
 import { useEffect, useState } from "react";
@@ -24,8 +25,8 @@ export function PaperAnchorReferences({ anchors, onOpen, label = "查看引用�
   const [visibleCount, setVisibleCount] = useState(12);
   useEffect(() => setVisibleCount(12), [anchors]);
   if (!anchors.length) return null;
-  return <details className={`paper-anchor-references ${className}`} open={open}>
-    <summary>{label}</summary>
+  return <DisclosureSection className={`paper-anchor-references ${className}`} defaultOpen={open} title={<>{label}</>}>
+
     <ol>
       {anchors.slice(0, visibleCount).map((anchor, index) => <li key={`${anchor.id}:${index}`} data-paper-anchor-id={anchor.id}>
         <Button
@@ -52,5 +53,5 @@ export function PaperAnchorReferences({ anchors, onOpen, label = "查看引用�
       onClick={() => setVisibleCount((current) => current + 12)}>
       显示更多引用（剩余 {anchors.length - visibleCount} 条）
     </Button> : null}
-  </details>;
+  </DisclosureSection>;
 }

@@ -1,5 +1,5 @@
-import { SourceDisclosure } from "../../shared/ui/productPrimitives";
-import { Button, Select, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
+import { SourceDisclosure, OptionPicker } from "../../shared/ui/productPrimitives";
+import { Button, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
 import {
   ArrowClockwiseRegular,
   CopyRegular,
@@ -7,7 +7,7 @@ import {
   DocumentArrowDownRegular,
   OpenRegular
 } from "@fluentui/react-icons";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type {
   LiteratureIdentifier,
   LiteratureRecord,
@@ -22,6 +22,7 @@ import {
 } from "./literatureVersioning";
 
 type LiteratureVersionRelationsProps = {
+  embedded?: boolean;
   copyText?: (value: string) => Promise<void>;
   currentLiterature: LiteratureRecord;
   loadRelations?: (literatureId: string) => Promise<LiteratureRelationsResult>;
@@ -85,8 +86,13 @@ async function defaultCopyText(value: string) {
   await navigator.clipboard.writeText(value);
 }
 
+function LiteratureInformation({ embedded, summary, children }: { embedded: boolean; summary: string; children: ReactNode }) {
+  return embedded ? <>{children}</> : <SourceDisclosure summary={summary}>{children}</SourceDisclosure>;
+}
+
 export function LiteratureVersionRelations({
   copyText = defaultCopyText,
+  embedded = false,
   currentLiterature,
   loadRelations,
   onAcquireVersion,
@@ -182,7 +188,7 @@ export function LiteratureVersionRelations({
         </div>
       ) : null}
       {result?.versions.some(version => relationLabel(version) === "已有正式发表版") ? <p role="status">已有正式发表版 · 可在文献信息中查看</p> : null}
-      <SourceDisclosure summary={`文献信息${result?.versions.length ? ` · ${result.versions.length} 个关联版本` : ""}`}><p>文献身份：公共来源</p>
+      <LiteratureInformation embedded={embedded} summary={`文献信息${result?.versions.length ? ` · ${result.versions.length} 个关联版本` : ""}`}><p>文献身份：公共来源</p>
       {loadState === "ready" && result?.versions.length === 0 ? (
         <div className="literature-version-state">暂无已确认的关联版本</div>
       ) : null}
@@ -256,22 +262,12 @@ export function LiteratureVersionRelations({
       })}
       {loadState === "ready" ? (
         <div className="literature-citation-export">
-          {citationOptions.length > 1 ? <Select
-            aria-label="引用版本"
-            onChange={(event) => setCitationLiteratureId(event.target.value)}
-            size="small"
-            value={citationLiterature.literatureId}
-          >
-            {citationOptions.map((option) => (
-              <option key={option.record.literatureId} value={option.record.literatureId}>
-                {option.label} · {option.record.title}
-              </option>
-            ))}
-          </Select> : null}
+          {citationOptions.length > 1 ? <OptionPicker aria-label="引用版本" density="compact" value={citationLiterature.literatureId}
+            onValueChange={setCitationLiteratureId} options={citationOptions.map((option) => ({ value: option.record.literatureId, label: option.label, description: option.record.title }))} /> : null}
           <Menu><MenuTrigger disableButtonEnhancement><Button size="small" icon={<CopyRegular />}>引用</Button></MenuTrigger><MenuPopover><MenuList><MenuItem icon={<CopyRegular />} onClick={() => void copyCitation("citation")}>复制引用</MenuItem><MenuItem icon={<DocumentArrowDownRegular />} onClick={() => void copyCitation("bibtex")}>复制 BibTeX</MenuItem></MenuList></MenuPopover></Menu>
         </div>
       ) : null}
-      </SourceDisclosure>
+      </LiteratureInformation>
       {actionMessage ? <div aria-live="polite" className="literature-version-action-message">{actionMessage}</div> : null}
     </section>
   );

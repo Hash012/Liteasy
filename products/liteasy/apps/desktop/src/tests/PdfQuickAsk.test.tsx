@@ -55,8 +55,9 @@ test("uses the full page and abstract, stores the answer privately, and restores
   await user.click(screen.getByRole("button", { name: "速问", exact: true }));
   await user.type(screen.getByLabelText("速问问题"), "这是什么意思？");
   expect(screen.queryByRole("textbox", { name: "本次系统提示词" })).not.toBeInTheDocument();
-  await user.click(screen.getByText("回答偏好", { selector: "summary" }));
-  await user.selectOptions(screen.getByRole("combobox", { name: "生成风格" }), "intuitive");
+  await user.click(screen.getByRole("button", { name: "回答偏好" }));
+  await user.click(screen.getByRole("combobox", { name: "生成风格" }));
+  await user.click(screen.getByRole("option", { name: "直觉" }));
   await user.click(screen.getByRole("button", { name: "更多指令" }));
   expect(screen.getByRole("textbox", { name: "本次系统提示词" })).toHaveValue(presetGenerationPrompt("selection_explanation", "intuitive"));
   await user.clear(screen.getByRole("textbox", { name: "本次系统提示词" }));
@@ -117,7 +118,7 @@ test("keeps a failed question available for retry without creating an annotation
   await user.type(screen.getByLabelText("速问问题"), "解释一下");
   await user.click(screen.getByRole("button", { name: "发送", exact: true }));
   expect(await screen.findByRole("alert")).toHaveTextContent("本次回答没有完成");
-  await user.click(screen.getByText("查看错误详情", { selector: "summary" }));
+  await user.click(screen.getByRole("button", { name: "查看错误详情" }));
   expect(screen.getByText("连接中断")).toBeVisible();
   expect(loadPdfAnnotations(pdfAnnotationStorageKey(paper))).toHaveLength(0);
   expect(screen.getByLabelText("速问问题")).toHaveValue("解释一下");

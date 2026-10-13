@@ -17,6 +17,7 @@ import type { ReadingMarkStyle } from "./pdfReadingAnnotations";
 import { pdfCanvasSize } from "./pdfRenderBudget";
 import { usePdfPageWindow } from "./usePdfPageWindow";
 import { pdfReaderContentRevision } from "./pdfReaderPosition";
+import { usePdfReaderFeedback } from "./usePdfReaderFeedback";
 import { usePdfReaderPosition } from "./usePdfReaderPosition";
 import { getHighlightColor, getOverlayStyle } from "./pdfAnnotationAppearance";
 import { DrawShapeRegular, EraserRegular, ArrowUndoRegular } from "@fluentui/react-icons";
@@ -30,7 +31,7 @@ import { preparePdfQuickAskContext } from "./quickAskContext";
 import { useQuickAskTask } from "./useQuickAskTask";
 import { QuickAskProvenance } from "./QuickAskProvenance";
 import { QuickAskSurface } from "./QuickAskSurface";
-import { ResponsiveOverlay, SourceDisclosure, InlineNotice } from "../../shared/ui/productPrimitives";
+import { ResponsiveOverlay, DisclosureSection, InfoPopover, IconAction, InlineNotice } from "../../shared/ui/productPrimitives";
 import { resolveLocalAccountKey } from "../library/localAccountKey";
 import { useQuickAskPresets } from "../quick-ask-presets/useQuickAskPresets";
 import { QuickAskPresetPicker } from "../quick-ask-presets/QuickAskPresetPicker";
@@ -56,7 +57,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent
 } from "react";
-import { Button, Checkbox, Tooltip } from "@fluentui/react-components";
+import { Button, Checkbox, Popover, PopoverTrigger, PopoverSurface, Tooltip } from "@fluentui/react-components";
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import {
   ChatHelpRegular,
@@ -77,6 +78,7 @@ import {
   PanelLeftContractRegular,
   PanelLeftExpandRegular,
   ShareRegular,
+  SettingsRegular,
   TextFieldRegular,
   TextUnderlineRegular,
   WhiteboardRegular
@@ -132,7 +134,7 @@ import { PdfAnnotationEditor } from "./PdfAnnotationEditor";
 import { PdfAnnotationStatus } from "./PdfAnnotationStatus";
 import { PdfAnnotationReview } from "./PdfAnnotationReview";
 import { usePdfAnnotationReview } from "./usePdfAnnotationReview";
-import { PaperReviewSharePanel } from "./PaperReviewSharePanel";
+import { PaperReviewShareControl, PaperReviewShareStatus, usePaperReviewShare } from "./PaperReviewSharePanel";
 import { persistPdfAnnotationState } from "./pdfAnnotationPersistence";
 import { readingQuoteRects, type PdfReadingAnnotations } from "./pdfReadingAnnotations";
 import { SelectionLookupCard } from "../selection-lookup/SelectionLookupCard";
@@ -1655,7 +1657,7 @@ export function PdfReader({
   const [annotationQuery, setAnnotationQuery] = useState("");
   const [sidebarMode, setSidebarMode] = useState<PdfSidebarMode>("annotations");
   const [stageWidth, setStageWidth] = useState(960);
-  const [status, setStatus] = useState("选择文段后可添加高亮、划线，或把选中文段交给 AI。");
+  const { status, setStatus, announcement, announceNavigation } = usePdfReaderFeedback();
   const [selection, setSelection] = useState<PdfSelection | null>(null);
   const [lookupOpen, setLookupOpen] = useState(false);
   const [lookupMode, setLookupMode] = useState<"auto" | "explain">("auto");
@@ -1858,7 +1860,7 @@ export function PdfReader({
     setReaderView("document");
     const nextPage = Math.min(Math.max(1, Math.trunc(page || 1)), Math.max(1, pageCount));
     setFocusedPage(nextPage);
-    setStatus(`已转到第 ${nextPage} 页。`);
+    announceNavigation(`已转到第 ${nextPage} 页。`);
     window.requestAnimationFrame(() => {
       if (restoringPosition && !restoringPosition()) return;
       const stageElement = stageRef.current;
@@ -3583,6 +3585,10 @@ export function PdfReader({
     }
   }
 
+  const reviewShare = usePaperReviewShare({ scopeKey: annotationStorageKey,
+    ready: Boolean(activePaper && annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError),
+    source: { title: activePaper?.title ?? "", annotations, pageTexts } });
+
   return (
     <section
       aria-label="PDF 阅读器"
@@ -3591,6 +3597,8 @@ export function PdfReader({
       data-pdf-night={pdfReadingPalette(pdfBackground).dark}
       style={{ "--pdf-reading-background": pdfBackground } as CSSProperties}
     >
+      <span className="pdf-navigation-announcement" aria-live="polite" aria-atomic="true"><span key={announcement.sequence}>{announcement.text}</span></span>
+      <PaperReviewShareStatus controller={reviewShare} />
       {quickAskSelection && !quickAskTask.draft.open ? <Button className="quick-ask-reopen" onClick={() => quickAskTask.update({ open: true })}>返回速问{quickAskPending ? "（正在回答）" : ""}</Button> : null}
       {readingView?.({ scopeKey: annotationStorageKey ?? "", ready: Boolean(annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError),
         searchMetadata, lookup: selectionLookup, paperId: activePaper?.id, paperTitle: activePaper?.title,
@@ -3791,32 +3799,25 @@ export function PdfReader({
                         onClick={() => setAnnotationLoadAttempt((attempt) => attempt + 1)} />
                     </Tooltip>
                   </div> : null}
-                  {activePaper?.literature ? (
-                    <>
-                      <LiteratureVersionRelations
-                        currentLiterature={activePaper.literature}
-                        loadRelations={loadLiteratureRelations}
-                        onAcquireVersion={onAcquireLiteratureVersion}
-                        onOpenVersion={onOpenLiteratureVersion}
-                      />
-                    </>
-                  ) : null}
+                  <div className="pdf-annotation-toolbar" role="toolbar" aria-label="批注工具">
+                    <InfoPopover label="文献信息">
+                      <h3>{activePaper?.title ?? "文献信息"}</h3>
+                      {activePaper?.literature ? <LiteratureVersionRelations embedded key={activePaper.literature.literatureId}
+                        currentLiterature={activePaper.literature} loadRelations={loadLiteratureRelations}
+                        onAcquireVersion={onAcquireLiteratureVersion} onOpenVersion={onOpenLiteratureVersion} /> : <p>此文献尚无公共来源身份信息。</p>}
+                      <h4>引用解析</h4><p>{citationParsing.modeDescription}</p>
+                      {citationParsing.warning ? <p>{citationParsing.warning}</p> : null}
+                    </InfoPopover>
+                    <PaperReviewShareControl controller={reviewShare} />
+                    <Popover positioning={{ position: "below", align: "start", autoSize: "always" }}><PopoverTrigger disableButtonEnhancement>
+                      <IconAction label="批注选项" appearance="subtle" density="compact" icon={<SettingsRegular />} />
+                    </PopoverTrigger><PopoverSurface aria-label="批注选项设置" className="pdf-annotation-settings-popover">
+                      <Checkbox checked={autoPublicAnnotations} onChange={(_, data) => setAutoPublic(data.checked === true)} label="新批注自动公开到论坛" />
+                    </PopoverSurface></Popover>
+                  </div>
                   {readerPosition.error ? <InlineNotice intent="error" message={readerPosition.error} /> : null}
                   {citationParsing.loading ? <InlineNotice intent="busy" message="正在提取结构化引用…" /> : null}
-                  {citationParsing.warning ? <InlineNotice intent="warning" message={citationParsing.warning} /> : null}
-                  <SourceDisclosure summary="引用解析信息"><p>{citationParsing.modeDescription}</p></SourceDisclosure>
-                  <PaperReviewSharePanel scopeKey={annotationStorageKey}
-                    ready={Boolean(activePaper && annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError)}
-                    source={{ title: activePaper?.title ?? "", annotations, pageTexts }} />
-                  <details className="pdf-annotation-options"><summary>批注选项</summary>
-                  <label className="pdf-annotation-auto-public-toggle">
-                    <input
-                      checked={autoPublicAnnotations}
-                      onChange={(event) => setAutoPublic(event.currentTarget.checked)}
-                      type="checkbox"
-                    />
-                    新批注自动公开到论坛
-                  </label></details>
+                  {citationParsing.warning ? <InlineNotice intent="warning" message="引用解析受限" action={<InfoPopover label="查看引用解析问题"><p>{citationParsing.warning}</p><p>{citationParsing.modeDescription}</p></InfoPopover>} /> : null}
                   {filteredAnnotations.length > 0 ? (
                     <ul className="pdf-annotation-list">
                       {filteredAnnotations.map((annotation) => (
@@ -4233,8 +4234,8 @@ export function PdfReader({
                   <strong>{popupAnnotation.text}</strong>
                   <PdfAnnotationMarkdown value={popupAnnotation.note ?? ""} />
                   <small>AI 讲解 · 请结合原文判断</small>
-                  <details><summary>编辑讲解</summary><PdfAnnotationEditor inline value={annotationNoteDraft} onChange={setAnnotationNoteDraft}
-                    onSave={saveAnnotationNote} onCancel={cancelAnnotationEditing} /></details>
+                  <DisclosureSection title="编辑讲解"><PdfAnnotationEditor inline value={annotationNoteDraft} onChange={setAnnotationNoteDraft}
+                    onSave={saveAnnotationNote} onCancel={cancelAnnotationEditing} /></DisclosureSection>
                 </> : popupAnnotation.quickAsk ? <>
                   <strong>{popupAnnotation.quickAsk.question}</strong>
                   <PdfAnnotationMarkdown value={popupAnnotation.quickAsk.answer} /><QuickAskProvenance context={popupAnnotation.quickAsk.receipt?.context} answer={popupAnnotation.quickAsk.answer} />

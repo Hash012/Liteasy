@@ -1,3 +1,4 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import "../../features/assistant/assistantView.css";
 import { createAssistantSessionService } from "./assistantSessionService";
 import { registerQuickAskTransfer } from "../../features/pdf/quickAskTransfer";
@@ -2474,6 +2475,8 @@ export function AssistantSessionController({
   const projectedSaveStatus = saveStatus === "saved" && savedRevisionsRef.current.get(`${currentScope}:${activeSessionId}`) !== currentRevision ? "dirty" : saveStatus;
   const selectedTaskRun = view.kind === "task-detail" ? activeSession?.taskRuns?.find((run) => run.id === view.runId) ?? activeSession?.taskRuns?.at(-1) : undefined;
   const taskMessages = selectedTaskRun?.messages ?? assistantState.messages;
+  const selectedTaskStatus = selectedTaskRun?.status ?? activeSession?.status ?? "unknown";
+  const taskFailure = selectedTaskStatus === "failed" ? [...taskMessages].reverse().find(message => message.role === "assistant" && message.content.trim())?.content : undefined;
   const taskHasSavedResult = !!activeSession && (!!activeSession.taskBinding?.resultRefs.length || activeSession.taskRuns?.some((run) => run.status === "completed" && run.artifactId) || activeSession.status === "completed");
   const activeSessionRunning = activeSession?.kind === "artifact_generation"
     ? activeSession.status === "running"
@@ -2567,12 +2570,12 @@ export function AssistantSessionController({
       {view.kind === "task-detail" && activeSession ? <section aria-label="任务详情">
         <Button appearance="subtle" onClick={() => setView({ kind: "task-list" })}>返回任务列表</Button>
         <h3>{activeSession.title}</h3>
-        <p>{({ idle: "可继续", running: "运行中", completed: "已完成", failed: "本次失败", cancelled: "已终止", interrupted: "运行已中断", unknown: "状态待核对" } as const)[activeSession.status ?? "unknown"]}{taskHasSavedResult ? " · 已保存结果可用" : " · 尚无已保存结果"}</p>
+        <p>{({ idle: "可继续", running: "运行中", completed: "已完成", failed: "本次失败", cancelled: "已终止", interrupted: "运行已中断", unknown: "状态待核对" } as const)[selectedTaskStatus]}{taskHasSavedResult ? " · 已保存结果可用" : " · 尚无已保存结果"}</p>
         {taskHasSavedResult ? <p>结果版本：{(selectedTaskRun?.status === "completed" ? selectedTaskRun.resultRefs : activeSession.taskBinding?.resultRefs)?.map((ref) => ref.revision).join(" · ") || "旧版结果，版本待核对"}</p> : null}
-        {activeSession.taskRuns?.length ? <label>运行记录<select aria-label="选择运行记录" value={selectedTaskRun?.id ?? ""} onChange={(event) => setView({ kind: "task-detail", taskId: activeSession.id, runId: event.target.value })}>{activeSession.taskRuns.map((run, index) => <option key={run.id} value={run.id}>第 {index + 1} 次 · {({ idle: "可继续", running: "运行中", completed: "已完成", failed: "失败", cancelled: "已终止", interrupted: "已中断", unknown: "待核对" } as const)[run.status]}</option>)}</select></label> : null}
-        <details><summary>来源与诊断</summary><p>{activeSession.origin?.kind === "conversation_action" ? "从对话发起" : activeSession.origin?.kind === "workflow_entry" ? "AI 工作台" : "旧版来源未记录"}</p>{selectedTaskRun ? <code>{selectedTaskRun.id}</code> : null}</details>
+        {activeSession.taskRuns?.length ? <div><span>运行记录</span><OptionPicker aria-label="选择运行记录" density="compact" value={selectedTaskRun?.id ?? ""} onValueChange={(runId) => setView({ kind: "task-detail", taskId: activeSession.id, runId })} options={activeSession.taskRuns.map((run, index) => ({ value: run.id, label: `第 ${index + 1} 次 · ${({ idle: "可继续", running: "运行中", completed: "已完成", failed: "失败", cancelled: "已终止", interrupted: "已中断", unknown: "待核对" } as const)[run.status]}` }))} /></div> : null}
+        {selectedTaskStatus === "failed" ? <div role="alert"><p>{taskFailure ? taskFailure.replace(/^薄读未完成：/, "") : "本次运行未完成，请查看运行详情。"}</p><p>核对资料与模型设置后，可从发起对话或 AI 工作台重新发起任务。</p></div> : null}
       </section> : null}
-      {view.kind === "conversation" || view.kind === "task-detail" ? <AssistantTranscript task={view.kind === "task-detail"}>
+      {view.kind === "conversation" || view.kind === "task-detail" ? <AssistantTranscript task={view.kind === "task-detail"} details={view.kind === "task-detail" && activeSession ? <div className="assistant-run-origin"><p>来源：{activeSession.origin?.kind === "conversation_action" ? "从对话发起" : activeSession.origin?.kind === "workflow_entry" ? "AI 工作台" : "旧版来源未记录"}</p>{selectedTaskRun ? <p>运行标识：<code>{selectedTaskRun.id}</code></p> : null}<h4>运行日志</h4></div> : undefined}>
       <AssistantMessageList
         targetId={activeSessionId}
         scrollAnchor={activeSession?.scrollAnchor}
@@ -2615,7 +2618,6 @@ export function AssistantSessionController({
       </div> : null}
       {!historyOpen && historyPersistence && hasCurrentContent ? <p className="assistant-save-status" role="status">{{ dirty: "有未保存内容", saving: "正在保存…", saved: isTauri() ? "已保存本机" : "已保存到此浏览器", failed: "保存失败 · 内容仍保留", conflict: "其他窗口已有更新 · 当前内容仍保留" }[projectedSaveStatus]}</p> : null}
       {view.kind === "task-detail" && activeSession?.kind === "artifact_generation" ? <div className="assistant-task-discussion">
-        <p>任务详情 · 运行日志与讨论分开保存</p>
         <Button disabled={!activeSession.artifactId || !taskHasSavedResult} onClick={() => { void beginTaskDiscussion(activeSession).catch((error) => setContextDropMessage(error instanceof Error ? error.message : String(error))); }}>围绕此结果提问</Button>
         {activeSession.origin?.parentConversationId ? <Button appearance="subtle" onClick={() => { void openSession(activeSession.origin!.parentConversationId!); }}>返回发起对话</Button> : null}
       </div> : !historyOpen ? <AssistantComposer

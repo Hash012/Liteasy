@@ -24,6 +24,9 @@ for (const sample of [
   await studio.getByRole("button", { name: "校验与预览", exact: true }).click();
   await expect(studio.locator(".studio-preview")).toContainText("Synthetic content retained");
   await studio.getByRole("button", { name: "保存草稿", exact: true }).click();
-  await expect(studio.getByText("演示已完成", { exact: true })).toBeVisible();
+  await expect(studio.getByText("离线示例", { exact: true })).toBeVisible();
+  await studio.getByRole("button", { name: "制作工作台帮助" }).click();
+  await expect(page.getByText("已修改 · 已预览 · 已保存", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
   await page.screenshot({ path: info.outputPath("scale.png"), fullPage: true });
 });

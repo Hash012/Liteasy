@@ -84,11 +84,12 @@ test("confirms AI translation with a preset and per-run prompt after a missing d
   await screen.findByText("未找到词典释义，可翻译这个选段。");
   expect(query.mock.calls[0][0]).toMatchObject({ mode: "auto", allowTranslation: false });
   expect(screen.queryByRole("textbox", { name: "本次系统提示词" })).not.toBeInTheDocument();
-  await userEvent.selectOptions(screen.getByRole("combobox", { name: "生成风格" }), "concise");
+  await userEvent.click(screen.getByRole("combobox", { name: "生成风格" }));
+  await userEvent.click(screen.getByRole("option", { name: "精简" }));
   await userEvent.click(screen.getByRole("button", { name: "自定义系统提示词" }));
   await userEvent.clear(screen.getByRole("textbox", { name: "本次系统提示词" }));
   await userEvent.type(screen.getByRole("textbox", { name: "本次系统提示词" }), "保留术语缩写");
-  await userEvent.click(screen.getByRole("button", { name: "翻译选段", exact: true }));
+  await userEvent.click(screen.getByRole("button", { name: "确认翻译选段", exact: true }));
   expect(query.mock.calls[1][0]).toMatchObject({ mode: "translate", allowTranslation: true, systemPrompt: "保留术语缩写", context: "A research field." });
 });
 
@@ -123,7 +124,8 @@ test("sends context and the selected prompt through the real model gateway witho
 test("updates centralized lookup preferences while keeping connection details collapsed", async () => {
   const onUpdateSetting = vi.fn();
   const view = render(<SelectionLookupSettingsPanel onUpdateSetting={onUpdateSetting} />);
-  await userEvent.selectOptions(screen.getByRole("combobox", { name: "词典服务" }), "youdao");
+  await userEvent.click(screen.getByRole("combobox", { name: "词典服务" }));
+  await userEvent.click(screen.getByRole("option", { name: /^有道词典/ }));
   expect(onUpdateSetting).toHaveBeenLastCalledWith({ intent: "update_setting", target: "lookup.dictionary_service", value: "youdao" });
   await userEvent.click(screen.getByRole("switch", { name: "自动查询选区" }));
   expect(onUpdateSetting).toHaveBeenLastCalledWith({ intent: "update_setting", target: "lookup.auto_query", value: true });
@@ -137,4 +139,17 @@ test("updates centralized lookup preferences while keeping connection details co
   expect(field).toHaveValue("");
   expect(onUpdateSetting).toHaveBeenLastCalledWith({ intent: "update_setting", target: "lookup.libretranslate_endpoint", value: "http://localhost:5000" });
   expect(JSON.stringify(localStorage)).not.toContain("test-secret");
+});
+
+test("Escape closes sentence information without dismissing the lookup draft", async () => {
+  const onClose = vi.fn();
+  const query = vi.fn(async () => ({ ...result, kind: "missing" as const, senses: [] }));
+  render(<SelectionLookupCard lookup={{ query, autoQuery: true, translationUsesAi: true }} text="field" context="Synthetic sentence context." onClose={onClose} />);
+  await screen.findByText("未找到词典释义，可翻译这个选段。");
+  await userEvent.click(screen.getByRole("button", { name: "所在句子" }));
+  expect(screen.getByText("Synthetic sentence context.")).toBeVisible();
+  await userEvent.keyboard("{Escape}");
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.getByRole("region", { name: "查词与翻译结果" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "所在句子" })).toHaveFocus();
 });

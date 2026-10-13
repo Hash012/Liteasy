@@ -1,8 +1,9 @@
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
 import { compileSearchQuery, type SearchMetadata } from "../search/searchQuery";
 import { annotationNoteLabels, noteLabels } from "../notes/noteLabels";
 import { useMemo, useState } from "react";
-import { Button, Input, Select } from "@fluentui/react-components";
+import { Button, Input } from "@fluentui/react-components";
 import { ArrowLeftRegular, LocationRegular, SearchRegular } from "@fluentui/react-icons";
 import type { PdfAnnotation, PdfAnnotationV2 } from "./pdfAnnotationStorage";
 import type { TeamAnnotation } from "../organization/teamAnnotationClient";
@@ -37,9 +38,8 @@ export function PdfAnnotationsOverview({ annotations, teamAnnotations, paperIden
       <strong>全部批注 · {entries.length}</strong>
       <Input aria-label="搜索全部批注" placeholder="搜索摘录、批注或页码" contentBefore={<SearchRegular />} value={query} onChange={(_, data) => { setQuery(data.value); setLimit(80); }} />
       <SearchOptions query={query} onChange={setQuery} tags={Object.values(noteLabels)} />
-      <Select aria-label="筛选批注类型" value={kind} onChange={(_, data) => { setKind(data.value); setLimit(80); }}>
-        <option value="all">全部类型</option>{Object.entries(labels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
-      </Select>
+      <OptionPicker aria-label="筛选批注类型" value={kind} onValueChange={(value) => { setKind(value); setLimit(80); }}
+        options={[{ value: "all", label: "全部类型" }, ...Object.entries(labels).map(([value, label]) => ({ value, label }))]} />
     </header>
     <div className="pdf-annotations-overview-scroll">
       {error ? <p role="alert">{error}</p> : null}

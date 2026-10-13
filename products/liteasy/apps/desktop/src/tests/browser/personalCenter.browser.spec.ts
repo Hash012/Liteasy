@@ -7,7 +7,8 @@ for (const theme of ["light", "dark"]) test(`offline personal center edits struc
   await page.getByRole("button", { name: "保存学术档案" }).click();
   await page.getByRole("tab", { name: "已记偏好", exact: true }).click();
   await page.getByRole("button", { name: "添加偏好" }).click();
-  await page.getByLabel("偏好类别").selectOption("response_style");
+  await page.getByRole("combobox", { name: "偏好类别" }).click();
+  await page.getByRole("option", { name: "回答方式", exact: true }).click();
   await page.getByLabel("偏好内容").fill("先给结论，再说明依据");
   await page.getByRole("button", { name: "保存偏好" }).click();
   await expect(page.getByLabel("已记住的偏好")).toContainText("先给结论");

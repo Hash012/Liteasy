@@ -42,11 +42,14 @@ describe("Liteasy display-language integration (run against the real application
     render(<FluentProvider theme={webLightTheme}><LanguageSettingsRow onUpdateSetting={command => { store.apply(command); }} /><ShellText /><Draft /></FluentProvider>);
     fireEvent.change(screen.getByRole("textbox", { name: "draft-probe" }), { target: { value: "unsaved draft 未保存" } });
     await act(async () => {
-      fireEvent.change(screen.getByRole("combobox", { name: "界面语言" }), { target: { value: "en-US" } });
+      fireEvent.click(screen.getByRole("combobox", { name: "界面语言" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("option", { name: "English (United States)" }));
       await flushUiLanguage();
     });
     expect(screen.getByTestId("translated-text").textContent).toBe("Display language");
-    expect(screen.getByRole("combobox", { name: "Display language" })).toHaveValue("en-US");
+    expect(screen.getByRole("combobox", { name: "Display language" })).toHaveTextContent("English (United States)");
     expect(screen.getByRole("textbox", { name: "draft-probe" })).toHaveValue("unsaved draft 未保存");
     expect(mounts).toBe(1);
     expect(document.documentElement.lang).toBe("en-US");
