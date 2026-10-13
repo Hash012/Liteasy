@@ -928,7 +928,8 @@ test("archives the current assistant session when starting a new one", async () 
 
   expect(screen.getByLabelText("历史会话面板")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "打开会话：/关闭联网推荐" })).toBeInTheDocument();
-  expect(screen.getByText("5 条消息 · 命令")).toBeInTheDocument();
+  await user.hover(screen.getByLabelText("历史会话面板").querySelector("time")!);
+  expect(await screen.findByText(/5 条消息 · 命令/)).toBeInTheDocument();
 });
 
 test("restores an archived assistant session from history", async () => {
@@ -983,7 +984,8 @@ test("starts a separate session from the session toolbar", async () => {
   await user.click(screen.getByRole("button", { name: "历史" }));
 
   expect(screen.getByRole("button", { name: "打开会话：/关闭联网推荐" })).toBeInTheDocument();
-  expect(screen.getByText("5 条消息 · 命令")).toBeInTheDocument();
+  await user.hover(screen.getByLabelText("历史会话面板").querySelector("time")!);
+  expect(await screen.findByText(/5 条消息 · 命令/)).toBeInTheDocument();
 });
 
 test("keeps session actions separate from the unified composer command entry", async () => {
@@ -1163,7 +1165,7 @@ test("lets users edit a previous prompt and replaces the following answer", asyn
   await user.click(screen.getByRole("button", { name: "发送" }));
   expect(await screen.findByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
 
-  await user.click(screen.getByRole("button", { name: "编辑：总结这篇论文的核心方法" }));
+  await user.click(screen.getByRole("button", { name: "编辑消息" }));
 
   expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveValue("总结这篇论文的核心方法");
 
@@ -1762,7 +1764,8 @@ test("opens settings from the single conversation toolbar without creating a mes
     selectedSetStatus={{ importedCount: 0, selectedCount: 0, selectionLocked: false }} />);
   const header = screen.getByRole("group", { name: "对话顶栏" });
   expect(within(header).queryByText("普通对话")).not.toBeInTheDocument();
-  await userEvent.setup().click(within(header).getByRole("button", { name: "对话设置" }));
+  await userEvent.setup().click(within(header).getByRole("button", { name: "更多会话操作" }));
+  await userEvent.setup().click(screen.getByRole("menuitem", { name: "对话设置" }));
   expect(onApplyPanelAction).toHaveBeenCalledExactlyOnceWith({ operation: "open", panel: "settings" });
   expect(screen.getByLabelText("助手首页")).toBeInTheDocument();
 });

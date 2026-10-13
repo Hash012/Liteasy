@@ -57,7 +57,7 @@ test("uses the full page and abstract, stores the answer privately, and restores
   expect(screen.queryByRole("textbox", { name: "本次系统提示词" })).not.toBeInTheDocument();
   await user.click(screen.getByText("回答偏好", { selector: "summary" }));
   await user.selectOptions(screen.getByRole("combobox", { name: "生成风格" }), "intuitive");
-  await user.click(screen.getByRole("button", { name: "自定义系统提示词" }));
+  await user.click(screen.getByRole("button", { name: "更多指令" }));
   expect(screen.getByRole("textbox", { name: "本次系统提示词" })).toHaveValue(presetGenerationPrompt("selection_explanation", "intuitive"));
   await user.clear(screen.getByRole("textbox", { name: "本次系统提示词" }));
   await user.type(screen.getByRole("textbox", { name: "本次系统提示词" }), "用二维向量举例");

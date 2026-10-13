@@ -1,3 +1,4 @@
+import { SourceDisclosure } from "../shared/ui/productPrimitives";
 import { message } from "../shared/i18n/i18n";
 import { useUiTranslation } from "../shared/i18n/useUiTranslation";
 import { WorkbenchPageHeader } from "../features/workbench/WorkbenchPage";
@@ -110,7 +111,7 @@ export function SettingsPane(props: SettingsPaneProps) {
     searchRef.current?.focus();
   }
   return <section aria-label={message("settings.page.aria")} className="settings-page">
-    <WorkbenchPageHeader title={message("settings.page.title")} description={message("settings.page.description")} actions={
+    <WorkbenchPageHeader descriptionMode="details" title={message("settings.page.title")} description={message("settings.page.description")} actions={
       <Input ref={searchRef} className="settings-search" aria-label={message("settings.search.label")}
         placeholder={message("settings.search.placeholder")} value={query}
         contentBefore={<SearchRegular aria-hidden="true" />}
@@ -142,7 +143,7 @@ export function SettingsPane(props: SettingsPaneProps) {
           className="settings-card" hidden={!visibleIds.has(section.id)}>
           <header className="settings-card-header">
             <h2 id={`${id}-${section.id}`}>{section.title}</h2>
-            <p>{section.description}</p>
+            {["appearance", "generation-prompts"].includes(section.id) ? <SourceDisclosure summary="设置说明"><p>{section.description}</p></SourceDisclosure> : <p>{section.description}</p>}
           </header>
           <div className="settings-card-content">{panels[section.id]}</div>
         </section>)}

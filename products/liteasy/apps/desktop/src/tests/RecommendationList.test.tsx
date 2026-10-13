@@ -36,13 +36,15 @@ test("keeps rows compact, shows selected metadata below, and double-click opens 
   const row = screen.getByRole("button", { name: `查看推荐 ${item.title}` });
   await user.click(row);
   expect(download).not.toHaveBeenCalled();
-  expect(screen.getByLabelText("文件状态栏")).toHaveTextContent("Researcher A · 2024-07 · Systems Conference");
+  expect(screen.getByLabelText("文件状态栏")).not.toHaveTextContent("Researcher A");
   await user.dblClick(row);
   expect(open).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ ...item, fullText: { status: "unknown" } }));
   expect(download).not.toHaveBeenCalled();
   await user.click(screen.getByRole("button", { name: "展开推荐元信息" }));
   const details = screen.getByRole("region", { name: "推荐文献元信息" });
   expect(details).toHaveTextContent(item.abstract!);
+  expect(details).toHaveTextContent("Researcher A");
+  expect(details).toHaveTextContent("Systems Conference");
   expect(within(details).getByRole("link", { name: "Crossref" })).toHaveAttribute("href", item.sourceUrl);
 });
 
@@ -63,6 +65,7 @@ test("narrows recommendations by author, year and available full text without re
   await user.type(screen.getByRole("textbox", { name: "搜索推荐论文" }), "Author B");
   expect(screen.queryByRole("button", { name: `查看推荐 ${item.title}` })).not.toBeInTheDocument();
   await user.clear(screen.getByRole("textbox", { name: "搜索推荐论文" }));
+  await user.click(screen.getByRole("button", { name: "推荐筛选" }));
   await user.selectOptions(screen.getByRole("combobox", { name: "推荐排序" }), "newest");
   expect(screen.getAllByRole("button", { name: /^查看推荐/ })[0]).toHaveAccessibleName("查看推荐 New memory systems");
   await user.click(screen.getByRole("checkbox", { name: "可下载 PDF" }));

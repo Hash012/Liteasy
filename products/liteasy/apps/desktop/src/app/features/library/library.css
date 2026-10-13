@@ -1309,3 +1309,5 @@ button.library-tag-chip:hover { border-color: currentColor; }
 .library-paper-children h4 { margin: 8px 0 4px; color: var(--colorNeutralForeground1); }
 .library-resource-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 8px; }
 .library-resource-facts dd { margin: 0; overflow-wrap: anywhere; }
+
+@media (pointer: coarse) { .library-section-actions button { min-height: 44px; min-width: 44px; height: auto; } }

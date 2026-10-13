@@ -108,7 +108,8 @@ test("help UI searches, opens provider content and handles missing articles and 
   await user.type(screen.getByRole("textbox", { name: "搜索帮助" }), "无结果");
   expect(await screen.findByText("没有匹配的帮助条目")).toBeInTheDocument();
   search.mockRejectedValueOnce(new Error("offline"));
-  await user.click(screen.getByRole("button", { name: "刷新帮助" }));
+  await user.click(screen.getByRole("button", { name: "更多帮助操作" }));
+  await user.click(screen.getByRole("menuitem", { name: "刷新帮助" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "帮助内容加载失败",
   );

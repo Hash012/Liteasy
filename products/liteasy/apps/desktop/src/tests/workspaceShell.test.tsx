@@ -1,4 +1,4 @@
-import { act, render, renderHook, screen } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { FileStatusBar } from "../app/layout/FileStatusBar";
 import { noteFileStatus, paperFileStatus, readingFileStatus, useWorkspaceShellController } from "../app/controllers/useWorkspaceShellController";
@@ -59,9 +59,12 @@ describe("ambient file status", () => {
     expect(readingFileStatus({ id: "book", title: "Book", format: "epub", readingStatus: "reading", fileSize: 4096, liteasyPath: "liteasy://book" }))
       .toMatchObject({ name: "Book", type: "EPUB", size: 4096, path: "liteasy://book" });
   });
-  it("renders only known metadata and describes failures with text", () => {
+  it("renders only known metadata and describes failures with text", async () => {
     const { rerender } = render(<FileStatusBar status={{ name: "Paper", path: "/private/Paper.pdf", type: "PDF", pageCount: 18, size: 1782579, source: "local", indexState: "indexing" }} />);
-    expect(screen.getByLabelText("文件状态栏")).toHaveTextContent("PDF · 18 页 · 1.7 MB · 本地");
+    expect(screen.getByLabelText("文件状态栏")).toHaveTextContent("PDF · 18 页");
+    fireEvent.click(screen.getByRole("button", { name: "展开文件元信息" }));
+    expect(screen.getByText("PDF · 18 页 · 1.7 MB · 本地")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "展开文件元信息" }));
     expect(screen.getByRole("status")).toHaveTextContent("正在索引…");
     expect(screen.getByLabelText("文件状态栏").textContent).not.toContain("/private/");
     rerender(<FileStatusBar status={{ syncState: "error", pageCount: NaN, size: -1, modifiedAt: new Date("invalid") }} />);

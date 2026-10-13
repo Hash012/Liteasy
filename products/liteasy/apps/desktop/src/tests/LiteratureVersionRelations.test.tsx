@@ -73,6 +73,7 @@ describe("LiteratureVersionRelations", () => {
     />);
 
     expect(await screen.findByText("已有正式发表版")).toBeInTheDocument();
+    await user.click(screen.getByText(/文献信息/, { selector: "summary" }));
     expect(screen.getByText("Published Version")).toBeInTheDocument();
     expect(screen.getByText("DOI 10.1000/publication")).toBeInTheDocument();
     expect(screen.getByText("来源：Crossref · 已确认")).toBeInTheDocument();
@@ -88,13 +89,16 @@ describe("LiteratureVersionRelations", () => {
     expect(await screen.findByText("已加入文献库")).toBeInTheDocument();
 
     expect(screen.getByRole("combobox", { name: "引用版本" })).toHaveValue("literature-publication");
-    await user.click(screen.getByRole("button", { name: "复制 BibTeX" }));
+    await user.click(screen.getByRole("button", { name: "引用", exact: true }));
+    await user.click(screen.getByRole("menuitem", { name: "复制 BibTeX" }));
     expect(copyText).toHaveBeenCalledWith(expect.stringContaining("doi = {10.1000/publication}"));
   });
 
   test("stays quiet when no authenticated relation loader is available", () => {
     const { container } = render(<LiteratureVersionRelations currentLiterature={currentLiterature} />);
-    expect(container).toBeEmptyDOMElement();
+    expect(container.querySelector("details")).not.toHaveAttribute("open");
+    expect(screen.getByText("文献身份：公共来源")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   test("shows a visible retry state after relation loading fails", async () => {

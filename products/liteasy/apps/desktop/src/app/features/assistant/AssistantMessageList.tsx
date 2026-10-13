@@ -1,3 +1,4 @@
+import { ContextualActions, IconAction } from "../../shared/ui/productPrimitives";
 import { VisuallyHidden } from "../../shared/ui/VisuallyHidden";
 import { copyAnswerWithEvidence } from "../evidence/evidenceCopy";
 import { MessageEvidence } from "../evidence/components/MessageEvidence";
@@ -27,9 +28,10 @@ import {
   EditRegular,
   FlashRegular,
   StarFilled,
+  SaveRegular,
   StarRegular
 } from "@fluentui/react-icons";
-import { Button, Tooltip } from "@fluentui/react-components";
+import { Button, Tooltip, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { getAnswerDisplayText } from "./answerFormatter";
 import type { Paper } from "../workspace/workspace.types";
@@ -158,6 +160,7 @@ export function AssistantMessageList({
     else setNewContent(true);
   }, [messages]);
   const workbench = useObjectWorkbench();
+  const [actionMenu, setActionMenu] = useState<string>();
   const [captureStatus, setCaptureStatus] = useState("");
   const selectedText = useRef("");
   const selectedMessageId = useRef("");
@@ -204,7 +207,7 @@ export function AssistantMessageList({
         return (
           <article
             aria-label={message.role === "user" ? "你的消息" : "AI 回复"}
-            className={`assistant-message-wrap ${message.role}`}
+            className={`assistant-message-wrap product-contextual-owner ${message.role}`}
             key={message.id}
             data-message-id={message.id}
           >
@@ -277,24 +280,10 @@ export function AssistantMessageList({
                     >
                       撤回
                     </Button>
-                    <Button
-                      appearance="subtle"
-                      disabled={message.queuedDelivery.policy === "interrupt"}
-                      icon={<FlashRegular />}
-                      onClick={() => onInterruptForQueuedMessage?.(message.id)}
-                      size="small"
-                    >
-                      立即中断并执行
-                    </Button>
-                    <Button
-                      appearance="subtle"
-                      disabled={message.queuedDelivery.policy === "after_run"}
-                      icon={<ClockRegular />}
-                      onClick={() => onWaitForRunForQueuedMessage?.(message.id)}
-                      size="small"
-                    >
-                      本轮完成后执行
-                    </Button>
+                    <Menu><MenuTrigger disableButtonEnhancement><Button size="small" disabled={message.queuedDelivery.policy === "interrupt"}>更改执行方式</Button></MenuTrigger><MenuPopover><MenuList>
+                      <MenuItem icon={<FlashRegular />} disabled={message.queuedDelivery.policy === "interrupt"} onClick={() => onInterruptForQueuedMessage?.(message.id)}>立即中断并执行</MenuItem>
+                      <MenuItem icon={<ClockRegular />} disabled={message.queuedDelivery.policy === "after_run"} onClick={() => onWaitForRunForQueuedMessage?.(message.id)}>本轮完成后执行</MenuItem>
+                    </MenuList></MenuPopover></Menu>
                   </div>
                 </div>
               ) : null}
@@ -336,11 +325,11 @@ export function AssistantMessageList({
                 </div>
               ) : null}
             </div>
-            <div aria-label="消息操作" className="assistant-message-actions">
+            <ContextualActions label="消息操作" className="assistant-message-actions" menuOpen={actionMenu === message.id}>
               {message.role === "user" ? (
                 <>
-                  <button
-                    aria-label={`复制：${message.content}`}
+                  <IconAction density="compact"
+                    label="复制消息"
                     className="assistant-message-action"
                     onClick={() => {
                       const tokenText =
@@ -349,49 +338,31 @@ export function AssistantMessageList({
                         [tokenText, message.content].filter(Boolean).join(" ")
                       );
                     }}
-                    title="复制"
+                    description="复制"
                     type="button"
-                  >
-                    <CopyRegular aria-hidden="true" />
-                  </button>
-                  {!message.queuedDelivery ? <button
-                    aria-label={`编辑：${message.content}`}
+                   icon={<CopyRegular />} />
+                  {!message.queuedDelivery ? <IconAction density="compact"
+                    label="编辑消息"
                     className="assistant-message-action"
                     onClick={() => onEditMessage?.(message.id)}
-                    title="编辑"
+                    description="编辑"
                     type="button"
-                  >
-                    <EditRegular aria-hidden="true" />
-                  </button> : null}
-                  {!message.queuedDelivery ? <button
-                    aria-label={`重试：${message.content}`}
+                   icon={<EditRegular />} /> : null}
+                  {!message.queuedDelivery ? <IconAction density="compact"
+                    label="重试消息"
                     className="assistant-message-action"
                     onClick={() => onRetryUserMessage?.(message.id)}
-                    title="重试"
+                    description="重试"
                     type="button"
-                  >
-                    <ArrowClockwiseRegular aria-hidden="true" />
-                  </button> : null}
+                   icon={<ArrowClockwiseRegular />} /> : null}
                 </>
               ) : null}
               {message.role === "assistant" ? (
                 <>
-                  {workbench ? <>
-                    <Tooltip content="保存所选文字；未选中时保存整段回答。也可以拖入白板。" relationship="description">
-                      <Button size="small" draggable
-                        onDragStart={(event) => workbench.dragMessage(captureInput(message), event.dataTransfer)}
-                        onClick={() => void workbench.captureMessage(captureInput(message), "board")
-                          .then(() => setCaptureStatus("回答摘录已保存到白板。"))
-                          .catch((e) => setCaptureStatus(e.message))}>
-                        加入白板
-                      </Button>
-                    </Tooltip>
-                    <Button size="small"
-                      onClick={() => void workbench.captureMessage(captureInput(message), "tray")
-                        .catch((e) => setCaptureStatus(e.message))}>
-                      加入摘录对话
-                    </Button>
-                  </> : null}
+                  {workbench ? <Menu onOpenChange={(_, data) => setActionMenu(data.open ? message.id : undefined)}><MenuTrigger disableButtonEnhancement><IconAction label="保存到…" description="保存所选文字；未选中时保存整段回答。也可以拖入白板。" density="compact" icon={<SaveRegular />} draggable onDragStart={event => workbench.dragMessage(captureInput(message), event.dataTransfer)} /></MenuTrigger><MenuPopover><MenuList>
+                    <MenuItem onClick={() => void workbench.captureMessage(captureInput(message), "board").then(() => setCaptureStatus("回答摘录已保存到白板。")).catch(e => setCaptureStatus(e.message))}>加入白板</MenuItem>
+                    <MenuItem onClick={() => void workbench.captureMessage(captureInput(message), "tray").catch(e => setCaptureStatus(e.message))}>加入摘录对话</MenuItem>
+                  </MenuList></MenuPopover></Menu> : null}
                   <Tooltip content="复制回复" relationship="description">
                     <button
                       aria-label="复制回复"
@@ -435,7 +406,7 @@ export function AssistantMessageList({
                   ) : null}
                 </>
               ) : null}
-            </div>
+            </ContextualActions>
           </article>
         );
       })}

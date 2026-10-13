@@ -109,7 +109,7 @@ test("editing an earlier question keeps the original discussion and excludes its
   await screen.findByText("reply:original question");
   await user.type(composer, "later question"); await user.click(screen.getByRole("button", { name: "发送", exact: true }));
   await screen.findByText("reply:later question");
-  await user.click(screen.getByRole("button", { name: "编辑：original question" }));
+  await user.click(within(within(screen.getByRole("log", { name: "对话消息" })).getByText("original question", { exact: true }).closest("article")!).getByRole("button", { name: "编辑消息" }));
   await user.clear(composer); await user.type(composer, "edited question");
   await user.click(screen.getByRole("button", { name: "更新并发送", exact: true }));
   await screen.findByText("reply:edited question");

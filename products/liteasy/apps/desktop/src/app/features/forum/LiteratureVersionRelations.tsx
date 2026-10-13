@@ -1,4 +1,5 @@
-import { Button, Select } from "@fluentui/react-components";
+import { SourceDisclosure } from "../../shared/ui/productPrimitives";
+import { Button, Select, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
 import {
   ArrowClockwiseRegular,
   CopyRegular,
@@ -130,7 +131,7 @@ export function LiteratureVersionRelations({
   const citationLiterature = citationOptions.find((option) => option.record.literatureId === citationLiteratureId)?.record
     ?? currentLiterature;
 
-  if (!loadRelations) return null;
+
 
   async function copyCitation(format: "citation" | "bibtex") {
     setActionMessage("");
@@ -164,7 +165,7 @@ export function LiteratureVersionRelations({
 
   return (
     <section aria-label="关联文献版本" className="literature-version-relations">
-      {loadState === "loading" ? (
+      {loadRelations && loadState === "loading" ? (
         <div className="literature-version-state" role="status">正在加载版本关系</div>
       ) : null}
       {loadState === "error" ? (
@@ -180,6 +181,8 @@ export function LiteratureVersionRelations({
           />
         </div>
       ) : null}
+      {result?.versions.some(version => relationLabel(version) === "已有正式发表版") ? <p role="status">已有正式发表版 · 可在文献信息中查看</p> : null}
+      <SourceDisclosure summary={`文献信息${result?.versions.length ? ` · ${result.versions.length} 个关联版本` : ""}`}><p>文献身份：公共来源</p>
       {loadState === "ready" && result?.versions.length === 0 ? (
         <div className="literature-version-state">暂无已确认的关联版本</div>
       ) : null}
@@ -253,7 +256,7 @@ export function LiteratureVersionRelations({
       })}
       {loadState === "ready" ? (
         <div className="literature-citation-export">
-          <Select
+          {citationOptions.length > 1 ? <Select
             aria-label="引用版本"
             onChange={(event) => setCitationLiteratureId(event.target.value)}
             size="small"
@@ -264,27 +267,11 @@ export function LiteratureVersionRelations({
                 {option.label} · {option.record.title}
               </option>
             ))}
-          </Select>
-          <div className="literature-citation-actions">
-            <Button
-              appearance="subtle"
-              aria-label="复制引用"
-              icon={<CopyRegular />}
-              onClick={() => void copyCitation("citation")}
-              size="small"
-              title="复制引用"
-            />
-            <Button
-              appearance="subtle"
-              aria-label="复制 BibTeX"
-              icon={<DocumentArrowDownRegular />}
-              onClick={() => void copyCitation("bibtex")}
-              size="small"
-              title="复制 BibTeX"
-            />
-          </div>
+          </Select> : null}
+          <Menu><MenuTrigger disableButtonEnhancement><Button size="small" icon={<CopyRegular />}>引用</Button></MenuTrigger><MenuPopover><MenuList><MenuItem icon={<CopyRegular />} onClick={() => void copyCitation("citation")}>复制引用</MenuItem><MenuItem icon={<DocumentArrowDownRegular />} onClick={() => void copyCitation("bibtex")}>复制 BibTeX</MenuItem></MenuList></MenuPopover></Menu>
         </div>
       ) : null}
+      </SourceDisclosure>
       {actionMessage ? <div aria-live="polite" className="literature-version-action-message">{actionMessage}</div> : null}
     </section>
   );

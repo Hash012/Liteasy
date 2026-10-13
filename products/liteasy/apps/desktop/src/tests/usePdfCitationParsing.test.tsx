@@ -34,7 +34,8 @@ describe("usePdfCitationParsing", () => {
       pageTexts
     }));
 
-    await waitFor(() => expect(result.current.warning).toContain("已关闭"));
+    await waitFor(() => expect(result.current.modeDescription).toContain("已关闭"));
+    expect(result.current.warning).toBe("");
     expect(loadPdfSource).not.toHaveBeenCalled();
   });
 

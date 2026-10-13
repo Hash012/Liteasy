@@ -259,3 +259,13 @@
 .notes-label-user-edited, .notes-label-personal { color: var(--colorPaletteGreenForeground1); background: var(--colorPaletteGreenBackground1); }
 .notes-label-translation { color: var(--colorPaletteMarigoldForeground1); background: var(--colorPaletteMarigoldBackground1); }
 .notes-label-ai-guide, .notes-label-ai-generated { color: var(--colorPalettePurpleForeground2); background: var(--colorPalettePurpleBackground2); }
+
+.notes-filter-toolbar { display: flex; align-items: center; gap: 4px; min-width: 0; flex-wrap: wrap; }
+.notes-filter-toolbar > .notes-search { flex: 1; min-width: 140px; }
+.notes-filter-toolbar .notes-label-filters { width: auto; }
+.notes-item > .product-contextual-actions { align-self: start; }
+@media (pointer: coarse) {
+  .notes-item-content { padding-right: 96px; }
+  .notes-item-menu, .notes-item-location { min-width: 44px; min-height: 44px; }
+  .notes-item-location { right: 48px; }
+}

@@ -1,5 +1,5 @@
 import { SearchOptions } from "../search/SearchOptions";
-import { Button, Checkbox, Input, Popover, PopoverSurface, PopoverTrigger, Select } from "@fluentui/react-components";
+import { Button, Checkbox, Input, Popover, PopoverSurface, PopoverTrigger, Select, Tooltip } from "@fluentui/react-components";
 import { FilterRegular } from "@fluentui/react-icons";
 import { isAiOnlyNote, noteLabelEntries, type NoteLabel } from "./noteLabels";
 import "./noteLabelFilter.css";
@@ -10,15 +10,15 @@ export function matchesNoteFilter(labels: readonly NoteLabel[], filter: NoteFilt
   return (!filter.label || labels.includes(filter.label)) && (!filter.hideTranslations || !labels.includes("translation")) &&
     (!filter.hideLookup || !labels.includes("lookup")) && (!filter.hideAiOnly || !isAiOnlyNote(labels));
 }
-export function NoteLabelFilter({ value, onChange, query, onQueryChange }: {
-  value: NoteFilter; onChange(value: NoteFilter): void; query?: string; onQueryChange?(value: string): void;
+export function NoteLabelFilter({ value, onChange, query, onQueryChange, compact = false }: {
+  compact?: boolean; value: NoteFilter; onChange(value: NoteFilter): void; query?: string; onQueryChange?(value: string): void;
 }) {
   const count = Number(Boolean(value.label)) + Number(value.hideTranslations) + Number(value.hideLookup) + Number(value.hideAiOnly) + Number(Boolean(query));
   return <div className="notes-label-filters">
     <Popover positioning={{ position: "below", align: "start", autoSize: true }} trapFocus>
-      <PopoverTrigger disableButtonEnhancement><Button size="small" appearance={count ? "secondary" : "subtle"} icon={<FilterRegular />} title="按来源与编辑痕迹筛选">
-        {count ? `标签筛选 · ${count}` : "标签筛选"}
-      </Button></PopoverTrigger>
+      <PopoverTrigger disableButtonEnhancement><Tooltip content="按来源与编辑痕迹筛选" relationship="description"><Button aria-label={count ? `标签筛选 · ${count}` : "标签筛选"} size="small" appearance={count ? "secondary" : "subtle"} icon={<FilterRegular />} title="按来源与编辑痕迹筛选">
+        {count ? `标签筛选 · ${count}` : compact ? null : "标签筛选"}
+      </Button></Tooltip></PopoverTrigger>
       <PopoverSurface aria-label="笔记标签筛选" className="notes-filter-popover">
         {onQueryChange && <Input aria-label="搜索批注内容" placeholder="搜索原文或批注" value={query ?? ""} onChange={(_, data) => onQueryChange(data.value)} />}
         {onQueryChange && <SearchOptions query={query ?? ""} onChange={onQueryChange} tags={noteLabelEntries.map(([, label]) => label)} />}

@@ -14,6 +14,8 @@ const states: Record<string, string> = { running: "进行中", waiting_user: "�
   interrupted: "已中断", exhausted: "预算已用完", completed: "交付已完成", failed: "失败", cancelled: "已取消",
   submitting: "正在核对提交", speculative: "推测", supported_under_conditions: "在所列条件下得到支持", inconclusive: "尚无定论", refuted: "已被反驳" };
 export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) {
+  const [stage, setStage] = useState("来源与访问范围");
+  useEffect(() => { setStage("来源与访问范围"); }, [model.detail?.task.taskId]);
   const exportPort = useDocumentExportPort();
   const [exportOpen, setExportOpen] = useState(false), [exportNotice, setExportNotice] = useState(""), [reviewed, setReviewed] = useState(false);
   const [allowExperiment, setAllowExperiment] = useState(false), [allowModel, setAllowModel] = useState(false);
@@ -71,15 +73,18 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
       <main className="research-detail">
         {model.detail ? <>
           <div className="research-toolbar"><h3>{model.detail.task.goal}</h3><span>{states[model.detail.task.state]}</span></div>
-          <p>{model.detail.task.taskBrief.nextCheck}</p>
-          <fieldset><legend>来源与访问范围</legend>
+          <p>{model.detail.task.taskBrief.nextCheck} · 本机实验预算 {model.detail.task.budget.usedRuns}/{model.detail.task.budget.maxRuns}</p>
+          {model.detail.runs.filter(run => ["submitting", "running"].includes(run.status)).map(run => <Button key={run.runId} onClick={() => void model.cancelRun(run.runId)}>取消本次实验</Button>)}
+          {latestClaim ? <p>条件化结论：{states[String(latestClaim.body.status)] ?? "待核对"} · 需核对适用条件与独立检查</p> : null}
+          <nav className="research-toolbar" aria-label="研究阶段">{["来源与访问范围", "假设分支", "最小实验与独立检查", "决策与条件化结论", "研究助手"].map(name => <Button key={name} appearance={stage === name ? "primary" : "subtle"} aria-pressed={stage === name} onClick={() => setStage(name)}>{name}</Button>)}</nav>
+          <fieldset hidden={stage !== "来源与访问范围"}><legend>来源与访问范围</legend>
             <Field label="固定来源版本"><Select value={model.source ? JSON.stringify(model.source) : ""} onChange={event => model.setSource(event.target.value ? JSON.parse(event.target.value) : undefined)}>
               <option value="">请选择来源</option>{model.sources.map(item => <option key={JSON.stringify(item.ref)} value={JSON.stringify(item.ref)}>{item.title} · {item.ref.revision.slice(0, 8)}</option>)}
             </Select></Field>
             <Button disabled={model.busy} onClick={() => void model.createSyntheticSource()}>创建 DataLoader 合成条件说明</Button>
             <Button disabled={model.busy || !model.source} onClick={() => void model.readSource()}>读取固定来源</Button>
           </fieldset>
-          <fieldset><legend>假设分支</legend>
+          <fieldset hidden={stage !== "假设分支"}><legend>假设分支</legend>
             <Field label="问题"><Textarea value={model.hypothesis.question} onChange={(_, data) => model.setHypothesis({ ...model.hypothesis, question: data.value })} /></Field>
             <Field label="可能的机制"><Textarea value={model.hypothesis.proposedMechanism} onChange={(_, data) => model.setHypothesis({ ...model.hypothesis, proposedMechanism: data.value })} /></Field>
             <Field label="改变了哪个假设"><Textarea value={model.hypothesis.changedAssumption} onChange={(_, data) => model.setHypothesis({ ...model.hypothesis, changedAssumption: data.value })} /></Field>
@@ -93,7 +98,7 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
             </Select></Field>
             {model.detail.records.filter(record => record.kind === "hypothesis").map(record => <p key={record.id}><strong>推测：</strong>{String(record.body.question)}</p>)}
           </fieldset>
-          <fieldset><legend>最小实验与独立检查</legend>
+          <fieldset hidden={stage !== "最小实验与独立检查"}><legend>最小实验与独立检查</legend>
             <p>合成 CPU trace 回放；统一缓存与 I/O 预算，先检查样本、顺序与跨模态对齐，再比较等待和读取放大。</p>
             <Field label="候选方案"><Select value={model.candidate} onChange={event => model.setCandidate(event.target.value as "sequential" | "last_delta")}>
               <option value="sequential">顺序预取</option><option value="last_delta">最近差值预测</option>
@@ -104,7 +109,7 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
             <Button icon={<PlayRegular />} disabled={model.busy || executing || !allowExperiment || !latestSpec} onClick={() => void model.approveAndRun()}>批准并运行本规格</Button>
             {model.detail.runs.map(run => <article key={run.runId} className="research-run">
               <div className="research-toolbar"><strong>{run.runId.slice(0, 20)}</strong><span>{states[run.status]}</span>
-                {["submitting", "running"].includes(run.status) ? <Tooltip content="取消本次实验" relationship="description"><Button icon={<DismissRegular />} aria-label="取消本次实验" onClick={() => void model.cancelRun(run.runId)} /></Tooltip> : null}</div>
+                </div>
               {run.error ? <p>{run.error}</p> : null}
               {run.rawResult ? <><p>正确性：{run.rawResult.correctnessPassed ? "通过" : "未通过"}；{states[run.rawResult.conditionalStatus] ?? run.rawResult.conditionalStatus}</p>
                 <table><thead><tr><th>工作负载</th><th>算法</th><th>模拟等待 P95 μs</th><th>读取放大</th><th>缓存峰值字节</th><th>回放耗时 μs</th></tr></thead><tbody>
@@ -114,7 +119,7 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
               </> : null}
             </article>)}
           </fieldset>
-          <fieldset><legend>决策与条件化结论</legend>
+          <fieldset hidden={stage !== "决策与条件化结论"}><legend>决策与条件化结论</legend>
             <Field label="本次决策依据的实验"><Select value={latestRun?.runId ?? ""} onChange={event => model.setRunId(event.target.value)}>
               <option value="">请选择实验</option>{model.detail.runs.map(run => <option key={run.runId} value={run.runId}>{run.runId} · {states[run.status]}</option>)}
             </Select></Field>
@@ -137,7 +142,7 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
             <Button icon={<DocumentSaveRegular />} disabled={model.busy} onClick={() => void model.saveReport()}>保存证据报告到笔记</Button>
             <Button disabled={model.busy || !exportPort} onClick={() => setExportOpen(true)}>导出报告与原始证据</Button>
           </fieldset>
-          <fieldset><legend>研究助手</legend>
+          <fieldset hidden={stage !== "研究助手"}><legend>研究助手</legend>
             <Checkbox checked={allowModel} label="允许将所选固定资料与本任务发送给所选 ChatGPT 账号" onChange={(_, data) => setAllowModel(Boolean(data.checked))} />
             <Button disabled={model.busy || !allowModel} onClick={() => void model.approveModel()}>批准本任务连接</Button>
             <Button disabled={model.busy || !allowModel} onClick={() => void model.askResearch()}>请研究助手检查与提出方案</Button>

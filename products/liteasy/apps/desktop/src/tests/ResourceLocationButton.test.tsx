@@ -20,12 +20,25 @@ test("copies a usable Liteasy Path even when the backing file is unavailable", a
 test("does not show a late physical location after switching accounts", async () => {
   let finish!: (value: ResourceLocation) => void;
   const first = { scopeId: "user:A", describeResource: vi.fn(() => new Promise<ResourceLocation>((resolve) => { finish = resolve; })) } as unknown as ObjectWorkbenchPort;
-  const second = { scopeId: "user:B", describeResource: vi.fn() } as unknown as ObjectWorkbenchPort;
+  const second = { scopeId: "user:B", describeResource: vi.fn(async () => ({ liteasyPath: "liteasy://agent-artifacts/deck?scope=user%3AB", physicalPath: "", physicalKind: "file", canReveal: false })) } as unknown as ObjectWorkbenchPort;
   const view = (port: ObjectWorkbenchPort) => <ObjectWorkbenchContext.Provider value={port}><ResourceLocationButton target={{ kind: "artifact", artifactId: "deck" }} /></ObjectWorkbenchContext.Provider>;
   const { rerender } = render(view(first));
   fireEvent.click(screen.getByRole("button", { name: "位置与 Liteasy Path" }));
   rerender(view(second));
   await act(async () => { finish({ liteasyPath: "old", physicalPath: "D:/AccountA/private.json", physicalKind: "file", canReveal: true }); });
+  expect(screen.queryByRole("textbox", { name: "Liteasy Path", exact: true })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "位置与 Liteasy Path" }));
   expect(screen.getByRole("textbox", { name: "Liteasy Path", exact: true })).toHaveValue("liteasy://agent-artifacts/deck?scope=user%3AB");
   expect(screen.getByRole("textbox", { name: "资源实际位置" })).not.toHaveValue("D:/AccountA/private.json");
+});
+
+test("hovering and focusing a hundred location controls does not inspect storage", async () => {
+  const describeResource = vi.fn(async () => ({ liteasyPath: "synthetic", physicalPath: "", physicalKind: "file", canReveal: false }));
+  const port = { scopeId: "local", describeResource } as unknown as ObjectWorkbenchPort;
+  render(<ObjectWorkbenchContext.Provider value={port}>{Array.from({ length: 100 }, (_, i) => <ResourceLocationButton key={i} target={{ kind: "artifact", artifactId: `synthetic-${i}` }} />)}</ObjectWorkbenchContext.Provider>);
+  const buttons = screen.getAllByRole("button", { name: "位置与 Liteasy Path" });
+  for (const button of buttons) { fireEvent.mouseEnter(button); fireEvent.focus(button); fireEvent.blur(button); fireEvent.mouseLeave(button); }
+  expect(describeResource).not.toHaveBeenCalled();
+  await act(async () => { fireEvent.click(buttons[42]); });
+  expect(describeResource).toHaveBeenCalledTimes(1);
 });

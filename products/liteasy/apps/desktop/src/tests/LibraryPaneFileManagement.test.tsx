@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { mockFocusLayout } from "./fixtures/mockFocusLayout";
 import { LibraryPane, personalLibraryScopeId } from "../app/features/library/LibraryPane";
 import { savePaperFileMetadata } from "../app/features/library/paperFileMetadata";
+import * as fileSystem from "../app/features/library/libraryFileSystemClient";
 import * as cloudTree from "../app/features/library/useCloudLibraryTree";
 
 const paper = {
@@ -131,9 +132,15 @@ test("offers a dedicated bibliography editor from the local paper context menu",
   const onEditBibliography = vi.fn();
   renderLibraryPane({ fileLibrary: { entries: [{ id: paper.id, title: paper.title, format: "pdf" }], pending: false, message: "",
     onImport: vi.fn(), onInspect: vi.fn(), onOpen: vi.fn(), onEditBibliography } });
-  expect(within(screen.getByRole("region", { name: "本地文献库" })).getByText("本机文件 · 保存在此设备")).toBeInTheDocument();
-  expect(within(screen.getByRole("region", { name: "收藏" })).getByText("个人云收藏 · 当前账号的云端副本，未因此发布到 Intuecho")).toBeInTheDocument();
-  expect(within(screen.getByRole("region", { name: "组织文献库" })).getByText("组织文献 · 访问和下载遵循当前组织权限")).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "本地文献库更多操作" }));
+  expect(screen.getByText(/本机文件 · 保存在此设备/)).toBeInTheDocument();
+  await userEvent.keyboard("{Escape}");
+  await userEvent.click(screen.getByRole("button", { name: "收藏更多操作" }));
+  expect(screen.getByText("个人云收藏 · 当前账号的云端副本，未因此发布到 Intuecho")).toBeInTheDocument();
+  await userEvent.keyboard("{Escape}");
+  await userEvent.click(screen.getByRole("button", { name: "组织文献库更多操作" }));
+  expect(screen.getByText("组织文献 · 访问和下载遵循当前组织权限")).toBeInTheDocument();
+  await userEvent.keyboard("{Escape}");
   await userEvent.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: paper.title, exact: true }) });
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑元信息", exact: true }));
   expect(onEditBibliography).toHaveBeenCalledWith(expect.objectContaining({ id: paper.id, title: paper.title, format: "pdf" }));
@@ -148,6 +155,7 @@ test("edits, displays and filters local papers by category and tags", async () =
   renderLibraryPane();
 
   const metadata = await screen.findByLabelText(`${paper.title} 的分类与标签`);
+  await user.click(within(metadata).getByRole("button", { name: /展开其余/ }));
   expect(within(metadata).getByText("机器学习")).toBeInTheDocument();
   expect(within(metadata).getByText("向量检索")).toBeInTheDocument();
 
@@ -442,9 +450,10 @@ test("displays compact facet chips and combines quick tag selection with author 
   await savePaperFileMetadata(paper.id, { category: "项目", tags: ["必读"], assetType: "journal-article", year: 2024, authors: ["Alice Smith"], subjects: ["机器学习"] });
   renderLibraryPane();
   const chips = await screen.findByLabelText(`${paper.title} 的分类与标签`);
+  await userEvent.click(within(chips).getByRole("button", { name: /展开其余/ }));
   expect(within(chips).getByText("期刊论文")).toBeInTheDocument();
   expect(within(chips).getByText("2024")).toBeInTheDocument();
-  expect(within(chips).queryByText("Alice Smith")).not.toBeInTheDocument();
+  expect(within(chips).getByRole("button", { name: "作者：Alice Smith" })).toBeInTheDocument();
   fireEvent.click(within(chips).getByText("必读"));
   expect(screen.getByRole("button", { name: paper.title })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "筛选本地文件" }));
@@ -480,4 +489,22 @@ test("distinguishes unknown, empty and failed associated content without hiding 
   expect(screen.getByText("目录权限不足")).toBeVisible();
   await userEvent.click(screen.getByRole("button", { name: "重试关联内容" })); expect(retry).toHaveBeenCalledOnce();
   expect(screen.queryByText("0 项关联内容")).not.toBeInTheDocument();
+});
+
+
+test("clears local trash only through its named menu and explicit confirmation", async () => {
+  const user = userEvent.setup(), empty = vi.spyOn(fileSystem, "emptyLocalLibraryTrash").mockResolvedValue(undefined);
+  const refresh = vi.fn(async () => {}), confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+  renderLibraryPane({ onRefreshLocalLibrary: refresh, localLibrarySnapshot: {
+    entries: [], folders: [], libraryId: "trash-fixture", revision: 1, rootPath: "/library", trashEntries: [{ trashId: "deleted", name: "Synthetic.pdf", nodeType: "document", byteLength: 100, documentCount: 1, originalRelativePath: "Synthetic.pdf", trashedAt: 1, purgeAfter: 2000000000 }]
+  } });
+  expect(screen.queryByRole("button", { name: "清空本地回收站" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "本地回收站更多操作" }));
+  await user.click(screen.getByRole("menuitem", { name: "清空本地回收站" }));
+  expect(empty).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "本地回收站更多操作" }));
+  await user.click(screen.getByRole("menuitem", { name: "清空本地回收站" }));
+  expect(confirm).toHaveBeenCalledWith(expect.stringContaining("无法恢复"));
+  await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  expect(empty).toHaveBeenCalledOnce();
 });

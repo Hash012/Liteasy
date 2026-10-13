@@ -30,7 +30,7 @@ import { preparePdfQuickAskContext } from "./quickAskContext";
 import { useQuickAskTask } from "./useQuickAskTask";
 import { QuickAskProvenance } from "./QuickAskProvenance";
 import { QuickAskSurface } from "./QuickAskSurface";
-import { ResponsiveOverlay } from "../../shared/ui/productPrimitives";
+import { ResponsiveOverlay, SourceDisclosure, InlineNotice } from "../../shared/ui/productPrimitives";
 import { resolveLocalAccountKey } from "../library/localAccountKey";
 import { useQuickAskPresets } from "../quick-ask-presets/useQuickAskPresets";
 import { QuickAskPresetPicker } from "../quick-ask-presets/QuickAskPresetPicker";
@@ -3662,7 +3662,7 @@ export function PdfReader({
                 onSubmit={() => void submitQuickAsk()} onStop={quickAskTask.stop}
                 onRetrySave={() => void quickAskTask.retrySave(saveQuickAskAnnotation)} onDiscard={quickAskTask.discard}
                 onSavePreset={() => setQuickAskPresetManagerOpen(true)}
-                preferences={<GenerationPromptEditor task="selection_explanation" value={quickAskPrompt} onChange={preference => quickAskTask.update({ preference })} disabled={quickAskPending} />} />
+                preferences={<GenerationPromptEditor context="quick" task="selection_explanation" value={quickAskPrompt} onChange={preference => quickAskTask.update({ preference })} disabled={quickAskPending} />} />
               {quickAskPresetManagerOpen ? <ResponsiveOverlay open title="管理快捷指令" onClose={() => setQuickAskPresetManagerOpen(false)} availableWidth={documentFrameWidth || stageWidth}><QuickAskPresetManager key={quickAskAccount} repository={quickAskPresets.repository} initialInstruction={quickAskQuestion}
                 onSaved={() => { setQuickAskPresetManagerOpen(false); setStatus("快捷指令已保存。"); }} onClose={() => setQuickAskPresetManagerOpen(false)} /></ResponsiveOverlay> : null}
             </> : null}
@@ -3757,7 +3757,7 @@ export function PdfReader({
                 </button>
               </div>
 
-              {sidebarMode === "annotations" && <NoteLabelFilter value={annotationFilter} onChange={setAnnotationFilter} query={annotationQuery} onQueryChange={setAnnotationQuery} />}
+              {sidebarMode === "annotations" && <NoteLabelFilter compact value={annotationFilter} onChange={setAnnotationFilter} query={annotationQuery} onQueryChange={setAnnotationQuery} />}
               </div>
               {sidebarMode === "outline" ? (
                 <PdfOutline document={pdfDocument} onNavigate={({ page, topRatio }) => navigateToPage(page, "auto", topRatio)} />
@@ -3793,13 +3793,6 @@ export function PdfReader({
                   </div> : null}
                   {activePaper?.literature ? (
                     <>
-                      <div
-                        aria-label="文献身份来源"
-                        className="pdf-status"
-                        role="status"
-                      >
-                        文献身份：公共来源
-                      </div>
                       <LiteratureVersionRelations
                         currentLiterature={activePaper.literature}
                         loadRelations={loadLiteratureRelations}
@@ -3808,6 +3801,10 @@ export function PdfReader({
                       />
                     </>
                   ) : null}
+                  {readerPosition.error ? <InlineNotice intent="error" message={readerPosition.error} /> : null}
+                  {citationParsing.loading ? <InlineNotice intent="busy" message="正在提取结构化引用…" /> : null}
+                  {citationParsing.warning ? <InlineNotice intent="warning" message={citationParsing.warning} /> : null}
+                  <SourceDisclosure summary="引用解析信息"><p>{citationParsing.modeDescription}</p></SourceDisclosure>
                   <PaperReviewSharePanel scopeKey={annotationStorageKey}
                     ready={Boolean(activePaper && annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError)}
                     source={{ title: activePaper?.title ?? "", annotations, pageTexts }} />
@@ -4079,17 +4076,6 @@ export function PdfReader({
               onZoomIn={() => onZoomChange?.(Math.min(180, zoom + 5))}
               onZoomOut={() => onZoomChange?.(Math.max(70, zoom - 5))}
               pageCount={pageCount}
-              parserStatus={(
-                <>
-                  {readerPosition.error ? <span role="status">{readerPosition.error}</span> : null}
-                  {citationParsing.loading ? (
-                    <span role="status">正在提取结构化引用…</span>
-                  ) : citationParsing.parser === "grobid" ? (
-                    <span role="note">结构化引用已就绪</span>
-                  ) : null}
-                  {citationParsing.warning ? <span role="status">{citationParsing.warning}</span> : null}
-                </>
-              )}
               searchOpen={searchOpen}
               searchTags={searchMetadata.tags}
               searchQuery={searchQuery}

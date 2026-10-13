@@ -272,7 +272,8 @@ describe("Notes reference directories", () => {
     render(<Harness />);
     const user = userEvent.setup();
     await screen.findByRole("button", { name: "查看笔记 可组织的文字" });
-    await user.click(screen.getByRole("button", { name: "新建目录" }));
+    await user.click(screen.getByRole("button", { name: "更多笔记操作" }));
+    await user.click(screen.getByRole("menuitem", { name: "新建目录" }));
     await user.type(
       screen.getByRole("textbox", { name: "目录名称" }),
       "我的专题",

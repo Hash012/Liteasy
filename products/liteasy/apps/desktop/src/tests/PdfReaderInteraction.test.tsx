@@ -196,6 +196,7 @@ test("shows highlighted comments beside the PDF only when the margin layer is en
   expect(toggle).toHaveAttribute("aria-pressed", "true");
   expect(window.localStorage.getItem("liteasy:pdf-reader:margin-comments")).toBe("true");
 
+  await user.click(screen.getByRole("button", { name: "PDF 批注工具" }));
   const connectorToggle = screen.getByRole("button", { name: "显示批注关联线" });
   expect(connectorToggle).toHaveAttribute("aria-pressed", "true");
   await user.click(connectorToggle);
@@ -210,6 +211,7 @@ test("shows highlighted comments beside the PDF only when the margin layer is en
 test("opens a persistent whiteboard beside the PDF reader", async () => {
   const user = userEvent.setup();
   render(<PdfReader selectedPapers={[paper]} zoom={100} />);
+  await user.click(screen.getByRole("button", { name: "PDF 批注工具" }));
   const toggle = screen.getByRole("button", { name: "打开 PDF 白板" });
 
   expect(toggle).toHaveAttribute("aria-pressed", "false");
@@ -229,7 +231,8 @@ test("opens a persistent whiteboard beside the PDF reader", async () => {
 
   await user.click(within(whiteboard).getByRole("button", { name: "收起 PDF 白板" }));
   expect(screen.queryByLabelText("PDF 思考白板")).not.toBeInTheDocument();
-  expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await user.click(screen.getByRole("button", { name: "PDF 批注工具" }));
+  expect(screen.getByRole("button", { name: "打开 PDF 白板" })).toHaveAttribute("aria-pressed", "false");
 });
 
 test("double-clicking navigation buttons replaces pages with an overview and locating returns to the document", async () => {

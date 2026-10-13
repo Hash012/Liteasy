@@ -1,13 +1,14 @@
-import { ActionButton as Button } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, IconAction } from "../../shared/ui/productPrimitives";
 import { useState } from "react";
 import { WorkbenchEmptyState } from "../workbench/WorkbenchPage";
-import { Input, Spinner, Tooltip } from "@fluentui/react-components";
+import { Input, Spinner, Tooltip, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
 import {
   ArrowClockwiseRegular,
   BookOpenRegular,
   HomeRegular,
   PlayRegular,
   SearchRegular,
+  MoreHorizontalRegular,
 } from "@fluentui/react-icons";
 import { ContentView } from "../markdown/ContentView";
 import { legacyContent } from "../markdown/contentFragment";
@@ -39,14 +40,7 @@ export function HelpPanel({ model, onStartTour, tourError }: { model: HelpViewMo
             onClick={() => { setCatalog(false); model.home(); }}
           />
         </Tooltip>
-        <Tooltip content="刷新帮助" relationship="description">
-          <Button
-            appearance="subtle"
-            icon={<ArrowClockwiseRegular />}
-            aria-label="刷新帮助"
-            onClick={model.retry}
-          />
-        </Tooltip>
+        <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="更多帮助操作" icon={<MoreHorizontalRegular />} /></MenuTrigger><MenuPopover><MenuList><MenuItem icon={<ArrowClockwiseRegular />} onClick={model.retry}>刷新帮助</MenuItem></MenuList></MenuPopover></Menu>
       </header>
       {tourError ? <p role="alert">{tourError}</p> : null}
       <Input

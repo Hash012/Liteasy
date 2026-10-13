@@ -54,7 +54,7 @@ test.each(["mention", "browser", "path", "drop"])("%s inserts the name in prose 
   await screen.findByText("已处理。");
   expect(submit.mock.calls[0][0]).toMatchObject({ input: { message: "往 CicN 里面写入 hello" }, contextRefs: note.contextRefs });
   expect(container.querySelector(".assistant-user-message-content strong.assistant-inline-context")).toHaveTextContent("CicN");
-  await user.click(screen.getByRole("button", { name: "编辑：往 CicN 里面写入 hello" }));
+  await user.click(screen.getByRole("button", { name: "编辑消息" }));
   expect(input).toHaveValue("往 CicN 里面写入 hello");
   expect(screen.getByRole("button", { name: "移除上下文：CicN" })).toBeInTheDocument();
 });
@@ -114,7 +114,7 @@ test("a context name containing 薄读 never becomes a generation command, but e
   await screen.findByText("已处理。");
   expect(submit.mock.calls[0][0]).toMatchObject({ input: { message: "注意力薄读 请解释核心方法" } });
   expect(generate).not.toHaveBeenCalled();
-  await user.click(screen.getByRole("button", { name: "编辑：注意力薄读 请解释核心方法" }));
+  await user.click(screen.getByRole("button", { name: "编辑消息" }));
   fireEvent.change(input, { target: { value: "根据 注意力薄读 生成 PPT" } });
   await user.click(screen.getByRole("button", { name: "更新并发送" }));
   await waitFor(() => expect(generate).toHaveBeenCalledWith("ppt", undefined, expect.stringContaining("根据 注意力薄读 生成 PPT"), note.contextRefs, getGenerationPrompt("ppt"), expect.objectContaining({ kind: "conversation_action", parentConversationId: expect.any(String), triggerMessageId: expect.any(String) })));

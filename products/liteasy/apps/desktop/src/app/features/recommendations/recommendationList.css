@@ -66,9 +66,18 @@
 .recommendation-filter-row:has(.fui-Checkbox) { flex-wrap: wrap; }
 
 .recommendation-row-reason { color: var(--colorNeutralForeground2); font-size: calc(12px * var(--app-font-ratio, 1)); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.recommendation-compact-row:focus-visible .recommendation-compact-title { -webkit-line-clamp: unset; }
-.recommendation-compact-row:focus-visible .recommendation-row-reason { white-space: normal; }
+
+
 .recommendation-row-meta { padding-right: 0; flex-wrap: wrap; }
 .recommendation-row-meta time { color: var(--colorNeutralForeground2); }
 .recommendation-keywords { min-height: 28px; }
 .recommendation-compact-actions .fui-Button { min-width: 28px; min-height: 28px; }
+
+.recommendation-filters { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.recommendation-filter-panel { display: grid; gap: 8px; max-width: calc(100vw - 24px); }
+.recommendation-filter-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.recommendation-filter-summary .recommendation-result-count { margin-left: 0; }
+.recommendation-compact-item > .product-source-disclosure { margin: 0 102px 4px 34px; min-height: 32px; }
+.recommendation-compact-item > .product-source-disclosure[open] { margin-right: 12px; padding-bottom: 32px; }
+.recommendation-compact-item:has(details[open]) .recommendation-compact-actions { opacity: 1; pointer-events: auto; }
+@media (pointer: coarse) { .recommendation-compact-actions .fui-Button { min-width: 44px; min-height: 44px; } .recommendation-compact-item > .product-source-disclosure { margin-right: 142px; min-height: 44px; } }

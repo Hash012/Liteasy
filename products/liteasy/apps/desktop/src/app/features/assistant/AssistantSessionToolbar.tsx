@@ -1,10 +1,10 @@
-import { ActionButton as Button } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, IconAction } from "../../shared/ui/productPrimitives";
 import { AssistantMarkdown } from "./AssistantMarkdown";
 import { conversationDigest } from "./assistantSessionHistory";
 import type { AssistantMessage } from "./assistant.types";
 import type { DragEventHandler } from "react";
-import { Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
-import { ArrowLeftRegular, ArrowRightRegular, OpenRegular, ComposeRegular, DocumentRegular, SettingsRegular, StopRegular } from "@fluentui/react-icons";
+import { Popover, PopoverSurface, PopoverTrigger, Tooltip, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
+import { ArrowLeftRegular, ArrowRightRegular, OpenRegular, ComposeRegular, DocumentRegular, SettingsRegular, StopRegular, MoreHorizontalRegular } from "@fluentui/react-icons";
 
 type Props = {
   title: string;
@@ -42,17 +42,14 @@ export function AssistantSessionToolbar(props: Props) {
       </Popover>
     </div>
     <div aria-label="会话操作" className="assistant-session-actions">
-      {props.onExpand ? <Tooltip content="在主区打开完整对话，保留当前消息与草稿" relationship="description"><Button appearance="subtle" className="assistant-toolbar-button" aria-label="在主区打开对话" icon={<OpenRegular />} onClick={props.onExpand} /></Tooltip> : null}
-      {props.onOpenArtifact ? <Tooltip content="打开产物" positioning="below" relationship="description">
+      {props.kind === "artifact_generation" && props.onOpenArtifact ? <Tooltip content="打开产物" positioning="below" relationship="description">
         <Button appearance="subtle" className="assistant-toolbar-button" aria-label="打开产物" icon={<DocumentRegular />} onClick={props.onOpenArtifact} />
       </Tooltip> : null}
       {props.running ? <Tooltip content={props.cancelling ? "正在终止 AI 运行" : "终止当前 AI 运行"} positioning="below" relationship="description">
         <Button appearance="subtle" className="assistant-toolbar-button danger" aria-label={props.cancelling ? "终止中" : "终止"}
           disabled={props.cancelling} icon={<StopRegular />} onClick={props.onCancel} />
       </Tooltip> : null}
-      {props.onOpenSettings ? <Tooltip content="打开设置" positioning="below" relationship="description">
-        <Button appearance="subtle" className="assistant-toolbar-button" aria-label="对话设置" icon={<SettingsRegular />} onClick={props.onOpenSettings} />
-      </Tooltip> : null}
+      {props.onExpand || props.onOpenSettings ? <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="更多会话操作" icon={<MoreHorizontalRegular />} appearance="subtle" /></MenuTrigger><MenuPopover><MenuList>{props.onExpand ? <MenuItem icon={<OpenRegular />} onClick={props.onExpand}>在主区打开对话</MenuItem> : null}{props.onOpenSettings ? <MenuItem icon={<SettingsRegular />} onClick={props.onOpenSettings}>对话设置</MenuItem> : null}</MenuList></MenuPopover></Menu> : null}
       <Tooltip content="新建对话" positioning="below" relationship="description">
         <Button appearance="subtle" className="assistant-toolbar-button" aria-label="新建" title="开始一个新的 AI 对话"
           disabled={props.newSessionDisabled} icon={<ComposeRegular />} onClick={props.onNewSession} />

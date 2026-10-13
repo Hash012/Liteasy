@@ -2283,6 +2283,8 @@ export function AppShell({
           key={assistantScopeId}
           historyPersistence={assistantHistoryRef.current}
           memoryNotice={profileActions.memory.notice}
+          memoryNoticeKind={profileActions.memory.noticeKind}
+          onDismissMemoryNotice={profileActions.memory.dismissNotice}
           profileEnabled={profileSamplingEnabled}
           onOpenCitation={(citation) => openEvidenceInReader(paperCitationOpenRequest(citation))}
           agentClient={assistantAgent.agentClient}

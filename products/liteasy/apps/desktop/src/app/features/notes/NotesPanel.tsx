@@ -1,4 +1,4 @@
-import { ActionButton as Button } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, IconAction, ContextualActions } from "../../shared/ui/productPrimitives";
 import { DocumentExportDialog } from "../document-export/DocumentExportDialog";
 import { useDocumentExportPort } from "../document-export/documentExportPort";
 import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
@@ -87,6 +87,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
   const [filter, setFilter] = useState(emptyNoteFilter);
   const labeledItems = useMemo(() => model.items.map((item) => ({ ...item, labels: item.labels ?? resolvedNoteLabels(item) })), [model.items]);
   const filteredItems = labeledItems.filter((item) => matchesNoteFilter(item.labels, filter));
+  const [itemMenu, setItemMenu] = useState<string>();
   const filterCount = Number(Boolean(filter.label)) + Number(filter.hideTranslations) + Number(filter.hideLookup) + Number(filter.hideAiOnly);
   const selected = filteredItems.find((item) => item.key === model.selected?.key);
   const [visibleCount, setVisibleCount] = useState(100);
@@ -148,35 +149,15 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
             setEditingItem(undefined);
           }}
         />
-        <IconButton
-          label="新建目录"
-          icon={<FolderAddRegular />}
-          onClick={() => setFolderName("")}
-        />
-        <IconButton
-          label="导入 Markdown 文件"
-          icon={<ArrowImportRegular />}
-          onClick={() => run(model.importFiles())}
-        />
-        <IconButton
-          label="连接文件夹 / Obsidian Vault"
-          icon={<FolderOpenRegular />}
-          onClick={() => run(model.connectFolder())}
-        />
-        <IconButton
-          label="刷新笔记"
-          icon={<ArrowClockwiseRegular />}
-          onClick={() => run(model.refresh())}
-        />
-        {folder && !folder.system && (
-          <IconButton
-            label="删除空目录"
-            icon={<DeleteRegular />}
-            onClick={() => run(model.removeFolder())}
-          />
-        )}
+        <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="更多笔记操作" icon={<MoreHorizontalRegular />} /></MenuTrigger><MenuPopover><MenuList>
+          <MenuItem icon={<FolderAddRegular />} onClick={() => setFolderName("")}>新建目录</MenuItem>
+          <MenuItem icon={<ArrowImportRegular />} onClick={() => run(model.importFiles())}>导入 Markdown 文件</MenuItem>
+          <MenuItem icon={<FolderOpenRegular />} onClick={() => run(model.connectFolder())}>连接文件夹 / Obsidian Vault</MenuItem>
+          <MenuItem icon={<ArrowClockwiseRegular />} onClick={() => run(model.refresh())}>刷新笔记</MenuItem>
+          {folder && !folder.system ? <MenuItem icon={<DeleteRegular />} onClick={() => run(model.removeFolder())}>删除空目录</MenuItem> : null}
+        </MenuList></MenuPopover></Menu>
       </header>
-      <Input
+      <div className="notes-filter-toolbar"><Input size="small"
         className="notes-search"
         aria-label="搜索笔记"
         placeholder="搜索笔记"
@@ -184,8 +165,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
         value={model.query}
         onChange={(_, data) => model.search(data.value)}
       />
-      <SearchOptions query={model.query} onChange={model.search} tags={Object.values(noteLabels)} />
-      <NoteLabelFilter value={filter} onChange={setFilter} />
+      <NoteLabelFilter compact value={filter} onChange={setFilter} query={model.query} onQueryChange={model.search} /></div>
       {model.error && (
         <p role="alert" className="notes-error">
           {model.error}
@@ -325,7 +305,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
               <article
                 key={item.key}
                 role="listitem"
-                className={`notes-item${model.selected?.key === item.key ? " is-selected" : ""}`}
+                className={`notes-item product-contextual-owner${model.selected?.key === item.key ? " is-selected" : ""}`}
                 draggable={!item.unavailable}
                 onDragStart={(event) => model.drag(item, event.dataTransfer)}
               >
@@ -343,12 +323,12 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
                     <LibraryItemIcon itemKey={noteIconKey(item)} kind={item.object?.kind === "workspace.board" || /\.canvas$/i.test(item.title) ? "board" : item.target.kind === "pdf-annotation" ? "pdf" : "note"} />
                     <strong title={item.title}><SearchHighlight text={item.title} query={model.query} /></strong>
                   </span>
-                  <span className="notes-item-source" title={item.source}>{item.source}</span>
-                  {item.labels.length > 0 && <span className="notes-item-labels" aria-label="笔记标签">
+                  <span className="notes-item-source" title={item.source}>{item.unavailable ? "来源不可用" : item.source || "来源不明"}</span>
+                  {model.selected?.key === item.key && item.labels.length > 0 && <span className="notes-item-labels" aria-label="笔记标签">
                     {item.labels.map((label) => <span key={label} className={`notes-label notes-label-${label}`}>{noteLabels[label]}</span>)}
                   </span>}
                 </button>
-                <Menu>
+                <ContextualActions selected={model.selected?.key === item.key} menuOpen={itemMenu === item.key}><Menu onOpenChange={(_, data) => setItemMenu(data.open ? item.key : undefined)}>
                   <MenuTrigger disableButtonEnhancement>
                     <Button
                       className="notes-item-menu"
@@ -409,7 +389,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
                     </MenuList>
                   </MenuPopover>
                 </Menu>
-                <ResourceLocationButton className="notes-item-location" target={item.target} />
+                <ResourceLocationButton className="notes-item-location" target={item.target} onOpenChange={open => setItemMenu(open ? item.key : undefined)} /></ContextualActions>
               </article>
             ))}
           </div>

@@ -1,3 +1,4 @@
+import { displayBibliographicTitle } from "../metadata/displayBibliographicTitle";
 import { compileSearchQuery } from "../search/searchQuery";
 import { recommendationKeywords } from "./recommendationKeywords";
 import { bibliographicDate } from "../paper-services/bibliographicMetadata";
@@ -57,7 +58,7 @@ export function filterRecommendations(items: RecommendationItem[], query: string
   const compiled = compileSearchQuery(query);
   const result = items.filter((item) => (!access || item.fullText?.status === "available") &&
     (!year || recommendationDateLabel(item).slice(0, 4) === year) && compiled.matches(
-      [item.title, ...(item.authors ?? []), item.venue, ...(item.subjects ?? []), ...(item.keywords ?? []), item.abstract]
+      [displayBibliographicTitle(item.title), ...(item.authors ?? []), item.venue, ...(item.subjects ?? []), ...(item.keywords ?? []), item.abstract]
         .filter(Boolean).join(" "), { format: item.fullText?.status === "available" ? "pdf" : "html",  tags: [...(item.subjects ?? []), ...(item.keywords ?? []), ...recommendationKeywords(item, items).map((tag) => tag.label)] }));
   if (sort === "newest") result.sort((a, b) => {
     const date = (item: RecommendationItem) => recommendationDateLabel(item) === "日期未知" ? "" : recommendationDateLabel(item);

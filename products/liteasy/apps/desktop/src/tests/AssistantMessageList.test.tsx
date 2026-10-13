@@ -21,7 +21,7 @@ describe("AssistantMessageList", () => {
     expect(chips[1]).toHaveTextContent("Cicada");
     expect(chips[0].parentElement).toHaveAttribute("title", `${title}\n本地文献库`);
     expect(container.querySelector(".assistant-user-message-content .assistant-inline-context")).toHaveAttribute("aria-label", title);
-    await user.click(screen.getByRole("button", { name: `复制：${content}` }));
+    await user.click(screen.getByRole("button", { name: "复制消息" }));
     expect(writeText).toHaveBeenCalledWith(`[${title}] [Cicada] ${content}`);
     expect(tokens[0].label).toBe(title);
   });
@@ -183,8 +183,10 @@ describe("AssistantMessageList", () => {
 
     expect(screen.getByText("已暂存 · 当前工具调用结束后生效")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "撤回" }));
-    await user.click(screen.getByRole("button", { name: "立即中断并执行" }));
-    await user.click(screen.getByRole("button", { name: "本轮完成后执行" }));
+    await user.click(screen.getByRole("button", { name: "更改执行方式" }));
+    await user.click(screen.getByRole("menuitem", { name: "立即中断并执行" }));
+    await user.click(screen.getByRole("button", { name: "更改执行方式" }));
+    await user.click(screen.getByRole("menuitem", { name: "本轮完成后执行" }));
     expect(onWithdraw).toHaveBeenCalledWith("queued-user-message");
     expect(onInterrupt).toHaveBeenCalledWith("queued-user-message");
     expect(onWait).toHaveBeenCalledWith("queued-user-message");

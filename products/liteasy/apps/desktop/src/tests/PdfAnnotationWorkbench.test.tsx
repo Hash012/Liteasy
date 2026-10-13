@@ -210,6 +210,7 @@ test("the PDF toolbar closes the object whiteboard without reserving a hidden le
   expect(screen.getByLabelText("PDF 阅读工作区")).not.toHaveClass(
     "whiteboard-open",
   );
+  fireEvent.click(screen.getByRole("button", { name: "PDF 批注工具" }));
   fireEvent.click(screen.getByRole("button", { name: "关闭 PDF 白板" }));
   expect(workbench.close).toHaveBeenCalledTimes(1);
   expect(workbench.openLegacyBoard).not.toHaveBeenCalled();
@@ -377,11 +378,14 @@ test("a failed board migration leaves a readable snapshot that the toolbar can c
       </ObjectWorkbenchContext.Provider>,
     );
   });
+  fireEvent.click(screen.getByRole("button", { name: "PDF 批注工具" }));
   fireEvent.click(screen.getByRole("button", { name: "打开 PDF 白板" }));
-  await screen.findByRole("button", { name: "关闭 PDF 白板" });
+  fireEvent.click(screen.getByRole("button", { name: "PDF 批注工具" }));
+  await screen.findByLabelText("PDF 思考白板");
   expect(screen.getByLabelText("PDF 阅读工作区")).toHaveClass(
     "whiteboard-open",
   );
+  fireEvent.click(screen.getByRole("button", { name: "PDF 批注工具" }));
   fireEvent.click(screen.getByRole("button", { name: "关闭 PDF 白板" }));
   expect(screen.getByLabelText("PDF 阅读工作区")).not.toHaveClass(
     "whiteboard-open",

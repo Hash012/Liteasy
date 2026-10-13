@@ -1,14 +1,15 @@
-import { ActionButton as Button } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, IconAction } from "../../shared/ui/productPrimitives";
 import { OrganizationInvitationPanel } from "./OrganizationInvitationPanel";
 import { OrganizationActivityInbox } from "./OrganizationActivityInbox";
 import type { AccountSession } from "../account/account.types";
-import { Tooltip } from "@fluentui/react-components";
+import { Tooltip, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
 import {
   AddRegular,
   OpenRegular,
   PeopleAddRegular,
   SignOutRegular,
   PeopleRegular,
+  MoreHorizontalRegular,
   SettingsRegular
 } from "@fluentui/react-icons";
 import { OrganizationMemberGovernancePanel } from "./OrganizationMemberGovernancePanel";
@@ -77,16 +78,20 @@ export function OrganizationSidebarPanel({
         <Button appearance="primary" icon={<PeopleAddRegular />} onClick={onLoginRequired}>登录后使用组织空间</Button>
       </div> : <div className="organization-sidebar-actions">
         <Tooltip content="打开组织窗口" relationship="label"><Button appearance="subtle" aria-label="打开组织窗口" icon={<OpenRegular />} onClick={onOpenWindow} /></Tooltip>
+        {!summary ? <>
         <Tooltip content={canCreateOrganization ? "创建组织" : "当前账号暂不可创建组织"} relationship="description">
           <Button appearance="subtle" aria-label="创建组织" icon={<AddRegular />} disabled={!canCreateOrganization || !onCreateOrganization} onClick={onCreateOrganization} />
         </Tooltip>
         <Button appearance="subtle" icon={<PeopleAddRegular />} onClick={onJoinOrganization}>加入组织</Button>
+        </> : null}
         {summary && canInviteMembers ? <Tooltip content="邀请成员" relationship="label">
           <Button appearance="subtle" aria-label="邀请成员" icon={<PeopleAddRegular />} onClick={() => onInviteMember?.(summary)} />
         </Tooltip> : null}
-        {summary ? <Tooltip content="退出组织" relationship="label">
-          <Button appearance="subtle" aria-label="退出组织" icon={<SignOutRegular />} onClick={() => onLeaveOrganization?.(summary)} />
-        </Tooltip> : null}
+        {summary ? <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="组织管理" icon={<MoreHorizontalRegular />} /></MenuTrigger><MenuPopover><MenuList>
+          <MenuItem icon={<AddRegular />} disabled={!canCreateOrganization || !onCreateOrganization} onClick={onCreateOrganization}>创建组织</MenuItem>
+          <MenuItem icon={<PeopleAddRegular />} onClick={onJoinOrganization}>加入组织</MenuItem>
+          <MenuItem icon={<SignOutRegular />} onClick={() => onLeaveOrganization?.(summary)}>退出组织</MenuItem>
+        </MenuList></MenuPopover></Menu> : null}
       </div>}
       {accountSession && <OrganizationActivityInbox session={accountSession} endpoint={cloudEndpoint} />}
       {actionMessage ? (

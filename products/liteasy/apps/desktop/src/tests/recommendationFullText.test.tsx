@@ -13,6 +13,7 @@ test("full-text filter lazily resolves missing metadata and passes the discovere
   discover.mockResolvedValue({ status: "available", checkedAt: Date.now(), url: "https://repository.test/paper.pdf" });
   render(<RecommendationList items={[item(1)]} canSave pendingIds={[]} onOpen={onOpen} onSave={() => {}} onDismiss={() => {}} />);
   expect(discover).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "推荐筛选" }));
   fireEvent.click(screen.getByRole("checkbox", { name: "可下载 PDF" }));
   await waitFor(() => expect(discover).toHaveBeenCalledOnce());
   const row = await screen.findByRole("button", { name: "查看推荐 Paper 1" });

@@ -1,4 +1,4 @@
-import { ActionButton as Button } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, IconAction, ContextualActions } from "../../shared/ui/productPrimitives";
 import { citationPaper, normalizeCitationDoi, type CitationPaper } from "../citation-graph/citationGraph";
 import { createCitationGraphClient } from "../citation-graph/citationGraphClient";
 import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
@@ -34,6 +34,8 @@ import {
 import { Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Field, Popover, PopoverSurface, PopoverTrigger, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Select, Textarea, Tooltip, useRestoreFocusTarget } from "@fluentui/react-components";
 import {
   AddRegular,
+  MoreHorizontalRegular,
+  InfoRegular,
   FilterRegular,
   ArrowClockwiseRegular,
   ArrowResetRegular,
@@ -417,14 +419,16 @@ function folderTransferSource(folder: ExplorerFolder): LibraryResourceFolderSour
 
 function SectionHeader(props: {
   actions?: ReactNode;
-  count: number;
+  count: number | null;
+  primaryAction?: ReactNode;
+  description?: string;
   expanded: boolean;
   icon: ReactNode;
   onToggle: () => void;
   title: string;
 }) {
   return (
-    <div className="library-section-header-row">
+    <div className="library-section-header-row product-contextual-owner">
       <button
         aria-label={`${props.expanded ? "收起" : "展开"}${props.title}`}
         aria-expanded={props.expanded}
@@ -437,9 +441,9 @@ function SectionHeader(props: {
         </span>
         <span aria-hidden="true" className="library-section-icon">{props.icon}</span>
         <span className="library-section-title">{props.title}</span>
-        <span className="library-section-count">{props.count}</span>
+        <span className="library-section-count">{props.count ?? "…"}</span>
       </button>
-      {props.actions ? <div className="library-section-actions">{props.actions}</div> : null}
+      <div className="library-section-actions">{props.primaryAction}{props.actions || props.description ? <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label={`${props.title}更多操作`} icon={<MoreHorizontalRegular />} appearance="subtle" /></MenuTrigger><MenuPopover><MenuList>{props.description ? <MenuItem disabled icon={<InfoRegular />}>{props.description}</MenuItem> : null}{props.actions}</MenuList></MenuPopover></Menu> : null}</div>
     </div>
   );
 }
@@ -1126,7 +1130,7 @@ function LibraryPaneContent({
     const row = (
       <div
         aria-busy={pending}
-        className="library-paper-row"
+        className="library-paper-row product-contextual-owner"
         onClick={(event) => { if (!(event.target as HTMLElement).closest("button,input")) selectEntry(event); }}
         onFocus={inspectEntry}
         draggable={!pending && canStartResourceDrag(entry.source)}
@@ -1241,10 +1245,10 @@ function LibraryPaneContent({
               </MenuList>
             </MenuPopover>
           </Menu>
-          <LibraryTagChips entry={catalogById.get(entry.id) ?? { id: entry.id, title: entry.label, format: "pdf" }} onSelect={selectTag} />
+          <LibraryTagChips limit={2} entry={catalogById.get(entry.id) ?? { id: entry.id, title: entry.label, format: "pdf" }} onSelect={selectTag} />
         </div>
         {!entry.bodyAvailable ? <span className="library-entry-status">仅元数据</span> : null}
-        {sourcePaper ? <ResourceLocationButton target={{ kind: "paper", paperId: sourcePaper.id }} /> : null}
+        {sourcePaper ? <ContextualActions selected={selected} expanded={childrenExpanded} menuOpen={locationEntryId === entry.id}><ResourceLocationButton target={{ kind: "paper", paperId: sourcePaper.id }} onOpenChange={open => setLocationEntryId(open ? entry.id : undefined)} /></ContextualActions> : null}
       </div>
     );
     return (
@@ -1487,20 +1491,9 @@ function LibraryPaneContent({
     }
   }
 
+  const [locationEntryId, setLocationEntryId] = useState<string>();
   function iconAction(label: string, icon: ReactElement, action: () => void, disabled = false) {
-    return (
-      <Tooltip content={label} relationship="label">
-        <Button
-          appearance="subtle"
-          aria-label={label}
-          {...restoreLibraryFocus}
-          disabled={disabled}
-          icon={icon}
-          onClick={action}
-          size="small"
-        />
-      </Tooltip>
-    );
+    return <MenuItem icon={icon} disabled={disabled} onClick={action}>{label}</MenuItem>;
   }
 
   const localCount = (localLibrarySnapshot?.entries.length ?? 0) + (fileLibrary?.entries.filter((entry) => entry.format !== "pdf").length ?? 0);
@@ -1586,7 +1579,7 @@ function LibraryPaneContent({
       </div>
       {hasFilters ? <div className="library-active-filters" role="status">筛选结果：{filteredIds?.size ?? 0} 个资产
         <Button appearance="subtle" size="small" onClick={() => { resetFilters(); setSearch(""); }}>清除筛选</Button></div> : null}
-      <p className="library-drag-help">将文件拖到目录名称上导入；拖动库内条目可整理位置。</p>
+      {localCount === 0 && !query ? <p className="library-drag-help">将文件拖到目录名称上导入；拖动库内条目可整理位置。</p> : null}
       {message || fileLibrary?.message ? <div aria-live="polite" className="library-resource-action-message">{message || fileLibrary?.message}</div> : null}
 
       {citationGraphOpen ? <Suspense fallback={<p role="status">正在打开文献引用图…</p>}>
@@ -1606,17 +1599,18 @@ function LibraryPaneContent({
           actions={<>
             {iconAction("文献引用图", <ShareRegular />, () => setCitationGraphOpen(true))}
             {iconAction("新建本地目录", <FolderAddRegular />, () => openCreateFolderDialog("local"), !localLibrarySnapshot)}
-            {iconAction(fileLibrary ? "导入文件" : "导入 PDF", <AddRegular />, openLocalPdfPicker, fileLibrary ? fileLibrary.pending : !localLibrarySnapshot)}
             {iconAction("从 Zotero 导出目录导入 PDF", <FolderOpenRegular />, () => zoteroDirectoryInputRef.current?.click(), !localLibrarySnapshot)}
             {iconAction("刷新本地文献库", <ArrowClockwiseRegular />, () => void onRefreshLocalLibrary?.())}
           </>}
-          count={localCount}
+          primaryAction={<IconAction density="compact" label={fileLibrary ? "导入文件" : "导入 PDF"} icon={<AddRegular />} onClick={openLocalPdfPicker} disabled={fileLibrary ? fileLibrary.pending : !localLibrarySnapshot} />}
+          description="本机文件 · 保存在此设备。将文件拖到目录名称上导入；拖动库内条目可整理位置。"
+          count={localLibrarySnapshot ? localCount : null}
           expanded={!collapsedSections.includes("local")}
           icon={<FolderRegular />}
           onToggle={() => toggleSection("local")}
           title="本地文献库"
         />
-        <p className="library-scope-description">本机文件 · 保存在此设备</p>
+
         <LiteratureHydrationStatus hydration={literatureHydration} />
         {dropHover?.key === dropKey("local") ? <div className="library-drop-feedback" role="status">{dropHover.label}</div> : null}
         <input
@@ -1733,13 +1727,14 @@ function LibraryPaneContent({
             {iconAction("新建收藏目录", <FolderAddRegular />, () => openCreateFolderDialog("collection"), !accountSessionAvailable)}
             {iconAction("刷新收藏", <ArrowClockwiseRegular />, () => void collection.refresh(), !accountSessionAvailable)}
           </>}
-          count={collectionCount}
+          description="个人云收藏 · 当前账号的云端副本，未因此发布到 Intuecho"
+          count={collection.status === "loading" ? null : collectionCount}
           expanded={!collapsedSections.includes("collection")}
           icon={<BookmarkRegular />}
           onToggle={() => toggleSection("collection")}
           title="收藏"
         />
-        <p className="library-scope-description">个人云收藏 · 当前账号的云端副本，未因此发布到 Intuecho</p>
+
         {!collapsedSections.includes("collection") ? (
           <div className="library-section-content">
             {!accountSessionAvailable ? (
@@ -1765,7 +1760,7 @@ function LibraryPaneContent({
         <SectionHeader
           actions={<>
             {iconAction("刷新推荐", <ArrowClockwiseRegular />, () => onRefreshRecommendations?.(), !(accountSessionAvailable || localRecommendations) || recommendationPending || !onRefreshRecommendations)}
-            {iconAction("清除推荐缓存", <DeleteDismissRegular />, onClearRecommendations, !(accountSessionAvailable || localRecommendations))}
+            {iconAction("清除推荐缓存", <DeleteDismissRegular />, () => { if (window.confirm("清除当前推荐缓存？已收藏的文献不受影响。")) onClearRecommendations(); }, !(accountSessionAvailable || localRecommendations))}
           </>}
           count={recommendationItems.length}
           expanded={!collapsedSections.includes("recommendation")}
@@ -1815,13 +1810,14 @@ function LibraryPaneContent({
             )}
             {iconAction("刷新组织文献库", <ArrowClockwiseRegular />, () => void organization.refresh(), !organizationScope)}
           </>}
-          count={organizationCount}
+          description="组织文献 · 访问和下载遵循当前组织权限"
+          count={organization.status === "loading" ? null : organizationCount}
           expanded={!collapsedSections.includes("organization")}
           icon={<OrganizationRegular />}
           onToggle={() => toggleSection("organization")}
           title={organizationWorkspaceLabel}
         />
-        <p className="library-scope-description">组织文献 · 访问和下载遵循当前组织权限</p>
+
         {!collapsedSections.includes("organization") ? (
           <div className="library-section-content">
             {!accountSessionAvailable ? (
@@ -1915,7 +1911,7 @@ function TrashGroup(props: {
       <div className="library-folder-row">
         <button aria-expanded={expanded} className="library-disclosure" onClick={() => setExpanded(!expanded)} type="button">{expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</button>
         <button className="library-folder-name" onClick={() => setExpanded(!expanded)} type="button"><DeleteRegular /><span>回收站</span></button>
-        <Tooltip content="清空回收站" relationship="label"><Button appearance="subtle" aria-label="清空本地回收站" icon={<DeleteDismissRegular />} onClick={() => void props.onEmpty()} size="small" /></Tooltip>
+        <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="本地回收站更多操作" icon={<MoreHorizontalRegular />} appearance="subtle" /></MenuTrigger><MenuPopover><MenuList><MenuItem icon={<DeleteDismissRegular />} onClick={() => { if (window.confirm("永久清空本地回收站？其中的文件将无法恢复。")) void props.onEmpty(); }}>清空本地回收站</MenuItem></MenuList></MenuPopover></Menu>
       </div>
       {expanded ? <ul className="library-resource-tree">{props.entries.map((entry) => (
         <li className="library-paper-row" key={entry.trashId}>
@@ -1925,7 +1921,7 @@ function TrashGroup(props: {
             {formatByteLength(entry.byteLength)} · {formatPurgeTime(entry.purgeAfter)}到期
           </span>
           <Tooltip content="恢复" relationship="label"><Button appearance="subtle" aria-label={`恢复 ${entry.name}`} icon={<ArrowResetRegular />} onClick={() => void props.onRestore(entry)} size="small" /></Tooltip>
-          <Tooltip content="永久删除" relationship="label"><Button appearance="subtle" aria-label={`永久删除 ${entry.name}`} icon={<DeleteDismissRegular />} onClick={() => void props.onPurge(entry)} size="small" /></Tooltip>
+          <Tooltip content="永久删除" relationship="label"><Button appearance="subtle" aria-label={`永久删除 ${entry.name}`} icon={<DeleteDismissRegular />} onClick={() => { if (window.confirm(`永久删除“${entry.name}”？此操作无法恢复。`)) void props.onPurge(entry); }} size="small" /></Tooltip>
         </li>
       ))}</ul> : null}
     </div>
@@ -1967,14 +1963,14 @@ function CloudTrashGroup(props: {
       <div className="library-folder-row">
         <button aria-expanded={expanded} className="library-disclosure" onClick={() => setExpanded(!expanded)} type="button">{expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</button>
         <button className="library-folder-name" onClick={() => setExpanded(!expanded)} type="button"><DeleteRegular /><span>回收站</span></button>
-        <Tooltip content="清空回收站" relationship="label"><Button appearance="subtle" aria-label="清空云端回收站" icon={<DeleteDismissRegular />} onClick={() => void client.emptyTrash(props.scope, props.tree.revision).then(props.onRefresh)} size="small" /></Tooltip>
+        <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="云端回收站更多操作" icon={<MoreHorizontalRegular />} appearance="subtle" /></MenuTrigger><MenuPopover><MenuList><MenuItem icon={<DeleteDismissRegular />} onClick={() => { if (window.confirm("永久清空此云端回收站？其中的文件和目录将无法恢复。")) void client.emptyTrash(props.scope, props.tree.revision).then(props.onRefresh); }}>清空云端回收站</MenuItem></MenuList></MenuPopover></Menu>
       </div>
       {expanded ? <ul className="library-resource-tree">
         {props.tree.folders.filter((folder) => !folder.parentFolderId).map((folder) => (
-          <li className="library-paper-row" key={folder.folderId}><FolderRegular /><span className="library-paper-title">{folder.name}</span><Button appearance="subtle" aria-label={`恢复 ${folder.name}`} icon={<ArrowResetRegular />} onClick={() => void restoreFolder(folder)} size="small" /><Button appearance="subtle" aria-label={`永久删除 ${folder.name}`} icon={<DeleteDismissRegular />} onClick={() => void purgeFolder(folder)} size="small" /></li>
+          <li className="library-paper-row" key={folder.folderId}><FolderRegular /><span className="library-paper-title">{folder.name}</span><Button appearance="subtle" aria-label={`恢复 ${folder.name}`} icon={<ArrowResetRegular />} onClick={() => void restoreFolder(folder)} size="small" /><Button appearance="subtle" aria-label={`永久删除 ${folder.name}`} icon={<DeleteDismissRegular />} onClick={() => { if (window.confirm(`永久删除云端目录“${folder.name}”？此操作无法恢复。`)) void purgeFolder(folder); }} size="small" /></li>
         ))}
         {props.tree.entries.map((entry) => (
-          <li className="library-paper-row" key={entry.documentId}><DocumentTextRegular /><span className="library-paper-title">{entry.title}</span><Button appearance="subtle" aria-label={`恢复 ${entry.title}`} icon={<ArrowResetRegular />} onClick={() => void client.restoreDocument(props.scope, entry.documentId, props.tree.revision).then(props.onRefresh)} size="small" /><Button appearance="subtle" aria-label={`永久删除 ${entry.title}`} icon={<DeleteDismissRegular />} onClick={() => void client.purgeEntry(props.scope, entry.documentId, props.tree.revision).then(props.onRefresh)} size="small" /></li>
+          <li className="library-paper-row" key={entry.documentId}><DocumentTextRegular /><span className="library-paper-title">{entry.title}</span><Button appearance="subtle" aria-label={`恢复 ${entry.title}`} icon={<ArrowResetRegular />} onClick={() => void client.restoreDocument(props.scope, entry.documentId, props.tree.revision).then(props.onRefresh)} size="small" /><Button appearance="subtle" aria-label={`永久删除 ${entry.title}`} icon={<DeleteDismissRegular />} onClick={() => { if (window.confirm(`永久删除云端文件“${entry.title}”？此操作无法恢复。`)) void client.purgeEntry(props.scope, entry.documentId, props.tree.revision).then(props.onRefresh); }} size="small" /></li>
         ))}
       </ul> : null}
     </div>

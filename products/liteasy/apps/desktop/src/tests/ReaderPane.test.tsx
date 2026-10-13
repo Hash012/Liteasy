@@ -999,8 +999,9 @@ describe("ReaderPane", () => {
       />
     );
 
-    await user.click(screen.getByRole("button", { name: "在 PDF 中添加 Markdown 文本框" }));
-    expect(screen.getByRole("button", { name: "在 PDF 中添加 Markdown 文本框" })).toHaveAttribute(
+    await user.click(screen.getByRole("button", { name: "PDF 批注工具" }));
+    await user.click(screen.getByRole("button", { name: "添加 Markdown 文本框" }));
+    expect(screen.getByRole("button", { name: "添加 Markdown 文本框" })).toHaveAttribute(
       "aria-pressed",
       "true"
     );
@@ -1044,7 +1045,8 @@ describe("ReaderPane", () => {
     fireEvent(window, new MouseEvent("pointermove", { bubbles: true, clientX: 300, clientY: 280 }));
     fireEvent(window, new MouseEvent("pointerup", { bubbles: true, clientX: 300, clientY: 280 }));
     await waitFor(() => expect(Number.parseFloat(textBox.style.left)).toBeGreaterThan(initialLeft));
-    expect(screen.getByRole("button", { name: "在 PDF 中添加 Markdown 文本框" })).toHaveAttribute(
+    await user.click(screen.getByRole("button", { name: "PDF 批注工具" }));
+    expect(screen.getByRole("button", { name: "添加 Markdown 文本框" })).toHaveAttribute(
       "aria-pressed",
       "false"
     );

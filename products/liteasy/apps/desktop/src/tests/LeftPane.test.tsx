@@ -175,17 +175,22 @@ describe("LeftPane", () => {
     });
     const { rerender } = render(<LeftPane {...props} />);
     const panel = within(screen.getByRole("region", { name: "关联推荐" }));
-    expect(panel.getByText("Cached attention paper")).toBeInTheDocument();
+    expect(panel.getByRole("button", { name: "查看推荐 Cached attention paper" })).toBeInTheDocument();
     expect(panel.getByRole("status")).toHaveTextContent("正在更新推荐，仍可浏览已有结果…");
-    expect(panel.getByRole("button", { name: "刷新推荐" })).toBeDisabled();
+    await user.click(panel.getByRole("button", { name: "关联推荐更多操作" }));
+    expect(screen.getByRole("menuitem", { name: "刷新推荐" })).toHaveAttribute("aria-disabled", "true");
+    await user.keyboard("{Escape}");
 
     rerender(<LeftPane {...props} recommendationPending={false} />);
     expect(panel.queryByRole("status")).not.toBeInTheDocument();
-    await user.click(panel.getByRole("button", { name: "刷新推荐" }));
+    await user.click(panel.getByRole("button", { name: "关联推荐更多操作" }));
+    await user.click(screen.getByRole("menuitem", { name: "刷新推荐" }));
     expect(onRefreshRecommendations).toHaveBeenCalledOnce();
 
     rerender(<LeftPane {...props} accountSession={null} recommendationPending={false} />);
-    expect(panel.getByRole("button", { name: "刷新推荐" })).toBeDisabled();
+    await user.click(panel.getByRole("button", { name: "关联推荐更多操作" }));
+    expect(screen.getByRole("menuitem", { name: "刷新推荐" })).toHaveAttribute("aria-disabled", "true");
+    await user.keyboard("{Escape}");
     expect(panel.queryByText("Cached attention paper")).not.toBeInTheDocument();
   });
 
@@ -215,7 +220,8 @@ describe("LeftPane", () => {
     const row = within(panel.getByRole("button", { name: `查看推荐 ${paper.title}` }));
     expect(row.getByText(dateLabel)).toBeInTheDocument();
     expect(panel.queryByText(/^引用 /)).not.toBeInTheDocument();
-    expect(row.getByText(paper.reason)).toBeInTheDocument();
+    await userEvent.click(panel.getByText("推荐详情"));
+    expect(panel.getByText(paper.reason)).toBeInTheDocument();
     expect(panel.queryByText(/2026-09-21|2024-02-29|2024-02-30|invalid-date|NaN/)).not.toBeInTheDocument();
   });
 
@@ -498,7 +504,9 @@ describe("LeftPane", () => {
     expect(candidates).toHaveTextContent("/library/account-a");
     expect(candidates).toHaveTextContent("/library/account-b");
     expect(screen.queryByText(/internal paths/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "新建本地目录" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "本地文献库更多操作" }));
+    expect(screen.getByRole("menuitem", { name: "新建本地目录" })).toHaveAttribute("aria-disabled", "true");
+    await userEvent.keyboard("{Escape}");
     expect(screen.getByRole("button", { name: "导入 PDF" })).toBeDisabled();
 
     await userEvent.click(screen.getAllByRole("button", { name: "设为当前库" })[0]);
@@ -735,13 +743,14 @@ describe("LeftPane", () => {
     expect(onDismissRecommendation).toHaveBeenCalledWith(expect.objectContaining({ ...recommendation, fullText: { status: "unknown" } }));
   });
 
-  test("disables organization writes when policy state is unavailable", () => {
+  test("disables organization writes when policy state is unavailable", async () => {
     render(<LeftPane {...createProps({
       leftRailView: "library",
       organizationId: "org-1",
       organizationSummary: organizationSummary({ policy: undefined })
     })} />);
-    expect(screen.getByRole("button", { name: "新建组织目录" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: /组织文献库.*更多操作/ }));
+    expect(screen.getByRole("menuitem", { name: "新建组织目录" })).toHaveAttribute("aria-disabled", "true");
   });
 
   test("renders the settings storage boundary", () => {

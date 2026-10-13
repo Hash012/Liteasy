@@ -76,7 +76,7 @@ test("old continuations cannot retarget a newly shared paper and account changes
 
 test("UI shares only after click and revokes on scope change, close, and account switch", () => {
   const view = render(<PaperReviewSharePanel scopeKey="a" ready hostAvailable source={source()} />);
-  fireEvent.click(screen.getByText("ChatGPT 评论 Review"));
+  fireEvent.click(screen.getByText("共享评论"));
   expect(() => paperReviewShareStore.read({ operation: "current" })).toThrow();
   fireEvent.click(screen.getByRole("button", { name: "共享本篇评论" }));
   expect(paperReviewShareStore.read({ operation: "current" }).totalComments).toBe(1);

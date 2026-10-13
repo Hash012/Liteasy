@@ -22,7 +22,7 @@ import {
   type SetStateAction,
   type ReactElement,
 } from "react";
-import { Checkbox, Input, Textarea, Tooltip,  } from "@fluentui/react-components";
+import { Checkbox, Input, Textarea, Tooltip, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
 import {
   ArrowDownloadRegular,
   DismissRegular,
@@ -434,13 +434,16 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
               />
             </Tooltip>
           ) : null}
-          {model.compileBoardReport && exportPort ? <><Tooltip content="导出白板阅读报告" relationship="description"><Button size="small" appearance="subtle" aria-label="导出白板阅读报告" icon={<ArrowDownloadRegular />} disabled={!model.board || model.busy} onClick={() => setExportReport(true)} /></Tooltip>
+          {model.compileBoardReport && exportPort ? <>
             {exportReport && model.board ? <DocumentExportDialog open allowSpatial jobScope={exportPort.jobScope} sourceIdentity={JSON.stringify([model.repository.scopeId, model.board, model.placements])} title={model.board.title} initialFormat="markdown"
               nodes={model.placements.map((p, index) => ({ id: p.placementId, title: `卡片 ${index + 1}` }))}
               compile={(options, signal) => model.compileBoardReport!(options, signal)} publish={exportPort.publish}
               onClose={() => setExportReport(false)} onOutcome={outcome => { if (outcome.status !== "cancelled") model.setStatus(outcome.record.location === "desktop" ? `已导出到 ${outcome.record.path}` : "已交给浏览器下载，保存位置由浏览器管理。"); }} /> : null}
           </> : null}
-          {model.exportBoardBundle ? <Tooltip content="导出白板与附件" relationship="description"><Button size="small" appearance="subtle" aria-label="导出白板与附件" icon={<ArrowDownloadRegular />} disabled={!model.board || model.busy} onClick={() => void model.exportBoardBundle!().then((blob) => { const url = URL.createObjectURL(blob), link = document.createElement("a"); link.href = url; link.download = "Liteasy-Canvas.zip"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }).catch(error)} /></Tooltip> : null}
+          {model.compileBoardReport && exportPort || model.exportBoardBundle ? <Menu><MenuTrigger disableButtonEnhancement><Button size="small" icon={<ArrowDownloadRegular />}>导出</Button></MenuTrigger><MenuPopover><MenuList>
+            {model.compileBoardReport && exportPort ? <MenuItem disabled={!model.board || model.busy} onClick={() => setExportReport(true)}>导出白板阅读报告（PDF / Markdown / DOCX）</MenuItem> : null}
+            {model.exportBoardBundle ? <MenuItem disabled={!model.board || model.busy} onClick={() => void model.exportBoardBundle!().then((blob) => { const url = URL.createObjectURL(blob), link = document.createElement("a"); link.href = url; link.download = "Liteasy-Canvas.zip"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }).catch(error)}>导出可编辑白板与附件包</MenuItem> : null}
+          </MenuList></MenuPopover></Menu> : null}
           <Tooltip content="关闭白板" relationship="description">
             <Button
               appearance="subtle"

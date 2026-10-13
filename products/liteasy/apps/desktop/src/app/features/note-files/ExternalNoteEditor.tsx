@@ -1,6 +1,8 @@
+import { IconAction, SourceDisclosure } from "../../shared/ui/productPrimitives";
+import { MoreHorizontalRegular, ArrowClockwiseRegular } from "@fluentui/react-icons";
 import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
 import { useContext, useEffect, useMemo, useState } from "react";
-import { Button, Select } from "@fluentui/react-components";
+import { Button, Select, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
 import { BookOpenRegular, EditRegular, SaveRegular } from "@fluentui/react-icons";
 import { ContentView } from "../markdown/ContentView";
 import { legacyContent } from "../markdown/contentFragment";
@@ -43,11 +45,11 @@ export function ExternalNoteEditor({ model }: { model: ExternalNoteModel }) {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void model.save(); }
   }}>
     <header>
-      <div><strong>{session.snapshot.name}{dirty ? " · 未保存" : ""}</strong><small>{session.snapshot.path}</small></div>
+      <div><strong>{session.snapshot.name}{dirty ? " · 未保存" : ""}</strong><SourceDisclosure summary="文件位置"><small>{session.snapshot.path}</small></SourceDisclosure></div>
       <MarkdownFontControl {...font} />
       {!live && <Button icon={session.editing ? <BookOpenRegular /> : <EditRegular />} onClick={() => model.setEditing(!session.editing)}>{session.editing ? "阅读" : "编辑"}</Button>}
       <Button appearance="primary" icon={<SaveRegular />} disabled={model.busy || !dirty} onClick={() => void model.save()}>保存</Button>
-      <Button disabled={model.busy} onClick={() => dirty ? setConfirmReload(true) : void model.reload()}>重新载入</Button>
+      <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="更多笔记操作" icon={<MoreHorizontalRegular />} /></MenuTrigger><MenuPopover><MenuList><MenuItem icon={<ArrowClockwiseRegular />} disabled={model.busy} onClick={() => dirty ? setConfirmReload(true) : void model.reload()}>重新载入</MenuItem></MenuList></MenuPopover></Menu>
     </header>
     {live ? <span role="status" className="markdown-save-status">{model.busy ? "正在保存…" : session.changed || model.error || model.status?.editing ? "自动保存已暂停 · 草稿保留，可手动保存" : dirty ? preference.autosave ? "等待自动保存…" : "未保存 · Ctrl+S 保存" : "已保存"}</span> : null}
     {model.drafts.length ? <nav aria-label="未保存的文件">未保存的草稿：{model.drafts.map((file) => <Button key={`${file.mountId}:${file.path}`} disabled={model.busy}

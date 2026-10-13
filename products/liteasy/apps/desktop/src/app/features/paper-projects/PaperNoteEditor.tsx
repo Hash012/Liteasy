@@ -1,6 +1,9 @@
+import { BookOpenRegular, EditRegular, SaveRegular } from "@fluentui/react-icons";
+import { IconAction, SourceDisclosure } from "../../shared/ui/productPrimitives";
+import { MoreHorizontalRegular, ArrowClockwiseRegular } from "@fluentui/react-icons";
 import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
 import { useContext, useEffect, useMemo, useState } from "react";
-import { Button, Select } from "@fluentui/react-components";
+import { Button, Select, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
 import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { ReferenceSourceContext, ResourceReferencesContext } from "../resource-links/ResourceReferencesContext";
 import { liteasyPath } from "../resource-filesystem/liteasyPath";
@@ -31,9 +34,9 @@ export function PaperNoteEditor({ model }: { model: Model }) {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void model.save(); }
   }}><header><strong>{note.object.title}{dirty ? " · 未保存" : ""}</strong>
     <MarkdownFontControl {...font} />
-    {!live && <Button onClick={() => setEditing(!editing)}>{editing ? "阅读" : "编辑"}</Button>}
-    <Button appearance="primary" disabled={!dirty || model.busy} onClick={() => void model.save()}>保存</Button>
-    <Button disabled={model.busy} onClick={() => dirty ? setConfirm(true) : void model.reload()}>重新载入</Button></header>
+    {!live && <Button icon={editing ? <BookOpenRegular /> : <EditRegular />} onClick={() => setEditing(!editing)}>{editing ? "阅读" : "编辑"}</Button>}
+    <Button appearance="primary" icon={<SaveRegular />} disabled={!dirty || model.busy} onClick={() => void model.save()}>保存</Button>
+    <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="更多笔记操作" icon={<MoreHorizontalRegular />} /></MenuTrigger><MenuPopover><MenuList><MenuItem icon={<ArrowClockwiseRegular />} disabled={model.busy} onClick={() => dirty ? setConfirm(true) : void model.reload()}>重新载入</MenuItem></MenuList></MenuPopover></Menu></header>
     {live ? <span role="status" className="markdown-save-status">{model.busy ? "正在保存…" : model.error ? "自动保存已暂停 · 草稿保留" : dirty ? preference.autosave ? "等待自动保存…" : "未保存 · Ctrl+S 保存" : "已保存"}</span> : null}
     {model.drafts.length ? <nav aria-label="未保存的论文笔记">{model.drafts.map((draft) => <Button key={draft.object.objectId} onClick={() => model.select(draft.object.objectId)}>{draft.object.title}</Button>)}</nav> : null}
     {confirm ? <div role="group" aria-label="放弃草稿确认"><p>重新载入会放弃此笔记未保存的修改。</p><Button onClick={() => { setConfirm(false); void model.reload(); }}>放弃修改并载入</Button><Button onClick={() => setConfirm(false)}>保留草稿</Button></div> : null}

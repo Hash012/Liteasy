@@ -12,3 +12,4 @@
 .research-workbench th,.research-workbench td{padding:6px;border-bottom:1px solid var(--colorNeutralStroke2);text-align:left}
 .research-notice{padding:8px;border:1px solid var(--colorNeutralStroke2);border-radius:4px}
 @media(max-width:760px){.research-grid{grid-template-columns:1fr}}
+.research-workbench fieldset[hidden] { display: none; }

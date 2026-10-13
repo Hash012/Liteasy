@@ -1,4 +1,4 @@
-import { ActionButton as Button } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, SourceDisclosure } from "../../shared/ui/productPrimitives";
 import { SearchOptions } from "../search/SearchOptions";
 import { compileSearchQuery } from "../search/searchQuery";
 import { ARTIFACT_CONTEXT_MIME } from "../object-transfer/contextTransfer";
@@ -190,7 +190,7 @@ export function ArtifactLibraryPane({
       <div className="artifact-library-filters">
       <Input
         aria-label="搜索产物"
-        className="artifact-library-search"
+        className="artifact-library-search" size="small"
         contentBefore={<SearchRegular aria-hidden="true" />}
         onChange={(_, data) => setQuery(data.value)}
         placeholder="搜索名称、论文、作者或 DOI"
@@ -198,6 +198,7 @@ export function ArtifactLibraryPane({
         value={query}
       />
 
+      <SourceDisclosure summary={`筛选${filterActive || sort !== "recent" ? " · 已启用" : ""}`}>
       <SearchOptions query={query} onChange={setQuery} tags={Object.values(artifactTypeLabels)} />
       <Select aria-label="按来源论文筛选" value={paperFilter} onChange={(_, data) => setPaperFilter(data.value)} size="small">
         <option value="">全部来源论文</option>
@@ -213,12 +214,13 @@ export function ArtifactLibraryPane({
           <option value="recent">最近生成</option><option value="title">名称排序</option>
         </Select>
       </div>
+      </SourceDisclosure>
       <div className="artifact-library-filter-summary">
         <span role="status">{activeView === "saved" ? filteredArtifacts.length : filteredExports.length} 项</span>
         {activePaperId && papers.some(({ paper }) => paper.id === activePaperId) ? <Button size="small" appearance="subtle"
           aria-pressed={paperFilter === activePaperId} icon={<BookOpenRegular />}
           onClick={() => setPaperFilter(paperFilter === activePaperId ? "" : activePaperId)}>当前论文</Button> : null}
-        {filterActive ? <Button size="small" appearance="subtle" onClick={() => { setQuery(""); setPaperFilter(""); setTypeFilter(""); }}>清除筛选</Button> : null}
+        {filterActive || sort !== "recent" ? <Button size="small" appearance="subtle" onClick={() => { setQuery(""); setPaperFilter(""); setTypeFilter(""); setSort("recent"); }}>清除筛选</Button> : null}
       </div>
       </div>
       <div className="artifact-library-results">

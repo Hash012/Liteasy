@@ -1,6 +1,6 @@
 .app-frame.workspace-frame {
   --shell-top-height: 40px;
-  --shell-bottom-height: 26px;
+  --shell-bottom-height: 32px;
   --shell-horizontal-gap: 8px;
   --shell-padding-x: 10px;
   --shell-icon-size: 16px;
@@ -78,14 +78,14 @@
   line-height: 18px;
 }
 
-.shell-file-details { display: flex; flex-wrap: wrap; align-items: center; flex: 1 1 auto; min-width: 0; column-gap: var(--shell-horizontal-gap, 8px); }
-.shell-file-name { flex: 0 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; color: var(--colorNeutralForeground1); }
-.shell-file-metadata { flex: 0 1 auto; min-width: 0; max-width: 100%; white-space: nowrap; color: var(--colorNeutralForeground3); }
+.shell-file-details { display: flex; flex-wrap: nowrap; align-items: center; flex: 1 1 auto; min-width: 0; column-gap: var(--shell-horizontal-gap, 8px); }
+.shell-file-name { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--colorNeutralForeground1); }
+.shell-file-metadata { flex: 0 0 auto; min-width: 0; max-width: 60%; white-space: nowrap; color: var(--colorNeutralForeground3); }
 .shell-file-metadata,
 .shell-file-progress { overflow: hidden; text-overflow: ellipsis; }
 .shell-file-name:focus-visible { outline: 1px solid var(--colorStrokeFocus2); outline-offset: 2px; }
 .shell-file-progress { flex: 0 0 auto; max-width: 48%; }
-.shell-file-progress.has-error { color: var(--colorStatusDangerForeground1); }
+.shell-file-progress.has-error { white-space: normal; overflow: visible; color: var(--colorStatusDangerForeground1); }
 .file-status-bar.is-idle { color: var(--colorNeutralForeground3); }
 
 /* A narrow workspace gutter separates rounded surfaces; the existing grid
@@ -125,7 +125,7 @@
 .shell-window-error { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
 .shell-file-inspector { width: min(680px, calc(100vw - 24px)); padding: 0; max-height: min(680px, calc(100vh - 90px)); overflow: auto; }
 .shell-file-inspector .reading-catalog-details { border: 0; max-width: none; }
-.file-status-bar > button { flex: 0 0 auto; min-height: 22px; height: 22px; padding-block: 0; }
+.file-status-bar > button { flex: 0 0 auto; min-height: 28px; height: 28px; padding-block: 0; }
 
 .workspace-command-bar:has(.shell-window-controls) { padding-right: 0; }
 
@@ -142,4 +142,10 @@
   .workspace-command-bar.has-global-search { grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr); }
   .has-global-search .shell-global-search { padding: 4px; }
   .shell-global-search .shell-global-search-label { display: none; }
+}
+
+@media (pointer: coarse) {
+  .file-status-bar > button { min-height: 44px; min-width: 44px; height: auto; }
+  .workspace-command-bar .shell-icon-button, .has-global-search .shell-global-search, .workspace-command-bar .shell-ai-button { min-width: 44px; min-height: 44px; }
+  .app-frame.workspace-frame { --shell-top-height: 48px; --shell-icon-button: 44px; }
 }

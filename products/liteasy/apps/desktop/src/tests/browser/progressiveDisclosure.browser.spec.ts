@@ -1,0 +1,72 @@
+import { expect, test } from "@playwright/test";
+const fixture = "/src/tests/browser/fixtures/progressive-disclosure.html";
+for (const width of [320, 400, 520]) {
+  test(`context actions preserve geometry and portal focus at ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(fixture);
+    await page.locator("main").evaluate((el, w) => el.style.setProperty("--test-pane-width", `${w}px`), width);
+    const owner = page.getByTestId("owner"), actions = owner.getByRole("group");
+    const trigger = owner.getByRole("button", { name: "条目更多操作" });
+    await page.mouse.move(1100, 700);
+    await expect(actions).toHaveCSS("opacity", "0");
+    const before = (await owner.boundingBox())!;
+    await page.screenshot({ path: info.outputPath("idle.png") });
+    await owner.hover(); await expect(actions).toHaveCSS("opacity", "1");
+    await expect(trigger).toBeVisible();
+    expect((await trigger.boundingBox())!.height).toBe(28);
+    const after = (await owner.boundingBox())!;
+    for (const key of ["x", "y", "width", "height"] as const) expect(Math.abs(before[key] - after[key])).toBeLessThanOrEqual(1);
+    await trigger.focus(); await page.keyboard.press("Enter");
+    await page.getByRole("menuitem", { name: "检查条目" }).hover();
+    await expect(actions).toHaveCSS("opacity", "1");
+    await page.keyboard.press("Escape"); await expect(trigger).toBeFocused();
+    await page.mouse.move(1100, 700); await expect(actions).toHaveCSS("opacity", "1");
+    const row = page.getByRole("button", { name: /^查看推荐 中文标题/ });
+    const rowBefore = (await row.boundingBox())!;
+    await row.focus(); expect((await row.boundingBox())!.height).toBe(rowBefore.height);
+    await page.keyboard.press("Enter"); await expect(page.locator("output")).toHaveText("打开 synthetic");
+    await page.getByRole("button", { name: "推荐筛选" }).click();
+    await page.getByRole("combobox", { name: "推荐发表年份" }).selectOption("2024");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: /^查看推荐/ })).toHaveCount(1);
+    await page.getByRole("button", { name: "推荐筛选" }).click();
+    await expect(page.getByRole("combobox", { name: "推荐发表年份" })).toHaveValue("2024");
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "清除筛选" }).click();
+    await expect(page.getByRole("button", { name: /^查看推荐/ })).toHaveCount(2);
+    await page.getByRole("button", { name: "PDF 批注工具", exact: true }).click();
+    await page.getByRole("button", { name: "添加 Markdown 文本框", exact: true }).click();
+    await page.keyboard.press("Escape");
+    const exit = page.getByRole("button", { name: "结束文本框", exact: true });
+    await expect(exit).toBeVisible();
+    const toolbar = page.getByRole("toolbar", { name: "PDF 导航工具栏" });
+    expect(await toolbar.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    await exit.click();
+    await expect(exit).toHaveCount(0);
+    const status = page.getByLabel("文件状态栏");
+    expect((await status.boundingBox())!.height).toBeLessThanOrEqual(40);
+    expect(await status.locator(".shell-file-metadata").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.getByRole("button", { name: "展开推荐元信息" }).click();
+    await expect(page.getByRole("region", { name: "推荐文献元信息" })).toContainText("Synthetic author");
+    await page.screenshot({ path: info.outputPath("expanded.png") });
+  });
+}
+test("touch, theme and font scaling preserve reachable controls", async ({ browser }, info) => {
+  const context = await browser.newContext({ viewport: { width: 1920, height: 1080 }, hasTouch: true, reducedMotion: "reduce" });
+  const page = await context.newPage(); await page.goto(fixture);
+  for (const theme of ["浅色", "深色"]) for (const ratio of [1, 1.25, 1.5, 2]) {
+    await page.getByRole("button", { name: theme, exact: true }).click();
+    await page.locator("html").evaluate((el, scale) => { el.style.setProperty("--app-font-ratio", String(scale)); el.style.fontSize = `${16 * scale}px`; }, ratio);
+    const actions = page.getByTestId("owner").getByRole("group");
+    await expect(actions).toHaveCSS("opacity", "1");
+    const button = actions.getByRole("button");
+    expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await button.tap(); await page.getByRole("menuitem", { name: "检查条目" }).tap();
+    await expect(page.locator("output")).toHaveText("已执行条目操作");
+    await expect(page.getByRole("button", { name: /^打开详情 中文标题/ })).toBeInViewport();
+    await page.screenshot({ path: info.outputPath(`touch-${theme}-${ratio}.png`) });
+  }
+  await page.emulateMedia({ forcedColors: "active" });
+  await page.screenshot({ path: info.outputPath("touch-forced-colors.png") });
+  await context.close();
+});

@@ -48,3 +48,24 @@ test("exports the recorded Markdown snapshot and navigates to the previous run w
     if (revoked) Object.defineProperty(URL, "revokeObjectURL", revoked); else Reflect.deleteProperty(URL, "revokeObjectURL");
   }
 });
+
+test.each(["queued", "running", "waiting_input", "paused", "succeeded", "failed", "cancelled", "partial"] as const)("keeps the correct primary controls for %s and requires snapshot cleanup confirmation", async status => {
+  const definition = researchTemplateWorkflow("evidence-audit");
+  const run = { schema: "liteasy.workflow-run/v2", id: "state-run", owner: "plugin.paper-lens", digest: "fixture", workflowDigest: "fixture", grantId: "fixture", definition, input: {}, settings: {}, status, createdAt: "2026-10-13", updatedAt: "2026-10-13", elapsedMs: 0, operations: 0, modelCalls: 0, tokens: 0, estimatedTokens: false, revision: "r1", nodes: Object.fromEntries(definition.nodes.map(node => [node.id, { status: "pending", attempts: 0, operations: [] }])) } as WorkflowRun;
+  const execute = vi.fn(), clearSnapshots = vi.fn(async () => {});
+  const host = { workflows: { runner: { list: async () => [run], subscribe: () => () => {}, replay: async () => ({ run, nodes: {}, receipts: {}, missing: [] }), execute, clearSnapshots }, triggers: { list: async () => [] }, error: "" }, openLink: vi.fn() } as unknown as ExtensionWorkbench;
+  const view = render(<ExtensionWorkbenchContext.Provider value={host}><WorkflowRuns /></ExtensionWorkbenchContext.Provider>);
+  fireEvent.click(await screen.findByRole("button", { name: new RegExp(definition.title) }));
+  await screen.findByRole("heading", { name: definition.title });
+  expect(Boolean(screen.queryByRole("button", { name: "继续", exact: true }))).toBe(!["running", "succeeded", "cancelled"].includes(status));
+  expect(Boolean(screen.queryByRole("button", { name: "暂停", exact: true }))).toBe(status === "running");
+  expect(Boolean(screen.queryByRole("button", { name: "取消", exact: true }))).toBe(!["succeeded", "cancelled"].includes(status));
+  expect(execute).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText("更多运行操作"));
+  const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+  try {
+    fireEvent.click(screen.getByRole("button", { name: "清理正文快照" })); expect(clearSnapshots).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "清理正文快照" })); expect(clearSnapshots).toHaveBeenCalledWith("state-run");
+    expect(execute).not.toHaveBeenCalled();
+  } finally { confirm.mockRestore(); view.unmount(); }
+});

@@ -1,3 +1,4 @@
+import { IconAction } from "../../shared/ui/productPrimitives";
 import { SearchOptions } from "../search/SearchOptions";
 import {
   Button,
@@ -18,6 +19,7 @@ import {
   DrawShapeRegular,
   SearchRegular,
   SettingsRegular,
+  MoreHorizontalRegular,
   TextFieldRegular,
   TextColumnOneRegular,
   TextColumnTwoRegular,
@@ -165,8 +167,8 @@ export function PdfReaderToolbar({
       <div aria-label="PDF 导航工具栏" className="pdf-reader-toolbar" role="toolbar">
         {readingControls}
         <div aria-label="页面导航" className="pdf-reader-toolbar-group" role="group">
-          <Button
-            aria-label="上一页"
+          <IconAction density="compact"
+            label="上一页"
             appearance="subtle"
             disabled={currentPage <= 1}
             icon={<ChevronUpRegular />}
@@ -174,8 +176,8 @@ export function PdfReaderToolbar({
             size="small"
             title="上一页"
           />
-          <Button
-            aria-label="下一页"
+          <IconAction density="compact"
+            label="下一页"
             appearance="subtle"
             disabled={currentPage >= pageCount}
             icon={<ChevronDownRegular />}
@@ -199,8 +201,8 @@ export function PdfReaderToolbar({
         </div>
 
         <div aria-label="PDF 比例缩放" className="pdf-reader-toolbar-group" role="group">
-          <Button
-            aria-label="按比例缩小 PDF"
+          <IconAction density="compact"
+            label="按比例缩小 PDF"
             appearance="subtle"
             disabled={zoom <= 70}
             icon={<ZoomOutRegular />}
@@ -209,8 +211,8 @@ export function PdfReaderToolbar({
             title="按比例缩小 PDF（5%）"
           />
           <span aria-label={`PDF 显示比例 ${zoom}%`} className="pdf-zoom-value">{zoom}%</span>
-          <Button
-            aria-label="按比例放大 PDF"
+          <IconAction density="compact"
+            label="按比例放大 PDF"
             appearance="subtle"
             disabled={zoom >= 180}
             icon={<ZoomInRegular />}
@@ -222,47 +224,17 @@ export function PdfReaderToolbar({
 
         <div className="pdf-reader-toolbar-spacer" />
         {parserStatus ? <div className="pdf-parser-status">{parserStatus}</div> : null}
-        <Button
-          aria-label="在 PDF 中添加 Markdown 文本框"
-          appearance={textBoxToolActive ? "primary" : "subtle"}
-          aria-pressed={textBoxToolActive}
-          icon={<TextFieldRegular />}
-          onClick={onToggleTextBoxTool}
-          size="small"
-          title={textBoxToolActive ? "文本框工具已启用；点击页面放置" : "添加 Markdown 文本框"}
-        />
-        <Button aria-label="手绘涂鸦" title="手绘涂鸦" aria-pressed={Boolean(inkActive)}
-          appearance={inkActive ? "primary" : "subtle"} icon={<DrawShapeRegular />} size="small" onClick={onToggleInk} />
-        <Button
-          aria-label={whiteboardOpen ? "关闭 PDF 白板" : "打开 PDF 白板"}
-          appearance={whiteboardOpen ? "primary" : "subtle"}
-          aria-pressed={whiteboardOpen}
-          icon={<WhiteboardRegular />}
-          onClick={onToggleWhiteboard}
-          size="small"
-          title={whiteboardOpen ? "收起 PDF 右侧白板" : "打开 PDF 右侧白板"}
-        />
-        <Button
-          aria-label="显示页边批注"
-          appearance={marginCommentsVisible ? "primary" : "subtle"}
-          aria-pressed={marginCommentsVisible}
-          icon={<CommentRegular />}
-          onClick={onToggleMarginComments}
-          size="small"
-          title={marginCommentsVisible ? "隐藏高亮与划线的页边批注" : "显示高亮与划线的页边批注"}
-        />
-        <Button
-          aria-label="显示批注关联线"
-          appearance={marginCommentConnectorsVisible && marginCommentsVisible ? "primary" : "subtle"}
-          aria-pressed={marginCommentConnectorsVisible}
-          disabled={!marginCommentsVisible}
-          icon={<CommentLinkRegular />}
-          onClick={onToggleMarginCommentConnectors}
-          size="small"
-          title={marginCommentConnectorsVisible ? "隐藏原文与页边批注之间的关联线" : "显示原文与页边批注之间的关联线"}
-        />
-        <Button
-          aria-label="在文档中搜索"
+        {textBoxToolActive ? <Button size="small" appearance="primary" onClick={onToggleTextBoxTool}>结束文本框</Button> : null}
+        {inkActive ? <Button size="small" appearance="primary" onClick={onToggleInk}>结束手绘</Button> : null}
+        <IconAction density="compact" label="显示页边批注" description={marginCommentsVisible ? "隐藏高亮与划线的页边批注" : "显示高亮与划线的页边批注"} appearance={marginCommentsVisible ? "primary" : "subtle"} aria-pressed={marginCommentsVisible} icon={<CommentRegular />} onClick={onToggleMarginComments} />
+        <Popover positioning="below-end"><PopoverTrigger disableButtonEnhancement><IconAction density="compact" label="PDF 批注工具" icon={<MoreHorizontalRegular />} appearance="subtle" /></PopoverTrigger><PopoverSurface aria-label="PDF 批注工具" className="pdf-layout-popover">
+          <Button size="small" icon={<TextFieldRegular />} aria-pressed={textBoxToolActive} onClick={onToggleTextBoxTool}>添加 Markdown 文本框</Button>
+          <Button size="small" icon={<DrawShapeRegular />} aria-pressed={Boolean(inkActive)} onClick={onToggleInk}>手绘涂鸦</Button>
+          <Button size="small" icon={<WhiteboardRegular />} aria-pressed={whiteboardOpen} onClick={onToggleWhiteboard}>{whiteboardOpen ? "关闭 PDF 白板" : "打开 PDF 白板"}</Button>
+          {marginCommentsVisible ? <Button size="small" icon={<CommentLinkRegular />} aria-pressed={marginCommentConnectorsVisible} onClick={onToggleMarginCommentConnectors}>显示批注关联线</Button> : null}
+        </PopoverSurface></Popover>
+        <IconAction density="compact"
+          label="在文档中搜索"
           appearance={searchOpen ? "primary" : "subtle"}
           icon={<SearchRegular />}
           ref={searchButton}
@@ -272,8 +244,8 @@ export function PdfReaderToolbar({
         />
         <Popover positioning="below-end" withArrow>
           <PopoverTrigger disableButtonEnhancement>
-            <Button
-              aria-label="页面布局设置"
+            <IconAction density="compact"
+              label="页面布局设置"
               appearance="subtle"
               icon={<SettingsRegular />}
               size="small"
@@ -334,8 +306,8 @@ export function PdfReaderToolbar({
                 : "未找到"
               : ""}
           </span>
-          <Button
-            aria-label="上一个搜索结果"
+          <IconAction density="compact"
+            label="上一个搜索结果"
             appearance="subtle"
             disabled={searchResultCount === 0}
             icon={<ChevronLeftRegular />}
@@ -343,8 +315,8 @@ export function PdfReaderToolbar({
             size="small"
             title="上一个搜索结果（Shift+Enter）"
           />
-          <Button
-            aria-label="下一个搜索结果"
+          <IconAction density="compact"
+            label="下一个搜索结果"
             appearance="subtle"
             disabled={searchResultCount === 0}
             icon={<ChevronRightRegular />}
@@ -362,8 +334,8 @@ export function PdfReaderToolbar({
             label="全字匹配"
             onChange={(_, data) => onChangeWholeWords(Boolean(data.checked))}
           />
-          <Button
-            aria-label="关闭文档搜索"
+          <IconAction density="compact"
+            label="关闭文档搜索"
             appearance="subtle"
             icon={<DismissRegular />}
             onClick={onCloseSearch}

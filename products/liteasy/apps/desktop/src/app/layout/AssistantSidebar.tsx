@@ -1,3 +1,5 @@
+import { IconAction } from "../shared/ui/productPrimitives";
+import { DismissRegular } from "@fluentui/react-icons";
 import type { AssistantComposerSuggestion } from "../features/assistant/assistant.types";
 import { AssistantSessionController as AssistantPane } from "../controllers/assistant/AssistantSessionController";
 import type { ArtifactTask, ArtifactType } from "../features/artifacts/artifact.types";
@@ -23,6 +25,8 @@ type AssistantSidebarProps = {
   agentClient: FrontendAgentClient;
   historyPersistence?: AssistantHistoryPersistence;
   memoryNotice?: string;
+  memoryNoticeKind?: "success" | "warning" | "error";
+  onDismissMemoryNotice?: () => void;
   academicProfile?: AcademicProfile;
   artifactTasks?: ArtifactTask[];
   artifactSessionOpenRequest?: ArtifactSessionOpenRequest;
@@ -73,7 +77,7 @@ type AssistantSidebarProps = {
 export function AssistantSidebar({
   agentClient,
   historyPersistence,
-  memoryNotice,
+  memoryNotice, memoryNoticeKind, onDismissMemoryNotice,
   academicProfile,
   artifactTasks = [],
   artifactSessionOpenRequest,
@@ -124,7 +128,7 @@ export function AssistantSidebar({
 
   return (
     <section aria-label={regionLabel} className={`pane ${regionId} assistant-only-pane`}>
-      {memoryNotice ? <div role="status" className="assistant-memory-notice">{memoryNotice} 可在个人中心查看。</div> : null}
+      {memoryNotice ? <div role="status" className="assistant-memory-notice">{memoryNotice} 可在个人中心查看。{memoryNoticeKind === "success" && onDismissMemoryNotice ? <IconAction label="关闭记忆提示" density="compact" icon={<DismissRegular />} onClick={onDismissMemoryNotice} /> : null}</div> : null}
       <div className="pane-body">
         <AssistantPane
           agentClient={agentClient}

@@ -1,7 +1,7 @@
 import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { useEffect, useRef, useState } from "react";
 import { WorkbenchPageHeader, WorkbenchEmptyState } from "../workbench/WorkbenchPage";
-import { Input, Select, Spinner } from "@fluentui/react-components";
+import { Input, Select, Spinner, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
 import { AddRegular, ArrowDownloadRegular, ArrowUploadRegular, PuzzlePieceRegular } from "@fluentui/react-icons";
 import { useExtensionWorkbench } from "./extensionWorkbenchContext";
 import { validateExtensionPackage, type ValidatedExtension } from "./extensionPackage";
@@ -59,12 +59,16 @@ export function ExtensionLibrary() {
     }); }} />
     {message || host.error ? <p role="status">{message || host.error}</p> : null}
     <div className="extension-library-grid">{filtered.map(({ state, pkg, error }) => <article className="extension-library-card" key={state.id}>
-      <h2>{pkg?.manifest.name ?? "不可用扩展"}</h2><p>{state.version} · {state.enabled ? "已启用" : "已停用"}</p>
-      {pkg?.manifest.permissions.length ? <details><summary>请求的能力</summary><ul>{pkg.manifest.permissions.map((permission, i) => <li key={i}>{permission.capability} · {permission.scopeRef}</li>)}</ul><p>实际执行时还需绑定本轮资料、保存位置和模型连接。</p></details> : <p>声明式组件与本地组合。</p>}
+      <h2>{pkg?.manifest.name ?? "不可用扩展"}</h2><p>{state.enabled ? "已启用" : "已停用"}</p>
+      {pkg?.manifest.permissions.length ? <details open={!state.enabled}><summary>请求的能力</summary><ul>{pkg.manifest.permissions.map((permission, i) => <li key={i}>{permission.capability} · {permission.scopeRef}</li>)}</ul><p>实际执行时还需绑定本轮资料、保存位置和模型连接。</p></details> : <p>声明式组件与本地组合。</p>}
       {error ? <p role="alert">{error}</p> : null}
-      <div className="extension-toolbar"><Button disabled={busy || !!error} onClick={() => void run(() => host.packages.store.enable(state.id, !state.enabled, state.revision))}>{state.enabled ? "停用" : "启用"}</Button><Button disabled={!pkg} icon={<ArrowDownloadRegular />} onClick={() => pkg && downloadExtensionJson(`${state.id}-${state.version}.liteasy-extension.json`, pkg.bundle)}>导出</Button><Button disabled={busy} onClick={() => void run(() => host.packages.store.uninstall(state.id, state.revision))}>卸载</Button></div>
-      {(versions[state.id]?.length ?? 0) > 1 ? <Select aria-label={`切换 ${pkg?.manifest.name ?? state.id} 的版本`} value={state.version} disabled={busy} onChange={(_, data) => void run(() => host.packages.store.rollback(state.id, data.value, state.revision))}>{versions[state.id].map((version) => <option key={version} value={version}>{version}</option>)}</Select> : null}
-      {state.enabled && pkg ? <div className="extension-entry-list">{pkg.manifest.contributes.views.map((view) => <Button key={view.id} appearance="subtle" onClick={() => void run(() => host.openView(state.id, view.id))}>{view.title}</Button>)}{pkg.manifest.contributes.commands.map((command) => <Button key={command.id} appearance="subtle" onClick={() => void run(() => host.invoke(state.id, command.id))}>{command.title}</Button>)}</div> : null}
+      <div className="extension-toolbar"><Button disabled={busy || !!error} onClick={() => void run(() => host.packages.store.enable(state.id, !state.enabled, state.revision))}>{state.enabled ? "停用" : "启用"}</Button>
+        {state.enabled && pkg?.manifest.contributes.views[0] ? <Button onClick={() => void run(() => host.openView(state.id, pkg.manifest.contributes.views[0].id))}>{pkg.manifest.contributes.views[0].title}</Button> : null}
+      </div>
+      <details><summary>管理与版本</summary><p>版本 {state.version}</p><Button disabled={!pkg} icon={<ArrowDownloadRegular />} onClick={() => pkg && downloadExtensionJson(`${state.id}-${state.version}.liteasy-extension.json`, pkg.bundle)}>导出</Button><Button disabled={busy} onClick={() => { if (window.confirm("卸载此扩展？已创建的笔记、白板和版本记录仍保留。")) void run(() => host.packages.store.uninstall(state.id, state.revision)); }}>卸载</Button>
+        {(versions[state.id]?.length ?? 0) > 1 ? <Select aria-label={`切换 ${pkg?.manifest.name ?? state.id} 的版本`} value={state.version} disabled={busy} onChange={(_, data) => void run(() => host.packages.store.rollback(state.id, data.value, state.revision))}>{versions[state.id].map(version => <option key={version} value={version}>{version}</option>)}</Select> : null}
+      </details>
+      {state.enabled && pkg && (pkg.manifest.contributes.views.length > 1 || pkg.manifest.contributes.commands.length) ? <Menu><MenuTrigger disableButtonEnhancement><Button size="small">更多扩展入口</Button></MenuTrigger><MenuPopover><MenuList>{pkg.manifest.contributes.views.slice(1).map(view => <MenuItem key={view.id} onClick={() => void run(() => host.openView(state.id, view.id))}>{view.title}</MenuItem>)}{pkg.manifest.contributes.commands.map(command => <MenuItem key={command.id} onClick={() => void run(() => host.invoke(state.id, command.id))}>{command.title}</MenuItem>)}</MenuList></MenuPopover></Menu> : null}
     </article>)}</div>
     {loading ? <Spinner label="正在加载扩展" /> : loadError ? <WorkbenchEmptyState error icon={<PuzzlePieceRegular />} title="扩展列表未能载入" description={loadError} actions={<Button onClick={() => void load()}>重试</Button>} /> : !items.length ? <WorkbenchEmptyState icon={<PuzzlePieceRegular />} title="还没有添加扩展" description="导入自己的扩展，或添加内置的论文比较板，了解如何组织资料与研究成果。" actions={<Button appearance="primary" icon={<ArrowUploadRegular />} onClick={() => file.current?.click()}>导入扩展</Button>} /> : !filtered.length ? <WorkbenchEmptyState icon={<PuzzlePieceRegular />} title="没有匹配的扩展" description="试试扩展名称、页面名称或命令，也可以清除筛选。" actions={<Button onClick={() => setQuery("")}>清除筛选</Button>} /> : null}
     <details><summary>恢复与数据</summary><p>停用或卸载保留已创建的笔记、白板、配置和版本记录。</p><Button disabled={busy} onClick={() => void run(() => host.packages.store.disableAll())}>停用所有第三方扩展</Button></details>
@@ -103,6 +107,6 @@ export function ExtensionViewHost({ dockId }: { dockId: string }) {
     <header><div><h1>{definition.title}</h1><small>来自 {pkg.manifest.name}</small></div><Button onClick={() => void navigator.clipboard.writeText(`liteasy://extensions/${instance.extensionId}/views/${instance.viewId}?instance=${instance.instanceId}`).catch((e) => setError(String(e)))}>复制页面链接</Button></header>
     {error ? <p role="alert">{error}</p> : null}
     <VisualBlockBase identity={dockId} fallback="页面内容暂不可用，可从扩展重新打开。"><ComponentTreeView tree={tree} data={{ ...instance.args, settings, state: instance.state }} openPath={host.openLink} /></VisualBlockBase>
-    <div className="extension-toolbar">{pkg.manifest.contributes.commands.map((command) => <Button key={command.id} onClick={() => void host.invoke(pkg.manifest.id, command.id).catch((e) => setError(String(e)))}>{command.title}</Button>)}</div>
+    <Menu><MenuTrigger disableButtonEnhancement><Button>扩展命令</Button></MenuTrigger><MenuPopover><MenuList>{pkg.manifest.contributes.commands.map((command) => <MenuItem key={command.id} onClick={() => void host.invoke(pkg.manifest.id, command.id).catch((e) => setError(String(e)))}>{command.title}</MenuItem>)}</MenuList></MenuPopover></Menu>
   </section>;
 }

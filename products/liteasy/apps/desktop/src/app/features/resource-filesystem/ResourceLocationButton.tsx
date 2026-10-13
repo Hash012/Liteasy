@@ -5,8 +5,9 @@ import { CopyRegular, FolderOpenRegular, LinkRegular } from "@fluentui/react-ico
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import { liteasyPath, type ResourceLocation, type ResourceTarget } from "./liteasyPath";
 
-export function ResourceLocationButton({ target, className }: { target: ResourceTarget; className?: string }) {
+export function ResourceLocationButton({ target, className, onOpenChange }: { target: ResourceTarget; className?: string; onOpenChange?(open: boolean): void }) {
   const workbench = useObjectWorkbench();
+  const [open, setOpen] = useState(false);
   const [location, setLocation] = useState<ResourceLocation>();
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -14,7 +15,7 @@ export function ResourceLocationButton({ target, className }: { target: Resource
   const path = workbench?.scopeId ? liteasyPath(workbench.scopeId, target) : "";
   useEffect(() => {
     request.current += 1;
-    setLocation(undefined); setMessage(""); setBusy(false);
+    setLocation(undefined); setMessage(""); setBusy(false); setOpen(false);
     return () => { request.current += 1; };
   }, [path]);
   if (!workbench?.describeResource || !workbench.scopeId) return null;
@@ -25,7 +26,7 @@ export function ResourceLocationButton({ target, className }: { target: Resource
     catch (e) { if (request.current === current) setMessage(e instanceof Error ? e.message : String(e)); }
     finally { if (request.current === current) setBusy(false); }
   }
-  return <Popover positioning="below" onOpenChange={(_, data) => { if (data.open) void inspect(); }}>
+  return <Popover open={open} positioning="below" onOpenChange={(_, data) => { setOpen(data.open); onOpenChange?.(data.open); if (data.open) void inspect(); }}>
     <PopoverTrigger disableButtonEnhancement>
       <Tooltip content="位置与 Liteasy Path" relationship="description">
         <Button className={className} aria-label="位置与 Liteasy Path" appearance="subtle" size="small" icon={<LinkRegular />} />

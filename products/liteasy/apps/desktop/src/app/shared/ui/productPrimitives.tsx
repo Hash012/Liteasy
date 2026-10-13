@@ -3,9 +3,15 @@ import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface
 import { DismissRegular } from "@fluentui/react-icons";
 import "./productPrimitives.css";
 
-export const ActionButton = forwardRef<HTMLButtonElement, ButtonProps>((props, ref) => <Button {...props} ref={ref} className={`product-action ${props.className ?? ""}`} />);
+export type ControlDensity = "compact" | "default";
+export const ActionButton = forwardRef<HTMLButtonElement, ButtonProps & { density?: ControlDensity }>(({ density = "default", ...props }, ref) => <Button {...props} ref={ref} data-density={density} className={`product-action ${props.className ?? ""}`} />);
 ActionButton.displayName = "ActionButton";
-export function IconAction({ label, ...props }: ButtonProps & { label: string }) { return <Tooltip content={label} relationship="description"><Button {...props} className={`product-icon-action ${props.className ?? ""}`} aria-label={label} /></Tooltip>; }
+export const IconAction = forwardRef<HTMLButtonElement, ButtonProps & { label: string; description?: string; density?: ControlDensity }>(({ label, description, density = "default", ...props }, ref) => <Tooltip content={description ?? label} relationship="description"><Button {...props} ref={ref} data-density={density} className={`product-icon-action ${props.className ?? ""}`} aria-label={label} /></Tooltip>);
+IconAction.displayName = "IconAction";
+/** Place inside a product-contextual-owner. The slot keeps its space and keyboard entry. */
+export function ContextualActions({ children, selected = false, expanded = false, menuOpen = false, editing = false, label = "条目操作", className = "" }: { children: ReactNode; selected?: boolean; expanded?: boolean; menuOpen?: boolean; editing?: boolean; label?: string; className?: string }) {
+  return <span role="group" aria-label={label} className={`product-contextual-actions ${className}`} data-revealed={selected || expanded || menuOpen || editing}>{children}</span>;
+}
 export function SurfaceHeader({ title, children, onClose }: { title: string; children?: ReactNode; onClose?: () => void }) {
   return <header className="product-surface-header"><h2>{title}</h2>{children}{onClose ? <IconAction label="关闭" appearance="subtle" icon={<DismissRegular />} onClick={onClose} /> : null}</header>;
 }
@@ -18,7 +24,7 @@ export function GenerationComposer({ value, onChange, label = "补充指令（�
 }
 export function ContextSummary({ children }: { children: ReactNode }) { return <div className="product-context-summary">{children}</div>; }
 export function SourceDisclosure({ summary, children }: { summary: ReactNode; children: ReactNode }) { return <details className="product-source-disclosure"><summary>{summary}</summary><div>{children}</div></details>; }
-export function InlineNotice({ intent = "info", message, action }: { intent?: "info" | "warning" | "error" | "success" | "busy"; message: string; action?: ReactNode }) {
+export function InlineNotice({ intent = "info", message, action }: { intent?: "normal" | "info" | "warning" | "error" | "success" | "busy"; message: string; action?: ReactNode }) {
   return <div className="product-inline-notice" data-intent={intent} role={intent === "error" ? "alert" : "status"}>{intent === "busy" ? <Spinner size="tiny" /> : null}<span>{message}</span>{action}</div>;
 }
 export function ReadingSurface({ children, label }: { children: ReactNode; label?: string }) { return <section className="product-reading-surface" aria-label={label}>{children}</section>; }

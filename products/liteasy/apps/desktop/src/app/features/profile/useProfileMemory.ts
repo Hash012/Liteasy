@@ -7,6 +7,7 @@ export function useProfileMemory(input: { scope: string; enabled: boolean; gener
   const latest = useRef(input); latest.current = input;
   const [state, setState] = useState(() => ({ scope: input.scope, ...loadProfileMemory(input.scope) }));
   const [notice, setNotice] = useState("");
+  const [noticeKind, setNoticeKind] = useState<"success" | "warning" | "error">("success");
   const busy = useRef<AbortController>();
   const queue = useRef<Array<{ sessionId: string; sentence: string }>>([]);
   const seen = useRef(new Set<string>());
@@ -25,9 +26,9 @@ export function useProfileMemory(input: { scope: string; enabled: boolean; gener
       if (current.error) throw new Error(current.error);
       const next = saveProfileMemory(input.scope, transform(current.data), current.data.revision);
       if (!next.automatic) { busy.current?.abort(); queue.current = []; }
-      if (message) setNotice(message);
+      if (message) { setNotice(message); setNoticeKind("success"); }
       return true;
-    } catch (error) { setNotice(error instanceof Error ? error.message : "本机画像保存失败。"); return false; }
+    } catch (error) { setNoticeKind("error"); setNotice(error instanceof Error ? error.message : "本机画像保存失败。"); return false; }
   }
   async function observeTurn(turn: CompletedProfileTurn) {
     const scope = input.scope;
@@ -54,17 +55,19 @@ export function useProfileMemory(input: { scope: string; enabled: boolean; gener
         const result = applyMemoryProposals(fresh.data, answer, sentences, turn.sessionId, Date.now());
         if (result.saved || result.pending) {
           saveProfileMemory(scope, result.data, fresh.data.revision);
+          setNoticeKind(result.pending ? "warning" : "success");
           setNotice([result.saved ? `已从对话记住 ${result.saved} 项偏好。` : "", result.pending ? `${result.pending} 项变更待确认。` : ""].join(""));
         }
       } finally { clearTimeout(timer); if (busy.current === controller) busy.current = undefined; }
     } catch { /* Background extraction must never break an answer or fabricate a memory. */ }
   }
   return {
-    data: snapshot.data, error: snapshot.error, notice,
+    data: snapshot.data, error: snapshot.error, notice, noticeKind,
+    dismissNotice: () => { if (noticeKind === "success") setNotice(""); },
     setAutomatic: (automatic: boolean) => change((data) => ({ ...data, automatic }), automatic ? "自动整理已开启。" : "自动整理已暂停，已有偏好仍可使用。"),
     saveEntry: (field: MemoryField, value: string, id?: string) => {
       const trimmed = value.trim();
-      if (!trimmed || trimmed.length > 240) { setNotice("请填写 1–240 字的偏好。"); return false; }
+      if (!trimmed || trimmed.length > 240) { setNoticeKind("warning"); setNotice("请填写 1–240 字的偏好。"); return false; }
       return change((data) => {
         const old = data.entries.find((entry) => entry.id === id);
         if (!old && data.entries.length >= 48) throw new Error("最多保存 48 项偏好，请先整理已有条目。");

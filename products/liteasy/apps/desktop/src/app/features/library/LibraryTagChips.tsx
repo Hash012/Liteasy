@@ -15,7 +15,9 @@ export function compactAuthorName(fullName: string) {
 }
 
 export function LibraryTagChips({ entry, onSelect, limit = 4 }: { entry: ReadingCatalogEntry; onSelect?: (tag: LibraryTag) => void; limit?: number }) {
-  const tags = libraryEntryTags(entry).map((tag) => ({ ...tag,
+  const sourceTags = libraryEntryTags(entry);
+  if (limit <= 2) sourceTags.sort((a, b) => Number(!["year", "tag"].includes(a.kind)) - Number(!["year", "tag"].includes(b.kind)));
+  const tags = sourceTags.map((tag) => ({ ...tag,
     description: `${kindLabel[tag.kind]}：${tag.label}`, compactLabel: tag.kind === "author" ? compactAuthorName(tag.label) : tag.label }));
   return <ResourceTagChips className="library-tag-chips" label={`${entry.title} 的分类与标签`} tags={tags} limit={limit} onSelect={onSelect}>
     <ExtensionLibraryColumns entry={entry} />

@@ -79,6 +79,7 @@ test("help home leads to real articles and keeps the complete catalog accessible
 test("conversation expansion is a layout action and does not submit another request", async () => {
   const expand = vi.fn(); const send = vi.fn();
   render(<AssistantSessionToolbar title="Research" kind="conversation" historyOpen={false} running={false} cancelling={false} newSessionDisabled={false} onToggleHistory={vi.fn()} onNewSession={send} onCancel={vi.fn()} onDragStart={vi.fn()} onExpand={expand} />);
-  await userEvent.click(screen.getByRole("button", { name: "在主区打开对话" }));
+  await userEvent.click(screen.getByRole("button", { name: "更多会话操作" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: "在主区打开对话" }));
   expect(expand).toHaveBeenCalledOnce(); expect(send).not.toHaveBeenCalled();
 });

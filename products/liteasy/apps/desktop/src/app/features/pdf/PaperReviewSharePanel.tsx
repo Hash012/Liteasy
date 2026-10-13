@@ -33,15 +33,14 @@ export function PaperReviewSharePanel({ scopeKey, ready, source, hostAvailable =
       setError("");
     } catch (failure) { setError(failure instanceof Error ? failure.message : "无法共享评论。"); }
   }
-  return <details className="pdf-annotation-options">
-    <summary>ChatGPT 评论 Review</summary>
+  return <><details className="pdf-annotation-options">
+    <summary>共享评论</summary>
     <p>通过已连接的 ChatGPT 读取本篇论文中已保存的个人文字评论、引用、评论所在页的文本及已有 AI 回答。图片与手绘不包含在内。</p>
     {!hostAvailable ? <p>请使用 Linux/macOS 桌面版配置 Liteasy 评论连接。</p> : null}
     <Button size="small" disabled={!ready || !hostAvailable} onClick={share}>{shared ? "更新共享快照" : "共享本篇评论"}</Button>
-    {shared ? <>
-      <Button size="small" onClick={() => { if (ownId) paperReviewShareStore.revoke(ownId); }}>停止共享</Button>
-      <p role="status">评论快照已共享。请在 ChatGPT 中选择 Liteasy 连接并说：“Review 我共享的论文中的全部评论”。切换论文或关闭阅读器后停止共享。</p>
-    </> : <p>共享前请先配置 Liteasy 评论连接；开启后仅共享本次快照，编辑评论后需更新。</p>}
+    {!shared ? <p>共享前请先配置 Liteasy 评论连接；开启后仅共享本次快照，编辑评论后需更新。</p> : null}
+  </details>
+  {shared ? <div role="status"><span>评论快照共享中 · 切换论文或关闭阅读器后停止共享。</span><Button size="small" onClick={() => { if (ownId) paperReviewShareStore.revoke(ownId); }}>停止共享</Button></div> : null}
     {error ? <p role="alert">{error}</p> : null}
-  </details>;
+  </>;
 }

@@ -220,7 +220,8 @@ test("expands the assistant into main without remounting or clearing its draft",
   await enterLocalWorkbench(user);
   const input = screen.getByPlaceholderText("输入你的问题或命令");
   await user.type(input, "Preserve this research question");
-  await user.click(screen.getByRole("button", { name: "在主区打开对话" }));
+  await user.click(screen.getByRole("button", { name: "更多会话操作" }));
+  await user.click(screen.getByRole("menuitem", { name: "在主区打开对话" }));
   expect(screen.getByPlaceholderText("输入你的问题或命令")).toBe(input);
   expect(input).toHaveValue("Preserve this research question");
   expect(input.closest('[data-region="main"]')).not.toBeNull();

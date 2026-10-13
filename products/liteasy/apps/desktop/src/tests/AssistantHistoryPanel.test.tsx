@@ -27,7 +27,8 @@ describe("AssistantHistoryPanel", () => {
 
     render(<AssistantHistoryPanel history={history} onRestoreSession={onRestoreSession} />);
 
-    expect(screen.getByText("1 条消息 · 问答")).toBeInTheDocument();
+    await user.hover(screen.getByText("会话信息"));
+    expect(await screen.findByText("1 条消息 · 问答")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "恢复会话：你好" }));
 
     expect(onRestoreSession).toHaveBeenCalledWith("session-1");

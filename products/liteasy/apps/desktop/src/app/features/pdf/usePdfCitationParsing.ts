@@ -84,7 +84,7 @@ export function usePdfCitationParsing({
     if (!enabled || !paperId || hydratedPaperId !== paperId || snapshot || attemptedPaperIdRef.current === paperId ||
       !fullDocumentTextReady) return;
     if (!allowServerPdfParsing) {
-      setWarning("云端结构解析已关闭，当前使用本地引用解析。");
+      setWarning("");
       return;
     }
     if (!endpoint.trim()) {
@@ -141,6 +141,7 @@ export function usePdfCitationParsing({
     loading,
     parser: snapshot ? "grobid" as const : "local_patterns" as const,
     parserVersion: snapshot?.parserVersion ?? 1,
+    modeDescription: snapshot ? "结构化引用已就绪" : !allowServerPdfParsing ? "云端结构解析已关闭，当前使用本地引用解析。" : "当前使用本地引用解析。",
     warning
   };
 }

@@ -1,3 +1,4 @@
+import { displayBibliographicTitle } from "../metadata/displayBibliographicTitle";
 import { ResourceTagChips } from "../resource-tags/ResourceTagChips";
 import { recommendationKeywords } from "./recommendationKeywords";
 import { Button } from "@fluentui/react-components";
@@ -23,7 +24,7 @@ export function RecommendationDetails({ item, onDownload, locations, page = fals
   return <section aria-label={page ? "推荐论文详情" : "推荐文献元信息"} className={page ? "recommendation-page" : "recommendation-detail"}>
     <div className="recommendation-detail-body">
       {page ? <p className="recommendation-page-eyebrow">论文详情 · {item.source}</p> : null}
-      {page ? <h1>{item.title}</h1> : <h3>{item.title}</h3>}
+      {page ? <h1>{displayBibliographicTitle(item.title)}</h1> : <h3>{displayBibliographicTitle(item.title)}</h3>}
       <p className="recommendation-detail-authors">{item.authors?.join(" · ") || "来源暂未提供作者信息"}</p>
       <div className="recommendation-detail-toolbar">
         {item.resourcePath && openPath ? <Button appearance="subtle" onClick={() => { void openPath(item.resourcePath!).catch((error: unknown) => setLinkError(String(error))); }}>打开本地资产</Button> : null}

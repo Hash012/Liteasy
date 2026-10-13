@@ -90,10 +90,10 @@ export function AiWorkbenchDialog(props: AiWorkbenchDialogProps) {
           <section className="ai-workbench-capabilities" aria-label="选择 AI 能力">
             <h3>2. 选择 AI 能力</h3>
             <p className="ai-workbench-muted">{props.confirmed ? `本次任务使用已确认的 ${props.confirmed.length} 篇论文。更改勾选后需重新确认。` : "确认左侧论文后，即可开始。"}</p>
-            {props.confirmed ? <ul className="ai-confirmed-papers" aria-label="已确认的任务论文">{props.confirmed.map((paper) => <li key={paper.id}>{paper.title}</li>)}</ul> : null}
+            {props.confirmed ? <details><summary>已确认 {props.confirmed.length} 篇 · 查看清单</summary><ul className="ai-confirmed-papers" aria-label="已确认的任务论文">{props.confirmed.map((paper) => <li key={paper.id}>{paper.title}</li>)}</ul></details> : null}
             <div className="ai-capability-list">{capabilities.map((capability) => <Button key={capability.type} className="ai-capability" appearance="outline"
               aria-label={capability.label} disabled={!props.confirmed} icon={capability.icon} aria-pressed={task === capability.type} onClick={() => { setTask(capability.type); setPrompt(undefined); }}>
-              <span><strong>{capability.label}</strong><small>{capability.detail}</small></span>
+              <span><strong>{capability.label}</strong>{task === capability.type ? <small>{capability.detail}</small> : null}</span>
             </Button>)}</div>
             {task ? <div className="ai-generation-options">
               <GenerationPromptEditor key={task} task={artifactPromptTask(task)} value={prompt} onChange={setPrompt} disabled={!props.confirmed} />

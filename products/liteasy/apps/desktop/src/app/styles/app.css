@@ -6238,3 +6238,6 @@ button.pdf-overlay-mark:focus-visible {
 .assistant-user-message-content .assistant-markdown p { margin: 0; }
 .assistant-user-message-content table, .assistant-user-message-content pre { max-width: 100%; overflow-x: auto; }
 .assistant-new-content { position: sticky; top: 0; z-index: 1; }
+
+.assistant-message-actions.product-contextual-actions { transform: none; }
+@media (hover: none), (pointer: coarse) { .assistant-message-actions.product-contextual-actions { opacity: 1; pointer-events: auto; } }

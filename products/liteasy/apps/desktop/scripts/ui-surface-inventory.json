@@ -19,6 +19,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -114,6 +121,13 @@
         "../../features/assistant/assistantView.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -140,6 +154,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -166,6 +187,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -186,6 +214,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -202,6 +237,13 @@
       "interactions": [],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -219,6 +261,13 @@
         "./agentLiveWorkPanel.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -234,6 +283,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -256,6 +312,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -273,6 +336,13 @@
         "./generationPrompts.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -298,6 +368,13 @@
         "./aiWorkbench.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -321,6 +398,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -361,6 +445,13 @@
         "./artifactLibrary.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -388,6 +479,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -406,6 +504,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -435,6 +540,13 @@
         "../models/assistantModelPicker.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -456,6 +568,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -474,11 +593,17 @@
         "MenuList",
         "MenuPopover",
         "MenuTrigger",
-        "button",
         "form"
       ],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": true,
+        "explicitDetails": false,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -494,6 +619,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -510,10 +642,22 @@
         "ResumeReadingButton"
       ],
       "interactions": [
+        "Menu",
+        "MenuItem",
+        "MenuList",
+        "MenuPopover",
+        "MenuTrigger",
         "button"
       ],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": true,
+        "explicitDetails": true,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -530,6 +674,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -543,12 +694,24 @@
         "AssistantSessionToolbar"
       ],
       "interactions": [
+        "Menu",
+        "MenuItem",
+        "MenuList",
+        "MenuPopover",
+        "MenuTrigger",
         "Popover",
         "PopoverSurface",
         "PopoverTrigger"
       ],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -565,6 +728,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -595,6 +765,13 @@
         "./contextAssetBrowser.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -614,6 +791,13 @@
         "./contextAssetThumbnail.css"
       ],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -629,6 +813,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -651,6 +842,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -666,6 +864,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -698,6 +903,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -715,6 +927,11 @@
       "interactions": [
         "BlockComposer",
         "DocumentExportDialog",
+        "Menu",
+        "MenuItem",
+        "MenuList",
+        "MenuPopover",
+        "MenuTrigger",
         "button",
         "select"
       ],
@@ -722,6 +939,13 @@
         "./objectWorkbench.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -740,6 +964,13 @@
         "@xyflow/react/dist/style.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -763,6 +994,13 @@
         "./citationGraph.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -786,6 +1024,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -801,6 +1046,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -832,6 +1084,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -848,6 +1107,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -874,6 +1140,13 @@
         "./documentExport.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -891,6 +1164,13 @@
         "./documentExport.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -916,6 +1196,13 @@
         "./evidenceLens.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -931,6 +1218,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -946,6 +1240,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -962,6 +1263,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -980,6 +1288,13 @@
       "interactions": [],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -996,12 +1311,24 @@
         "ExtensionViewHost"
       ],
       "interactions": [
+        "Menu",
+        "MenuItem",
+        "MenuList",
+        "MenuPopover",
+        "MenuTrigger",
         "input"
       ],
       "styles": [
         "./extensionWorkbench.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1017,6 +1344,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1033,6 +1367,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1055,6 +1396,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1073,9 +1421,22 @@
         "copyCitation",
         "acquireVersion"
       ],
-      "interactions": [],
+      "interactions": [
+        "Menu",
+        "MenuItem",
+        "MenuList",
+        "MenuPopover",
+        "MenuTrigger"
+      ],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1100,6 +1461,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1125,6 +1493,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1149,6 +1524,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1167,6 +1549,13 @@
         "./slideDeckView.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1190,7 +1579,14 @@
       "styles": [
         "./globalSearch.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": true,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1203,11 +1599,24 @@
       "symbols": [
         "HelpPanel"
       ],
-      "interactions": [],
+      "interactions": [
+        "Menu",
+        "MenuItem",
+        "MenuList",
+        "MenuPopover",
+        "MenuTrigger"
+      ],
       "styles": [
         "./help.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1225,6 +1634,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1242,6 +1658,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1285,6 +1708,13 @@
         "./paperResource.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1306,6 +1736,13 @@
         "@xyflow/react/dist/style.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1325,6 +1762,13 @@
         "./bibliographicMetadataEditor.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1340,6 +1784,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1363,6 +1814,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1394,6 +1852,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1412,6 +1877,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1436,6 +1908,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1526,6 +2005,13 @@
         "./library.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": true,
+        "explicitDetails": false,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1542,6 +2028,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1561,6 +2054,13 @@
       "interactions": [],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1582,6 +2082,13 @@
         "./readingCatalog.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1601,6 +2108,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1618,6 +2132,13 @@
         "./local-diagnostics.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1634,6 +2155,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1649,6 +2177,13 @@
       "interactions": [],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1666,6 +2201,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1681,6 +2223,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1704,6 +2253,13 @@
         "./markdownContent.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1730,6 +2286,13 @@
         "./markdownSourceEditor.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1745,6 +2308,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1769,6 +2339,13 @@
         "./markdownFontControl.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1787,6 +2364,13 @@
         "./markdownLiveEditor.css"
       ],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1804,6 +2388,13 @@
         "./markdownSourceEditor.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1835,6 +2426,13 @@
         "./mermaidPreview.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1851,6 +2449,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1873,6 +2478,13 @@
         "./assistantModelPicker.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1894,6 +2506,13 @@
         "./modelConnection.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1906,11 +2525,24 @@
       "symbols": [
         "ExternalNoteEditor"
       ],
-      "interactions": [],
+      "interactions": [
+        "Menu",
+        "MenuItem",
+        "MenuList",
+        "MenuPopover",
+        "MenuTrigger"
+      ],
       "styles": [
         "./externalNoteEditor.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1933,6 +2565,13 @@
         "./noteLabelFilter.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1955,6 +2594,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -1972,6 +2618,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2003,6 +2656,13 @@
         "./notes.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": true,
+        "explicitDetails": true,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2019,6 +2679,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2034,6 +2701,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2051,6 +2725,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2074,6 +2755,13 @@
         "./onboarding.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2089,6 +2777,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2108,6 +2803,13 @@
       "interactions": [],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2126,6 +2828,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2147,6 +2856,13 @@
       ],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2165,6 +2881,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2185,6 +2908,13 @@
       "interactions": [],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2204,6 +2934,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2222,6 +2959,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2239,6 +2983,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2258,6 +3009,13 @@
       "interactions": [],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2276,6 +3034,13 @@
         "./organization.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2288,9 +3053,22 @@
       "symbols": [
         "OrganizationSidebarPanel"
       ],
-      "interactions": [],
+      "interactions": [
+        "Menu",
+        "MenuItem",
+        "MenuList",
+        "MenuPopover",
+        "MenuTrigger"
+      ],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2306,6 +3084,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2322,6 +3107,13 @@
       "interactions": [],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2339,6 +3131,13 @@
         "./paperAnchors.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2351,11 +3150,24 @@
       "symbols": [
         "PaperNoteEditor"
       ],
-      "interactions": [],
+      "interactions": [
+        "Menu",
+        "MenuItem",
+        "MenuList",
+        "MenuPopover",
+        "MenuTrigger"
+      ],
       "styles": [
         "../note-files/externalNoteEditor.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2380,6 +3192,13 @@
         "./literatureGuide.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2397,6 +3216,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2435,6 +3261,13 @@
         "./literatureGuide.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2454,6 +3287,13 @@
         "./readingMarginComments.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2471,6 +3311,13 @@
       "interactions": [],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2487,6 +3334,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2504,6 +3358,13 @@
         "./paperSelectionTools.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2521,6 +3382,13 @@
         "./pdfAnnotationEditor.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2537,6 +3405,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2553,6 +3428,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2568,6 +3450,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2583,6 +3472,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2603,6 +3499,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2618,6 +3521,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2648,6 +3558,13 @@
         "./pdfTextBoxResize.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2667,6 +3584,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2683,6 +3607,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2698,6 +3629,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2829,6 +3767,7 @@
       "interactions": [
         "GenerationPromptDialog",
         "PdfSelectionMenu",
+        "ResponsiveOverlay",
         "button",
         "input"
       ],
@@ -2836,7 +3775,14 @@
         "./pdfAnnotationList.css",
         "./pdfNavigationViews.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2858,7 +3804,14 @@
         "PopoverTrigger"
       ],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2874,6 +3827,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2891,6 +3851,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2907,6 +3874,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2925,6 +3899,13 @@
       ],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2961,6 +3942,13 @@
         "./pdfWhiteboard.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -2978,6 +3966,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3000,6 +3995,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3017,6 +4019,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3034,6 +4043,13 @@
         "./personalCenter.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3052,6 +4068,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3074,6 +4097,13 @@
         "./quickAskPresets.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3091,6 +4121,13 @@
         "./quickAskPresets.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3119,6 +4156,13 @@
         "./readingDocumentReader.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3134,6 +4178,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3151,6 +4202,13 @@
         "./recommendationList.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3166,6 +4224,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3182,6 +4247,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3195,12 +4267,21 @@
         "RecommendationList"
       ],
       "interactions": [
-        "button"
+        "Popover",
+        "PopoverSurface",
+        "PopoverTrigger"
       ],
       "styles": [
         "./recommendationList.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3216,6 +4297,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3235,6 +4323,13 @@
         "./researchWorkbench.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3255,6 +4350,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3277,6 +4379,13 @@
         "./resourceReferences.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3300,6 +4409,13 @@
         "./resourceReferences.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3320,6 +4436,13 @@
         "./resourceReferences.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3339,6 +4462,13 @@
         "./resourceTags.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3354,6 +4484,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3370,6 +4507,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3392,6 +4536,13 @@
         "./search.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3410,6 +4561,13 @@
         "./selectionLookup.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3428,6 +4586,13 @@
         "./selectionLookup.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3443,6 +4608,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3459,6 +4631,13 @@
       "interactions": [],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3474,6 +4653,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3489,6 +4675,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3504,6 +4697,13 @@
       "interactions": [],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3523,6 +4723,13 @@
         "./systemFontPicker.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3540,6 +4747,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3557,6 +4771,13 @@
         "./spaces.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3576,6 +4797,13 @@
         "../../shared/ui/productPrimitives.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3596,6 +4824,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3613,6 +4848,13 @@
         "./thinReading.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3638,6 +4880,13 @@
         "@xyflow/react/dist/style.css"
       ],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3660,6 +4909,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3682,6 +4938,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3700,6 +4963,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3759,6 +5029,13 @@
         "./thinReading.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3775,6 +5052,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3790,6 +5074,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3805,6 +5096,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3823,6 +5121,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3838,6 +5143,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3864,6 +5176,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3879,6 +5198,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3894,6 +5220,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3912,6 +5245,13 @@
         "./visualBlocks.css"
       ],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3929,6 +5269,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3944,6 +5291,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3961,6 +5315,13 @@
         "./visualization.css"
       ],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -3986,6 +5347,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4004,6 +5372,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4022,6 +5397,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4050,6 +5432,13 @@
         "./interactiveMathRenderer.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4079,6 +5468,13 @@
         "./interactiveMathRenderer.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4102,6 +5498,13 @@
         "./geometry3dRenderer.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4118,6 +5521,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4145,6 +5555,13 @@
         "./processRenderer.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4164,6 +5581,13 @@
         "./rasterIllustrationRenderer.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4188,6 +5612,13 @@
         "./processRenderer.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4207,6 +5638,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4223,6 +5661,13 @@
       "interactions": [],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4238,6 +5683,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4260,6 +5712,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4278,7 +5737,14 @@
       "styles": [
         "./workbenchPage.css"
       ],
-      "migration": "inherited-semantic-surface",
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4300,6 +5766,13 @@
         "./workbenchWelcome.css"
       ],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4315,6 +5788,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4334,6 +5814,13 @@
         "@xyflow/react/dist/style.css"
       ],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4350,6 +5837,13 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4378,6 +5872,13 @@
         "./workflowStudio.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4401,6 +5902,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4425,6 +5933,13 @@
         "./workspacePageSwitcher.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4440,6 +5955,13 @@
       "interactions": [],
       "styles": [],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4465,6 +5987,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4525,6 +6054,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4539,7 +6075,14 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "inherited-semantic-surface",
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4559,6 +6102,13 @@
       ],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4582,6 +6132,13 @@
         "../styles/workspaceShell.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4601,6 +6158,13 @@
         "../styles/immersiveReading.css"
       ],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4617,6 +6181,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4632,6 +6203,13 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4649,6 +6227,13 @@
       ],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4667,7 +6252,14 @@
       "styles": [
         "../features/settings/settingsPage.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4696,6 +6288,13 @@
         "../styles/workspaceShell.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4713,6 +6312,13 @@
         "./visuallyHidden.css"
       ],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "explicitDetails": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
@@ -4723,7 +6329,7 @@
       "batch": "M6",
       "owner": "M6 surface owner / shared UI review",
       "symbols": [
-        "IconAction",
+        "ContextualActions",
         "SurfaceHeader",
         "SurfaceActions",
         "ActionChips",
@@ -4748,6 +6354,13 @@
         "./productPrimitives.css"
       ],
       "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": true,
+        "explicitDetails": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
       "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
       "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
       "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
