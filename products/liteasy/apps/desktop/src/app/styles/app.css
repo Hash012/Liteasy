@@ -2916,6 +2916,15 @@ body {
   overflow: hidden;
 }
 
+.pdf-reader.has-quick-ask-resume {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.pdf-reader > .quick-ask-reopen {
+  justify-self: start;
+  margin: 4px 8px;
+}
+
 .pdf-reader.fluid {
   height: 100%;
   width: 100%;

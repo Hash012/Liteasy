@@ -23,6 +23,9 @@ test("real reader streams once, preserves a hidden run and persists private answ
   await expect(page.getByText("正在回答…", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "收起", exact: true }).click();
   await expect(page.getByRole("button", { name: /返回速问/ })).toBeVisible();
+  const resume = await page.getByRole("button", { name: /返回速问/ }).boundingBox();
+  const toolbar = await page.getByRole("toolbar", { name: "PDF 导航工具栏" }).boundingBox();
+  expect(resume!.y + resume!.height).toBeLessThanOrEqual(toolbar!.y);
   await page.getByRole("button", { name: /返回速问/ }).click();
   await expect(page.getByText("已保存为私人批注", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => (window as any).quickAskFixture.requests.length)).toBe(1);
@@ -58,3 +61,24 @@ for (const width of [320, 448, 768, 1440]) for (const theme of ["light", "dark",
     await page.screenshot({ path: info.outputPath(`quick-ask-${width}-${theme}.png`) });
   });
 }
+
+test("reader preset management stays usable in a narrow overlay without generating", async ({ page }, info) => {
+  await page.setViewportSize({ width: 1440, height: 900 }); await open(page);
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.getByRole("button", { name: "管理快捷指令", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "管理快捷指令", exact: true });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("textbox", { name: "快捷指令名称", exact: true }).fill("合成指令");
+  await dialog.getByRole("textbox", { name: "完整快捷指令", exact: true }).fill("保留术语，解释选段。");
+  await dialog.getByRole("button", { name: "保存快捷指令", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("button", { name: "解释选段", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "管理快捷指令", exact: true }).click();
+  const select = dialog.getByRole("combobox", { name: "管理快捷指令", exact: true });
+  const option = select.locator("option").filter({ hasText: "合成指令" });
+  await expect(option).toHaveCount(1);
+  await select.selectOption(await option.getAttribute("value") as string);
+  await expect(dialog.getByRole("textbox", { name: "完整快捷指令", exact: true })).toHaveValue("保留术语，解释选段。");
+  expect(await page.evaluate(() => (window as any).quickAskFixture.requests.length)).toBe(0);
+  await page.screenshot({ path: info.outputPath("quick-ask-reader-presets.png") });
+});

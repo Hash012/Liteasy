@@ -30,6 +30,7 @@ import { preparePdfQuickAskContext } from "./quickAskContext";
 import { useQuickAskTask } from "./useQuickAskTask";
 import { QuickAskProvenance } from "./QuickAskProvenance";
 import { QuickAskSurface } from "./QuickAskSurface";
+import { ResponsiveOverlay } from "../../shared/ui/productPrimitives";
 import { resolveLocalAccountKey } from "../library/localAccountKey";
 import { useQuickAskPresets } from "../quick-ask-presets/useQuickAskPresets";
 import { QuickAskPresetPicker } from "../quick-ask-presets/QuickAskPresetPicker";
@@ -3585,11 +3586,12 @@ export function PdfReader({
   return (
     <section
       aria-label="PDF 阅读器"
-      className="pdf-reader fluid"
+      className={`pdf-reader fluid${quickAskSelection && !quickAskTask.draft.open ? " has-quick-ask-resume" : ""}`}
       data-pdf-source={pdfDisplaySource ?? ""}
       data-pdf-night={pdfReadingPalette(pdfBackground).dark}
       style={{ "--pdf-reading-background": pdfBackground } as CSSProperties}
     >
+      {quickAskSelection && !quickAskTask.draft.open ? <Button className="quick-ask-reopen" onClick={() => quickAskTask.update({ open: true })}>返回速问{quickAskPending ? "（正在回答）" : ""}</Button> : null}
       {readingView?.({ scopeKey: annotationStorageKey ?? "", ready: Boolean(annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError),
         searchMetadata, lookup: selectionLookup, paperId: activePaper?.id, paperTitle: activePaper?.title,
         error: annotationLoadError || annotationSaveError, annotations: hydratedAnnotationStorageKey === annotationStorageKey ? annotationsInReadingOrder.filter((annotation) => guide.visible || !annotation.aiGuide) : [], guideControls,
@@ -3638,8 +3640,7 @@ export function PdfReader({
         },
       })}
             {quickAskSelection ? <>
-              {!quickAskTask.draft.open ? <Button className="quick-ask-reopen" onClick={() => quickAskTask.update({ open: true })}>返回速问{quickAskPending ? "（正在回答）" : ""}</Button> : null}
-              <QuickAskSurface returnFocusRef={stageRef} open={quickAskTask.draft.open} onClose={quickAskTask.close}
+              <QuickAskSurface returnFocusRef={stageRef} open={quickAskTask.draft.open && !quickAskPresetManagerOpen} onClose={quickAskTask.close}
                 page={quickAskSelection.page} excerpt={quickAskSelection.excerpt} width={documentFrameWidth || stageWidth}
                 anchor={{ getBoundingClientRect: () => { const stage = stageRef.current; const rect = stage?.getBoundingClientRect(); return new DOMRect((rect?.left ?? 0) + quickAskSelection.menuLeft - (stage?.scrollLeft ?? 0), (rect?.top ?? 0) + quickAskSelection.menuTop - (stage?.scrollTop ?? 0), 1, 1); } }}
                 instruction={quickAskQuestion} onInstruction={instruction => quickAskTask.update({ instruction })}
@@ -3662,8 +3663,8 @@ export function PdfReader({
                 onRetrySave={() => void quickAskTask.retrySave(saveQuickAskAnnotation)} onDiscard={quickAskTask.discard}
                 onSavePreset={() => setQuickAskPresetManagerOpen(true)}
                 preferences={<GenerationPromptEditor task="selection_explanation" value={quickAskPrompt} onChange={preference => quickAskTask.update({ preference })} disabled={quickAskPending} />} />
-              {quickAskPresetManagerOpen ? <QuickAskPresetManager key={quickAskAccount} repository={quickAskPresets.repository} initialInstruction={quickAskQuestion}
-                onSaved={() => { setQuickAskPresetManagerOpen(false); setStatus("快捷指令已保存。"); }} onClose={() => setQuickAskPresetManagerOpen(false)} /> : null}
+              {quickAskPresetManagerOpen ? <ResponsiveOverlay open title="管理快捷指令" onClose={() => setQuickAskPresetManagerOpen(false)} availableWidth={documentFrameWidth || stageWidth}><QuickAskPresetManager key={quickAskAccount} repository={quickAskPresets.repository} initialInstruction={quickAskQuestion}
+                onSaved={() => { setQuickAskPresetManagerOpen(false); setStatus("快捷指令已保存。"); }} onClose={() => setQuickAskPresetManagerOpen(false)} /></ResponsiveOverlay> : null}
             </> : null}
       <div
         aria-label="PDF 阅读工作区"
