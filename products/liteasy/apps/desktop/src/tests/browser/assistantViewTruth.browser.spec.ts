@@ -1,4 +1,29 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+
+test("failure diagnostics stay collapsed, export redacted text and become previewable conversation context", async ({ page }, info) => {
+  await page.goto("/src/tests/browser/fixtures/assistant-root-cause.html?diagnostic=1");
+  await page.getByRole("button", { name: "任务", exact: true }).click();
+  await page.getByRole("button", { name: "打开会话：生成：薄读" }).click();
+  await expect(page.getByRole("alert")).toContainText("结构化输出方式");
+  await expect(page.getByText(/技术关联：任务/)).not.toBeVisible();
+  await page.screenshot({ path: info.outputPath("failure-summary-light.png"), animations: "disabled" });
+  await page.getByRole("button", { name: "查看诊断日志", exact: true }).click();
+  await expect(page.getByText(/技术关联：任务/)).toBeVisible();
+  const pending = page.waitForEvent("download");
+  await page.getByRole("button", { name: "导出日志", exact: true }).click();
+  const download = await pending;
+  expect(download.suggestedFilename()).toBe("Liteasy-任务诊断日志.txt");
+  const text = await readFile((await download.path())!, "utf8");
+  expect(text).toContain("unsupported response_format");
+  expect(text).not.toContain("fixture-secret");
+  await page.getByRole("button", { name: "让 AI 分析错误", exact: true }).click();
+  await expect(page.getByPlaceholder("输入你的问题或命令")).toHaveValue(/请根据这份诊断日志/);
+  await page.getByRole("button", { name: "深色", exact: true }).click();
+  await page.getByRole("button", { name: "预览上下文：任务诊断日志", exact: true }).click();
+  await expect(page.getByLabel("上下文预览")).toContainText("fixture-model");
+  await page.screenshot({ path: info.outputPath("diagnostic-context-dark.png"), animations: "disabled" });
+});
 
 test("assistant home, task list and selected run logs are exclusive with real production styling", async ({ page }, info) => {
   await page.goto("/src/tests/browser/fixtures/assistant-root-cause.html");

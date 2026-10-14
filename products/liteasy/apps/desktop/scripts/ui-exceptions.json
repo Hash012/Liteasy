@@ -984,7 +984,7 @@
     {
       "file": "src/app/features/extensions/ExtensionViews.tsx",
       "rule": "native-interaction",
-      "detail": "<input hidden ref={file} type=\"file\" accept=\".json\" onChange={(event) => { const selected = event.target.files?.[0]; event.target.value = \"\"; if (selected) void run(async () => { if (selected.size > 24 * 1024 * 1024) throw new Error(\"包文件超过 24 MB。\"); const pkg = await validateExtensionPackage(JSON.parse(await selected.text())); const previous = (await host.packages.store.list()).find((item) => item.id === pkg.manifest.id); await host.packages.store.install(pkg.bundle, previous?.revision ?? null); setMessage(\"已导入。检查能力说明后启用。\"); }); }} />",
+      "detail": "<input hidden ref={file} type=\"file\" accept=\".json\" onChange={(event) => { const selected = event.target.files?.[0]; event.target.value = \"\"; if (selected) void run(async () => { if (selected.size > 24 * 1024 * 1024) throw new Error(\"包文件超过 24 MB。\"); const pkg = await validateExtensionPackage(JSON.parse(await selected.text())); const previous = (await host.packages.store.list()).find((item) => item.id === pkg.manifest.id); await host.packages.store.install(pkg.bundle, previous?.revision ?? null, []); setMessage(\"已导入。检查能力说明后启用。\"); }); }} />",
       "count": 1,
       "surface": "features/extensions/ExtensionViews.tsx",
       "owner": "Settings and extensions UI (M6)",

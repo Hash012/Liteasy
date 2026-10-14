@@ -109,6 +109,7 @@
         "changeQueuedTurnPolicy",
         "withdrawQueuedTurn",
         "beginTaskDiscussion",
+        "analyzeTaskFailure",
         "updateSessionMetadata",
         "exportSession",
         "branchConversation",
@@ -442,6 +443,31 @@
         "filterPopover": false,
         "optionPicker": false,
         "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
+      "path": "src/app/features/artifacts/ArtifactFailurePanel.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "symbols": [
+        "ArtifactFailurePanel"
+      ],
+      "interactions": [],
+      "styles": [],
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
+        "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
       },
@@ -6580,6 +6606,31 @@
         "infoPopover": false,
         "filterPopover": false,
         "optionPicker": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
+      "path": "src/app/features/workflow-studio/ExtensionDraftHistory.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "symbols": [
+        "ExtensionDraftHistory"
+      ],
+      "interactions": [],
+      "styles": [],
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"

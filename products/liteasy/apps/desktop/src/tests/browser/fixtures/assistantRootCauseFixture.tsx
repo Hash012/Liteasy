@@ -18,7 +18,8 @@ const persistence = createAssistantHistoryPersistence({
   save: async (snapshot) => localStorage.setItem("assistant-isolated-fixture", JSON.stringify(snapshot))
 });
 const tasks = [
-  { id: "failed", agentRunId: "run-2", artifactId: "saved-reading", type: "thin_reading" as const, status: "failed" as const, stage: "failed" as const, progress: 20, message: "离线新运行失败" },
+  { id: "failed", agentRunId: "run-2", artifactId: "saved-reading", type: "thin_reading" as const, status: "failed" as const, stage: "failed" as const, progress: 20, message: "离线新运行失败",
+    ...(new URLSearchParams(location.search).has("diagnostic") ? { failure: { failedStage: "generating_answer" as const, message: "HTTP 400 unsupported response_format; api_key=fixture-secret", model: "fixture-model", provider: "fixture-provider", occurredAt: "2026-10-15T00:00:00Z", recovery: [] } } : {}) },
   { id: "complete", agentRunId: "run-1", artifactId: "saved-reading", type: "thin_reading" as const, status: "completed" as const, stage: "completed" as const, progress: 100, message: "离线结果已保存" }
 ];
 createRoot(document.getElementById("root")!).render(<ApplicationThemeProvider>
