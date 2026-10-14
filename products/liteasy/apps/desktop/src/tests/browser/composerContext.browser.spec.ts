@@ -49,6 +49,9 @@ test("light mode selections expose contrasting native ink instead of the mirror"
 
 test("a paper context opens the original PDF without Markdown and navigates pages", async ({ page }, info) => {
   test.setTimeout(60000);
+  // Exercise scroll events between React renders, as on slower Windows devices.
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
   const { readFile } = await import("node:fs/promises");
   const pdf = await readFile(new URL("../../../../../../../development/test-data/pdf-selection/source-preview.pdf", import.meta.url));
   await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
@@ -78,6 +81,10 @@ test("a paper context opens the original PDF without Markdown and navigates page
   await expect(preview).toContainText("第 2 /");
   await page.screenshot({ path: info.outputPath("original-pdf-source-preview.png") });
   await preview.getByRole("button", { name: "打开原文件" }).click();
+  await page.waitForFunction(() => {
+    const stage = document.querySelector(".pdf-stage");
+    return stage && Math.abs(stage.scrollHeight - stage.clientHeight - stage.scrollTop) <= 1;
+  });
   await expect(page.getByLabel("当前页码")).toHaveValue("2");
   await expect(preview.getByRole("alert")).toHaveCount(0);
 });

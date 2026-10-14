@@ -19,6 +19,7 @@ import { usePdfPageWindow } from "./usePdfPageWindow";
 import { pdfReaderContentRevision } from "./pdfReaderPosition";
 import { usePdfReaderFeedback } from "./usePdfReaderFeedback";
 import { usePdfReaderPosition } from "./usePdfReaderPosition";
+import { pdfVisiblePage } from "./pdfVisiblePage";
 import { getHighlightColor, getOverlayStyle } from "./pdfAnnotationAppearance";
 import { DrawShapeRegular, EraserRegular, ArrowUndoRegular } from "@fluentui/react-icons";
 import { PdfInkLayer } from "./PdfInkLayer";
@@ -1919,18 +1920,12 @@ export function PdfReader({
     if (layoutMode !== "continuous" || readerPosition.isRestoring()) return;
     const stageElement = stageRef.current;
     if (!stageElement) return;
-    const stageTop = stageElement.getBoundingClientRect().top;
-    let nearestPage = focusedPage;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-    for (const pageElement of stageElement.querySelectorAll<HTMLElement>(".pdf-page-shell")) {
-      const page = Number(pageElement.dataset.page);
-      const distance = Math.abs(pageElement.getBoundingClientRect().top - stageTop - 18);
-      if (Number.isFinite(page) && distance < nearestDistance) {
-        nearestDistance = distance;
-        nearestPage = page;
-      }
-    }
-    if (nearestPage !== focusedPage) { readerPosition.markNavigation(); setFocusedPage(nearestPage); }
+    const visiblePage = pdfVisiblePage(getElementContentRect(stageElement),
+      [...stageElement.querySelectorAll<HTMLElement>(".pdf-page-shell")].map((element) => {
+        const { top, bottom } = element.getBoundingClientRect();
+        return { page: Number(element.dataset.page), top, bottom };
+      }).filter((page) => Number.isSafeInteger(page.page) && page.page > 0), focusedPage);
+    if (visiblePage !== focusedPage) { readerPosition.markNavigation(); setFocusedPage(visiblePage); }
   }
 
   function handleStageKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {

@@ -24,7 +24,7 @@ test("bookmarks, page overview and annotation overview navigate real PDF pages",
   await page.goto("/?pdf-highlight-fixture#navigation");
   await expect(page.locator('.pdf-page-shell[data-page="1"] .pdf-text-layer')).toContainText("Abstract", { timeout: 30_000 });
   await page.getByRole("button", { name: "目录", exact: true }).click();
-  await page.getByRole("button", { name: "Named Section", exact: true }).click();
+  await page.getByRole("treeitem", { name: "Named Section", exact: true }).click();
   await expect(page.getByLabel("当前页码")).toHaveValue("3");
   const thumbnails = page.getByRole("button", { name: "缩略图", exact: true });
   await thumbnails.dblclick();
@@ -64,7 +64,7 @@ test("bookmarks, page overview and annotation overview navigate real PDF pages",
   await notes.getByRole("button", { name: /定位第 1 页高亮/ }).click();
   await expect(page.locator("button.pdf-overlay-mark.highlight")).toBeVisible();
   await page.getByRole("button", { name: "目录", exact: true }).click();
-  await page.getByRole("button", { name: "Last Chapter", exact: true }).click();
+  await page.getByRole("treeitem", { name: "Last Chapter", exact: true }).click();
   await expect(page.getByLabel("当前页码")).toHaveValue("4");
   await thumbnails.dblclick();
   await pages.getByRole("button", { name: "转到第 3 页", exact: true }).click();
