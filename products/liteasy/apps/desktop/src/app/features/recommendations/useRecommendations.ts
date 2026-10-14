@@ -65,7 +65,7 @@ type UseRecommendationsInput = {
   workspaceSourceKey: string;
 };
 
-function buildSelectionCacheKey(
+export function buildSelectionCacheKey(
   selectedDocuments: RecommendationRequestDocument[],
   researchProfile?: RecommendationResearchProfile,
   style: RecommendationStyle = "balanced"
@@ -84,7 +84,7 @@ function buildSelectionCacheKey(
   return `selection:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
-function buildWorkspaceCacheKey(workspaceSourceKey: string) {
+export function buildWorkspaceCacheKey(workspaceSourceKey: string) {
   let hash = 2166136261;
   for (let index = 0; index < workspaceSourceKey.length; index += 1) {
     hash ^= workspaceSourceKey.charCodeAt(index);

@@ -359,6 +359,7 @@ fn asset_path(app: &AppHandle, scope: &str, hash: &str) -> Result<std::path::Pat
 // Local activation and grants never cross device boundaries.
 fn sync_record_category(key: &str) -> Option<&'static str> {
     if [
+        "recommendation/v2/",
         "extension-grant/",
         "extension-installation/",
         "extension-trigger/",
@@ -837,6 +838,7 @@ mod tests {
     #[test]
     fn extension_sync_never_transfers_activation_and_keeps_packages_immutable() {
         for prefix in [
+            "recommendation/v2/",
             "extension-grant/",
             "extension-installation/",
             "extension-trigger/",

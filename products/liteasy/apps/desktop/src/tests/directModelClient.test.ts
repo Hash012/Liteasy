@@ -174,3 +174,13 @@ test("shows Anthropic public thinking and ignores redacted blocks and signatures
   expect(stream.finish()).toBe("正文");
   expect(reasoning).toHaveBeenCalledExactlyOnceWith("公开推理", "公开推理");
 });
+
+test("bounded research calls forward the output cap without losing structured output", () => {
+  for (const config of [openai, getModelProvider("anthropic")]) {
+    const body = buildDirectModelBody(config, { ...input, maxOutputTokens: 1500 });
+    expect(body.max_tokens).toBe(1500);
+    expect(JSON.stringify(body.messages)).toContain("schema");
+  }
+  expect(buildDirectModelBody(openai, { ...input, maxOutputTokens: 1500 })).toHaveProperty("response_format");
+  expect(() => buildDirectModelBody(openai, { ...input, maxOutputTokens: -1 })).toThrow("预算");
+});

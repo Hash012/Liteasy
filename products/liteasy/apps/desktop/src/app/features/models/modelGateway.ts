@@ -14,6 +14,7 @@ export type ModelOutputFormat = {
 
 export type GenerateAnswerInput = {
   model: string;
+  maxOutputTokens?: number;
   onReasoningDelta?: (delta: string, accumulated: string) => void;
   onDelta?: (delta: string, accumulated: string) => void;
   outputFormat?: ModelOutputFormat;

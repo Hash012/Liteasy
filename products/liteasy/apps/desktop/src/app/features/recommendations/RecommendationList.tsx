@@ -1,3 +1,7 @@
+import type { RecommendationFeedbackMeaning } from "./recommendationCoordinator";
+import { useRecommendationExposure } from "./useRecommendationExposure";
+import { useRecommendationPreferences } from "./recommendationPreferences";
+import { composeSlate, canonicalCandidate } from "../../../../../../packages/recommendation-core/v2.mjs";
 import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { displayBibliographicTitle } from "../metadata/displayBibliographicTitle";
 import { IconAction, SourceDisclosure } from "../../shared/ui/productPrimitives";
@@ -7,7 +11,7 @@ import { ResourceTagChips } from "../resource-tags/ResourceTagChips";
 import { recommendationKeywords } from "./recommendationKeywords";
 import { useRecommendationFullText } from "./useRecommendationFullText";
 import type { PaperServiceConfig } from "../paper-services/paperServiceTransport";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button, Checkbox, Input, Tooltip, Popover, PopoverTrigger, PopoverSurface } from "@fluentui/react-components";
 import { BookmarkRegular, DeleteRegular, DocumentRegular, SearchRegular, FilterRegular, OpenRegular } from "@fluentui/react-icons";
 import type { RecommendationItem } from "./recommendation.types";
@@ -16,8 +20,10 @@ import "./recommendationList.css";
 
 export { recommendationDateLabel } from "./recommendationPresentation";
 
-export function RecommendationList({ items, service, selectedId, pendingIds, canSave, onInspect, onOpen, onSave, onDismiss }: {
+export function RecommendationList({ items, service, selectedId, pendingIds, canSave, onInspect, onOpen, onSave, onDismiss, onAdoptBrief, onFeedback }: {
   items: RecommendationItem[];
+  onFeedback?: (item: RecommendationItem, action: RecommendationFeedbackMeaning) => Promise<unknown>;
+  onAdoptBrief?: (item: RecommendationItem) => Promise<unknown>;
   service?: PaperServiceConfig;
   selectedId?: string;
   pendingIds: string[];
@@ -27,39 +33,58 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
   onSave: (item: RecommendationItem) => void;
   onDismiss: (item: RecommendationItem) => void;
 }) {
+  const root = useRef<HTMLDivElement>(null);
+  const exposure = useRecommendationExposure(root, items);
+  const preferences = useRecommendationPreferences();
   const tags = useMemo(() => new Map(items.map((item) => [item.id, recommendationKeywords(item, items)])), [items]);
+  const [lastFeedback, setLastFeedback] = useState<RecommendationItem>();
+  const [notice, setNotice] = useState("");
+  const [explore, setExplore] = useState(false);
+  const [page, setPage] = useState(0);
+  const [seen, setSeen] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [year, setYear] = useState("");
   const [savedOnly, setSavedOnly] = useState(false);
   const [access, setAccess] = useState(false);
+  const [checkFullText, setCheckFullText] = useState(false);
   const [sort, setSort] = useState<RecommendationSort>("recommended");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filterCount = Number(Boolean(query)) + Number(Boolean(year)) + Number(access) + Number(savedOnly) + Number(sort !== "recommended");
-  const clearFilters = () => { setQuery(""); setYear(""); setAccess(false); setSavedOnly(false); setSort("recommended"); };
+  const clearFilters = () => { setQuery(""); setYear(""); setAccess(false); setCheckFullText(false); setSavedOnly(false); setSort("recommended"); };
   const years = useMemo(() => [...new Set(items.map(recommendationDateLabel).filter((date) => /^\d{4}/.test(date)).map((date) => date.slice(0, 4)))].sort().reverse(), [items]);
-  const fullText = useRecommendationFullText(items, access, service);
-  const visible = useMemo(() => filterRecommendations(savedOnly ? fullText.items.filter((item) => item.saved) : fullText.items, query, access, year, sort), [fullText.items, query, access, year, sort, savedOnly]);
-  return <div className="recommendation-browser">
+  const fullText = useRecommendationFullText(items, access && checkFullText, service);
+  const filtered = useMemo(() => filterRecommendations(savedOnly ? fullText.items.filter((item) => item.saved) : fullText.items, query, access, year, sort), [fullText.items, query, access, year, sort, savedOnly]);
+  const slate = useMemo(() => sort === "recommended" ? composeSlate(filtered, { count: preferences.feed.displayCount, preserveOrder: true, excluded: seen, exposure: exposure.exposure.current, topicExposure: exposure.topicExposure.current }) : filtered.filter(item => (item.scoreComponents?.finalScore ?? item.relevanceScore) >= .15 && !seen.includes(canonicalCandidate(item))).slice(0, preferences.feed.displayCount), [filtered, seen, preferences.feed.displayCount, sort]);
+  const visible = explore ? filtered.slice(page * 12, (page + 1) * 12) : slate;
+  return <div ref={root} className="recommendation-browser">
+    {notice ? <p role="status">{notice}{lastFeedback && onFeedback ? <Button size="small" appearance="subtle" onClick={() => { void onFeedback(lastFeedback, "undo").then(() => { setLastFeedback(undefined); setNotice("已撤销反馈。"); }); }}>撤销反馈</Button> : null}</p> : null}
+    <div className="recommendation-feed-actions">
+      <Button appearance="subtle" size="small" onClick={() => { setExplore(!explore); setPage(0); }}>{explore ? "返回精选" : `查看更多候选 · ${items.length}`}</Button>
+      {!explore ? <Button appearance="subtle" size="small" disabled={!filtered.length} onClick={() => { const next = [...seen, ...slate.map(canonicalCandidate)]; setSeen(composeSlate(filtered, { excluded: next }).length ? next : []); }}>换一组</Button> : <>
+        <Button appearance="subtle" size="small" disabled={page === 0} onClick={() => setPage(value => value - 1)}>上一页</Button>
+        <Button appearance="subtle" size="small" disabled={(page + 1) * 12 >= filtered.length} onClick={() => setPage(value => value + 1)}>下一页</Button>
+      </>}
+    </div>
     <div className="recommendation-filters">
-      <Input aria-label="搜索推荐论文" placeholder="搜索标题、作者、主题" contentBefore={<SearchRegular />} value={query} onChange={(_, data) => setQuery(data.value)} />
+      <Input aria-label="搜索推荐论文" placeholder="搜索标题、作者、主题" contentBefore={<SearchRegular />} value={query} onChange={(_, data) => { setQuery(data.value); setPage(0); }} />
       <Popover open={filtersOpen} onOpenChange={(_, data) => setFiltersOpen(data.open)} positioning="below-end"><PopoverTrigger disableButtonEnhancement><Button size="small" icon={<FilterRegular />} aria-label="推荐筛选" aria-pressed={filterCount > 0}>筛选{filterCount ? ` · ${filterCount}` : ""}</Button></PopoverTrigger><PopoverSurface className="recommendation-filter-panel" aria-label="推荐筛选条件">
         <SearchOptions query={query} onChange={setQuery} tags={[...tags.values()].flatMap(items => items.map(tag => tag.label))} />
         <div className="recommendation-filter-row">
           <OptionPicker aria-label="推荐排序" value={String(sort ?? "")} onValueChange={nextValue => setSort(nextValue as RecommendationSort)} options={[{ value: String("recommended"), label: String("\u63A8\u8350\u987A\u5E8F") }, { value: String("newest"), label: String("\u6700\u65B0\u53D1\u8868") }, { value: String("citations"), label: String("\u5F15\u7528\u6700\u591A") }]} />
           <OptionPicker aria-label="推荐发表年份" value={String(year ?? "")} onValueChange={nextValue => setYear(nextValue)} options={[{ value: String(""), label: String("\u5168\u90E8\u5E74\u4EFD") }, ...(years.map(value => ({ value: String(value), label: String(value) }))), ...(year && !years.includes(year) ? [{ value: String(year), label: String(year) }] : [])]} />
         </div>
-        <Checkbox label="可下载 PDF" checked={access} onChange={(_, data) => setAccess(data.checked === true)} />
+        <Checkbox label="可下载 PDF" checked={access} onChange={(_, data) => { setAccess(data.checked === true); if (!data.checked) setCheckFullText(false); }} />
         <Checkbox label="已收藏" checked={savedOnly} onChange={(_, data) => setSavedOnly(data.checked === true)} />
       </PopoverSurface></Popover>
     </div>
     <div className="recommendation-filter-summary"><span className="recommendation-result-count" aria-live="polite">{visible.length} / {items.length} 篇{filterCount ? ` · 已筛选 ${filterCount} 项` : ""}</span>{filterCount && visible.length > 0 ? <Button appearance="subtle" size="small" onClick={clearFilters}>清除筛选</Button> : null}</div>
     {fullText.pending > 0 ? <p role="status" className="recommendation-interaction-hint">正在查找开放全文 · 剩余 {fullText.pending} 篇</p> : null}
     {fullText.failed > 0 ? <p role="status" className="recommendation-interaction-hint">{fullText.failed} 篇的全文来源暂不可用。<Button size="small" appearance="subtle" onClick={fullText.retry}>重试全文查询</Button></p> : null}
-    {access && fullText.unknown > 0 && !fullText.pending ? <p className="recommendation-interaction-hint">仍有 {fullText.unknown} 篇待检查。<Button appearance="subtle" size="small" onClick={fullText.checkMore}>继续检查全文</Button></p> : null}
+    {access && fullText.unknown > 0 && !fullText.pending ? <p className="recommendation-interaction-hint">仍有 {fullText.unknown} 篇待检查。<Button appearance="subtle" size="small" onClick={() => { setCheckFullText(true); if (checkFullText) fullText.checkMore(); }}>{checkFullText ? "继续检查全文" : "检查全文链接"}</Button></p> : null}
     {!visible.length && !fullText.pending ? <div className="recommendation-no-results"><p>{access ? "暂未发现符合筛选条件的全文链接；未收录链接不代表论文没有 PDF，可打开详情继续查找。" : "没有符合条件的论文。"}</p>
       <Button appearance="subtle" onClick={clearFilters}>清除筛选</Button></div> : null}
     <ul className="recommendation-compact-list" aria-label="推荐论文">
-      {visible.map((item) => { const displayTitle = displayBibliographicTitle(item.title) || "未提供题名"; return <li key={item.id} className={`recommendation-compact-item${selectedId === item.id ? " selected" : ""}`}>
+      {visible.map((item) => { const displayTitle = displayBibliographicTitle(item.title) || "未提供题名"; return <li key={item.id} data-candidate-id={item.id} className={`recommendation-compact-item${selectedId === item.id ? " selected" : ""}`}>
         <Button appearance="transparent" type="button" className="recommendation-compact-row" aria-label={`查看推荐 ${displayTitle}`}
           aria-pressed={selectedId === item.id} aria-busy={pendingIds.includes(item.id)}
           title={`${displayTitle}\n单击查看元信息，双击打开论文详情`}
@@ -85,12 +110,15 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
             </span>
           </span>
         </Button>
-        <SourceDisclosure summary="推荐详情"><p>{displayTitle}</p><p>{item.reason?.trim() || "未提供个别推荐理由"}</p><ResourceTagChips tags={tags.get(item.id) ?? []} label={`${displayTitle} 的关键词`} onSelect={tag => setQuery(tag.label)} /></SourceDisclosure>
+        <SourceDisclosure summary="推荐详情"><p>{displayTitle}</p><p>{item.reason?.trim() || "未提供个别推荐理由"}</p><ResourceTagChips tags={tags.get(item.id) ?? []} label={`${displayTitle} 的关键词`} onSelect={tag => setQuery(tag.label)} />
+          {onFeedback ? <div className="recommendation-feed-actions">{([["read", "已读"], ["snoozed", "稍后看"], ["too_basic", "太基础"], ["too_advanced", "太难"]] as const).map(([action, label]) => <Button key={action} size="small" appearance="subtle" onClick={() => { void onFeedback(item, action).then(() => { setLastFeedback(item); setNotice(`已记录：${label}`); }, error => setNotice(String(error))); }}>{label}</Button>)}</div> : null}
+        </SourceDisclosure>
 
         <div className="recommendation-compact-actions">
+          {item.researchReason && onAdoptBrief ? <Button size="small" appearance="subtle" onClick={() => { void onAdoptBrief(item).then(() => setNotice("研究建议已保存为笔记。"), error => setNotice(String(error))); }}>采用为研究笔记</Button> : null}
           <IconAction density="compact" label={`打开详情 ${displayTitle}`} appearance="subtle" icon={<OpenRegular />} onClick={() => onOpen?.(item)} />
           <Tooltip content="收藏" relationship="label"><Button appearance="subtle" size="small" aria-label={`收藏 ${displayTitle}`} disabled={Boolean(item.resourcePath) || !canSave || pendingIds.includes(item.id)} icon={<BookmarkRegular />} onClick={() => onSave(item)} /></Tooltip>
-          <Tooltip content="不感兴趣" relationship="label"><Button appearance="subtle" size="small" aria-label={`忽略 ${displayTitle}`} icon={<DeleteRegular />} onClick={() => onDismiss(item)} /></Tooltip>
+          <Tooltip content="不感兴趣" relationship="label"><Button appearance="subtle" size="small" aria-label={`忽略 ${displayTitle}`} icon={<DeleteRegular />} onClick={() => { onDismiss(item); setLastFeedback(item); setNotice("已隐藏此课题下的推荐。"); }} /></Tooltip>
         </div>
       </li>; })}
     </ul>

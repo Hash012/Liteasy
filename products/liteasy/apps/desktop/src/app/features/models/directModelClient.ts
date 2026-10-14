@@ -27,8 +27,10 @@ export function buildDirectModelBody(config: DirectModelConfig, input: GenerateA
     ] : prompt }],
     stream: Boolean(input.onDelta)
   };
-  if (config.protocol === "anthropic") body.max_tokens = 8192;
-  else if (input.outputFormat && config.outputFormat !== "prompt") {
+  if (input.maxOutputTokens !== undefined && (!Number.isInteger(input.maxOutputTokens) || input.maxOutputTokens < 1 || input.maxOutputTokens > 8192)) throw new Error("输出令牌预算无效。");
+  if (config.protocol === "anthropic") body.max_tokens = input.maxOutputTokens ?? 8192;
+  else if (input.maxOutputTokens !== undefined) body.max_tokens = input.maxOutputTokens;
+  if (config.protocol !== "anthropic" && input.outputFormat && config.outputFormat !== "prompt") {
     body.response_format = config.outputFormat === "json_schema"
       ? { type: "json_schema", json_schema: input.outputFormat }
       : { type: "json_object" };

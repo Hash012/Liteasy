@@ -1,6 +1,6 @@
 import type { RecommendationTask } from "./recommendationCoordinator";
 import type { AgentAssetService } from "../resource-filesystem/agentAssetService";
-import { hybridRank, diversify, cosine, keywords, terms, type Candidate } from "../../../../../../packages/recommendation-core/index.mjs";
+import { hybridRank, diversify, terms, type Candidate } from "../../../../../../packages/recommendation-core/index.mjs";
 import { contentFingerprint, createSemanticIndex, type IndexRecord } from "../semantic-index/semanticIndexClient";
 import { embedTexts, embeddingFingerprint, localEmbedding, rerankTexts } from "../semantic-index/embeddingProvider";
 import type { RecommendationContext } from "./recommendationContext";
@@ -29,6 +29,7 @@ export async function rankContextRecommendations(input: { task?: RecommendationT
   const index = createSemanticIndex({ scope: input.scope, workspace: input.workspace, model, active: input.active });
   const views = context.views.map((view) => ({ ...view }));
   let items: (RecommendationItem & { vector?: number[] })[] = [...input.items, ...(context.localCandidates ?? [])], warning = "";
+  let embeddedTexts = 0, embeddingRequests = 0;
   const vectorByText = new Map<string, number[]>();
   const vectorize = async (entries: { id: string; text: string; path: string; private?: boolean; payload?: unknown }[]) => {
     const records: (IndexRecord & { private?: boolean })[] = await Promise.all(entries.map(async (entry) => {
@@ -40,9 +41,11 @@ export async function rankContextRecommendations(input: { task?: RecommendationT
       const batch = records.slice(offset, offset + 16);
       const cached = await index.lookup(batch.filter((record) => !record.id.startsWith("profile:")).map((record) => record.id), signal);
       cached.forEach((record) => { if (record.vector) vectorByText.set(record.text, record.vector); });
-      const missing = batch.filter((record) => !vectorByText.has(record.text) && (!record.private || localEmbedding(config) || preferences.sendPrivateText));
-      if (semantic && missing.length) {
-        const vectors = await embedTexts(config, missing.map((record) => record.text), signal);
+      const missing = batch.filter((record) => !vectorByText.has(record.text) && (!record.private || localEmbedding(config) || preferences.sendPrivateText)).slice(0, Math.max(0, 60 - embeddedTexts));
+      if (semantic && missing.length && embeddingRequests < 8) {
+        embeddedTexts += missing.length; embeddingRequests++;
+        const request = () => embedTexts(config, missing.map((record) => record.text), signal);
+        const vectors = input.task ? await input.task.request("embedding", request, missing.reduce((sum, record) => sum + new TextEncoder().encode(record.text).length, 0)) : await request();
         check(); missing.forEach((record, i) => vectorByText.set(record.text, vectors[i]));
       }
       // Asset cache hits are checked against the live repository below. Profile/query-only fragments remain transient.
@@ -78,22 +81,19 @@ export async function rankContextRecommendations(input: { task?: RecommendationT
   views.forEach((view) => { view.vector = vectorByText.get(view.text); });
   items = items.map((item) => ({ ...item, vector: vectorByText.get(textOf(item)) }));
   let ranked = hybridRank(items, views.map((view) => ({ ...view, text: view.provenance === "highlight" ? view.text.slice(0, 200) : view.text })), { style: input.style });
-  if (preferences.reranker.endpoint && preferences.reranker.model && ranked.length) {
+  if (preferences.hybridEnabled && preferences.reranker.endpoint && preferences.reranker.model && ranked.length) {
     const query = views.filter((view) => !view.private || localEmbedding(preferences.reranker) || preferences.sendPrivateText).map((view) => view.text).join("\n");
     if (query.trim()) try {
-      const top = ranked.filter((item) => !item.resourcePath || localEmbedding(preferences.reranker) || preferences.sendPrivateText).slice(0, 30), scores = await rerankTexts(preferences.reranker, query, top.map(textOf), signal);
+      const top = ranked.filter((item) => !item.resourcePath || localEmbedding(preferences.reranker) || preferences.sendPrivateText).slice(0, 24);
+      const request = () => rerankTexts(preferences.reranker, query, top.map(textOf), signal);
+      const scores = input.task ? await input.task.request("reranker", request) : await request();
       check();
       for (const row of scores) top[row.index].hybrid.score = top[row.index].hybrid.score * .8 + row.relevance_score * .2;
       top.sort((a, b) => b.hybrid.score - a.hybrid.score);
       ranked = diversify([...top, ...ranked.filter((item) => !top.includes(item))].map((item) => ({ ...item, hybrid: { ...item.hybrid, score: item.hybrid.score + item.hybrid.diversityPenalty, diversityPenalty: 0 } })), { style: input.style });
     } catch (error) { input.signal.throwIfAborted(); if (!input.active()) throw error; warning = `${warning} 重排服务暂不可用，保留混合排序。`.trim(); }
   }
-  if (semantic) try {
-    const visible = ranked.filter((item) => item.vector && (!item.resourcePath || localEmbedding(config) || preferences.sendPrivateText)).slice(0, 12);
-    const phrases = visible.flatMap((item) => keywords(item, items).filter((tag) => tag.source === "text").slice(0, 3).map((tag) => ({ id: `keyword:${tag.value}`, path: `keyword:${tag.value}`, text: tag.label, private: Boolean(item.resourcePath) })));
-    await vectorize(phrases);
-    for (const item of visible) item.keywordScores = Object.fromEntries(keywords(item, items).map((tag) => [tag.value, Math.max(0, cosine(item.vector, vectorByText.get(tag.label)))]));
-  } catch { input.signal.throwIfAborted(); }
+  // Card keywords use lexical extraction; they never purchase additional embeddings.
   input.signal.throwIfAborted();
   if (!input.active()) throw new Error("推荐工作区已切换。");
   return { warning, items: ranked.map(({ vector: _vector, hybrid, ...item }) => {

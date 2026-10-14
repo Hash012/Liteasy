@@ -47,7 +47,11 @@ export async function fetchLocalRecommendations(config: PaperServiceConfig, quer
       url.searchParams.set("fields", "title,authors,year,externalIds,url,citationCount,publicationDate,abstract,fieldsOfStudy,venue,openAccessPdf");
       if (style === "frontier") url.searchParams.set("year", `${new Date().getUTCFullYear() - 2}-`);
     }
-    const request = () => paperServiceRequest(config, url.href, { timeoutMs: 12_000, maxResponseBytes: 4 * 1024 * 1024, signal });
+    const request = async () => {
+      const response = await paperServiceRequest(config, url.href, { timeoutMs: 12_000, maxResponseBytes: 4 * 1024 * 1024, signal });
+      if (!response.ok) { const retry = response.headers.get("Retry-After"); throw Object.assign(new Error(`文献 API 返回 HTTP ${response.status}`), { status: response.status, retryAfterMs: retry ? /^\d+$/.test(retry) ? Number(retry) * 1000 : Math.max(0, Date.parse(retry) - Date.now()) : undefined }); }
+      return response;
+    };
     const response = options.task ? await options.task.request("provider", request) : await request();
     signal.throwIfAborted();
     if (!response.ok) throw Object.assign(new Error(`文献 API 返回 HTTP ${response.status}，请检查文献服务地址、密钥或配额。`), { status: response.status });
@@ -68,7 +72,7 @@ export async function fetchLocalRecommendations(config: PaperServiceConfig, quer
       const doi = text(item.DOI ?? item.doi ?? record(item.externalIds).DOI).replace(/^https?:\/\/(?:dx\.)?doi.org\//i, "").toLowerCase();
       const id = doi ? `doi:${doi}` : `${config.provider}:${text(item.id ?? item.paperId)}`;
       if (!title || id.endsWith(":")) continue;
-      if (typeof seed !== "string" && (seed.doi?.toLowerCase() === doi || seed.title.toLocaleLowerCase() === title.toLocaleLowerCase())) continue;
+      if (typeof seed !== "string" && (seed.doi?.toLowerCase() === doi)) continue;
       const authors = array(item.author ?? item.authorships ?? item.authors).slice(0, 12).map((rawAuthor) => {
         const author = record(rawAuthor); return text(author.name ?? record(author.author).display_name) || [text(author.given), text(author.family)].filter(Boolean).join(" ");
       }).filter(Boolean);

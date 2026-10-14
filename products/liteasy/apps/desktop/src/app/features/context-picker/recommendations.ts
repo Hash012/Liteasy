@@ -4,7 +4,7 @@ import { readPickerRecord, writePickerRecord } from "./pickerState";
 
 export type PickerActivity = { id: string; at: number; kind: "viewed" | "foreground-dwell" | "created" | "attached" | "sent" | "undone"; origin: "reader" | "editor" | "picker_preview" | "picker"; durationMs?: number };
 export type RecommendationSettings = { enabled: boolean; recentReading: boolean; recentCreated: boolean; draftSimilarity: boolean; projectFirst: boolean; count: number };
-export const defaultRecommendationSettings: RecommendationSettings = { enabled: true, recentReading: true, recentCreated: true, draftSimilarity: true, projectFirst: true, count: 6 };
+export const defaultRecommendationSettings: RecommendationSettings = { enabled: true, recentReading: false, recentCreated: true, draftSimilarity: true, projectFirst: true, count: 6 };
 const settingsKey = (scope: string) => `liteasy:context-picker:recommendations:${scope}`;
 const activityKey = (scope: string) => `liteasy:context-picker:activity:${scope}`;
 export function readRecommendationSettings(scope: string): RecommendationSettings {
@@ -14,7 +14,7 @@ export function readRecommendationSettings(scope: string): RecommendationSetting
   if (value?.count && Number.isSafeInteger(value.count)) settings.count = Math.max(4, Math.min(12, value.count));
   return settings;
 }
-export function saveRecommendationSettings(scope: string, settings: RecommendationSettings) { writePickerRecord(settingsKey(scope), settings); }
+export function saveRecommendationSettings(scope: string, settings: RecommendationSettings) { writePickerRecord(settingsKey(scope), settings); window.dispatchEvent(new Event("liteasy:context-picker:recommendations")); }
 export function readPickerActivity(scope: string, now = Date.now()): PickerActivity[] {
   const raw = readPickerRecord<PickerActivity[]>(activityKey(scope));
   return Array.isArray(raw) ? raw.filter(event => typeof event?.id === "string" && Number.isFinite(event.at) && event.at <= now && event.at >= now - 30 * 86400000).slice(-2000) : [];

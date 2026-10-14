@@ -179,18 +179,18 @@ describe("LeftPane", () => {
     expect(panel.getByRole("button", { name: "查看推荐 Cached attention paper" })).toBeInTheDocument();
     expect(panel.getByRole("status")).toHaveTextContent("正在更新推荐，仍可浏览已有结果…");
     await user.click(panel.getByRole("button", { name: "关联推荐更多操作" }));
-    expect(screen.getByRole("menuitem", { name: "刷新推荐" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("menuitem", { name: "检查新论文" })).toHaveAttribute("aria-disabled", "true");
     await user.keyboard("{Escape}");
 
     rerender(<LeftPane {...props} recommendationPending={false} />);
     expect(panel.queryByRole("status")).not.toBeInTheDocument();
     await user.click(panel.getByRole("button", { name: "关联推荐更多操作" }));
-    await user.click(screen.getByRole("menuitem", { name: "刷新推荐" }));
+    await user.click(screen.getByRole("menuitem", { name: "检查新论文" }));
     expect(onRefreshRecommendations).toHaveBeenCalledOnce();
 
     rerender(<LeftPane {...props} accountSession={null} recommendationPending={false} />);
     await user.click(panel.getByRole("button", { name: "关联推荐更多操作" }));
-    expect(screen.getByRole("menuitem", { name: "刷新推荐" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("menuitem", { name: "检查新论文" })).toHaveAttribute("aria-disabled", "true");
     await user.keyboard("{Escape}");
     expect(panel.queryByText("Cached attention paper")).not.toBeInTheDocument();
   });

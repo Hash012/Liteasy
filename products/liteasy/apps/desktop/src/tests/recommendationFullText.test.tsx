@@ -6,15 +6,17 @@ import type { RecommendationItem } from "../app/features/recommendations/recomme
 const discover = vi.hoisted(() => vi.fn());
 vi.mock("../app/features/paper-services/paperPdfResolver", async (original) => ({ ...await original<object>(), probePaperPdf: discover }));
 afterEach(() => vi.resetAllMocks());
-const item = (n: number) => ({ id: `doi:10.1234/test-${n}`, title: `Paper ${n}`, authors: [], source: "crossref" }) as RecommendationItem;
+const item = (n: number) => ({ id: `doi:10.1234/test-${n}`, title: `Paper ${n}`, authors: [], source: "crossref", relevanceScore: .8, relevanceBand: "high", discoveredAt: "2026-10-14", relatedDocumentTitle: "Methods", reason: "Metadata" }) as RecommendationItem;
 
-test("full-text filter lazily resolves missing metadata and passes the discovered PDF into open/save", async () => {
+test("full-text filter stays local; explicit verification resolves metadata and passes the PDF into open/save", async () => {
   const onOpen = vi.fn();
   discover.mockResolvedValue({ status: "available", checkedAt: Date.now(), url: "https://repository.test/paper.pdf" });
   render(<RecommendationList items={[item(1)]} canSave pendingIds={[]} onOpen={onOpen} onSave={() => {}} onDismiss={() => {}} />);
   expect(discover).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "推荐筛选" }));
   fireEvent.click(screen.getByRole("checkbox", { name: "可下载 PDF" }));
+  expect(discover).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "检查全文链接" }));
   await waitFor(() => expect(discover).toHaveBeenCalledOnce());
   const row = await screen.findByRole("button", { name: "查看推荐 Paper 1" });
   fireEvent.doubleClick(row);

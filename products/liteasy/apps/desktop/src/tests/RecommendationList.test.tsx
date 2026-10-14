@@ -56,6 +56,16 @@ test("never invents a publication month when only the year is known", () => {
   expect(recommendationDateLabel({ ...item, publishedAt: "2024-02-30" })).toBe("2024");
   expect(recommendationDateLabel({ ...item, publishedAt: undefined, publishedYear: undefined })).toBe("日期未知");
 });
+test("offers undo after dismissing a topic recommendation without probing sources", async () => {
+  const dismiss = vi.fn(), feedback = vi.fn().mockResolvedValue(undefined);
+  render(<RecommendationList items={[item]} pendingIds={[]} canSave onSave={vi.fn()} onDismiss={dismiss} onFeedback={feedback} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: `忽略 ${item.title}` }));
+  expect(dismiss).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: item.id }));
+  await user.click(screen.getByRole("button", { name: "撤销反馈" }));
+  expect(feedback).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: item.id }), "undo");
+  expect(probe).not.toHaveBeenCalled();
+});
 
 test("narrows recommendations by author, year and available full text without replacing the source list", async () => {
   const open = vi.fn();
@@ -70,7 +80,10 @@ test("narrows recommendations by author, year and available full text without re
   await selectPickerValue(screen.getByRole("combobox", { name: "推荐排序" }), "newest");
   expect(screen.getAllByRole("button", { name: /^查看推荐/ })[0]).toHaveAccessibleName("查看推荐 New memory systems");
   await user.click(screen.getByRole("checkbox", { name: "可下载 PDF" }));
+  expect(probe).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "检查全文链接" }));
   expect(await screen.findAllByRole("button", { name: /^查看推荐/ })).toHaveLength(1);
+  await user.click(screen.getByRole("button", { name: "推荐筛选" }));
   await selectPickerValue(screen.getByRole("combobox", { name: "推荐发表年份" }), "2024");
   expect(await screen.findByText(/暂未发现符合筛选条件的全文链接/)).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "清除筛选" }));
@@ -103,4 +116,19 @@ test("allows full-text lookup without a prefilled PDF URL and rejects unsafe sou
   expect(download).toHaveBeenCalledOnce();
   expect(await screen.findByText("已查找并下载")).toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "打开论文网站" })).not.toBeInTheDocument();
+});
+
+test("shows a diverse three-card slate and pages the cached pool without remote calls", async () => {
+  const user = userEvent.setup();
+  const candidates = Array.from({ length: 15 }, (_, index) => ({ ...item, id: `candidate-${index}`, title: `Research topic ${index}`, relatedDocumentTitles: [index < 8 ? "systems" : "biology"], relevanceScore: .9 - index * .01 }));
+  render(<RecommendationList items={candidates} pendingIds={[]} canSave onSave={vi.fn()} onDismiss={vi.fn()} />);
+  const rows = () => within(screen.getByRole("list", { name: "推荐论文" })).getAllByRole("button", { name: /^查看推荐/ });
+  expect(rows()).toHaveLength(3);
+  const before = rows().map(row => row.textContent);
+  await user.click(screen.getByRole("button", { name: "换一组" }));
+  expect(rows()).toHaveLength(3); expect(rows().map(row => row.textContent)).not.toEqual(before);
+  await user.click(screen.getByRole("button", { name: "查看更多候选 · 15" }));
+  expect(rows()).toHaveLength(12);
+  await user.click(screen.getByRole("button", { name: "下一页" })); expect(rows()).toHaveLength(3);
+  expect(probe).not.toHaveBeenCalled();
 });

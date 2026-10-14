@@ -1,3 +1,4 @@
+import type { RecommendationFeedbackMeaning } from "../recommendations/recommendationCoordinator";
 import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { ActionButton as Button, IconAction, ContextualActions } from "../../shared/ui/productPrimitives";
 import { citationPaper, normalizeCitationDoi, type CitationPaper } from "../citation-graph/citationGraph";
@@ -165,7 +166,14 @@ type LibraryPaneProps = {
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onAddExternalPdf?: (item: ExternalPdfDragPayload) => void | Promise<void>;
   onClearRecommendations: () => void;
+  onRecommendationFeedback?: (item: RecommendationItem, action: RecommendationFeedbackMeaning) => Promise<unknown>;
+  onAdoptRecommendationBrief?: (item: RecommendationItem) => Promise<unknown>;
   onRefreshRecommendations?: () => void;
+  onExploreSelectedRecommendations?: () => void;
+  onShowOrdinaryRecommendations?: () => void;
+  onAcceptPendingRecommendations?: () => void;
+  recommendationPendingSnapshot?: boolean;
+  recommendationExploringSelection?: boolean;
   onDismissRecommendation: (recommendation: RecommendationItem) => void;
   onImportZoteroDirectory?: (files: File[]) => string | Promise<string>;
   onLoginRequired?: () => void;
@@ -475,7 +483,11 @@ function LibraryPaneContent({
   loadLegacyLibraryRoots,
   onAddDroppedPdfFiles,
   onClearRecommendations,
+  onRecommendationFeedback,
+  onAdoptRecommendationBrief,
   onRefreshRecommendations,
+  onExploreSelectedRecommendations, onShowOrdinaryRecommendations, onAcceptPendingRecommendations,
+  recommendationPendingSnapshot, recommendationExploringSelection,
   onDismissRecommendation,
   onImportZoteroDirectory,
   onLoginRequired,
@@ -1745,7 +1757,7 @@ function LibraryPaneContent({
       <section aria-label="关联推荐" className="library-section">
         <SectionHeader
           actions={<>
-            {iconAction("刷新推荐", <ArrowClockwiseRegular />, () => onRefreshRecommendations?.(), !(accountSessionAvailable || localRecommendations) || recommendationPending || !onRefreshRecommendations)}
+            {iconAction("检查新论文", <ArrowClockwiseRegular />, () => onRefreshRecommendations?.(), !(accountSessionAvailable || localRecommendations) || recommendationPending || !onRefreshRecommendations)}
             {iconAction("清除推荐缓存", <DeleteDismissRegular />, () => { if (window.confirm("清除当前推荐缓存？已收藏的文献不受影响。")) onClearRecommendations(); }, !(accountSessionAvailable || localRecommendations))}
           </>}
           count={recommendationItems.length}
@@ -1756,12 +1768,18 @@ function LibraryPaneContent({
         />
         {!collapsedSections.includes("recommendation") ? (
           <div className="library-section-content">
+            <div className="recommendation-feed-actions">
+              {onExploreSelectedRecommendations ? <Button size="small" appearance="subtle" onClick={onExploreSelectedRecommendations}>按此选集探索</Button> : null}
+              {recommendationExploringSelection ? <Button size="small" appearance="subtle" onClick={onShowOrdinaryRecommendations}>返回日常推荐</Button> : null}
+              {recommendationPendingSnapshot ? <Button size="small" onClick={onAcceptPendingRecommendations}>有新推荐 · 查看</Button> : null}
+            </div>
             {(accountSessionAvailable || localRecommendations) ? (
               <RecommendationStyleControl compact
                 onChange={onRecommendationStyleChange}
                 value={recommendationStyle}
               />
             ) : null}
+            {recommendationItems.length > 0 && !recommendationPending && recommendationMessage ? <p className="recommendation-interaction-hint">{recommendationMessage}</p> : null}
             {(accountSessionAvailable || localRecommendations) && recommendationPending ? (
               <div className="library-recommendation-message loading" role="status">
                 {recommendationItems.length > 0 ? "正在更新推荐，仍可浏览已有结果…" : "正在获取推荐…"}
@@ -1772,7 +1790,7 @@ function LibraryPaneContent({
             ) : recommendationItems.length === 0 ? (
               !recommendationPending ? <div className="library-empty-collection">{recommendationMessage || "暂无关联推荐"}</div> : null
             ) : (
-              <RecommendationList service={recommendationService} items={recommendationItems} selectedId={selectedRecommendationId}
+              <RecommendationList onFeedback={onRecommendationFeedback} onAdoptBrief={onAdoptRecommendationBrief} service={recommendationService} items={recommendationItems} selectedId={selectedRecommendationId}
                 pendingIds={pendingNodeIds} canSave={localRecommendations || Boolean(collection.tree)}
                 onInspect={onInspectRecommendation}
                 onOpen={onOpenRecommendation}

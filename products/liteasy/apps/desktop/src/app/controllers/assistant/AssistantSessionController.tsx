@@ -1,3 +1,5 @@
+import { createRecommendationEvidenceStore } from "../../features/recommendations/recommendationEvidence";
+import { loadRecommendationPreferences } from "../../features/recommendations/recommendationPreferences";
 import { ResearchSkillsContext } from "../../features/research-skills/researchSkillsPort";
 import { ResearchSkillSelectionView } from "../../features/research-skills/ResearchSkillSelection";
 import { listResearchSkills } from "../../features/research-skills/researchSkillCatalog";
@@ -2358,6 +2360,7 @@ export function AssistantSessionController({
 
     const activeMode = adapted.runtimeInput.mode;
     assistantStoreRef.current.setMode(activeMode);
+    const recommendationConsentEpoch = loadRecommendationPreferences().consentEpoch;
     const userMessage = createMessage("user", adapted.userMessageContent);
     userMessage.contextTokens = contextTokensForTurn;
     userMessage.thinkingDepth = thinkingDepth;
@@ -2406,6 +2409,11 @@ export function AssistantSessionController({
     }
     sendLockRef.current.delete(sendTarget);
     if (owner.disposed) return;
+    if (historyPersistence && objectWorkbench?.scopeId) {
+      void createRecommendationEvidenceStore(objectWorkbench.scopeId).record({ id: userMessage.requestId!, producerActionId: userMessage.requestId!,
+        sourceId: `chat:${sendTarget}`, type: "user_question_committed", revision: userMessage.id,
+        at: Date.now(), epoch: recommendationConsentEpoch, text: input.slice(0, 8000) }).catch(() => {});
+    }
     if (activeSessionIdRef.current === sendTarget) {
       resetComposerDraft({ input: "", tokens: [], readerContexts: [] });
       lastReaderContextKeyRef.current = null;

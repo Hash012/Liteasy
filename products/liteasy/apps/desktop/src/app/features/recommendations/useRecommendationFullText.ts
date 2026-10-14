@@ -54,7 +54,7 @@ export function useRecommendationFullText(items: RecommendationItem[], enabled: 
   }), [items, resolved, scope]);
   return { items: enriched, pending: enabled ? pending : 0,
     failed: enabled ? enriched.filter((item) => ["error", "blocked"].includes(item.fullText.status)).length : 0,
-    unknown: enabled ? enriched.filter((item) => item.fullText.status === "unknown").length : 0,
+    unknown: enriched.filter((item) => item.fullText.status === "unknown").length,
     checkMore: () => { setBudget((value) => Math.min(items.length, value + 12)); setRevision((value) => value + 1); },
     retry: () => { cache.current = Object.fromEntries(Object.entries(cache.current).filter(([, value]) => value.status === "available")); setResolved(cache.current); setRevision((value) => value + 1); },
   };

@@ -1,3 +1,4 @@
+import { defaultRecommendationPreferences, saveRecommendationPreferences } from "../app/features/recommendations/recommendationPreferences";
 import "fake-indexeddb/auto";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, afterEach, expect, test, vi } from "vitest";
@@ -10,10 +11,10 @@ const { discover, rank } = vi.hoisted(() => ({ discover: vi.fn(), rank: vi.fn() 
 vi.mock("../app/features/recommendations/localRecommendationClient", () => ({ fetchLocalRecommendations: discover }));
 vi.mock("../app/features/recommendations/recommendationHybridPipeline", () => ({ rankContextRecommendations: rank }));
 vi.mock("../app/features/recommendations/recommendationContext", async (original) => ({ ...await original<typeof import("../app/features/recommendations/recommendationContext")>(),
-  buildRecommendationContext: async ({ papers }: { papers: Paper[] }) => ({ documents: papers.map(recommendationDocument), views: [], warnings: [] }) }));
+  buildRecommendationContext: async ({ papers }: { papers: Paper[] }) => ({ documents: papers.map(recommendationDocument), views: papers.map(paper => ({ id: `paper:${paper.id}`, title: paper.title, text: paper.title, kind: "document", private: false, provenance: "metadata", revision: "1" })), warnings: [] }) }));
 const paper: Paper = { id: "p", title: "Attention Is All You Need", literature: confirmedLiterature("Attention Is All You Need") };
 const item: RecommendationItem = { id: "candidate", title: "Memory Efficient Attention for Language Models", relevanceScore: .9, relevanceBand: "high", reason: "Shared attention methods", source: "crossref", sourceKind: "live", discoveredAt: "2026-10-14", relatedDocumentTitle: paper.title };
-beforeEach(() => { localStorage.clear(); discover.mockReset().mockResolvedValue([item]); rank.mockReset().mockImplementation(async ({ items }) => ({ items, warning: "" })); });
+beforeEach(() => { localStorage.clear(); saveRecommendationPreferences({ ...defaultRecommendationPreferences, hybridEnabled: true }); discover.mockReset().mockResolvedValue([item]); rank.mockReset().mockImplementation(async ({ items }) => ({ items, warning: "" })); });
 afterEach(() => { vi.useRealTimers(); });
 test.each([true, false])("REC-001: 20 selection changes cause zero discovery or model calls while the ordinary feed is fresh (direct %s)", async (direct) => {
   vi.useFakeTimers();
@@ -28,6 +29,7 @@ test.each([true, false])("REC-001: 20 selection changes cause zero discovery or 
   const hook = renderHook(({ selectedPapers }) => useKnowledgeSyncController({ ...base, selectedPapers }), { initialProps: { selectedPapers: [paper] } });
   for (let tick = 0; tick < 3; tick++) await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
   expect(hook.result.current.model.recommendationItems).toHaveLength(1);
+  expect(rank).toHaveBeenCalledTimes(1);
   const calls = (direct ? discover : cloud).mock.calls.length, rankingCalls = rank.mock.calls.length;
   const visible: string[][] = [];
   for (let index = 0; index < 20; index++) {

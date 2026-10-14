@@ -1,3 +1,4 @@
+import "fake-indexeddb/auto";
 import { confirmedLiterature } from "./fixtures/confirmedLiterature";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
@@ -9,9 +10,10 @@ import { paperServiceRequest } from "../app/features/paper-services/paperService
 import { createSettingsStore } from "../app/features/settings/settings.store";
 vi.mock("../app/features/paper-services/paperServiceTransport", () => ({ paperServiceRequest: vi.fn() }));
 const api = vi.mocked(paperServiceRequest);
-beforeEach(() => { localStorage.clear(); vi.restoreAllMocks(); api.mockReset(); });
+beforeEach(() => { localStorage.clear(); vi.restoreAllMocks(); api.mockReset(); params.recommendationResources.scope = crypto.randomUUID(); });
 const paper = { id: "paper-a", title: "Graph neural networks", literature: confirmedLiterature("Graph neural networks") };
 const params = { accountSession: null, controlPlaneEndpoint: "https://liteasy.invalid", documents: [paper], selectedPapers: [paper],
+  recommendationResources: { scope: "local" },
   recommendationsEnabled: true, recommendationSortMode: "relevance" as const, recommendationStyle: "balanced" as const,
   personalizationEnabled: true, workspaceRevision: 0, workspaceSourceKey: "local_library:/papers", localMode: true,
   localService: { provider: "crossref" as const, endpoint: "https://api.crossref.org" } };
@@ -28,7 +30,7 @@ test("local mode bypasses cloud authentication and metadata upload, caches resul
   unmount();
   api.mockClear(); vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
   const offline = renderHook(() => useKnowledgeSyncController(params));
-  await waitFor(() => expect(offline.result.current.model.recommendationPending).toBe(false), { timeout: 3000 });
+  await waitFor(() => expect(offline.result.current.model.recommendationStatus).toBe("ready"), { timeout: 3000 });
   expect(offline.result.current.model.recommendationItems).toHaveLength(1);
   expect(offline.result.current.model.recommendationMessage).toContain("显示本机缓存");
   expect(api).not.toHaveBeenCalled();

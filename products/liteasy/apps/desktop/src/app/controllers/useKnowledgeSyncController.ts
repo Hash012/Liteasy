@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { createRecommendationEvidenceStore } from "../features/recommendations/recommendationEvidence";
+import { useEffect, useRef, useState } from "react";
 import { useRecommendationFeed } from "../features/recommendations/useRecommendationFeed";
 import { useRecommendationContextController, type RecommendationResourceInput } from "./useRecommendationContextController";
 import { hasRecommendationMetadata, useRecommendationMetadataController } from "./useRecommendationMetadataController";
@@ -20,6 +21,7 @@ import type { RecommendationCacheScope } from "../features/recommendations/recom
 import type { RecommendationFeedbackTransport } from "../features/recommendations/recommendationFeedbackClient";
 
 type UseKnowledgeSyncControllerInput = {
+  recommendationModelSettings?: SettingsState;
   localMode?: boolean;
   localService?: PaperServiceConfig;
   accountSession: AccountSession | null;
@@ -57,7 +59,7 @@ type UseKnowledgeSyncControllerInput = {
 };
 
 export function useKnowledgeSyncController({
-  localMode = false, localService,
+  localMode = false, localService, recommendationModelSettings,
   accountSession,
   controlPlaneEndpoint,
   documentMetadataTransport,
@@ -79,6 +81,17 @@ export function useKnowledgeSyncController({
   workspaceRevision,
   workspaceSourceKey
 }: UseKnowledgeSyncControllerInput) {
+  const previousDocuments = useRef<{ scope: string; ids: string[] }>();
+  const documentScope = `${recommendationResources?.scope}:${workspaceSourceKey}`;
+  useEffect(() => {
+    const previous = previousDocuments.current, ids = documents.map(paper => paper.id);
+    previousDocuments.current = { scope: documentScope, ids };
+    if (previous?.scope === documentScope && recommendationResources?.scope) {
+      const removed = previous.ids.filter(id => !ids.includes(id));
+      if (removed.length) { const scope = recommendationResources.scope; const store = createRecommendationEvidenceStore(scope, () => scope);
+        void store.read().then(state => store.forget(state.events.filter(event => removed.some(id => event.sourceId === `paper:${id}` || event.sourceId.startsWith(`annotation:${id}:`))).map(event => event.sourceId))).catch(() => {}); }
+    }
+  }, [documentScope, documents.map(paper => paper.id).join("|")]);
   const directRecommendations = localMode || Boolean(localService);
   const [seed, setSeed] = useState<{ workspace: string; id: string; papers: Paper[]; resources?: RecommendationResourceInput }>();
   const activeSeed = seed?.workspace === workspaceSourceKey ? seed : undefined;
@@ -89,9 +102,9 @@ export function useKnowledgeSyncController({
   const recommendations = useRecommendationFeed({ enabled: recommendationsEnabled, direct: directRecommendations,
     accountSession, endpoint: controlPlaneEndpoint, scope: recommendationResources?.scope ?? "local", workspace: workspaceSourceKey,
     context: context.context, pending: context.pending || metadata.blocked, preferences: context.preferences, profile: researchProfile,
-    style: recommendationStyle ?? "balanced", config: localService, assets: recommendationResources?.assets,
+    style: recommendationStyle ?? "balanced", sort: recommendationSortMode, config: localService, assets: recommendationResources?.assets,
     transport: recommendationTransport, feedbackTransport: recommendationFeedbackTransport, generator: recommendationGeneratorDeps,
-    legacyCache: recommendationCacheDeps, seedId: activeSeed?.id });
+    modelSettings: recommendationModelSettings, legacyCache: recommendationCacheDeps, seedId: activeSeed?.id });
   const documentMetadataSync = useDocumentMetadataSync({
     accountSession,
     controlPlaneEndpoint,
@@ -103,9 +116,11 @@ export function useKnowledgeSyncController({
 
   return {
     actions: {
+      recordRecommendationSignal: recommendations.recordSignal,
+      adoptRecommendationBrief: recommendations.adoptBrief,
       clearRecommendationCache: recommendations.clearRecommendationCache,
       refreshRecommendations: () => metadata.blocked ? metadata.retry() : recommendations.refreshRecommendations(),
-      exploreSelectedPapers: () => setSeed({ workspace: workspaceSourceKey, id: crypto.randomUUID(), papers: [...selectedPapers], resources: recommendationResources ? { ...recommendationResources, selected: [...(recommendationResources.selected ?? [])] } : undefined }),
+      exploreSelectedPapers: () => setSeed({ workspace: workspaceSourceKey, id: crypto.randomUUID(), papers: structuredClone(selectedPapers), resources: recommendationResources ? { ...recommendationResources, selected: structuredClone(recommendationResources.selected ?? []) } : undefined }),
       showOrdinaryRecommendations: () => setSeed(undefined),
       acceptPendingRecommendations: recommendations.acceptPending,
       recordRecommendationSaved: (recommendation: RecommendationItem) =>

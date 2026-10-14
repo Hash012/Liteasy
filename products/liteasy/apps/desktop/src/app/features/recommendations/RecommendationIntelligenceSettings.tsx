@@ -1,3 +1,5 @@
+import { RecommendationInterestsSettings } from "./RecommendationInterestsSettings";
+import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { DisclosureSection } from "../../shared/ui/productPrimitives";
 import { useEffect, useRef, useState } from "react";
 import { Button, Field, Input, Switch } from "@fluentui/react-components";
@@ -38,12 +40,25 @@ export function RecommendationIntelligenceSettings() {
     finally { if (request.current === task) setBusy(false); }
   }
   return <section className="recommendation-intelligence-settings" aria-label="关联分析设置">
-    <Switch label="增强关联推荐" checked={preferences.hybridEnabled} onChange={(_, data) => save({ ...preferences, hybridEnabled: data.checked })} />
+    <Switch label="增强关联推荐" checked={draft.hybridEnabled} onChange={(_, data) => setDraft({ ...draft, hybridEnabled: data.checked })} />
     <p>围绕文献内容、你的阅读问题和研究方向排序。未配置语义服务时使用本地词项匹配；随时可以关闭。</p>
-    <Switch label="结合相关批注与笔记" checked={preferences.useAnnotations} onChange={(_, data) => save({ ...preferences, useAnnotations: data.checked })} />
-    <Switch label="结合已确认的用户画像" checked={preferences.useProfile} onChange={(_, data) => save({ ...preferences, useProfile: data.checked })} />
-    <Switch label="允许向外部服务发送笔记、批注和画像" checked={preferences.sendPrivateText} onChange={(_, data) => save({ ...preferences, sendPrivateText: data.checked })} />
+    <Switch label="结合相关批注与笔记" checked={draft.useAnnotations} onChange={(_, data) => setDraft({ ...draft, useAnnotations: data.checked })} />
+    <Switch label="结合已确认的用户画像" checked={draft.useProfile} onChange={(_, data) => setDraft({ ...draft, useProfile: data.checked })} />
+    <Switch label="允许向外部服务发送笔记、批注和画像" checked={draft.sendPrivateText} onChange={(_, data) => setDraft({ ...draft, sendPrivateText: data.checked })} />
     <p>关闭时，这些内容只在本机匹配；公开题录仍可用于联网检索。使用本机模型无需向外部发送。</p>
+    <Field label="每组推荐数量"><OptionPicker aria-label="每组推荐数量" value={String(draft.feed.displayCount)} options={[1, 2, 3, 4, 5].map(value => ({ value: String(value), label: String(value) }))} onValueChange={value => setDraft({ ...draft, feed: { ...draft.feed, displayCount: Number(value) } })} /></Field>
+    <Field label="自动检查频率"><OptionPicker aria-label="自动检查频率" value={String(draft.feed.automaticHours)} options={[{ value: "0", label: "仅手动" }, { value: "24", label: "每天一次" }, { value: "72", label: "每三天一次" }, { value: "168", label: "每周一次" }]} onValueChange={value => setDraft({ ...draft, feed: { ...draft.feed, automaticHours: Number(value) } })} /></Field>
+    <Switch label="在本机记录有效阅读" checked={draft.signals.readingActivity} onChange={(_, data) => setDraft({ ...draft, signals: { ...draft.signals, readingActivity: data.checked } })} />
+    <Switch label="在本机结合已发送的用户问题" checked={draft.signals.userQuestions} onChange={(_, data) => setDraft({ ...draft, signals: { ...draft.signals, userQuestions: data.checked } })} />
+    <Switch label="允许发送由私有兴趣提取的检索词" checked={draft.privacy.externalDerivedQueries} onChange={(_, data) => setDraft({ ...draft, privacy: { ...draft.privacy, externalDerivedQueries: data.checked } })} />
+    <Switch label="生成有依据的研究价值建议（可选）" checked={draft.generationEnabled} onChange={(_, data) => setDraft({ ...draft, generationEnabled: data.checked })} />
+    <p>使用已配置的自备模型，每天最多两次；默认关闭，可随时停用。未配置时保留题录解释。</p>
+    <Button onClick={() => save(draft)}>保存推荐设置</Button>
+    <DisclosureSection title="资源额度">
+      <p>每次最多检索 200 篇、重排 24 篇、新增 60 个文本向量。每次文献请求最多 6 个，共用服务每天最多 12 个；生成建议每天最多 2 次。</p>
+      <p>达到额度后仍可浏览缓存、换一组和筛选。使用旧版云端接口时，上游请求用量无法核实。</p>
+    </DisclosureSection>
+    <RecommendationInterestsSettings />
     {(["embedding", "reranker"] as const).map((provider) => <DisclosureSection key={provider} title={<>{provider === "embedding" ? "语义检索服务" : "精细重排服务"}（可选）</>}>
 
       <div className="recommendation-service-fields">

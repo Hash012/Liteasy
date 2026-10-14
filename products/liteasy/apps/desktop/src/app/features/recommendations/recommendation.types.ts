@@ -3,6 +3,8 @@ export type RecommendationStyle = "balanced" | "frontier" | "classic" | "explora
 export type RecommendationDownloadOptions = { targetFolderPath?: string; newFolderName?: string; signal?: AbortSignal; onProgress?: (value: { received: number; total?: number }) => void };
 
 export type RecommendationItem = {
+  feedSnapshotId?: string;
+  researchReason?: { consentEpoch: number; candidateId: string; evidenceIds: string[]; text: string; role: string; model: string; recipe: string; generatedAt: string; evidence: { evidenceId: string; path?: string; revision: string; text: string }[] };
   saved?: boolean;
   resourcePath?: string;
   resourceRevision?: string;

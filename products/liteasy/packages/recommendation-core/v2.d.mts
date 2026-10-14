@@ -183,3 +183,12 @@ export interface BudgetReceipt {
   readonly accounting: "measured" | "conservative_estimate";
   readonly cost?: { readonly amount: number; readonly currency: string; readonly priceVersion: string };
 }
+
+export interface SlateCandidate { id: string; canonicalId?: string; doi?: string; title: string; styleScore?: number; relevanceScore?: number; scoreComponents?: { finalScore?: number }; relatedDocumentTitle?: string; relatedDocumentTitles?: string[]; facetIds?: string[]; }
+export function canonicalCandidate(item: SlateCandidate): string;
+export function composeSlate<T extends SlateCandidate>(items: readonly T[], options?: { count?: number; preserveOrder?: boolean; excluded?: string[]; exposure?: Record<string, number>; topicExposure?: Record<string, number> }): T[];
+export interface ResearchReason { candidateId: string; evidenceIds: string[]; text: string; role: RecommendationCard["role"]; }
+export function validateResearchReasons(value: unknown, candidateIds: string[], evidenceIds: string[]): ResearchReason[];
+export interface LocalEvidence { id: string; type: string; sourceId: string; producerActionId: string; revision: string; at: number; epoch: number; text: string; weight?: number; }
+export function projectEvidence(events: LocalEvidence[], options: { now: number; epoch: number; tombstones: string[]; days?: number }): LocalEvidence[];
+export function clusterInterests(events: LocalEvidence[], fixed?: InterestFacet[]): InterestFacet[];

@@ -1,11 +1,12 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { paperServiceRequest, validatePaperService, type PaperServiceConfig } from "../paper-services/paperServiceTransport";
-export type EmbeddingConfig = { endpoint: string; model: string; dimensions?: number };
+export type EmbeddingConfig = { endpoint: string; model: string; dimensions?: number; revision?: string; task?: string; normalization?: string };
 export function localEmbedding(config: EmbeddingConfig) { try { return ["localhost", "127.0.0.1", "[::1]"].includes(new URL(config.endpoint).hostname); } catch { return false; } }
 export function embeddingFingerprint(config: EmbeddingConfig) {
-  return JSON.stringify(["multilingual-v1", validatePaperService({ provider: "embedding", endpoint: config.endpoint }).endpoint, config.model, config.dimensions]);
+  return JSON.stringify(["multilingual-v1", validatePaperService({ provider: "embedding", endpoint: config.endpoint }).endpoint, config.model, config.revision ?? "unspecified", config.dimensions, config.task ?? "retrieval", config.normalization ?? "provider"]);
 }
 export async function semanticRequest(provider: "embedding" | "reranker", config: EmbeddingConfig, body: unknown, signal: AbortSignal) {
+  signal = AbortSignal.any([signal, AbortSignal.timeout(12_000)]);
   signal.throwIfAborted();
   const service: PaperServiceConfig = validatePaperService({ provider, endpoint: config.endpoint });
   if (!config.model.trim() || config.model.length > 200) throw new Error("请指定语义服务模型。");
@@ -17,7 +18,7 @@ export async function semanticRequest(provider: "embedding" | "reranker", config
     signal.addEventListener("abort", cancel, { once: true });
     try { const result = await task; signal.throwIfAborted(); response = new Response(Uint8Array.from(atob(result.bodyBase64), (value) => value.charCodeAt(0)), { status: result.status }); }
     finally { signal.removeEventListener("abort", cancel); }
-  } else response = await paperServiceRequest(service, `${service.endpoint}/${provider === "embedding" ? "embeddings" : "rerank"}`, { method: "POST", json: body, signal, timeoutMs: 30_000, maxResponseBytes: 8 * 1024 * 1024 });
+  } else response = await paperServiceRequest(service, `${service.endpoint}/${provider === "embedding" ? "embeddings" : "rerank"}`, { method: "POST", json: body, signal, timeoutMs: 12_000, maxResponseBytes: 8 * 1024 * 1024 });
   signal.throwIfAborted();
   if (!response.ok) throw new Error(`语义服务返回 HTTP ${response.status}，已保留词项推荐。`);
   return response.json() as Promise<unknown>;

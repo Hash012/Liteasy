@@ -1,3 +1,4 @@
+import type { RecommendationFeedbackMeaning } from "../features/recommendations/recommendationCoordinator";
 import type { LibraryInventory } from "../features/library/libraryInventory";
 import type { SpaceOperationsView } from "../features/spaces/SpaceOperationsPanel";
 import type { PaperServiceConfig } from "../features/paper-services/paperServiceTransport";
@@ -90,7 +91,14 @@ export type LeftPaneProps = {
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onClearProfile: () => void;
   onClearRecommendations: () => void;
+  onRecommendationFeedback?: (item: RecommendationItem, action: RecommendationFeedbackMeaning) => Promise<unknown>;
+  onAdoptRecommendationBrief?: (item: RecommendationItem) => Promise<unknown>;
   onRefreshRecommendations?: () => void;
+  onExploreSelectedRecommendations?: () => void;
+  onShowOrdinaryRecommendations?: () => void;
+  onAcceptPendingRecommendations?: () => void;
+  recommendationPendingSnapshot?: boolean;
+  recommendationExploringSelection?: boolean;
   onDeleteArtifact: (
     artifactId: string
   ) => ArtifactMutationOutcome | Promise<ArtifactMutationOutcome>;
@@ -233,7 +241,11 @@ export function LeftPane({
   onAddDroppedPdfFiles,
   onClearProfile,
   onClearRecommendations,
+  onRecommendationFeedback,
+  onAdoptRecommendationBrief,
   onRefreshRecommendations,
+  onExploreSelectedRecommendations, onShowOrdinaryRecommendations, onAcceptPendingRecommendations,
+  recommendationPendingSnapshot, recommendationExploringSelection,
   onDeleteArtifact,
   onDismissRecommendation,
   onCreateOrganization,
@@ -432,7 +444,14 @@ export function LeftPane({
             onAddExternalPdf={onAddExternalPdf}
             onAddDroppedPdfFiles={onAddDroppedPdfFiles}
             onClearRecommendations={onClearRecommendations}
+            onRecommendationFeedback={onRecommendationFeedback}
+            onAdoptRecommendationBrief={onAdoptRecommendationBrief}
             onRefreshRecommendations={onRefreshRecommendations}
+            onExploreSelectedRecommendations={onExploreSelectedRecommendations}
+            onShowOrdinaryRecommendations={onShowOrdinaryRecommendations}
+            onAcceptPendingRecommendations={onAcceptPendingRecommendations}
+            recommendationPendingSnapshot={recommendationPendingSnapshot}
+            recommendationExploringSelection={recommendationExploringSelection}
             onDismissRecommendation={onDismissRecommendation}
             onImportZoteroDirectory={onImportZoteroDirectory}
             onLoginRequired={onLoginRequired}

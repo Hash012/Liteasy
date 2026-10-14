@@ -1,3 +1,6 @@
+import { createRecommendationEvidenceStore, localRecommendationScope } from "../recommendations/recommendationEvidence";
+import { loadRecommendationPreferences } from "../recommendations/recommendationPreferences";
+import { feedHash } from "../recommendations/recommendationCoordinator";
 import { resolveLocalAccountKey } from "../library/localAccountKey";
 import {
   isUserPaperArtifactStoreAvailable,
@@ -20,6 +23,7 @@ export function persistPdfAnnotationState(input: {
   snapshot: PdfAnnotationPrivateState;
 }): Promise<void> {
   const scope = resolveLocalAccountKey();
+  const consentEpoch = loadRecommendationPreferences().consentEpoch;
   const previous = pendingSaves.get(input.annotationStorageKey) ?? Promise.resolve();
   const save = previous.catch(() => {}).then(async () => {
     if (resolveLocalAccountKey() !== scope) throw new Error("账号已切换，批注未写入其他账号。");
@@ -38,6 +42,19 @@ export function persistPdfAnnotationState(input: {
       }
     }
     notifyNotesSourcesChanged();
+    // Only the committed annotation body is evidence. Generated reviews/answers and color edits are excluded.
+    const evidence = createRecommendationEvidenceStore(scope === "guest" ? "local" : scope, localRecommendationScope);
+    void (async () => {
+      await evidence.forget(Object.keys(input.snapshot.sync?.tombstones ?? {}).map(id => `annotation:${input.paperId}:${id}`));
+      for (const annotation of input.snapshot.annotations.slice(-64)) {
+        if (annotation.aiGuide || annotation.quickAsk && !annotation.userEditedAt) continue;
+        const text = [annotation.note, ["note", "text"].includes(annotation.kind) ? annotation.text : "", annotation.excerpt].filter(Boolean).join("\n").slice(0, 8000);
+        if (!text.trim()) continue;
+        const sourceId = `annotation:${input.paperId}:${annotation.id}`, revision = feedHash(text);
+        await evidence.record({ id: `${sourceId}:${revision}`, producerActionId: sourceId, sourceId, revision,
+          type: "annotation_committed", epoch: consentEpoch, at: Date.now(), text });
+      }
+    })().catch(() => {});
   });
   pendingSaves.set(input.annotationStorageKey, save);
   void save.finally(() => {

@@ -1,6 +1,7 @@
+import "fake-indexeddb/auto";
 import { confirmedLiterature } from "./fixtures/confirmedLiterature";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { useKnowledgeSyncController } from "../app/controllers/useKnowledgeSyncController";
 import type { AccountSession } from "../app/features/account/account.types";
 import type { Paper } from "../app/features/workspace/workspace.types";
@@ -22,10 +23,13 @@ const selectedPapers: Paper[] = [
   }
 ];
 
+beforeEach(() => { localStorage.clear(); accountSession.sessionId = crypto.randomUUID(); });
+
 describe("useKnowledgeSyncController", () => {
   test("does not upload a local manifest while personalization is disabled", async () => {
     const documentMetadataTransport = vi.fn();
     const { result } = renderHook(() => useKnowledgeSyncController({
+      recommendationResources: { scope: accountSession.sessionId },
       accountSession,
       controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
       documentMetadataTransport,
@@ -65,6 +69,7 @@ describe("useKnowledgeSyncController", () => {
 
     const { result } = renderHook(() =>
       useKnowledgeSyncController({
+        recommendationResources: { scope: accountSession.sessionId },
         accountSession,
         controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
         documentMetadataTransport,
@@ -118,6 +123,7 @@ describe("useKnowledgeSyncController", () => {
       return { json: async () => ({ feedback: { action: "saved" } }), ok: true, status: 200 };
     });
     const { result } = renderHook(() => useKnowledgeSyncController({
+      recommendationResources: { scope: accountSession.sessionId },
       accountSession,
       controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
       documentMetadataTransport,

@@ -81,3 +81,5 @@
 .recommendation-compact-item > .product-source-disclosure[open] { margin-right: 12px; padding-bottom: 32px; }
 .recommendation-compact-item:has(details[open]) .recommendation-compact-actions { opacity: 1; pointer-events: auto; }
 @media (pointer: coarse) { .recommendation-compact-actions .fui-Button { min-width: 44px; min-height: 44px; } .recommendation-compact-item > .product-source-disclosure { margin-right: 142px; min-height: 44px; } }
+
+.recommendation-feed-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-block: 4px; }

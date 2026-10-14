@@ -29,15 +29,15 @@ export function rankRecommendations(items: RecommendationItem[], input: {
   now?: Date;
 } = {}): RecommendationItem[] {
   const style = input.style ?? "balanced";
-  const selectedTitles = new Set(input.selectedDocuments?.map((item) => normalizedTitle(item.title)));
+  const selectedDois = new Set(input.selectedDocuments?.flatMap(item => item.doi ? [`doi:${item.doi.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "").toLowerCase()}`] : []));
   const selectedIds = new Set(input.selectedDocuments?.map((item) => item.id));
-  const ids = new Set<string>(), titles = new Set<string>();
+  const ids = new Set<string>();
   const candidates = items.filter((item) => Number.isFinite(item.relevanceScore))
     .sort((a, b) => b.relevanceScore - a.relevanceScore)
     .filter((item) => {
-      const key = identity(item), title = normalizedTitle(item.title);
-      if (selectedIds.has(item.id) || selectedTitles.has(title) || ids.has(key) || titles.has(title) || item.qualityGate?.passed === false) return false;
-      ids.add(key); titles.add(title); return true;
+      const key = identity(item);
+      if (selectedIds.has(item.id) || selectedDois.has(key) || ids.has(key) || item.qualityGate?.passed === false) return false;
+      ids.add(key); return true;
     });
   if (input.sortMode === "retrieved_at") {
     return candidates.sort((a, b) => b.discoveredAt.localeCompare(a.discoveredAt));

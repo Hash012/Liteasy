@@ -1486,6 +1486,7 @@ export function AppShell({
   }
   const recommendationProfile = profileActions.recommendationProfile;
   const knowledgeSync = useKnowledgeSyncController({
+    recommendationModelSettings: settingsState,
     localMode: localLiteratureMode,
     localService: settingsState["papers.metadata_provider"] === "cloud" ? undefined : {
       provider: settingsState["papers.metadata_provider"], endpoint: settingsState["papers.metadata_endpoint"],
@@ -1992,7 +1993,14 @@ export function AppShell({
     onAddExternalPdf: externalPapers.promoteExternalPaperToLibrary,
     onClearProfile: profileActions.openClearProfileConfirm,
     onClearRecommendations: () => { recommendationLibrary.clear(); knowledgeSync.actions.clearRecommendationCache(); },
+    onRecommendationFeedback: knowledgeSync.actions.recordRecommendationSignal,
+    onAdoptRecommendationBrief: knowledgeSync.actions.adoptRecommendationBrief,
     onRefreshRecommendations: knowledgeSync.actions.refreshRecommendations,
+    onExploreSelectedRecommendations: knowledgeSync.actions.exploreSelectedPapers,
+    onShowOrdinaryRecommendations: knowledgeSync.actions.showOrdinaryRecommendations,
+    onAcceptPendingRecommendations: knowledgeSync.actions.acceptPendingRecommendations,
+    recommendationPendingSnapshot: knowledgeSync.model.recommendationPendingSnapshot,
+    recommendationExploringSelection: knowledgeSync.model.recommendationExploringSelection,
     onDeleteArtifact: deleteArtifact,
     onDismissRecommendation: async (recommendation) => {
       if (recommendationLibrary.selected?.id === recommendation.id) recommendationLibrary.clear();
@@ -2720,7 +2728,7 @@ export function AppShell({
     openSettings: () => openDockedLeftRailView("settings")
   });
 
-  usePickerReaderActivity({ scope: objectWorkbench.repository.scopeId, activePaperId: activeReaderPaper?.id, visible: workspaceShell.activeSurfaceId === `pdf-${activeReaderPaper?.id}` });
+  usePickerReaderActivity({ scope: objectWorkbench.repository.scopeId, activePaperId: activeReaderPaper?.id, title: activeReaderPaper?.title, visible: workspaceShell.activeSurfaceId === `pdf-${activeReaderPaper?.id}` });
 
   const aiWorkbench = useAiWorkbenchController({
     scopeId: objectWorkbench.repository.scopeId,

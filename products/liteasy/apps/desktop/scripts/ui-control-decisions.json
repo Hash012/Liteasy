@@ -287,12 +287,12 @@
       "fingerprint": "695738e30725d69e42c0d448",
       "file": "products/liteasy/apps/desktop/src/app/features/recommendations/RecommendationList.tsx",
       "rule": "source-disclosure-wrapper",
-      "reviewedGitBlob": "b74e6025cd89a89525e9e41c53611d4c41a95275",
+      "reviewedGitBlob": "a3f7d6e8e6cd905ca73a747423d12413631c175a",
       "decision": "migrate",
       "owner": "recommendations",
       "renderedSurface": "推荐详情",
-      "reason": "此调用保留语义章节与交互状态；SourceDisclosure 已由共享 DisclosureSection/Fluent Accordion 实现，首图标、末尾 chevron、可访问展开状态与保留挂载的内容。错误主提示及操作独立保持可见。",
-      "acceptanceTest": "src/tests/controlContracts.test.tsx; src/tests/quickAskProductionRoute.test.ts; src/tests/RecommendationList.test.tsx; src/tests/LiteratureVersionRelations.test.tsx"
+      "reason": "推荐详情继续使用共享 SourceDisclosure/Fluent Accordion；阅读难度反馈仅在展开后出现，默认三篇精选与本地分页保留键盘和来源交互。",
+      "acceptanceTest": "src/tests/RecommendationList.test.tsx; src/tests/browser/recommendationList.browser.spec.ts"
     },
     {
       "fingerprint": "daac2cd05bfe8f038e690809",

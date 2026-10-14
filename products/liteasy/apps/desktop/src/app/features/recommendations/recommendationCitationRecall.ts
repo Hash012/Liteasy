@@ -8,7 +8,11 @@ export async function recallCitations(config: PaperServiceConfig, seed: Recommen
   if (!seed.doi) return [];
   const base = config.endpoint.replace(/\/+$/, "");
   const get = async (path: string) => {
-    const request = () => paperServiceRequest(config, `${base}${path}`, { signal, timeoutMs: 8000, maxResponseBytes: 4 * 1024 * 1024 });
+    const request = async () => {
+      const response = await paperServiceRequest(config, `${base}${path}`, { signal, timeoutMs: 8000, maxResponseBytes: 4 * 1024 * 1024 });
+      if (!response.ok) throw Object.assign(new Error(`引用查询返回 HTTP ${response.status}`), { status: response.status });
+      return response;
+    };
     const response = task ? await task.request("provider", request) : await request();
     if (!response.ok) throw new Error(`引用关系查询返回 HTTP ${response.status}`);
     return object(await response.json());

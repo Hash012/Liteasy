@@ -54,7 +54,7 @@ test("exploratory promotes a different related direction over near-identical tit
   expect(ids(rankRecommendations(papers, { style: "exploratory", now }))).toEqual(["first", "extension", "similar"]);
 });
 
-test("removes selected papers and duplicate DOI or exact titles while retaining title extensions", () => {
+test("removes selected DOI and aliases while retaining ambiguous same-title publications", () => {
   const papers = [
     paper("original", { canonicalId: "doi:10.1234/test", title: "Graph Retrieval" }),
     paper("duplicate-doi", { canonicalId: "https://doi.org/10.1234/TEST", title: "Other title" }),
@@ -63,8 +63,8 @@ test("removes selected papers and duplicate DOI or exact titles while retaining 
     paper("selected", { title: "Already Selected" }),
     paper("rejected", { qualityGate: { passed: false, checks: {}, reasons: [], version: "1" } })
   ];
-  expect(ids(rankRecommendations(papers, { selectedDocuments: [{ id: "local-id", title: "Already selected" }] })))
-    .toEqual(["original", "extension"]);
+  expect(ids(rankRecommendations(papers, { selectedDocuments: [{ id: "local-id", title: "Already selected", doi: "10.1234/selected" }] })))
+    .toEqual(["original", "duplicate-title", "extension"]);
 });
 
 test("uses the server final ranking score rather than topical relevance or style evidence alone", () => {
