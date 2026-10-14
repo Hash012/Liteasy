@@ -75,7 +75,20 @@
     "sharedCore": "8 tests passed, including all three v2 pure-function tests.",
     "contracts": "Passed on clean release candidate with the same runtime/build/workflow code; lockfiles and generated contracts match Git. Only this validation report was amended afterward.",
     "installer": "pending_final_Windows_CI",
-    "build": "npm run ci:smoke and npm run build passed on final runtime source."
+    "build": "npm run ci:smoke and npm run build passed on final runtime source.",
+    "ciFollowup": {
+      "initialRun": "https://github.com/Hash012/Liteasy/actions/runs/38548957304",
+      "initialResult": "blocked_before_windows_packaging",
+      "findings": [
+        "Sidebar test queried the dialog synchronously before portal mount. It now awaits the accessible input and filtered row.",
+        "Geometry/theme recommendation fixtures omitted required relevanceScore and were correctly excluded by the new quality gate. Fixtures now supply explicit relevant scores; production thresholds and behavioral assertions are unchanged."
+      ],
+      "correctionValidation": {
+        "affectedUnitTestsPassed": 34,
+        "affectedBrowserTestsPassed": 7
+      },
+      "installer": "requires_successful_final_head_run"
+    }
   },
   "evaluation": {
     "script": "products/liteasy/apps/desktop/scripts/evaluate-recommendation-v2.ts",

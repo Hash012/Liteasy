@@ -31,8 +31,8 @@ function Fixture() {
     </div>
     <label>推荐区域宽度<select aria-label="推荐区域宽度" value={width} onChange={event => setWidth(Number(event.target.value))}>{[280, 360, 480].map(n => <option key={n}>{n}</option>)}</select></label>
     <section aria-label="推荐宽度验收" style={{ width, maxWidth: "100%" }}><RecommendationList
-      items={[{ id: "reason", title: "很长的推荐标题：Memory systems concurrency control and reproducible scientific results", authors: ["Synthetic author"], reason: "来源提供的理由：主题与并发控制有关", source: "Synthetic", sourceKind: "live", sourceUrl: "https://example.test/synthetic", discoveredAt: "2026-10-13", relevanceBand: "high" },
-        { id: "no-reason", title: "没有个别理由的推荐", authors: [], reason: "", source: "Synthetic", sourceKind: "live", sourceUrl: "https://example.test/other", discoveredAt: "2026-10-13", relevanceBand: "medium" }]}
+      items={[{ id: "reason", title: "很长的推荐标题：Memory systems concurrency control and reproducible scientific results", authors: ["Synthetic author"], reason: "来源提供的理由：主题与并发控制有关", source: "Synthetic", sourceKind: "live", sourceUrl: "https://example.test/synthetic", discoveredAt: "2026-10-13", relevanceBand: "high", relevanceScore: 0.9 },
+        { id: "no-reason", title: "没有个别理由的推荐", authors: [], reason: "", source: "Synthetic", sourceKind: "live", sourceUrl: "https://example.test/other", discoveredAt: "2026-10-13", relevanceBand: "medium", relevanceScore: 0.6 }]}
       pendingIds={[]} canSave onSave={item => setNotice(`已收藏：${item.id}`)} onDismiss={item => setNotice(`已忽略：${item.id}`)}
     /></section>
     <AssistantMessageList mode="qa" onModeChange={noop} messages={[{ id: "synthetic-complete", role: "assistant", content: "合成完成回复" }]} />

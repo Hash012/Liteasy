@@ -12,8 +12,8 @@ describe("AssistantSidebar", () => {
       availablePapers={[{ id: "memory", title: "Memory research", sourcePath: "/library/memory.pdf" }, { id: "translation", title: "Memory translation", sourcePath: "/library/translation.pdf" }]}
       searchEntries={[{ id: "memory", title: "Memory research", format: "pdf", tags: ["精读"] }, { id: "translation", title: "Memory translation", format: "pdf", tags: ["翻译"] }]} />);
     await user.click(screen.getByRole("button", { name: "添加上下文" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "搜索全部上下文资产" }), { target: { value: '/memory/i tag:精读 -tag:翻译 format:pdf' } });
-    expect(screen.getByRole("button", { name: "预览 Memory research" })).toBeInTheDocument();
+    fireEvent.change(await screen.findByRole("textbox", { name: "搜索全部上下文资产" }), { target: { value: '/memory/i tag:精读 -tag:翻译 format:pdf' } });
+    expect(await screen.findByRole("button", { name: "预览 Memory research" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "预览 Memory translation" })).not.toBeInTheDocument();
   });
   test("renders a conventional chat panel with compact controls", () => {

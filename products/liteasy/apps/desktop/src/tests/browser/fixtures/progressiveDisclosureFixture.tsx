@@ -12,7 +12,7 @@ import type { RecommendationItem } from "../../../app/features/recommendations/r
 import "../../../app/styles/app.css";
 import "../../../app/styles/workspaceShell.css";
 import "../../../app/features/theme/appearance.css";
-const item: RecommendationItem = { id: "synthetic", title: "<p>中文标题 Memory systems and reproducible scientific results with very long names</p>", authors: ["Synthetic author"], publishedYear: 2024, reason: "离线合成资料推荐理由", source: "Synthetic", sourceKind: "live", discoveredAt: "2026-10-13", relevanceBand: "high" };
+const item: RecommendationItem = { id: "synthetic", title: "<p>中文标题 Memory systems and reproducible scientific results with very long names</p>", authors: ["Synthetic author"], publishedYear: 2024, reason: "离线合成资料推荐理由", source: "Synthetic", sourceKind: "live", discoveredAt: "2026-10-13", relevanceBand: "high", relevanceScore: 0.9 };
 function Fixture() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [selected, setSelected] = useState<RecommendationItem>();
