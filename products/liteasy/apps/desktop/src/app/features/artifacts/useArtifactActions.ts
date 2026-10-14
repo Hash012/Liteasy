@@ -446,6 +446,7 @@ function thinReadingTitleForSource(source: ThinReadingBranchSource, targetLangua
 }
 
 const artifactTypeLabels: Record<Exclude<ArtifactType, "skill_doc">, string> = {
+  research_document: "科研文档",
   comparison_table: "对比表",
   layered_graph: "分层关系图",
   mindmap: "思维导图",
@@ -1311,6 +1312,7 @@ export function useArtifactActions({
       papers: result.papers,
       regeneratedFromArtifactId: result.regeneratedFromArtifactId,
       resultPath: `liteasy://agent-artifacts/${encodeURIComponent(result.artifactId)}`,
+      researchDocument: result.researchDocument,
       thinReadingDocument: result.thinReadingDocument,
       title: result.title,
       type: result.artifactType,

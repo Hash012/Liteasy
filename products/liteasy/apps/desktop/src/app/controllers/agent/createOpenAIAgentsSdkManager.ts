@@ -26,6 +26,7 @@ import type {
 } from "./createDesktopAgentService";
 
 const artifactLabels: Record<AgentArtifactType, string> = {
+  research_document: "科研文档",
   comparison_table: "对比表",
   layered_graph: "分层关系图",
   mindmap: "思维导图",

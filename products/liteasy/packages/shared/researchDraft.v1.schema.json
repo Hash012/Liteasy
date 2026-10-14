@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "liteasy.research-draft/v1"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "documentKind": {
+      "type": "string",
+      "enum": [
+        "paper_brief",
+        "concept_note",
+        "comparison",
+        "literature_packet",
+        "hypothesis_cards",
+        "risk_vector",
+        "evaluation_plan",
+        "falsification",
+        "claim_audit",
+        "manuscript_draft"
+      ]
+    },
+    "sections": {
+      "minItems": 1,
+      "maxItems": 32,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z_]+$"
+          },
+          "markdown": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30000
+          },
+          "sourceIds": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^S[1-9][0-9]*$"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "markdown",
+          "sourceIds"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "claims": {
+      "maxItems": 200,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^C[1-9][0-9]*$"
+          },
+          "sectionId": {
+            "type": "string",
+            "pattern": "^[a-z_]+$"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "source_assertion",
+              "inference",
+              "hypothesis",
+              "general_explanation"
+            ]
+          },
+          "citations": {
+            "maxItems": 30,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "sourceId": {
+                  "type": "string",
+                  "pattern": "^S[1-9][0-9]*$"
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                }
+              },
+              "required": [
+                "sourceId"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "conditions": {
+            "maxItems": 30,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 2000
+            }
+          }
+        },
+        "required": [
+          "id",
+          "sectionId",
+          "text",
+          "kind",
+          "citations",
+          "conditions"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "limitations": {
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      }
+    },
+    "nextActions": {
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "title",
+    "documentKind",
+    "sections",
+    "claims",
+    "limitations",
+    "nextActions"
+  ],
+  "additionalProperties": false,
+  "$id": "https://schemas.liteasy.app/researchDraft.v1.schema.json"
+}

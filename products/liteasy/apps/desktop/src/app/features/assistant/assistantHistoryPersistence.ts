@@ -1,3 +1,4 @@
+import { researchSelectionSchema } from "../research-skills/researchDocument";
 import { parseEvidenceReport } from "../evidence/evidenceReport";
 import { parseResearchTask } from "../research-loop/researchLoop";
 import { parseSavedAssistantAssetWrites } from "./assistantAssetWrites";
@@ -20,7 +21,7 @@ export type AssistantHistorySnapshot = {
 type Transport = { load(): Promise<unknown>; save(snapshot: AssistantHistorySnapshot): Promise<void> };
 const emptyDraft = (): AssistantSessionDraft => ({ input: "", tokens: [], readerContexts: [] });
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
-const validDraft = (value: unknown): value is AssistantSessionDraft => record(value) && typeof value.input === "string" && Array.isArray(value.tokens) && Array.isArray(value.readerContexts);
+const validDraft = (value: unknown): value is AssistantSessionDraft => record(value) && typeof value.input === "string" && Array.isArray(value.tokens) && Array.isArray(value.readerContexts) && (value.selectedResearchSkill === undefined || researchSelectionSchema.safeParse(value.selectedResearchSkill).success);
 
 /** Recovery never guesses executor state or replays old authorization. Raw data is backed up before migration. */
 export function parseAssistantHistory(value: unknown): AssistantHistorySnapshot | null {
@@ -159,7 +160,7 @@ export function createScopedAssistantHistoryPersistence(scopeId: string, current
       changes.push({ key, expected: previous?.version ?? null, row: { key, version: crypto.randomUUID(), value } });
     };
     for (const session of snapshot.sessions) {
-      if (session.kind !== "artifact_generation" && !session.messages.length && !session.draft?.input.trim() && !session.messageCount) continue;
+      if (session.kind !== "artifact_generation" && !session.messages.length && !session.draft?.input.trim() && !session.draft?.selectedResearchSkill && !session.draft?.tokens.length && !session.messageCount) continue;
       const { messages, draft, outbox, taskInput, messagesLoaded: _loaded, ...metadata } = session;
       const previousIndex = indexes.get(session.id);
       const index: SessionIndex = { ...metadata, scopeId,

@@ -1,0 +1,67 @@
+{
+  "schema": "liteasy.skill-adapter/v1",
+  "id": "research-claim-audit",
+  "version": "0.1.0",
+  "availability": "adapter_required",
+  "display": {
+    "title": "主张与证据审计",
+    "description": "逐项核对正文中的关键主张、原始依据、适用条件和尚未解决的缺口。",
+    "group": "提出与验证",
+    "aliases": [
+      "claim-audit",
+      "主张与证据审计"
+    ]
+  },
+  "instructions": "SKILL.md",
+  "contract": "references/research-contract.md",
+  "template": "assets/output-template.md",
+  "workflow": "workflow.json",
+  "execution": {
+    "mode": "document",
+    "operatorId": "liteasy.research.generate-document",
+    "operatorVersion": "1.0.0",
+    "maxGenerations": 1,
+    "maxRepairAttempts": 1,
+    "tools": [],
+    "permissions": [
+      "model.invoke",
+      "context.read",
+      "artifact.write"
+    ]
+  },
+  "inputs": {
+    "roles": [
+      {
+        "id": "draft",
+        "label": "待审正文",
+        "minRefs": 1,
+        "maxRefs": 1
+      },
+      {
+        "id": "evidence",
+        "label": "可读证据",
+        "minRefs": 0,
+        "maxRefs": 32
+      }
+    ],
+    "minimumDistinctPrimaryObjects": 1,
+    "requireProblemInPromptOrContext": false
+  },
+  "output": {
+    "artifactType": "research_document",
+    "documentKind": "claim_audit",
+    "requiredSections": [
+      "scope",
+      "claim_table",
+      "contradictions",
+      "revisions",
+      "unresolved",
+      "next_step"
+    ]
+  },
+  "defaults": {
+    "instruction": "审查待审正文的关键主张及其证据，保留缺失、矛盾与条件越界，不冒充独立验证。",
+    "language": "auto",
+    "presetId": "default"
+  }
+}

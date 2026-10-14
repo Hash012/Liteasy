@@ -1,0 +1,67 @@
+{
+  "schema": "liteasy.skill-adapter/v1",
+  "id": "research-compare",
+  "version": "0.1.0",
+  "availability": "adapter_required",
+  "display": {
+    "title": "条件化比较",
+    "description": "在明确数据、负载、指标和资源条件后比较论文或方案，不制造脱离条件的排名。",
+    "group": "对照",
+    "aliases": [
+      "compare",
+      "条件化比较"
+    ]
+  },
+  "instructions": "SKILL.md",
+  "contract": "references/research-contract.md",
+  "template": "assets/output-template.md",
+  "workflow": "workflow.json",
+  "execution": {
+    "mode": "document",
+    "operatorId": "liteasy.research.generate-document",
+    "operatorVersion": "1.0.0",
+    "maxGenerations": 1,
+    "maxRepairAttempts": 1,
+    "tools": [],
+    "permissions": [
+      "model.invoke",
+      "context.read",
+      "artifact.write"
+    ]
+  },
+  "inputs": {
+    "roles": [
+      {
+        "id": "peers",
+        "label": "比较对象",
+        "minRefs": 2,
+        "maxRefs": 12
+      },
+      {
+        "id": "criteria",
+        "label": "比较要求与个人假设",
+        "minRefs": 0,
+        "maxRefs": 8
+      }
+    ],
+    "minimumDistinctPrimaryObjects": 2,
+    "requireProblemInPromptOrContext": false
+  },
+  "output": {
+    "artifactType": "research_document",
+    "documentKind": "comparison",
+    "requiredSections": [
+      "scope",
+      "criteria",
+      "matrix",
+      "incomparability",
+      "implications",
+      "next_step"
+    ]
+  },
+  "defaults": {
+    "instruction": "比较所选对象的问题、机制、适用条件、证据与代价；优先识别不可直接比较之处。",
+    "language": "auto",
+    "presetId": "default"
+  }
+}

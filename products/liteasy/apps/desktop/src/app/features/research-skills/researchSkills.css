@@ -1,0 +1,5 @@
+.research-skill-selection { display: grid; gap: 8px; padding: 8px; border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; background: var(--colorNeutralBackground2); min-width: 0; }
+.research-skill-selection label { display: grid; gap: 4px; margin: 4px 0; min-width: 0; }
+.research-skill-selection label > div { min-width: 0; max-width: 100%; }
+.research-skill-selection small { color: var(--colorNeutralForeground2); overflow-wrap: anywhere; }
+.research-source-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; }

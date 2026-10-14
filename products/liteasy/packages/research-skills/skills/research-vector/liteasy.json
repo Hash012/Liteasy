@@ -1,0 +1,67 @@
+{
+  "schema": "liteasy.skill-adapter/v1",
+  "id": "research-vector",
+  "version": "0.1.0",
+  "availability": "adapter_required",
+  "display": {
+    "title": "研究风险排序",
+    "description": "从当前假设、问题和进度找出最关键未知，选择降低风险的最小行动。",
+    "group": "提出与验证",
+    "aliases": [
+      "vector",
+      "研究风险排序"
+    ]
+  },
+  "instructions": "SKILL.md",
+  "contract": "references/research-contract.md",
+  "template": "assets/output-template.md",
+  "workflow": "workflow.json",
+  "execution": {
+    "mode": "document",
+    "operatorId": "liteasy.research.generate-document",
+    "operatorVersion": "1.0.0",
+    "maxGenerations": 1,
+    "maxRepairAttempts": 1,
+    "tools": [],
+    "permissions": [
+      "model.invoke",
+      "context.read",
+      "artifact.write"
+    ]
+  },
+  "inputs": {
+    "roles": [
+      {
+        "id": "state",
+        "label": "当前方案与困难",
+        "minRefs": 1,
+        "maxRefs": 12
+      },
+      {
+        "id": "constraints",
+        "label": "时间资源与既有证据",
+        "minRefs": 0,
+        "maxRefs": 12
+      }
+    ],
+    "minimumDistinctPrimaryObjects": 1,
+    "requireProblemInPromptOrContext": false
+  },
+  "output": {
+    "artifactType": "research_document",
+    "documentKind": "risk_vector",
+    "requiredSections": [
+      "scope",
+      "risks",
+      "chosen_vector",
+      "minimal_test",
+      "decision_rule",
+      "next_step"
+    ]
+  },
+  "defaults": {
+    "instruction": "找出当前最值得优先回答的一个未知，说明为什么关键，并提出最小判别行动。",
+    "language": "auto",
+    "presetId": "default"
+  }
+}

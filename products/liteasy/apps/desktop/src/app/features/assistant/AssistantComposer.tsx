@@ -1,3 +1,4 @@
+import { isResearchSkillPosition } from "../research-skills/researchSkillCommand";
 import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { ContextAssetThumbnail } from "./ContextAssetThumbnail";
 import "../models/assistantModelPicker.css";
@@ -27,6 +28,9 @@ type ActiveTrigger = {
 };
 
 type AssistantComposerProps = {
+  researchSelection?: ReactNode;
+  researchSelected?: boolean;
+  onSelectResearchSkill?: (skill: import("../research-skills/researchDocument").ResearchSkillRef) => void;
   contextUsage?: AgentContextUsage;
   modelPicker?: ReactNode;
   thinkingDepth?: ThinkingDepth;
@@ -59,6 +63,7 @@ function getActiveTrigger(input: string, caret: number): ActiveTrigger | null {
   const match = /(?:^|\s)([/\$][^\s]*)$|(@[^@\n]*)$/.exec(beforeCaret);
   if (!match || match.index === undefined) return null;
   const value = match[1] ?? match[2];
+  if (value.startsWith("$") && !isResearchSkillPosition(input, caret - value.length)) return null;
   const suffix = /^[^\s@]*/.exec(input.slice(caret))?.[0] ?? "";
   return { query: value.slice(1), start: caret - value.length, end: caret + suffix.length,
     trigger: value[0] as ActiveTrigger["trigger"] };
@@ -66,6 +71,7 @@ function getActiveTrigger(input: string, caret: number): ActiveTrigger | null {
 
 
 export function AssistantComposer({
+  researchSelection, researchSelected, onSelectResearchSkill,
   contextUsage,
   modelPicker,
   thinkingDepth = "balanced",
@@ -200,6 +206,13 @@ export function AssistantComposer({
 
     const beforeTrigger = input.slice(0, activeTrigger.start);
     const afterTrigger = input.slice(activeTrigger.end);
+    if (suggestion.researchSkill && onSelectResearchSkill) {
+      onSelectResearchSkill(suggestion.researchSkill);
+      onInputChange(`${beforeTrigger}${afterTrigger}`);
+      setDismissed(true);
+      editorRef.current?.focus();
+      return;
+    }
     if (suggestion.token || suggestion.resolveToken) {
       const insertion = { input, start: activeTrigger.start, end: activeTrigger.end };
       if (suggestion.resolveToken) void onResolveContextToken?.(async () => ({ ...await suggestion.resolveToken!(), resourcePath: suggestion.resourcePath }), insertion);
@@ -220,6 +233,7 @@ export function AssistantComposer({
 
   return (
     <div className="assistant-input-wrap" data-tour="assistant-composer">
+      {researchSelection}
       {pending ? (
         <div className="assistant-command-feedback">
           当前回复仍在执行；发送的新消息会先暂存，可随后选择执行时机。
@@ -400,13 +414,13 @@ export function AssistantComposer({
             <MicRegular />
           </button>
         </Tooltip>
-        <Tooltip content={editing ? "更新并发送" : "发送消息"} positioning="above" relationship="description">
+        <Tooltip content={researchSelected ? "生成并保存" : editing ? "更新并发送" : "发送消息"} positioning="above" relationship="description">
           <button
-            aria-label={editing ? "更新并发送" : "发送"}
+            aria-label={researchSelected ? "生成并保存" : editing ? "更新并发送" : "发送"}
             className="assistant-send assistant-icon-button"
             disabled={contextLoading}
             onClick={onSend}
-            title={editing ? "更新并发送" : "发送"}
+            title={researchSelected ? "生成并保存" : editing ? "更新并发送" : "发送"}
             type="button"
           >
             <SendRegular />

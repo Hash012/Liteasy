@@ -1,0 +1,63 @@
+{
+  "abiVersion": "liteasy.workflow-skill/v1",
+  "description": "从一个明确主张推导对照、指标、工作负载、资源约束、负例和停止条件。",
+  "id": "research-design",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "requestId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "requestId"
+    ],
+    "type": "object"
+  },
+  "name": "评估与实验设计",
+  "output": {
+    "source": "step",
+    "stepId": "generate"
+  },
+  "outputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "artifactId": {
+        "type": "string"
+      },
+      "resourceUri": {
+        "type": "string"
+      },
+      "message": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "artifactId",
+      "resourceUri",
+      "message"
+    ],
+    "type": "object"
+  },
+  "permissions": [
+    "model.invoke",
+    "context.read",
+    "artifact.write"
+  ],
+  "steps": [
+    {
+      "id": "generate",
+      "input": {
+        "requestId": {
+          "source": "input",
+          "path": "requestId"
+        }
+      },
+      "operator": {
+        "id": "liteasy.research.generate-document",
+        "version": "1.0.0"
+      }
+    }
+  ],
+  "version": "0.1.0"
+}

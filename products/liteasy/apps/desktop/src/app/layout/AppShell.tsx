@@ -1,3 +1,6 @@
+import { useResearchSkillsController } from "../controllers/useResearchSkillsController";
+import { ResearchSkillsContext } from "../features/research-skills/researchSkillsPort";
+import { withLocalResearchDocuments } from "../features/research-skills/researchArtifactClient";
 import { SurfaceErrorBoundary, SurfaceRenderer } from "../shared/ui/SurfaceErrorBoundary";
 import { projectLibraryPaperInventory } from "../controllers/libraryPaperInventory";
 import { DocumentExportContext } from "../features/document-export/documentExportPort";
@@ -342,11 +345,7 @@ export function AppShell({
     });
     const local = localArtifactResultClientRef.current;
     const client = () => settingsStoreRef.current.getState()["models.connection_mode"] === "direct" || !loadStoredAccountSession()?.sessionId ? local : cloud;
-    artifactResultClientRef.current = {
-      getReadStatus: () => client().getReadStatus?.() ?? { issueCount: 0, readOnly: false },
-      list: (signal) => client().list(signal), save: (document, signal) => client().save(document, signal),
-      delete: (id) => client().delete(id), rename: (id, title) => client().rename(id, title)
-    };
+    artifactResultClientRef.current = withLocalResearchDocuments({ current: client, local, scope: () => localWorkspaceScope(loadStoredAccountSession()?.userId) });
   }
   const artifactExportClientRef = useRef<ReturnType<typeof createArtifactExportClient> | null>(null);
   if (!artifactExportClientRef.current) {
@@ -561,7 +560,7 @@ export function AppShell({
   const artifactWorkflow = useArtifactWorkflowController({
     artifactStore,
     artifactResultClient: artifactResultClientRef.current,
-    loadLocalArtifactResults: () => localArtifactResultClientRef.current.list(),
+    loadLocalArtifactResults: () => artifactResultClientRef.current!.list(),
     artifactResultScopeKey: artifactAccountId && settingsState["models.connection_mode"] !== "direct"
       ? JSON.stringify([settingsState["models.cloud_proxy_endpoint"], loadStoredAccountSession()?.issuer ?? "unverified", artifactAccountId])
       : undefined,
@@ -1268,6 +1267,10 @@ export function AppShell({
     scopeId: objectWorkbench.repository.scopeId, papers: workspaceState.papers, artifacts: artifactCatalog,
     extractionVersion: projectExtractionVersion, getResources: getPaperMineruResources,
   });
+  const researchSkills = useResearchSkillsController({ repository: objectWorkbench.repository, projects: paperProjects.repository,
+    destinations: paperProjects.catalog.filter(entry => workspaceState.papers.some(paper => paper.id === entry.project.paperId)).map(({ project }) => ({ kind: "entry-child", canonicalEntryId: project.projectId, paperId: project.paperId, scopeId: project.scopeId, title: project.title })),
+    settings: settingsState, modelTransport: effectiveModelTransport, store: artifactStore,
+    client: artifactResultClientRef.current!, sync: artifactWorkflow.actions.syncArtifacts, notice: setAnalysisHint });
   const paperAttachments = usePaperAttachmentController({ autosave: settingsState["view.markdown_mode"] !== "manual" && settingsState["view.markdown_autosave"] !== false, repository: objectWorkbench.repository, projects: paperProjects.repository,
     openEditor: () => { setLibraryExpanded(false); workbenchNavigation.open("paper-note"); },
     openBoard: async (object) => { await objectWorkbench.selectBoard(object); setLibraryExpanded(false); objectWorkbench.setVisible(true); workbenchNavigation.open("board"); },
@@ -2303,8 +2306,8 @@ export function AppShell({
           onApplyGeneratedTheme={runtimeActionContext.applyGeneratedTheme}
           onApplyPanelAction={runtimeActionContext.applyPanelAction}
           onApplyThemePreset={runtimeActionContext.applyThemePreset}
-          onResumeArtifactTask={artifactWorkflow.actions.resumeArtifactTask}
-          onCancelArtifactTask={artifactWorkflow.actions.cancelArtifactTask}
+          onResumeArtifactTask={taskId => artifactStore.getTask(taskId)?.type === "research_document" ? researchSkills.retry(taskId) : artifactWorkflow.actions.resumeArtifactTask(taskId)}
+          onCancelArtifactTask={taskId => artifactStore.getTask(taskId)?.type === "research_document" ? researchSkills.cancel(taskId) : artifactWorkflow.actions.cancelArtifactTask(taskId)}
           onGenerateArtifact={(artifactType, paperIds, context, contextRefs, systemPrompt, origin) => {
             const ids = paperIds?.length ? paperIds : workspaceStoreRef.current.getSelectedDocumentSet().locked
               ? workspaceStoreRef.current.getSelectedDocumentSet().documentIds : [];
@@ -2749,6 +2752,7 @@ export function AppShell({
     <HelpContext.Provider value={help.port}>
     <OnboardingContext.Provider value={onboarding}>
     <ObjectWorkbenchContext.Provider value={objectWorkbench.port}>
+    <ResearchSkillsContext.Provider value={researchSkills}>
     <ExtensionWorkbenchContext.Provider value={extensionWorkbench}>
     <DocumentExportContext.Provider value={artifactExports.actions}>
     <VisualAssetContext.Provider value={objectWorkbench.agentAssets}>
@@ -2947,6 +2951,7 @@ export function AppShell({
     </VisualAssetContext.Provider>
     </DocumentExportContext.Provider>
     </ExtensionWorkbenchContext.Provider>
+    </ResearchSkillsContext.Provider>
     </ObjectWorkbenchContext.Provider>
     </OnboardingContext.Provider>
     </HelpContext.Provider>

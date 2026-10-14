@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-14",
+  "scope": "CS197 M1 local document backend",
+  "fullDesktopRegression": {
+    "filesPassed": 589,
+    "testsPassed": 4181,
+    "testsFailed": 1,
+    "testsSkipped": 9,
+    "note": "The sole failure exposed selection being cleared by a composer input update. Fixed and verified in the targeted regressions below; no claim that the original full run passed."
+  },
+  "finalAffected": {
+    "files": 4,
+    "tests": 75,
+    "status": "passed",
+    "covers": [
+      "10 methods x 3 contract cases",
+      "literal/code/math command guards",
+      "package identity",
+      "forged quotes",
+      "bounded repair",
+      "IndexedDB reopen",
+      "pending payload recovery",
+      "cancellation",
+      "scope change",
+      "composer priority",
+      "owner-only draft persistence",
+      "document export"
+    ]
+  },
+  "composerRegression": {
+    "files": 5,
+    "tests": 78,
+    "status": "passed"
+  },
+  "browser": {
+    "tests": 1,
+    "status": "passed",
+    "scope": "actual application, selected method persistence and reload"
+  },
+  "liveModel": {
+    "status": "passed",
+    "report": "live-model-smoke.json"
+  },
+  "rust": {
+    "toolchain": "1.98.1",
+    "platform": "Linux",
+    "check": "cargo check --locked --all-targets --no-default-features",
+    "affectedTests": 3,
+    "status": "passed"
+  },
+  "smoke": {
+    "tests": 9,
+    "status": "passed",
+    "localeKeys": 361
+  },
+  "contracts": {
+    "status": "passed",
+    "scope": "clean implementation commit, generated schemas and locks"
+  },
+  "build": {
+    "status": "passed",
+    "productionAssets": 228
+  },
+  "notRun": [
+    "HTTP/PostgreSQL research-document storage (not enabled)",
+    "manual SCIENCE rubric and controlled baseline comparison",
+    "Windows installer for the new research-skills implementation"
+  ],
+  "previousUiInstaller": {
+    "commit": "11792837754b56a070f4ac5dbc410e0b7c6cc65b",
+    "run": "https://github.com/Hash012/Liteasy/actions/runs/38511402370",
+    "status": "success",
+    "artifact": "Liteasy_0.1.51_x64-setup.exe",
+    "sha256": "a41507d93972224231e3f96f3b87a661f184aabe98e75d57cb869b2ee1f83860",
+    "includesResearchSkills": false
+  }
+}

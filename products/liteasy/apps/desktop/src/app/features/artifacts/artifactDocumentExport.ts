@@ -1,3 +1,4 @@
+import { researchDocumentMarkdown } from "../research-skills/researchDocument";
 import { researchMarkdownParser } from "../markdown/researchParser";
 import { documentFormats } from "../document-export/documentExport.types";
 import { researchDocumentNodes } from "../document-export/documentCompiler";
@@ -18,6 +19,7 @@ import type { ThinReadingEvidenceSpan, ThinReadingFigureRecommendation } from ".
 export type { ArtifactDocumentFormat, ArtifactExportPayload } from "./artifactExport.types";
 
 const artifactTypeLabels: Record<ArtifactType, string> = {
+  research_document: "科研文档",
   comparison_table: "文献对比",
   layered_graph: "分层关系图",
   mindmap: "思维导图",
@@ -241,6 +243,7 @@ function thinReadingToMarkdown(tab: ArtifactTab, anchors: readonly PaperAnchorEn
 }
 
 export function createArtifactSourceMarkdown(tab: ArtifactTab, options: Partial<ExportOptions> & { includeExportedAt?: boolean } = {}) {
+  if (tab.researchDocument) return researchDocumentMarkdown(tab.researchDocument);
   const anchors = paperAnchorsForArtifact(tab);
   if (tab.type === "skill_doc") return `${removeInternalEvidenceIds(tab.markdown?.trim() || `# ${tab.title}`, anchors)}\n`;
 
@@ -300,6 +303,7 @@ function escapeHtml(value: string) {
 }
 
 export function createArtifactMarkdown(tab: ArtifactTab, options: { includeExportedAt?: boolean } = {}) {
+  if (tab.researchDocument) return researchDocumentMarkdown(tab.researchDocument);
   return researchDocumentNodes(createArtifactSourceMarkdown(tab, options)).nodes.map(documentNodeMarkdown).join("").trimEnd() + "\n";
 }
 

@@ -2,6 +2,7 @@ import { projectArtifactMetadata } from "./artifactMetadataProjection";
 import type { ArtifactPaperRef, ArtifactTab, ArtifactType } from "./artifact.types";
 
 export const artifactTypeLabels: Record<ArtifactType, string> = {
+  research_document: "科研文档",
   comparison_table: "文献对比", layered_graph: "分层关系图", mindmap: "思维导图",
   ppt: "演示文稿", skill_doc: "Skill 文档", thin_reading: "薄读", tree: "树形分析"
 };

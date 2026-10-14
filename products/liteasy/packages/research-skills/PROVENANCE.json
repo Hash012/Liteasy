@@ -1,0 +1,20 @@
+{
+  "packageVersion": "0.1.0",
+  "reviewedRepository": "Hash012/Liteasy",
+  "reviewedCommit": "dc1c7bfec87ab1fbeb9b90fa699b664eaaa193fb",
+  "artifactKind": "implementation_spec_and_new_starter_instructions",
+  "originalHarnessZipRecovered": false,
+  "repositoryModified": false,
+  "runtimeIntegrationImplemented": false,
+  "claimsHistoricalTestsRerun": false,
+  "thirdPartySlidesBundled": false,
+  "privateResearchProfileBundled": false,
+  "methodSources": [
+    "CS197 vectoring, velocity, evaluation, argumentation lecture materials in user Library"
+  ],
+  "formatSources": [
+    "https://agentskills.io/specification",
+    "https://developers.openai.com/codex/build-skills"
+  ],
+  "verificationScope": "See VALIDATION_REPORT.json. Package-static checks only; actual runtime acceptance remains unexecuted."
+}

@@ -1,0 +1,195 @@
+{
+  "status": "passed",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "requests": 1,
+  "usage": [
+    {
+      "prompt_tokens": 2227,
+      "completion_tokens": 3556,
+      "total_tokens": 5783,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 2483
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 2227
+    }
+  ],
+  "elapsedMs": 18062,
+  "cost": "not_reported_by_provider",
+  "scientificQuality": "not_scored_synthetic_smoke_only",
+  "reason": "",
+  "draft": {
+    "schema": "liteasy.research-draft/v1",
+    "title": "合成缓存实验研究卡",
+    "documentKind": "paper_brief",
+    "sections": [
+      {
+        "id": "scope",
+        "markdown": "本次实际读取范围为 S1 全文；该来源自身标注为合成实验夹具，而非已发表论文。未使用任何补充资料，也没有可区分的正文与派生资料集合。",
+        "sourceIds": [
+          "S1"
+        ]
+      },
+      {
+        "id": "problem",
+        "markdown": "材料以“缓存是否减少重复查找时间”为问题，限制是仅针对一张固定合成表上的重复查找。若该问题成立，会影响重复查询场景的延迟判断，但目前重要性只限于该合成设定。",
+        "sourceIds": [
+          "S1"
+        ]
+      },
+      {
+        "id": "method",
+        "markdown": "输入是一张固定合成表和十二次重复查找；处理是比较无缓存与有缓存两种条件，输出为平均查找时间。小例子：同一固定表重复查找十二次，缓存条件下均值更低。",
+        "sourceIds": [
+          "S1"
+        ]
+      },
+      {
+        "id": "claims_evidence",
+        "markdown": "材料称无缓存平均 10 ms、有缓存平均 4 ms，且没有记录方差、硬件细节、独立重复或消融。该证据仅适用于这张固定合成表上的十二次重复查找，不能当作生产工作负载验证。",
+        "sourceIds": [
+          "S1"
+        ]
+      },
+      {
+        "id": "limitations",
+        "markdown": "未提供方差、硬件细节、独立重复、消融和统计检验，无法评估稳定性或因果归因。来源明确说明该夹具不支持推广到生产工作负载；此外，没有补充或独立核验材料。",
+        "sourceIds": [
+          "S1"
+        ]
+      },
+      {
+        "id": "next_step",
+        "markdown": "可追问：重复十二次是否独立、是否随机顺序、缓存命中率与预热状态如何？下一步需要提供原始每次测量、环境配置和独立重复实验，才能检验均值差异是否稳健。",
+        "sourceIds": [
+          "S1"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "C1",
+        "sectionId": "scope",
+        "text": "S1 是合成实验夹具，不是已发表论文，且本次读取覆盖为全文。",
+        "kind": "source_assertion",
+        "citations": [
+          {
+            "sourceId": "S1",
+            "quote": "Synthetic experiment, not a published paper."
+          }
+        ],
+        "conditions": []
+      },
+      {
+        "id": "C2",
+        "sectionId": "problem",
+        "text": "S1 提出的问题是缓存是否减少重复查找时间。",
+        "kind": "source_assertion",
+        "citations": [
+          {
+            "sourceId": "S1",
+            "quote": "does caching reduce repeated lookup time?"
+          }
+        ],
+        "conditions": []
+      },
+      {
+        "id": "C3",
+        "sectionId": "method",
+        "text": "S1 的方法是在一张固定合成表上进行十二次重复查找，并比较无缓存与有缓存。",
+        "kind": "source_assertion",
+        "citations": [
+          {
+            "sourceId": "S1",
+            "quote": "twelve repeated lookups on one fixed synthetic table"
+          }
+        ],
+        "conditions": []
+      },
+      {
+        "id": "C4",
+        "sectionId": "claims_evidence",
+        "text": "S1 记录无缓存平均 10 ms、有缓存平均 4 ms。",
+        "kind": "source_assertion",
+        "citations": [
+          {
+            "sourceId": "S1",
+            "quote": "Mean time without cache was 10 ms and with cache was 4 ms."
+          }
+        ],
+        "conditions": [
+          "仅适用于该合成表上的十二次重复查找"
+        ]
+      },
+      {
+        "id": "C5",
+        "sectionId": "limitations",
+        "text": "S1 未记录方差、硬件细节、独立重复或消融结果。",
+        "kind": "source_assertion",
+        "citations": [
+          {
+            "sourceId": "S1",
+            "quote": "No variance, hardware details, independent repetitions or ablation results were recorded."
+          }
+        ],
+        "conditions": []
+      },
+      {
+        "id": "C6",
+        "sectionId": "limitations",
+        "text": "S1 声明该夹具不支持推广到生产工作负载。",
+        "kind": "source_assertion",
+        "citations": [
+          {
+            "sourceId": "S1",
+            "quote": "This fixture does not support generalization to production workloads."
+          }
+        ],
+        "conditions": []
+      },
+      {
+        "id": "C7",
+        "sectionId": "claims_evidence",
+        "text": "可见均值差异仅提示该固定合成表上缓存条件下平均查找时间较低，不能证明普遍性能提升或因果机制。",
+        "kind": "inference",
+        "citations": [
+          {
+            "sourceId": "S1"
+          }
+        ],
+        "conditions": [
+          "缺少方差、硬件细节、独立重复和消融"
+        ]
+      },
+      {
+        "id": "C8",
+        "sectionId": "next_step",
+        "text": "需要原始每次测量、环境配置和独立重复实验来检验均值差异是否稳健。",
+        "kind": "hypothesis",
+        "citations": [
+          {
+            "sourceId": "S1"
+          }
+        ],
+        "conditions": [
+          "当前未提供这些数据"
+        ]
+      }
+    ],
+    "limitations": [
+      "S1 为合成实验夹具，非已发表论文或独立验证来源。",
+      "未提供方差、硬件细节、独立重复、消融和统计结论。",
+      "无法评估缓存效果是否稳定或可推广到其他表、数据分布或生产负载。",
+      "没有补充资料可交叉核对。"
+    ],
+    "nextActions": [
+      "提供 S1 的原始每次查找耗时和实验脚本/配置。",
+      "补充独立重复实验与缓存命中率、预热状态、随机化顺序等信息。",
+      "若目标是推广结论，增加不同表规模、访问分布和生产式负载的对照实验。"
+    ]
+  }
+}

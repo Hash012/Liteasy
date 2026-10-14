@@ -1,3 +1,4 @@
+import { researchDocumentSchema, researchDocumentMarkdown } from "../research-skills/researchDocument";
 import { artifactMetadataIssueCount, projectArtifactMetadata } from "./artifactMetadataProjection";
 import { invoke } from "@tauri-apps/api/core";
 import type { ArtifactTab, ArtifactType } from "./artifact.types";
@@ -21,6 +22,7 @@ type ArtifactCatalogTransport = {
 };
 
 const artifactTypes = new Set<ArtifactType>([
+  "research_document",
   "comparison_table",
   "layered_graph",
   "mindmap",
@@ -94,6 +96,10 @@ function isCachedArtifact(value: unknown): value is ArtifactTab {
     return false;
   }
   const candidate = value as Partial<ArtifactTab>;
+  if (candidate.type === "research_document") {
+    const parsed = researchDocumentSchema.safeParse(candidate.researchDocument);
+    if (!parsed.success || candidate.answer !== researchDocumentMarkdown(parsed.data)) return false;
+  }
   return (
     typeof candidate.artifactId === "string" &&
     candidate.artifactId.length > 0 &&
@@ -255,13 +261,13 @@ export function createArtifactLocalRepository(transport?: ArtifactCatalogTranspo
       sourceSnapshot = await activeTransport.load();
       const projection = normalizeSnapshot(sourceSnapshot);
       readStatus = projection.status;
-      return projection.artifacts;
+      return projection.artifacts.filter(artifact => artifact.type !== "research_document");
     },
     async replace(artifacts: ArtifactTab[]) {
       if (readStatus.readOnly || artifacts.some((artifact) => artifactMetadataIssueCount(artifact) > 0)) {
         throw new Error("目录中存在不可读记录，已保留原始资料；当前列表为只读，未覆盖保存。");
       }
-      const persistentArtifacts = artifacts.filter((artifact) => artifact.type !== "skill_doc");
+      const persistentArtifacts = artifacts.filter((artifact) => artifact.type !== "skill_doc" && artifact.type !== "research_document");
       if (persistentArtifacts.some((artifact) => !isCachedArtifact(artifact) || artifactMetadataIssueCount(projectArtifactMetadata(artifact)) > 0)) {
         throw new Error("产物元数据无效，未覆盖已有目录。");
       }

@@ -9,6 +9,7 @@ import { parseStreamingOutlineMarkdown } from "../../features/artifacts/artifact
 import type { AgentArtifactGenerationOptions } from "../../features/artifacts/useArtifactActions";
 
 const modalityLabels = {
+  research_document: "科研文档",
   comparison_table: "对比表",
   layered_graph: "分层关系图",
   mindmap: "思维导图",
@@ -122,6 +123,7 @@ export async function runAgentArtifactAnalysis(
   }) => void,
   options?: AgentArtifactGenerationOptions
 ) {
+  if (artifactType === "research_document") throw new Error("科研文档必须通过已选科研方法和明确保存目标生成");
   if (artifactType === "skill_doc") {
     throw new Error("Skill 文档不是论文分析模态");
   }

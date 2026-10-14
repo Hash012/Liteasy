@@ -1,0 +1,63 @@
+{
+  "abiVersion": "liteasy.workflow-skill/v1",
+  "description": "逐项核对正文中的关键主张、原始依据、适用条件和尚未解决的缺口。",
+  "id": "research-claim-audit",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "requestId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "requestId"
+    ],
+    "type": "object"
+  },
+  "name": "主张与证据审计",
+  "output": {
+    "source": "step",
+    "stepId": "generate"
+  },
+  "outputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "artifactId": {
+        "type": "string"
+      },
+      "resourceUri": {
+        "type": "string"
+      },
+      "message": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "artifactId",
+      "resourceUri",
+      "message"
+    ],
+    "type": "object"
+  },
+  "permissions": [
+    "model.invoke",
+    "context.read",
+    "artifact.write"
+  ],
+  "steps": [
+    {
+      "id": "generate",
+      "input": {
+        "requestId": {
+          "source": "input",
+          "path": "requestId"
+        }
+      },
+      "operator": {
+        "id": "liteasy.research.generate-document",
+        "version": "1.0.0"
+      }
+    }
+  ],
+  "version": "0.1.0"
+}

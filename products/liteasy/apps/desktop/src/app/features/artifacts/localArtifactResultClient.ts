@@ -32,8 +32,20 @@ function browserTransport(): Transport {
   return {
     list,
     async save(document) {
-      if (typeof indexedDB === "undefined") localStorage.setItem(key, JSON.stringify([...(await list()).filter((item) => item.artifactId !== document.artifactId), document]));
-      else await access(true, (store) => store.put(document));
+      if (typeof indexedDB === "undefined") {
+        if (document.artifactType === "research_document") throw new Error("此浏览器缺少可靠的文档存储，请使用桌面版或启用 IndexedDB");
+        localStorage.setItem(key, JSON.stringify([...(await list()).filter((item) => item.artifactId !== document.artifactId), document]));
+      }
+      else await access(true, (store) => {
+        const request = store.get(document.artifactId);
+        request.onsuccess = () => {
+          const previous = request.result as AgentArtifactResult | undefined;
+          if ((document.artifactType === "research_document" || previous?.artifactType === "research_document") && previous && JSON.stringify(previous) !== JSON.stringify(document)) {
+            store.transaction.abort();
+          } else store.put(document);
+        };
+        return request;
+      });
       return `liteasy-local://agent-artifacts/${encodeURIComponent(document.artifactId)}.json`;
     },
     async delete(artifactId) {
@@ -78,6 +90,7 @@ export function createLocalArtifactResultClient(transport?: Transport): Artifact
       const documents = await storage.list();
       const document: unknown = Array.isArray(documents) ? documents.find((item) => item?.artifactId === artifactId) : undefined;
       if (!document || !isArtifactResult(document)) throw new Error("本地产物不存在或格式无效。");
+      if (document.artifactType === "research_document") throw new Error("科研文档是固定版本，请生成新版本后修改标题");
       const renamed = { ...document, title };
       await storage.save(renamed);
       return renamed;

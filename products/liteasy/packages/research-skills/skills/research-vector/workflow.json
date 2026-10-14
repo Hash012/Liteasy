@@ -1,0 +1,63 @@
+{
+  "abiVersion": "liteasy.workflow-skill/v1",
+  "description": "从当前假设、问题和进度找出最关键未知，选择降低风险的最小行动。",
+  "id": "research-vector",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "requestId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "requestId"
+    ],
+    "type": "object"
+  },
+  "name": "研究风险排序",
+  "output": {
+    "source": "step",
+    "stepId": "generate"
+  },
+  "outputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "artifactId": {
+        "type": "string"
+      },
+      "resourceUri": {
+        "type": "string"
+      },
+      "message": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "artifactId",
+      "resourceUri",
+      "message"
+    ],
+    "type": "object"
+  },
+  "permissions": [
+    "model.invoke",
+    "context.read",
+    "artifact.write"
+  ],
+  "steps": [
+    {
+      "id": "generate",
+      "input": {
+        "requestId": {
+          "source": "input",
+          "path": "requestId"
+        }
+      },
+      "operator": {
+        "id": "liteasy.research.generate-document",
+        "version": "1.0.0"
+      }
+    }
+  ],
+  "version": "0.1.0"
+}

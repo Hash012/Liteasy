@@ -1,0 +1,68 @@
+{
+  "schema": "liteasy.skill-adapter/v1",
+  "id": "research-learn",
+  "version": "0.1.0",
+  "availability": "adapter_required",
+  "display": {
+    "title": "概念与方法讲解",
+    "description": "围绕选中的论文概念，用直觉、例子和严格定义搭建可复习的理解笔记。",
+    "group": "读懂",
+    "aliases": [
+      "learn",
+      "概念与方法讲解"
+    ]
+  },
+  "instructions": "SKILL.md",
+  "contract": "references/research-contract.md",
+  "template": "assets/output-template.md",
+  "workflow": "workflow.json",
+  "execution": {
+    "mode": "document",
+    "operatorId": "liteasy.research.generate-document",
+    "operatorVersion": "1.0.0",
+    "maxGenerations": 1,
+    "maxRepairAttempts": 1,
+    "tools": [],
+    "permissions": [
+      "model.invoke",
+      "context.read",
+      "artifact.write"
+    ]
+  },
+  "inputs": {
+    "roles": [
+      {
+        "id": "concept",
+        "label": "概念原文",
+        "minRefs": 1,
+        "maxRefs": 4
+      },
+      {
+        "id": "background",
+        "label": "读者背景与补充材料",
+        "minRefs": 0,
+        "maxRefs": 8
+      }
+    ],
+    "minimumDistinctPrimaryObjects": 1,
+    "requireProblemInPromptOrContext": false
+  },
+  "output": {
+    "artifactType": "research_document",
+    "documentKind": "concept_note",
+    "requiredSections": [
+      "scope",
+      "intuition",
+      "example",
+      "definition",
+      "source_alignment",
+      "limits",
+      "self_check"
+    ]
+  },
+  "defaults": {
+    "instruction": "讲清所选概念：先说明必要前提，再给直觉与例子，最后给定义、边界和自测。",
+    "language": "auto",
+    "presetId": "default"
+  }
+}

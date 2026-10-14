@@ -99,6 +99,7 @@ export type AssistantContextToken = {
 };
 
 export type AssistantComposerSuggestion = {
+  researchSkill?: import("../research-skills/researchDocument").ResearchSkillRef;
   scopeId?: string;
   domain?: "research" | "application";
   updatedAt?: string;

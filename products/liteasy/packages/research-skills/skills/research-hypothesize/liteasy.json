@@ -1,0 +1,66 @@
+{
+  "schema": "liteasy.skill-adapter/v1",
+  "id": "research-hypothesize",
+  "version": "0.1.0",
+  "availability": "adapter_required",
+  "display": {
+    "title": "可证伪假设",
+    "description": "从问题、文献与真实约束形成少量带机制解释、可区分预测和失败条件的假设卡。",
+    "group": "提出与验证",
+    "aliases": [
+      "hypothesize",
+      "可证伪假设"
+    ]
+  },
+  "instructions": "SKILL.md",
+  "contract": "references/research-contract.md",
+  "template": "assets/output-template.md",
+  "workflow": "workflow.json",
+  "execution": {
+    "mode": "document",
+    "operatorId": "liteasy.research.generate-document",
+    "operatorVersion": "1.0.0",
+    "maxGenerations": 1,
+    "maxRepairAttempts": 1,
+    "tools": [],
+    "permissions": [
+      "model.invoke",
+      "context.read",
+      "artifact.write"
+    ]
+  },
+  "inputs": {
+    "roles": [
+      {
+        "id": "seed",
+        "label": "问题与约束",
+        "minRefs": 0,
+        "maxRefs": 8
+      },
+      {
+        "id": "literature",
+        "label": "文献证据",
+        "minRefs": 0,
+        "maxRefs": 24
+      }
+    ],
+    "minimumDistinctPrimaryObjects": 0,
+    "requireProblemInPromptOrContext": true
+  },
+  "output": {
+    "artifactType": "research_document",
+    "documentKind": "hypothesis_cards",
+    "requiredSections": [
+      "scope",
+      "hypotheses",
+      "prior_work",
+      "falsifiers",
+      "next_step"
+    ]
+  },
+  "defaults": {
+    "instruction": "依据所给问题和材料提出一到三个可证伪假设，说明机制、预测、失败条件及最近的已有方法。",
+    "language": "auto",
+    "presetId": "default"
+  }
+}

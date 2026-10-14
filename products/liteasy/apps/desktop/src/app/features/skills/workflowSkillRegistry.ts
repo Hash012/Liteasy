@@ -114,6 +114,14 @@ const operatorDefinitions = [
     outputSchema: agentResultSchema,
     permissions: ["artifact.write", "network.retrieve", "paper.figure.read", "paper.read"],
     version: "1.0.0"
+  },
+  {
+    id: "liteasy.research.generate-document",
+    version: "1.0.0",
+    description: "基于固定资料生成并保存研究文档",
+    permissions: ["model.invoke", "context.read", "artifact.write"],
+    inputSchema: { type: "object", additionalProperties: false, properties: { requestId: { type: "string" } }, required: ["requestId"] },
+    outputSchema: { type: "object", additionalProperties: false, properties: { artifactId: { type: "string" }, resourceUri: { type: "string" }, message: { type: "string" } }, required: ["artifactId", "resourceUri", "message"] }
   }
 ] as const satisfies readonly WorkflowOperatorDefinition[];
 
@@ -410,8 +418,13 @@ async function executeOperator(
   operator: WorkflowOperatorDefinition,
   input: Record<string, unknown>,
   runtime: WorkflowOperatorRuntime,
-  workflowInstructions: string
+  workflowInstructions: string,
+  workflow: { id: string; version: string }
 ): Promise<Record<string, unknown>> {
+  if (operator.id === "liteasy.research.generate-document") {
+    if (!runtime.runResearchDocument) throw new Error("workflow_operator_requires_research_document");
+    return runtime.runResearchDocument({ requestId: input.requestId as string, skillId: workflow.id, skillVersion: workflow.version });
+  }
   if (operator.id === "liteasy.agent.artifact-analysis") {
     if (!runtime.runArtifactAnalysis) {
       throw new Error("workflow_operator_requires_artifact_analysis");
@@ -523,7 +536,8 @@ export async function executeWorkflowSkill<T = unknown>(
       operator,
       stepInput,
       runtime,
-      workflowPackage.instructions
+      workflowPackage.instructions,
+      { id: manifest.id, version: manifest.version }
     );
     assertSchema(output, operator.outputSchema, `workflow_step.${step.id}.output`);
     stepOutputs.set(step.id, output);

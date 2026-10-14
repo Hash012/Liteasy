@@ -133,18 +133,18 @@ export function createArtifactStore(taskNamespace = "") {
       task.stage = "failed";
       task.status = "failed";
     },
-    restoreInterruptedTask(task: Pick<ArtifactTask, "pendingResult" | "agentRunId" | "artifactId" | "id" | "message" | "progress" | "thinReadingBranchRecovery" | "type" | "recovery" | "publicReasoning" | "partialAnswer" | "partialOutlineNodes">) {
+    restoreInterruptedTask(task: Pick<ArtifactTask, "researchInvocation" | "origin" | "pendingResult" | "agentRunId" | "artifactId" | "id" | "message" | "progress" | "thinReadingBranchRecovery" | "type" | "recovery" | "publicReasoning" | "partialAnswer" | "partialOutlineNodes">) {
       const recovered: ArtifactTask = {
-        pendingResult: task.pendingResult, recovery: task.recovery, publicReasoning: task.publicReasoning,
+        researchInvocation: task.researchInvocation, origin: task.origin, pendingResult: task.pendingResult, recovery: task.recovery, publicReasoning: task.publicReasoning,
         partialAnswer: task.partialAnswer, partialOutlineNodes: task.partialOutlineNodes,
         ...(task.agentRunId ? { agentRunId: task.agentRunId } : {}),
         ...(task.artifactId ? { artifactId: task.artifactId } : {}),
         ...(task.thinReadingBranchRecovery ? { thinReadingBranchRecovery: task.thinReadingBranchRecovery } : {}),
         failure: {
           failedStage: "failed",
-          message: task.pendingResult ? "已生成结果尚未保存，可以重试保存，无需重新生成。" : "应用在生成期间重启，原模型调用已中断。已保存薄读草稿与上下文，可继续生成。",
+          message: task.pendingResult ? "已生成结果尚未保存，可以重试保存，无需重新生成。" : task.type === "research_document" ? "生成已中断；原模型请求不会自动重放，请检查资料后重新发起。" : "应用在生成期间重启，原模型调用已中断。已保存薄读草稿与上下文，可继续生成。",
           occurredAt: new Date().toISOString(),
-          recovery: [task.pendingResult ? "重试保存已有结果" : "继续薄读"]
+          recovery: [task.pendingResult ? "重试保存已有结果" : task.type === "research_document" ? "检查资料后重新发起" : "继续薄读"]
         },
         id: task.id,
         message: task.pendingResult ? "已有结果等待保存。" : "生成已中断，草稿与上下文已保留。",
@@ -167,6 +167,7 @@ export function createArtifactStore(taskNamespace = "") {
       task.status = "cancelled";
       return true;
     },
+    removeTask(id: string) { tasks.delete(id); },
     getTask(id: string) {
       return tasks.get(id);
     },

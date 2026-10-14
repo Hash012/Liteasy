@@ -156,7 +156,7 @@ export function usePaperProjectsController(input: {
               if (artifact.papers?.some((source) => source.id === project.paperId) || artifact.sourceContextRefs?.some((ref) => "objectId" in ref && memberIds.has(ref.objectId))) {
                 try {
                   await repository.addAsset(project.projectId, { assetId: `artifact:${artifact.artifactId}`, title: artifact.title,
-                    kind: "artifact", role: "derived", artifactId: artifact.artifactId });
+                    kind: "artifact", role: artifact.researchDocument && artifact.researchDocument.invocation.destination.canonicalEntryId !== project.projectId ? "reference" : "derived", artifactId: artifact.artifactId });
                 } catch (failure) { recordFailure(`「${project.title}」产物「${artifact.title}」`, failure); }
               }
             }

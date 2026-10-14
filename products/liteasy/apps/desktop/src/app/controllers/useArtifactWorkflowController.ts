@@ -150,6 +150,7 @@ type ArtifactWorkflowActions = {
     requestedName: string
   ) => Promise<ArtifactMutationOutcome>;
   regenerateArtifact: (request: ArtifactRegenerationRequest) => string;
+  syncArtifacts: () => void;
   resumeArtifactTask: (taskId: string) => Promise<void>;
   retryInterruptedThinReadingBranch: (taskId: string) => Promise<void>;
   startAnalysis: (artifactType: ArtifactType) => string;
@@ -263,7 +264,7 @@ export function useArtifactWorkflowController({
   function handleArtifactTasksChanged(tasks: ArtifactTask[]) {
     if (taskPersistenceReady.current) {
       const scopeKey = artifactResultScopeKey ?? "device";
-      const checkpointTasks = tasks.filter((task) => (task.type === "thin_reading" || !!task.pendingResult) && task.status !== "completed");
+      const checkpointTasks = tasks.filter((task) => (task.type === "thin_reading" || !!task.pendingResult && task.type !== "research_document") && task.status !== "completed");
       const previous = lastTaskCheckpointRef.current;
       const unchanged = previous?.scopeKey === scopeKey && previous.tasks.length === checkpointTasks.length &&
         checkpointTasks.every((task, index) => {
@@ -280,7 +281,7 @@ export function useArtifactWorkflowController({
         });
       }
     }
-    persistInterruptedArtifactTasks(tasks, artifactResultScopeKey);
+    persistInterruptedArtifactTasks(tasks.filter(task => task.type !== "research_document"), artifactResultScopeKey);
     setArtifactTasks(tasks);
   }
 
@@ -477,6 +478,7 @@ export function useArtifactWorkflowController({
 
   return {
     actions: {
+      syncArtifacts: artifactActions.syncArtifacts,
       applyThinReadingDocument: artifactActions.applyThinReadingDocument,
       cancelArtifactTask: artifactActions.cancelArtifactTask,
       cancelThinReadingVisualization: thinReadingVisualization.cancelVisualization,

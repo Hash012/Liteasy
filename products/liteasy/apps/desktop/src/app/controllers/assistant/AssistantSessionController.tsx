@@ -1,3 +1,8 @@
+import { ResearchSkillsContext } from "../../features/research-skills/researchSkillsPort";
+import { ResearchSkillSelectionView } from "../../features/research-skills/ResearchSkillSelection";
+import { listResearchSkills } from "../../features/research-skills/researchSkillCatalog";
+import { parseResearchSkillCommand } from "../../features/research-skills/researchSkillCommand";
+import type { ResearchSkillSelection } from "../../features/research-skills/researchDocument";
 import { useUiTranslation } from "../../shared/i18n/useUiTranslation";
 import { OptionPicker } from "../../shared/ui/productPrimitives";
 import "../../features/assistant/assistantView.css";
@@ -28,7 +33,7 @@ import { readerContextDragMime, readDraggedReaderContext } from "../../features/
 import { useObjectWorkbench } from "../../features/objects/objectWorkbenchPort";
 import { hasResourceContextTransfer, readContextPaper } from "../../features/object-transfer/contextTransfer";
 import { contextRefSchema, type ContextRef } from "../../features/context/objectContext";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { adaptContextMentions, contextInstructionText, insertContextMentions, mapContextMentions, type ContextInsertion } from "../../features/assistant/inlineContext";
 import { Button, Input } from "@fluentui/react-components";
 import { AssistantSessionToolbar } from "../../features/assistant/AssistantSessionToolbar";
@@ -403,6 +408,9 @@ export function AssistantSessionController({
   const resultLookupsRef = useRef(new Set<string>());
   const [embeddedUsage, setEmbeddedUsage] = useState<{ sessionId: string; usage: AgentContextUsage }>();
   const [generationPrompts, setGenerationPrompts] = useState<Partial<Record<GenerationPromptTask, string>>>({});
+  const researchSkills = useContext(ResearchSkillsContext);
+  const [selectedResearchSkill, setSelectedResearchSkill] = useState<ResearchSkillSelection>();
+  const [researchStarting, setResearchStarting] = useState(false);
   const [input, setInput] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [voiceInputMessage, setVoiceInputMessage] = useState<string | undefined>();
@@ -425,8 +433,8 @@ export function AssistantSessionController({
   const [historyLoadAttempt, setHistoryLoadAttempt] = useState(0);
   const [taskHydrationEpoch, setTaskHydrationEpoch] = useState(0);
   const hydratingTasksRef = useRef(new Set<string>());
-  const draftRef = useRef({ input, tokens: composerContextTokens, readerContexts });
-  draftRef.current = { input, tokens: composerContextTokens, readerContexts };
+  const draftRef = useRef<import("../../features/assistant/assistantSessionHistory").AssistantSessionDraft>({ input, tokens: composerContextTokens, readerContexts, selectedResearchSkill });
+  draftRef.current = { input, tokens: composerContextTokens, readerContexts, selectedResearchSkill };
   const contextCaretRef = useRef<{ input: string; caret: number; sessionId: string }>();
   useAssistantSessionTitles({
     scope: objectWorkbench?.scopeId ?? "local", ready: historyReady, sessions: sessionHistory,
@@ -503,6 +511,7 @@ export function AssistantSessionController({
         setView(session.kind === "artifact_generation" ? { kind: "task-detail", taskId: session.id } : session.messages.length ? { kind: "conversation", conversationId: session.id } : { kind: "home" });
         for (const item of snapshot.sessions) savedRevisionsRef.current.set(`${objectWorkbench?.scopeId ?? "local"}:${item.id}`, assistantContentRevision(item, item.id === session.id ? snapshot.draft : item.draft));
         setInput(snapshot.draft.input);
+        setSelectedResearchSkill(snapshot.draft.selectedResearchSkill);
         setComposerContextTokens(snapshot.draft.tokens);
         setReaderContexts(snapshot.draft.readerContexts);
       }
@@ -524,7 +533,7 @@ export function AssistantSessionController({
       saveTimerRef.current = undefined;
       void persistConversation().catch(() => {});
     }, 250);
-  }, [historyReady, sessionHistory, activeSessionId, input, composerContextTokens, readerContexts]);
+  }, [historyReady, sessionHistory, activeSessionId, input, composerContextTokens, readerContexts, selectedResearchSkill]);
   useEffect(() => {
     const flush = () => { void persistConversation().catch(() => {}); };
     window.addEventListener("blur", flush);
@@ -811,14 +820,14 @@ export function AssistantSessionController({
       end: inputRef.current?.selectionEnd ?? value.length };
   }
 
-  const composerUndoRef = useRef<{ key: string; position: number; entries: Array<{ input: string; tokens: AssistantContextToken[]; readerContexts: ReaderConversationContext[] }> }>({ key: "", position: -1, entries: [] });
+  const composerUndoRef = useRef<{ key: string; position: number; entries: Array<import("../../features/assistant/assistantSessionHistory").AssistantSessionDraft> }>({ key: "", position: -1, entries: [] });
   function composerHistory() {
     const key = `${objectWorkbench?.scopeId ?? "local"}:${activeSessionIdRef.current}`;
     if (composerUndoRef.current.key !== key) composerUndoRef.current = { key, position: -1, entries: [] };
     return composerUndoRef.current;
   }
-  function applyComposerDraft(update: { input: string; tokens: AssistantContextToken[]; readerContexts?: ReaderConversationContext[] }, record = true) {
-    const next = { input: update.input, tokens: update.tokens, readerContexts: update.readerContexts ?? draftRef.current.readerContexts };
+  function applyComposerDraft(update: { input: string; tokens: AssistantContextToken[]; readerContexts?: ReaderConversationContext[]; selectedResearchSkill?: ResearchSkillSelection }, record = true) {
+    const next = { input: update.input, tokens: update.tokens, readerContexts: update.readerContexts ?? draftRef.current.readerContexts, selectedResearchSkill: "selectedResearchSkill" in update ? update.selectedResearchSkill : draftRef.current.selectedResearchSkill };
     const history = composerHistory();
     if (record) {
       const before = { ...draftRef.current };
@@ -829,15 +838,17 @@ export function AssistantSessionController({
       history.position = history.entries.length - 1;
     }
     draftRef.current = { ...draftRef.current, ...next };
+    if ("selectedResearchSkill" in update) setSelectedResearchSkill(next.selectedResearchSkill);
     setComposerContextTokens(next.tokens);
     setReaderContexts(next.readerContexts);
     setInput(next.input);
   }
-  function resetComposerDraft(next: { input: string; tokens: AssistantContextToken[]; readerContexts: ReaderConversationContext[] }) {
+  function resetComposerDraft(next: import("../../features/assistant/assistantSessionHistory").AssistantSessionDraft) {
+    setSelectedResearchSkill(next.selectedResearchSkill);
     const history = composerHistory();
     history.entries = [next];
     history.position = 0;
-    applyComposerDraft(next, false);
+    applyComposerDraft({ ...next, selectedResearchSkill: next.selectedResearchSkill }, false);
   }
   function changeComposerInput(value: string) {
     applyComposerDraft({ input: value, tokens: mapContextMentions(draftRef.current.input, value, draftRef.current.tokens) });
@@ -1082,6 +1093,7 @@ export function AssistantSessionController({
     setView({ kind: "home" });
     setHistoryError(undefined);
     setInput("");
+    setSelectedResearchSkill(undefined);
     setEditingMessageId(null);
     setVoiceInputMessage(undefined);
     connectPublicAgentSession(session);
@@ -1116,6 +1128,7 @@ export function AssistantSessionController({
     setView(session.kind === "artifact_generation" ? { kind: "task-detail", taskId: session.id } : { kind: "conversation", conversationId: session.id });
     setHistoryError(undefined);
     setInput(session.draft?.input ?? "");
+    setSelectedResearchSkill(session.draft?.selectedResearchSkill);
     setComposerContextTokens(session.draft?.tokens ?? []);
     setReaderContexts(session.draft?.readerContexts ?? []);
     setEditingMessageId(null);
@@ -1741,6 +1754,7 @@ export function AssistantSessionController({
         assistantStoreRef.current.addMessage(assistantMessage);
       }
       setInput("");
+    setSelectedResearchSkill(undefined);
       setEditingMessageId(null);
     } catch (error) {
       assistantStoreRef.current.addMessage(
@@ -2258,7 +2272,34 @@ export function AssistantSessionController({
   }
 
   async function handleSend() {
-    if (!historyReadyRef.current || contextDropCount > 0) return;
+    if (!historyReadyRef.current || contextDropCount > 0 || researchStarting) return;
+    const researchTarget = owner.target();
+    if (sendLockRef.current.has(researchTarget)) return;
+    try {
+      const command = selectedResearchSkill ? undefined : parseResearchSkillCommand(input);
+      const selection = selectedResearchSkill ?? (command?.skill.ref ? { skill: command.skill.ref, roles: {}, preset: { id: "default", parameters: {} } } : undefined);
+      if (selection) {
+        if (!researchSkills) throw new Error("科研方法暂不可用");
+        if (!selection.destination) { setSelectedResearchSkill(selection); if (command) setInput(command.prompt); throw new Error("请选择科研文档的保存目标，再点击生成并保存"); }
+        setResearchStarting(true);
+        sendLockRef.current.add(researchTarget);
+        await persistConversation();
+        const origin = { kind: "conversation_action" as const, entryPoint: "research-skill-composer", initiatedBy: { type: "user" as const, id: "local-user" }, parentConversationId: researchTarget };
+        const result = await researchSkills.start({ selection, prompt: command?.prompt ?? contextInstructionText(input, composerContextTokens), refs: selectedContextRefs(composerContextTokens), origin });
+        const message = createMessage("assistant", result.message);
+        message.kind = "task_reference";
+        message.taskReference = { taskId: result.taskIds[0], title: result.message };
+        if (owner.disposed) return;
+        owner.store(researchTarget).addMessage(message);
+        owner.withTarget(researchTarget, syncAssistant);
+        if (activeSessionIdRef.current === researchTarget) {
+          resetComposerDraft({ input: "", tokens: [], readerContexts: [] });
+          setContextDropMessage(result.message);
+        }
+        return;
+      }
+    } catch (error) { setContextDropMessage(error instanceof Error ? error.message : String(error)); return; }
+    finally { sendLockRef.current.delete(researchTarget); setResearchStarting(false); }
     let currentState = assistantStoreRef.current.getState();
     let contextTokensForTurn = [...composerContextTokens];
     const referencedPaperIds = contextTokensForTurn
@@ -2599,7 +2640,7 @@ export function AssistantSessionController({
           onUpdateSession={updateSessionMetadata}
           onExportSession={(id) => { void exportSession(id).catch((error) => setHistoryError(String(error))); }}
           activeSessionId={activeSessionId}
-          history={sessionHistory.filter((item) => item.kind === "artifact_generation" || item.messageCount || item.messages.length || item.draft?.input.trim())}
+          history={sessionHistory.filter((item) => item.kind === "artifact_generation" || item.messageCount || item.messages.length || item.draft?.input.trim() || item.draft?.selectedResearchSkill)}
           onOpenSession={(id) => { void openSession(id); }}
         />
       ) : null}
@@ -2626,6 +2667,10 @@ export function AssistantSessionController({
         <h3>{activeSession.title}</h3>
         <p>{({ idle: "可继续", running: "运行中", completed: "已完成", failed: "本次失败", cancelled: "已终止", interrupted: "运行已中断", unknown: "状态待核对" } as const)[selectedTaskStatus]}{taskHasSavedResult ? " · 已保存结果可用" : " · 尚无已保存结果"}</p>
         {taskHasSavedResult ? <p>结果版本：{(selectedTaskRun?.status === "completed" ? selectedTaskRun.resultRefs : activeSession.taskBinding?.resultRefs)?.map((ref) => ref.revision).join(" · ") || "旧版结果，版本待核对"}</p> : null}
+        {activeSession.artifactType === "research_document" && activeSession.artifactTaskId ? <div>
+          {artifactTasks.find(task => task.id === activeSession.artifactTaskId)?.pendingResult && selectedTaskStatus === "failed" ? <Button onClick={() => void onResumeArtifactTask?.(activeSession.artifactTaskId!).catch(error => setContextDropMessage(String(error)))}>重试保存已有结果</Button> : null}
+          {selectedTaskStatus === "running" ? <Button onClick={() => void onCancelArtifactTask?.(activeSession.artifactTaskId!)}>停止生成</Button> : null}
+        </div> : null}
         {activeSession.taskRuns?.length ? <div><span>运行记录</span><OptionPicker aria-label="选择运行记录" density="compact" value={selectedTaskRun?.id ?? ""} onValueChange={(runId) => setView({ kind: "task-detail", taskId: activeSession.id, runId })} options={activeSession.taskRuns.map((run, index) => ({ value: run.id, label: `第 ${index + 1} 次 · ${({ idle: "可继续", running: "运行中", completed: "已完成", failed: "失败", cancelled: "已终止", interrupted: "已中断", unknown: "待核对" } as const)[run.status]}` }))} /></div> : null}
         {selectedTaskStatus === "failed" ? <div role="alert"><p>{taskFailure ? taskFailure.replace(/^薄读未完成：/, "") : "本次运行未完成，请查看运行详情。"}</p><p>核对资料与模型设置后，可从发起对话或 AI 工作台重新发起任务。</p></div> : null}
       </section> : null}
@@ -2675,6 +2720,9 @@ export function AssistantSessionController({
         <Button disabled={!activeSession.artifactId || !taskHasSavedResult} onClick={() => { void beginTaskDiscussion(activeSession).catch((error) => setContextDropMessage(error instanceof Error ? error.message : String(error))); }}>围绕此结果提问</Button>
         {activeSession.origin?.parentConversationId ? <Button appearance="subtle" onClick={() => { void openSession(activeSession.origin!.parentConversationId!); }}>返回发起对话</Button> : null}
       </div> : !historyOpen ? <AssistantComposer
+        researchSelected={!!selectedResearchSkill}
+        onSelectResearchSkill={skill => setSelectedResearchSkill({ skill, roles: {}, preset: { id: "default", parameters: {} }, destination: selectedResearchSkill?.destination })}
+        researchSelection={selectedResearchSkill ? <ResearchSkillSelectionView selection={selectedResearchSkill} destinations={researchSkills?.destinations ?? []} sources={composerContextTokens.map(token => ({ label: token.label, detail: token.detail, refs: token.contextRefs ?? [] }))} onChange={setSelectedResearchSkill} /> : undefined}
         contextUsage={contextUsage ?? (embeddedUsage?.sessionId === activeSessionId ? embeddedUsage.usage : undefined) ?? [...assistantState.messages].reverse()
           .find((message) => message.agentActivity?.contextUsage)?.agentActivity?.contextUsage ?? {
             usedTokens: 0,
@@ -2703,8 +2751,8 @@ export function AssistantSessionController({
         onRemoveContextToken={removeComposerContextToken}
         onSend={handleSend}
         onVoiceInput={showVoiceInputPlaceholder}
-        pending={assistantState.pending || !historyReady}
-        suggestions={composerSuggestions}
+        pending={assistantState.pending || !historyReady || researchStarting}
+        suggestions={researchSkills ? [...composerSuggestions, ...listResearchSkills().filter(skill => skill.ref || input.includes(skill.id)).map(skill => ({ id: skill.id, label: skill.title, detail: skill.description, category: skill.group, keywords: [skill.id, ...skill.aliases], trigger: "$" as const, researchSkill: skill.ref, unavailableReason: skill.unavailableReason }))] : composerSuggestions}
         voiceInputMessage={voiceInputMessage}
       /> : null}
     </AssistantPane>

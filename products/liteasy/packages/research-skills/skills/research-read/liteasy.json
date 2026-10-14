@@ -1,0 +1,67 @@
+{
+  "schema": "liteasy.skill-adapter/v1",
+  "id": "research-read",
+  "version": "0.1.0",
+  "availability": "adapter_required",
+  "display": {
+    "title": "论文研究卡",
+    "description": "把实际可读的论文材料整理为问题、方法、主张、证据与局限清晰分开的研究卡。",
+    "group": "读懂",
+    "aliases": [
+      "read",
+      "论文研究卡"
+    ]
+  },
+  "instructions": "SKILL.md",
+  "contract": "references/research-contract.md",
+  "template": "assets/output-template.md",
+  "workflow": "workflow.json",
+  "execution": {
+    "mode": "document",
+    "operatorId": "liteasy.research.generate-document",
+    "operatorVersion": "1.0.0",
+    "maxGenerations": 1,
+    "maxRepairAttempts": 1,
+    "tools": [],
+    "permissions": [
+      "model.invoke",
+      "context.read",
+      "artifact.write"
+    ]
+  },
+  "inputs": {
+    "roles": [
+      {
+        "id": "primary",
+        "label": "目标论文",
+        "minRefs": 1,
+        "maxRefs": 1
+      },
+      {
+        "id": "supporting",
+        "label": "补充资料",
+        "minRefs": 0,
+        "maxRefs": 12
+      }
+    ],
+    "minimumDistinctPrimaryObjects": 1,
+    "requireProblemInPromptOrContext": false
+  },
+  "output": {
+    "artifactType": "research_document",
+    "documentKind": "paper_brief",
+    "requiredSections": [
+      "scope",
+      "problem",
+      "method",
+      "claims_evidence",
+      "limitations",
+      "next_step"
+    ]
+  },
+  "defaults": {
+    "instruction": "基于所选论文内容生成一份研究卡；指出本次实际读取范围，不补造未读的实验细节。",
+    "language": "auto",
+    "presetId": "default"
+  }
+}

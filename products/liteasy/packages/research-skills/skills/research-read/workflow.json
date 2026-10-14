@@ -1,0 +1,63 @@
+{
+  "abiVersion": "liteasy.workflow-skill/v1",
+  "description": "把实际可读的论文材料整理为问题、方法、主张、证据与局限清晰分开的研究卡。",
+  "id": "research-read",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "requestId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "requestId"
+    ],
+    "type": "object"
+  },
+  "name": "论文研究卡",
+  "output": {
+    "source": "step",
+    "stepId": "generate"
+  },
+  "outputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "artifactId": {
+        "type": "string"
+      },
+      "resourceUri": {
+        "type": "string"
+      },
+      "message": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "artifactId",
+      "resourceUri",
+      "message"
+    ],
+    "type": "object"
+  },
+  "permissions": [
+    "model.invoke",
+    "context.read",
+    "artifact.write"
+  ],
+  "steps": [
+    {
+      "id": "generate",
+      "input": {
+        "requestId": {
+          "source": "input",
+          "path": "requestId"
+        }
+      },
+      "operator": {
+        "id": "liteasy.research.generate-document",
+        "version": "1.0.0"
+      }
+    }
+  ],
+  "version": "0.1.0"
+}

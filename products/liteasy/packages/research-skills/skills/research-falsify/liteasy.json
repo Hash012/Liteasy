@@ -1,0 +1,67 @@
+{
+  "schema": "liteasy.skill-adapter/v1",
+  "id": "research-falsify",
+  "version": "0.1.0",
+  "availability": "adapter_required",
+  "display": {
+    "title": "反证与失败边界",
+    "description": "对目标主张提出反例、替代解释和最小失败测试，同时区分推测与已观察证据。",
+    "group": "提出与验证",
+    "aliases": [
+      "falsify",
+      "反证与失败边界"
+    ]
+  },
+  "instructions": "SKILL.md",
+  "contract": "references/research-contract.md",
+  "template": "assets/output-template.md",
+  "workflow": "workflow.json",
+  "execution": {
+    "mode": "document",
+    "operatorId": "liteasy.research.generate-document",
+    "operatorVersion": "1.0.0",
+    "maxGenerations": 1,
+    "maxRepairAttempts": 1,
+    "tools": [],
+    "permissions": [
+      "model.invoke",
+      "context.read",
+      "artifact.write"
+    ]
+  },
+  "inputs": {
+    "roles": [
+      {
+        "id": "target",
+        "label": "待检验主张",
+        "minRefs": 1,
+        "maxRefs": 8
+      },
+      {
+        "id": "evidence",
+        "label": "已有支持和相反证据",
+        "minRefs": 0,
+        "maxRefs": 24
+      }
+    ],
+    "minimumDistinctPrimaryObjects": 1,
+    "requireProblemInPromptOrContext": false
+  },
+  "output": {
+    "artifactType": "research_document",
+    "documentKind": "falsification",
+    "requiredSections": [
+      "scope",
+      "alternatives",
+      "counterexamples",
+      "failure_cases",
+      "decision_rule",
+      "next_step"
+    ]
+  },
+  "defaults": {
+    "instruction": "严肃检验所选主张，寻找替代解释、反例与失败边界，并提出最小区分测试。",
+    "language": "auto",
+    "presetId": "default"
+  }
+}

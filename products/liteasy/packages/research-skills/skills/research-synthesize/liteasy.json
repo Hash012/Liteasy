@@ -1,0 +1,67 @@
+{
+  "schema": "liteasy.skill-adapter/v1",
+  "id": "research-synthesize",
+  "version": "0.1.0",
+  "availability": "adapter_required",
+  "display": {
+    "title": "文献综合包",
+    "description": "把一组已读材料汇总为有覆盖边界的共识、分歧、方法版图和研究缺口。",
+    "group": "对照",
+    "aliases": [
+      "synthesize",
+      "文献综合包"
+    ]
+  },
+  "instructions": "SKILL.md",
+  "contract": "references/research-contract.md",
+  "template": "assets/output-template.md",
+  "workflow": "workflow.json",
+  "execution": {
+    "mode": "document",
+    "operatorId": "liteasy.research.generate-document",
+    "operatorVersion": "1.0.0",
+    "maxGenerations": 1,
+    "maxRepairAttempts": 1,
+    "tools": [],
+    "permissions": [
+      "model.invoke",
+      "context.read",
+      "artifact.write"
+    ]
+  },
+  "inputs": {
+    "roles": [
+      {
+        "id": "sources",
+        "label": "文献来源",
+        "minRefs": 2,
+        "maxRefs": 24
+      },
+      {
+        "id": "question",
+        "label": "研究问题与约束",
+        "minRefs": 0,
+        "maxRefs": 8
+      }
+    ],
+    "minimumDistinctPrimaryObjects": 2,
+    "requireProblemInPromptOrContext": false
+  },
+  "output": {
+    "artifactType": "research_document",
+    "documentKind": "literature_packet",
+    "requiredSections": [
+      "scope",
+      "map",
+      "consensus",
+      "disagreements",
+      "gaps",
+      "next_step"
+    ]
+  },
+  "defaults": {
+    "instruction": "基于实际选中文献形成 literature packet，区分共识、分歧、候选缺口和下一行动。",
+    "language": "auto",
+    "presetId": "default"
+  }
+}

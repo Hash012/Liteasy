@@ -10,7 +10,7 @@ export type AssistantView =
 
 export function hasAssistantContent(session: AssistantSessionHistoryItem) {
   return session.kind === "artifact_generation" || !!session.messages.length || !!session.messageCount ||
-    !!session.draft?.input.trim() || !!session.draft?.tokens.length || !!session.draft?.readerContexts.length;
+    !!session.draft?.selectedResearchSkill || !!session.draft?.input.trim() || !!session.draft?.tokens.length || !!session.draft?.readerContexts.length;
 }
 
 /** Equality of the persisted semantic content; opaque revisions are never ordered. */

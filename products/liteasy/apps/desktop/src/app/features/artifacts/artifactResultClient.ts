@@ -1,3 +1,4 @@
+import { researchDocumentSchema, researchDocumentMarkdown } from "../research-skills/researchDocument";
 import { artifactMetadataIssueCount, isArtifactPaperRef, projectArtifactMetadata } from "./artifactMetadataProjection";
 import type { AgentArtifactResult } from "./artifact.types";
 import { IntuitionGraphDocumentSchema } from "../intuition-graph/intuitionGraph.schema";
@@ -30,6 +31,10 @@ export function isArtifactResult(value: unknown): value is AgentArtifactResult {
     return false;
   }
   const candidate = value as Partial<AgentArtifactResult>;
+  if (candidate.artifactType === "research_document") {
+    const parsed = researchDocumentSchema.safeParse(candidate.researchDocument);
+    if (!parsed.success || candidate.answer !== researchDocumentMarkdown(parsed.data) || candidate.title !== parsed.data.draft.title || candidate.agent?.runId !== parsed.data.invocation.requestId) return false;
+  } else if (candidate.researchDocument !== undefined) return false;
   if (candidate.paperAnchors !== undefined && (!Array.isArray(candidate.paperAnchors) ||
     candidate.paperAnchors.length > 512 || !candidate.paperAnchors.every((anchor) => paperAnchorEntitySchema.safeParse(anchor).success))) {
     return false;

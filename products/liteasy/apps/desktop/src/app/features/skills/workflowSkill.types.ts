@@ -72,6 +72,7 @@ export type WorkflowArtifactAnalysisInput = {
 };
 
 export type WorkflowOperatorRuntime = {
+  runResearchDocument?: (input: { requestId: string; skillId: string; skillVersion: string }) => Promise<Record<string, unknown>>;
   actionContext?: ActionContext;
   now?: () => Date;
   runArtifactAnalysis?: (

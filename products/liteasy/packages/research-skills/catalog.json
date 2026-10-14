@@ -1,0 +1,229 @@
+{
+  "schema": "liteasy.research-skill-catalog/v1",
+  "version": "0.1.0",
+  "historicalBasis": "先前对话交付记录；旧 ZIP 字节未取得，本包不声明逐字复原或历史测试复验。",
+  "entries": [
+    {
+      "id": "research-orchestrate",
+      "historicalIntroducedIn": "v0.1",
+      "title": "研究循环编排",
+      "stage": "later",
+      "availability": "capability_not_integrated",
+      "notes": "协调各阶段；需真实宿主状态和批准，不把一次输出当全循环。"
+    },
+    {
+      "id": "research-checkpoint",
+      "historicalIntroducedIn": "v0.1",
+      "title": "研究检查点",
+      "stage": "later",
+      "availability": "capability_not_integrated",
+      "notes": "保存研究状态、未解问题和恢复依据；不重放旧权限。"
+    },
+    {
+      "id": "research-ingest",
+      "historicalIntroducedIn": "v0.1",
+      "title": "研究材料接入",
+      "stage": "later",
+      "availability": "capability_not_integrated",
+      "notes": "解析并校验实际来源，身份和覆盖需真实记录。"
+    },
+    {
+      "id": "research-learn",
+      "historicalIntroducedIn": "v0.1",
+      "title": "概念与方法讲解",
+      "stage": "M1",
+      "availability": "adapter_required",
+      "notes": "新编写的方法包存在，但 Liteasy 宿主算子尚待实现。",
+      "packagePath": "skills/research-learn",
+      "version": "0.1.0",
+      "packageDigest": "43ada65b9fc31362ab905e1e3f9e8ceb511be004d2e4f415801a3cd05fad4942"
+    },
+    {
+      "id": "research-map",
+      "historicalIntroducedIn": "v0.1",
+      "title": "问题与证据版图",
+      "stage": "later",
+      "availability": "capability_not_integrated",
+      "notes": "组织研究问题、方法和证据关系；不可自由伪造系统来源边。"
+    },
+    {
+      "id": "research-hypothesize",
+      "historicalIntroducedIn": "v0.1",
+      "title": "可证伪假设",
+      "stage": "M1",
+      "availability": "adapter_required",
+      "notes": "新编写的方法包存在，但 Liteasy 宿主算子尚待实现。",
+      "packagePath": "skills/research-hypothesize",
+      "version": "0.1.0",
+      "packageDigest": "61d0a0c7406ffc5f0b065389cff84fd8958f370a8f2c6973ed0b2f1a494ba223"
+    },
+    {
+      "id": "research-vector",
+      "historicalIntroducedIn": "v0.1",
+      "title": "研究风险排序",
+      "stage": "M1",
+      "availability": "adapter_required",
+      "notes": "新编写的方法包存在，但 Liteasy 宿主算子尚待实现。",
+      "packagePath": "skills/research-vector",
+      "version": "0.1.0",
+      "packageDigest": "ee03aa432fbacbc04821857eff8ff309b237fc02bb68d1db0a9e1eba3bffe14c"
+    },
+    {
+      "id": "research-design",
+      "historicalIntroducedIn": "v0.1",
+      "title": "评估与实验设计",
+      "stage": "M1",
+      "availability": "adapter_required",
+      "notes": "新编写的方法包存在，但 Liteasy 宿主算子尚待实现。",
+      "packagePath": "skills/research-design",
+      "version": "0.1.0",
+      "packageDigest": "fb6d4791d438f7410a58bcd97e435454db1e29ee1e199c179aa98f4c21024079"
+    },
+    {
+      "id": "research-run",
+      "historicalIntroducedIn": "v0.1",
+      "title": "实验执行",
+      "stage": "later",
+      "availability": "capability_not_integrated",
+      "notes": "必须接通 runner 和环境隔离；没有真实运行就不能执行。"
+    },
+    {
+      "id": "research-analyze",
+      "historicalIntroducedIn": "v0.1",
+      "title": "结果分析",
+      "stage": "later",
+      "availability": "capability_not_integrated",
+      "notes": "须有原始结果；确定性计算需专门算子支持。"
+    },
+    {
+      "id": "research-falsify",
+      "historicalIntroducedIn": "v0.1",
+      "title": "反证与失败边界",
+      "stage": "M1",
+      "availability": "adapter_required",
+      "notes": "新编写的方法包存在，但 Liteasy 宿主算子尚待实现。",
+      "packagePath": "skills/research-falsify",
+      "version": "0.1.0",
+      "packageDigest": "ddadc0f89fc3f6dde7c528573be197b358b7b897b2c0364abe6319c45fae6d52"
+    },
+    {
+      "id": "research-claim-audit",
+      "historicalIntroducedIn": "v0.1",
+      "title": "主张与证据审计",
+      "stage": "M1",
+      "availability": "adapter_required",
+      "notes": "新编写的方法包存在，但 Liteasy 宿主算子尚待实现。",
+      "packagePath": "skills/research-claim-audit",
+      "version": "0.1.0",
+      "packageDigest": "3350eb54368a57ac525f30ab90da6180732cea980693e197ab16a44b51e42574"
+    },
+    {
+      "id": "research-write",
+      "historicalIntroducedIn": "v0.1",
+      "title": "研究写作",
+      "stage": "M1",
+      "availability": "adapter_required",
+      "notes": "新编写的方法包存在，但 Liteasy 宿主算子尚待实现。",
+      "packagePath": "skills/research-write",
+      "version": "0.1.0",
+      "packageDigest": "ed580ea025fb4ecd7f87deb896f3a5e9bc61d0e09c5d689520f53b2133560663"
+    },
+    {
+      "id": "research-review",
+      "historicalIntroducedIn": "v0.1",
+      "title": "研究评审",
+      "stage": "later",
+      "availability": "capability_not_integrated",
+      "notes": "生成评审与修订建议；不是独立科学验收回执。"
+    },
+    {
+      "id": "research-portfolio",
+      "historicalIntroducedIn": "v0.2",
+      "title": "研究方向组合",
+      "stage": "later",
+      "availability": "capability_not_integrated",
+      "notes": "比较问题价值、风险和资源，不伪造成功率。"
+    },
+    {
+      "id": "research-replicate",
+      "historicalIntroducedIn": "v0.2",
+      "title": "复现",
+      "stage": "later",
+      "availability": "capability_not_integrated",
+      "notes": "计划与实际运行分开；执行需要 runner。"
+    },
+    {
+      "id": "research-mentor",
+      "historicalIntroducedIn": "v0.2",
+      "title": "导师沟通准备",
+      "stage": "later",
+      "availability": "capability_not_integrated",
+      "notes": "会议准备和反馈整理，不冒充真实导师意见。"
+    },
+    {
+      "id": "research-communicate",
+      "historicalIntroducedIn": "v0.2",
+      "title": "研究表达",
+      "stage": "later",
+      "availability": "capability_not_integrated",
+      "notes": "汇报材料与沟通草稿，不自动向外发送。"
+    },
+    {
+      "id": "research-submit",
+      "historicalIntroducedIn": "v0.2",
+      "title": "投稿准备",
+      "stage": "later",
+      "availability": "capability_not_integrated",
+      "notes": "投稿材料与检查清单；真实外发需另外确认。"
+    },
+    {
+      "id": "research-discover",
+      "historicalIntroducedIn": "v0.3",
+      "title": "文献发现",
+      "stage": "later",
+      "availability": "capability_not_integrated",
+      "notes": "授权检索、去重和查询日志；需要真实检索能力。"
+    },
+    {
+      "id": "research-library",
+      "historicalIntroducedIn": "v0.3",
+      "title": "文献身份管理",
+      "stage": "later",
+      "availability": "capability_not_integrated",
+      "notes": "去重/组织/书目信息；写入权限与共享边界单独检查。"
+    },
+    {
+      "id": "research-read",
+      "historicalIntroducedIn": "v0.3",
+      "title": "论文研究卡",
+      "stage": "M1",
+      "availability": "adapter_required",
+      "notes": "新编写的方法包存在，但 Liteasy 宿主算子尚待实现。",
+      "packagePath": "skills/research-read",
+      "version": "0.1.0",
+      "packageDigest": "fa41ba7d8da6f3180a52ed7fdec7de66435d9141325be43972667b88fc28f65e"
+    },
+    {
+      "id": "research-compare",
+      "historicalIntroducedIn": "v0.3",
+      "title": "条件化比较",
+      "stage": "M1",
+      "availability": "adapter_required",
+      "notes": "新编写的方法包存在，但 Liteasy 宿主算子尚待实现。",
+      "packagePath": "skills/research-compare",
+      "version": "0.1.0",
+      "packageDigest": "b250d60f192509ec4d0900c0810e2254cef05fce897fbb9f4c619ba2444acb5f"
+    },
+    {
+      "id": "research-synthesize",
+      "historicalIntroducedIn": "v0.3",
+      "title": "文献综合包",
+      "stage": "M1",
+      "availability": "adapter_required",
+      "notes": "新编写的方法包存在，但 Liteasy 宿主算子尚待实现。",
+      "packagePath": "skills/research-synthesize",
+      "version": "0.1.0",
+      "packageDigest": "e51a07b92074cbf7727fc7e6a22bd8320a0681eb0427126abd615b9a60c38f0d"
+    }
+  ]
+}

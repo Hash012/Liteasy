@@ -1,3 +1,4 @@
+import { researchDraftSchema, researchDocumentSchema, researchSkillInvocationSchema } from "../src/app/features/research-skills/researchDocument";
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { z } from "zod";
@@ -13,6 +14,9 @@ import { contextRefSchema } from "../src/app/features/context/objectContext";
 import { assistantConversationSchema, assistantTaskBindingSchema, assistantOriginSchema, assistantTargetSchema } from "../src/app/features/assistant/assistantSessionContracts";
 const root = resolve(process.cwd(), "../../packages/shared");
 for (const [name, schema] of Object.entries({
+  researchDraft: researchDraftSchema,
+  researchDocument: researchDocumentSchema,
+  researchSkillInvocation: researchSkillInvocationSchema,
   assistantConversation: assistantConversationSchema,
   assistantTaskBinding: assistantTaskBindingSchema,
   assistantOrigin: assistantOriginSchema,

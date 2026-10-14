@@ -157,7 +157,7 @@ export function createArtifactResourceProvider(input: ArtifactProviderInput) {
     async saveArtifact(document: AgentArtifactResult, options: { signal?: AbortSignal } = {}) {
       check(options.signal);
       // Match the existing formal API's normalization, also for the local adapter.
-      const normalized = { ...document, title: document.title.normalize("NFKC").trim() };
+      const normalized = document.researchDocument ? document : { ...document, title: document.title.normalize("NFKC").trim() };
       const canonicalDocument = canonicalResourceJson(normalized);
       const snapshot: AgentArtifactResult = JSON.parse(canonicalDocument);
       const { resource } = await describe(snapshot, undefined, canonicalDocument);

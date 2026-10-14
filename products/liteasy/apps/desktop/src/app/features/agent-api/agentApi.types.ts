@@ -24,7 +24,7 @@ export type AgentManagerActivity = {
   status: "completed" | "failed" | "running";
 };
 
-export type AgentArtifactType = "comparison_table" | "layered_graph" | "mindmap" | "ppt" | "thin_reading" | "tree";
+export type AgentArtifactType = "research_document" | "comparison_table" | "layered_graph" | "mindmap" | "ppt" | "thin_reading" | "tree";
 
 export type AgentRunStatus =
   | "interrupted"

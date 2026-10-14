@@ -1,0 +1,72 @@
+{
+  "schema": "liteasy.skill-adapter/v1",
+  "id": "research-write",
+  "version": "0.1.0",
+  "availability": "adapter_required",
+  "display": {
+    "title": "研究写作",
+    "description": "从现有论点和依据生成六句提纲、引言或段落草稿，不以写作填补缺失实验。",
+    "group": "写作",
+    "aliases": [
+      "write",
+      "研究写作"
+    ]
+  },
+  "instructions": "SKILL.md",
+  "contract": "references/research-contract.md",
+  "template": "assets/output-template.md",
+  "workflow": "workflow.json",
+  "execution": {
+    "mode": "document",
+    "operatorId": "liteasy.research.generate-document",
+    "operatorVersion": "1.0.0",
+    "maxGenerations": 1,
+    "maxRepairAttempts": 1,
+    "tools": [],
+    "permissions": [
+      "model.invoke",
+      "context.read",
+      "artifact.write"
+    ]
+  },
+  "inputs": {
+    "roles": [
+      {
+        "id": "argument",
+        "label": "论点与草稿材料",
+        "minRefs": 1,
+        "maxRefs": 16
+      },
+      {
+        "id": "evidence",
+        "label": "证据与结果",
+        "minRefs": 0,
+        "maxRefs": 24
+      },
+      {
+        "id": "style",
+        "label": "写作要求",
+        "minRefs": 0,
+        "maxRefs": 4
+      }
+    ],
+    "minimumDistinctPrimaryObjects": 1,
+    "requireProblemInPromptOrContext": false
+  },
+  "output": {
+    "artifactType": "research_document",
+    "documentKind": "manuscript_draft",
+    "requiredSections": [
+      "scope",
+      "outline",
+      "draft",
+      "evidence_gaps",
+      "next_step"
+    ]
+  },
+  "defaults": {
+    "instruction": "先形成动机、既有假设、关键改变、实例化、评估、意义的六句提纲，再写一版紧凑引言草稿。",
+    "language": "auto",
+    "presetId": "default"
+  }
+}

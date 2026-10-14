@@ -8,7 +8,7 @@ import { projectArtifactTaskMessage } from "./assistantArtifactActivity";
 
 export type AssistantTaskStartResult = string | { message: string; taskIds: string[] };
 export type ArtifactSessionOpenRequest = { requestId: string; taskId: string };
-export type AssistantSessionDraft = { input: string; tokens: AssistantContextToken[]; readerContexts: ReaderConversationContext[]; selection?: { start: number; end: number }; thinkingDepth?: import("./thinkingDepth").ThinkingDepth };
+export type AssistantSessionDraft = { selectedResearchSkill?: import("../research-skills/researchDocument").ResearchSkillSelection; input: string; tokens: AssistantContextToken[]; readerContexts: ReaderConversationContext[]; selection?: { start: number; end: number }; thinkingDepth?: import("./thinkingDepth").ThinkingDepth };
 import type { AssistantOrigin, AssistantTaskBinding } from "./assistantSessionContracts";
 import type { ObjectRef } from "../objects/object.types";
 
@@ -96,6 +96,7 @@ function createSessionId(now: () => number, randomId: () => string) {
 }
 
 const artifactTypeLabels: Record<ArtifactType, string> = {
+  research_document: "科研文档",
   comparison_table: "论文对比表",
   layered_graph: "分层关系图",
   mindmap: "思维导图",
@@ -327,7 +328,7 @@ export function createArtifactTaskSession(
     origin: task.origin ?? previous?.origin ?? { kind: "legacy_unknown", entryPoint: "legacy", initiatedBy: { type: "import", id: "local" } },
     taskInput: previous?.taskInput ?? {
       taskId: task.id, workflowId: task.type, sourcePaperIds: task.sourcePaperIds ?? task.recovery?.papers.map((paper) => paper.id) ?? [],
-      contextRefs: structuredClone(task.recovery?.options?.contextRefs ?? []),
+      contextRefs: structuredClone(task.researchInvocation?.inputs.flatMap(input => input.refs) ?? task.recovery?.options?.contextRefs ?? []),
       supplementalContext: task.recovery?.options?.supplementalContext,
       systemPrompt: task.recovery?.options?.systemPrompt,
       available: !!task.recovery
@@ -335,9 +336,9 @@ export function createArtifactTaskSession(
     taskBinding: {
       schemaVersion: "liteasy.workflow-task/v2", taskId: sessionId,
       origin: task.origin ?? previous?.origin ?? { kind: "legacy_unknown", entryPoint: "legacy", initiatedBy: { type: "import", id: "local" } },
-      workflowId: task.type, workflowVersion: "1", inputSnapshotId: previous?.taskBinding?.inputSnapshotId ?? `assistant/v2/task-input/${encodeURIComponent(task.id)}`,
+      workflowId: task.researchInvocation?.skill.id ?? task.type, workflowVersion: task.researchInvocation?.skill.version ?? "1", inputSnapshotId: task.researchInvocation?.contextSnapshotId ?? previous?.taskBinding?.inputSnapshotId ?? `assistant/v2/task-input/${encodeURIComponent(task.id)}`,
       runIds: [...new Set([...(previous?.taskBinding?.runIds ?? []), ...(task.agentRunId ? [task.agentRunId] : [])])],
-      resultRefs: previous?.taskBinding?.resultRefs ?? [], relatedConversationId: previous?.taskBinding?.relatedConversationId
+      resultRefs: previous?.taskBinding?.resultRefs ?? [], relatedConversationId: task.origin?.parentConversationId ?? previous?.taskBinding?.relatedConversationId
     },
     artifactId: task.artifactId ?? previous?.artifactId,
     artifactTaskId: task.id,

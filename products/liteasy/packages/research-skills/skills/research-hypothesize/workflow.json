@@ -1,0 +1,63 @@
+{
+  "abiVersion": "liteasy.workflow-skill/v1",
+  "description": "从问题、文献与真实约束形成少量带机制解释、可区分预测和失败条件的假设卡。",
+  "id": "research-hypothesize",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "requestId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "requestId"
+    ],
+    "type": "object"
+  },
+  "name": "可证伪假设",
+  "output": {
+    "source": "step",
+    "stepId": "generate"
+  },
+  "outputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "artifactId": {
+        "type": "string"
+      },
+      "resourceUri": {
+        "type": "string"
+      },
+      "message": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "artifactId",
+      "resourceUri",
+      "message"
+    ],
+    "type": "object"
+  },
+  "permissions": [
+    "model.invoke",
+    "context.read",
+    "artifact.write"
+  ],
+  "steps": [
+    {
+      "id": "generate",
+      "input": {
+        "requestId": {
+          "source": "input",
+          "path": "requestId"
+        }
+      },
+      "operator": {
+        "id": "liteasy.research.generate-document",
+        "version": "1.0.0"
+      }
+    }
+  ],
+  "version": "0.1.0"
+}

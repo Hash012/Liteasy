@@ -1,0 +1,346 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "liteasy.skill-invocation/v1"
+    },
+    "requestId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "scopeId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "sessionGeneration": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "skill": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "packageDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "packageDigest"
+      ],
+      "additionalProperties": false
+    },
+    "prompt": {
+      "type": "string",
+      "maxLength": 12000
+    },
+    "preset": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "parameters": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "parameters"
+      ],
+      "additionalProperties": false
+    },
+    "inputs": {
+      "maxItems": 16,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "refs": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "objectId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    },
+                    "revision": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    },
+                    "selectorId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    }
+                  },
+                  "required": [
+                    "objectId",
+                    "revision"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "setting"
+                        },
+                        "key": {
+                          "type": "string",
+                          "maxLength": 200
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "key"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "diagnostic"
+                        },
+                        "code": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "stage": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "message": {
+                          "type": "string",
+                          "maxLength": 4000
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "code",
+                        "stage",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "role",
+          "refs"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "destination": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "entry-child"
+        },
+        "canonicalEntryId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "paperId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "scopeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "expectedOwnerRevision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "canonicalEntryId",
+        "paperId",
+        "scopeId",
+        "title"
+      ],
+      "additionalProperties": false
+    },
+    "origin": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "direct_chat",
+            "conversation_action",
+            "workflow_entry",
+            "automation",
+            "legacy_unknown"
+          ]
+        },
+        "entryPoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "initiatedBy": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "user",
+                "automation",
+                "import"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "parentConversationId": {
+          "type": "string"
+        },
+        "triggerMessageId": {
+          "type": "string"
+        },
+        "parentTaskId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "entryPoint",
+        "initiatedBy"
+      ],
+      "additionalProperties": false
+    },
+    "modelBindingId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "contextSnapshotId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "budget": {
+      "type": "object",
+      "properties": {
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200000
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32000
+        },
+        "repairAttempts": {
+          "anyOf": [
+            {
+              "type": "number",
+              "const": 0
+            },
+            {
+              "type": "number",
+              "const": 1
+            }
+          ]
+        }
+      },
+      "required": [
+        "inputTokens",
+        "outputTokens",
+        "repairAttempts"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema",
+    "requestId",
+    "scopeId",
+    "sessionGeneration",
+    "skill",
+    "prompt",
+    "preset",
+    "inputs",
+    "destination",
+    "origin",
+    "modelBindingId",
+    "contextSnapshotId",
+    "budget"
+  ],
+  "additionalProperties": false,
+  "$id": "https://schemas.liteasy.app/researchSkillInvocation.v1.schema.json"
+}

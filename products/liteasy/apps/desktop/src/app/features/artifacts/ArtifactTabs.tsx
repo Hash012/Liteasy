@@ -1,3 +1,4 @@
+import { ResearchDocumentDetails } from "../research-skills/ResearchDocumentDetails";
 import { DisclosureSection } from "../../shared/ui/productPrimitives";
 import { GenerationPromptEditor } from "../ai-prompts/GenerationPromptEditor";
 import { artifactPromptTask } from "../ai-prompts/generationPrompts";
@@ -550,7 +551,7 @@ export function ArtifactTabs({
                   {graphMode ? "查看原产物" : "星图阅读"}
                 </button>
               ) : null}
-              {onRegenerateArtifact && activeTab.papers && activeTab.papers.length > 0 ? (
+              {onRegenerateArtifact && activeTab.type !== "research_document" && activeTab.papers && activeTab.papers.length > 0 ? (
                 <button
                   className="artifact-regenerate-button"
                   onClick={() => { setSystemPrompt(undefined); setRegenerationOpen(true); }}
@@ -572,9 +573,10 @@ export function ArtifactTabs({
               ) : null}
             </div>
           </div>
+          {activeTab.researchDocument ? <ResearchDocumentDetails document={activeTab.researchDocument} /> : null}
           {activeTab.resultPath ? (
             <div className="artifact-result-meta">
-              已由 Agent 生成并保存到当前账号
+              {activeTab.researchDocument ? "科研文档已保存到本机 · 固定版本 · 结论待核对" : "已由 Agent 生成并保存到当前账号"}
             </div>
           ) : null}
           {activeTab.regeneratedFromArtifactId ? (

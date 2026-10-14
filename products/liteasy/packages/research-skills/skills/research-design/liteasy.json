@@ -1,0 +1,74 @@
+{
+  "schema": "liteasy.skill-adapter/v1",
+  "id": "research-design",
+  "version": "0.1.0",
+  "availability": "adapter_required",
+  "display": {
+    "title": "评估与实验设计",
+    "description": "从一个明确主张推导对照、指标、工作负载、资源约束、负例和停止条件。",
+    "group": "提出与验证",
+    "aliases": [
+      "design",
+      "评估与实验设计"
+    ]
+  },
+  "instructions": "SKILL.md",
+  "contract": "references/research-contract.md",
+  "template": "assets/output-template.md",
+  "workflow": "workflow.json",
+  "execution": {
+    "mode": "document",
+    "operatorId": "liteasy.research.generate-document",
+    "operatorVersion": "1.0.0",
+    "maxGenerations": 1,
+    "maxRepairAttempts": 1,
+    "tools": [],
+    "permissions": [
+      "model.invoke",
+      "context.read",
+      "artifact.write"
+    ]
+  },
+  "inputs": {
+    "roles": [
+      {
+        "id": "hypothesis",
+        "label": "目标主张或假设",
+        "minRefs": 1,
+        "maxRefs": 8
+      },
+      {
+        "id": "constraints",
+        "label": "可用数据与资源约束",
+        "minRefs": 0,
+        "maxRefs": 12
+      },
+      {
+        "id": "baselines",
+        "label": "对照方案",
+        "minRefs": 0,
+        "maxRefs": 12
+      }
+    ],
+    "minimumDistinctPrimaryObjects": 1,
+    "requireProblemInPromptOrContext": false
+  },
+  "output": {
+    "artifactType": "research_document",
+    "documentKind": "evaluation_plan",
+    "requiredSections": [
+      "scope",
+      "variables",
+      "baselines",
+      "protocol",
+      "analysis",
+      "stopping",
+      "next_step"
+    ]
+  },
+  "defaults": {
+    "instruction": "为目标主张设计可区分机制和替代解释的评估计划，不执行实验，不补造结果。",
+    "language": "auto",
+    "presetId": "default"
+  }
+}

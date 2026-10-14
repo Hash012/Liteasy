@@ -101,6 +101,7 @@ export type AgentActivityToolResult =
     };
 
 const artifactTypeLabels: Record<ArtifactType, string> = {
+  research_document: "科研文档",
   comparison_table: "对比表",
   layered_graph: "分层图",
   mindmap: "思维导图",
