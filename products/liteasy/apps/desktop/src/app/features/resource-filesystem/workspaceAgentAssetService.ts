@@ -41,7 +41,7 @@ export type WorkspaceAgentAssetInput = {
   getArtifacts?(): Promise<AgentArtifactResult[]>;
   getArtifactTitles?(): Array<{ artifactId: string; title: string }>;
   /** Called only by an explicit asset read, never during discovery. */
-  readPaper?(paper: Paper, options: AgentAssetReadOptions): Promise<string>;
+  readPaper?(paper: Paper, options: AgentAssetReadOptions): Promise<string | ReturnType<typeof import("../resource-links/paperReferenceSource").paperReferenceText>>;
   resolveContext?(path: string): Promise<ResourceContextAttachment[]>;
 };
 
@@ -213,6 +213,7 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
         if (!bodyCapability.available) throw new AgentAssetError("unavailable", bodyCapability.reason);
       }
       let text = objectText(object);
+      let source: import("../resource-links/paperReferenceSource").PaperReferenceSource | undefined;
       const parsed = target(path);
       if (parsed.kind === "object" && parsed.ref.selectorId) {
         const selector = parsed.ref.selectorId;
@@ -243,7 +244,9 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
         const body = await input.readPaper(paper, options);
         const after = input.getPapers?.().find((item) => item.id === paper.id);
         if (!after || hash && hash !== after.contentHash) throw new AgentAssetError("revision_conflict", "读取期间论文文件版本已变化，请重新添加论文。");
-        text = `${hash ? "题录已固定；以下正文来自同一文件版本的已解析内容。" : "题录已固定；正文版本未固定，以下是读取时可用的内容。"}\n\n${body}`;
+        const notice = `${hash ? "题录已固定；以下正文来自同一文件版本的已解析内容。" : "题录已固定；正文版本未固定，以下是读取时可用的内容。"}\n\n`;
+        text = notice + (typeof body === "string" ? body : body.text);
+        if (typeof body !== "string") source = { ...body.source, pages: body.source.pages.map((page) => ({ ...page, start: page.start + notice.length, end: page.end + notice.length })) };
       }
       if (object.kind === "workspace.board" && !(parsed.kind === "object" && parsed.ref.selectorId)) {
         text = await readAgentBoard(input.repository, object);
@@ -252,12 +255,12 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
       const bodyCapability = object.kind === "source.document" ? sourceDocumentBodyCapability(object) : undefined;
       const selectedSource = parsed.kind === "object" && Boolean(parsed.ref.selectorId) && object.kind === "source.document";
       const paperBody = object.kind === "source.document" && isPaperMetadataReference(object) && Boolean(input.readPaper);
-      return readAgentAssetText(await objectStat(object, path), text, options, {
+      return { ...readAgentAssetText(await objectStat(object, path), text, options, {
         kind: object.kind === "source.document" ? bodyCapability?.available || selectedSource || paperBody ? "source" : "metadata"
           : object.kind === "content.note" && object.content.payload.origin !== "derived" ? "user" : "derived",
         coverage: selectedSource || paperBody ? "partial" : "unknown",
         ...(bodyCapability && !bodyCapability.available && !selectedSource && !paperBody ? { reason: bodyCapability.reason } : {})
-      });
+      }), ...(source ? { source } : {}) };
     },
     resolveRelativeImages: relativeImages,
     resolveImages: resolveObjectImages,
@@ -400,10 +403,10 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
       async read(path, options) {
         const paper = findPaper(path);
         const revision = paper.contentHash;
-        const text = input.readPaper ? await input.readPaper(paper, options) : `# ${paperStat(paper).title}\n\n${paperStat(paper).summary}\n\n当前仅有题录；请先在阅读器中解析论文正文。`;
+        const body = input.readPaper ? await input.readPaper(paper, options) : `# ${paperStat(paper).title}\n\n${paperStat(paper).summary}\n\n当前仅有题录；请先在阅读器中解析论文正文。`;
         if (findPaper(path).contentHash !== revision) throw new AgentAssetError("revision_conflict", "读取期间论文文件版本已变化，请重新选择来源。");
-        return readAgentAssetText(paperStat(paper), text, options, { kind: input.readPaper ? "source" : "metadata", coverage: "partial",
-          ...(!input.readPaper ? { reason: "当前仅有题录，正文尚未读取。" } : {}) });
+        return { ...readAgentAssetText(paperStat(paper), typeof body === "string" ? body : body.text, options, { kind: input.readPaper ? "source" : "metadata", coverage: "partial",
+          ...(!input.readPaper ? { reason: "当前仅有题录，正文尚未读取。" } : {}) }), ...(typeof body !== "string" ? { source: body.source } : {}) };
       },
     });
   }

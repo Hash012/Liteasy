@@ -68,7 +68,7 @@ async function dropNote(container: HTMLElement) {
   } as unknown as DataTransfer;
   writeObjectTransfer(transfer, makeObjectTransfer([noteRef]));
   fireEvent.drop(container.querySelector(".assistant-pane")!, { dataTransfer: transfer });
-  expect(await screen.findByRole("button", { name: "移除上下文：方法笔记" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "预览上下文：方法笔记" })).toBeInTheDocument();
 }
 
 test("a normal conversation request to generate PPT enters the artifact workflow with the locked papers", async () => {
@@ -138,7 +138,7 @@ test("a pasted Liteasy Path becomes fixed object context in the public Agent req
   const { user, submit } = await renderRouting({ port });
   const composer = screen.getByPlaceholderText("输入你的问题或命令");
   fireEvent.paste(composer, { clipboardData: { getData: () => "liteasy://objects/note-methods?scope=device&revision=note-revision-3" } });
-  expect(await screen.findByRole("button", { name: "移除上下文：路径笔记" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "预览上下文：路径笔记" })).toBeInTheDocument();
   expect(composer).toHaveValue("路径笔记 ");
   await user.type(composer, "分析这份笔记");
   await user.click(screen.getByRole("button", { name: "发送" }));
@@ -160,7 +160,7 @@ test("paper paths prepare full text before capture and keep send disabled while 
   expect(port.resolveLiteasyPath).not.toHaveBeenCalled();
   expect(screen.getByRole("button", { name: "发送" })).toBeDisabled();
   await act(async () => { finish(); });
-  expect(await screen.findByRole("button", { name: "移除上下文：论文全文" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "预览上下文：论文全文" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "发送" })).toBeEnabled();
 });
 
@@ -175,7 +175,7 @@ test("cross-account and missing resource paths produce no context chip", async (
   expect(port.resolveLiteasyPath).not.toHaveBeenCalled();
   fireEvent.paste(input, { clipboardData: { getData: () => "liteasy://objects/note-methods?scope=device&revision=r" } });
   expect(await screen.findByText("原文件已删除")).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: /^移除上下文/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /^预览上下文/ })).not.toBeInTheDocument();
 });
 
 

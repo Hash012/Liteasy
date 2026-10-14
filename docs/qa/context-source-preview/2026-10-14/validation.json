@@ -1,0 +1,173 @@
+{
+  "date": "2026-10-14",
+  "environment": {
+    "os": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "cpu": "AMD Ryzen 9 7940HX, 32 logical CPUs",
+    "node": "22.23.2",
+    "browser": "Chromium 151.0.7922.34",
+    "nativeWindowsVerified": false
+  },
+  "runs": [
+    {
+      "id": "full-unit-initial",
+      "command": "npm test",
+      "status": "failed-before-fixes",
+      "note": "13 files / 31 tests failed during implementation; all failed files rerun after corrections below. 573 files / 4083 tests passed, 4 files / 8 tests skipped by existing suite. This is not a final full-suite pass.",
+      "localLog": "/tmp/liteasy-context-full-tests.log",
+      "logSha256": "b20ba196a826204baa921825a531f5c3a3b8ea3b2b9757a55f2d45113e600c0b"
+    },
+    {
+      "id": "content",
+      "command": "npm run ci:content",
+      "status": "passed",
+      "note": "25 Vitest cases plus existing boundary/negative tests.",
+      "localLog": "/tmp/liteasy-context-content-gate.log",
+      "logSha256": "fd7e396a40e87b530504ee4f04feb767165f7627235a7fc29b6d98ee11609a44"
+    },
+    {
+      "id": "ui",
+      "command": "npm run ci:ui",
+      "status": "superseded-in-part",
+      "note": "Existing 24 UI files / 150 tests passed; the appended context stage caught two newly-added offscreen tests before their implementation. Final context run below passed.",
+      "localLog": "/tmp/liteasy-context-ui-final.log",
+      "logSha256": "40ecb3aff5ec996d0f44e470637b695708519c5f38ee6db1688c5d13c5cb3259"
+    },
+    {
+      "id": "context-final",
+      "command": "npm run ci:context",
+      "status": "passed",
+      "note": "16 files / 148 tests; includes final lifecycle, selection, catalog, Notes, mentions and titles.",
+      "localLog": "/tmp/liteasy-context-merged.log",
+      "logSha256": "ca65db90974fbee741e13772bce5ddcac413332b42cc2503a78c52275370666a"
+    },
+    {
+      "id": "failed-files-final",
+      "command": "npx vitest run src/tests/AssistantLearningMaterials.test.tsx src/tests/AssistantMessageList.test.tsx src/tests/AssistantPane.test.tsx src/tests/assistantArtifactRouting.test.tsx src/tests/assistantHistoryPersistence.test.tsx src/tests/assistantResourceContext.test.tsx src/tests/paperProjects.test.ts src/tests/thinReadingTab.test.tsx",
+      "status": "passed",
+      "note": "8 files / 138 tests; remaining initially failed files also covered by context-final.",
+      "localLog": "/tmp/liteasy-context-full-regressions.log",
+      "logSha256": "3e5aee4467cba8ffd2a832bce279c421b322e8632c750ba9fecdb64c1e848b70"
+    },
+    {
+      "id": "catalog-final",
+      "command": "npx vitest run <11 affected catalog/search/integration files>",
+      "status": "passed",
+      "note": "11 files / 92 tests; exact command scope maintained by ci:context and affected source tests.",
+      "localLog": "/tmp/catalog-all-final.log",
+      "logSha256": "cd544d39c8f84a012368133cceba131662267a41f77722c75c99880354487d47"
+    },
+    {
+      "id": "smoke",
+      "command": "npm run ci:smoke",
+      "status": "passed",
+      "note": "9 module/resource tests plus i18n check.",
+      "localLog": "/tmp/liteasy-context-smoke-final.log",
+      "logSha256": "98e4759281ecae291d3cb1bbfa242b2ed168d9ad89dd3279053e3d60c231e8ab"
+    },
+    {
+      "id": "i18n",
+      "command": "node scripts/check-i18n.mjs --write-types",
+      "status": "passed",
+      "note": "Final catalog includes 361 keys with both bundled locales; updated checker run recorded before commit.",
+      "localLog": "/tmp/liteasy-context-i18n-final.log",
+      "logSha256": "538d02ec69998f90e8379fd5f0fd32ca22f1a13eabb3f0e16525cb31eb01f1b8"
+    },
+    {
+      "id": "ui-boundaries",
+      "command": "node scripts/check-ui-boundaries.mjs",
+      "status": "passed",
+      "note": "No new violations. 704 exact legacy declarations remain tracked; no blanket exception added.",
+      "localLog": "/tmp/liteasy-context-boundaries-final.log",
+      "logSha256": "0dd9b715d4c5b05871c77494344c399b4a7e8d944338a8a392e674cf3d1e5671"
+    },
+    {
+      "id": "workflow-lint-tests",
+      "command": "bash .github/scripts/lint-workflows.sh && node --test .github/scripts/*.test.mjs",
+      "status": "passed",
+      "note": "93 script tests passed.",
+      "localLog": "/tmp/liteasy-context-ci-scripts.log",
+      "logSha256": "703e7b5a97d47741c9f90935463bb1c041cecff92d4f8bbf535108754f5ecbb6"
+    },
+    {
+      "id": "browser-initial",
+      "command": "PLAYWRIGHT_BASE_URL=http://127.0.0.1:1425 npm run ci:ui-browser",
+      "status": "failed-before-rechecks",
+      "note": "67 passed / 4 failed. uiScale saw an intermediate missing export during editing; artifact initial fixture load and selection word positioning failed once. Subsequent isolated rechecks passed; the latter two transient causes were not established.",
+      "localLog": "/tmp/liteasy-context-browser-gate.log",
+      "logSha256": "b6e16fe451a641e68fe648365e4b1d30e2e477284fe9f51782eef8d6ea61780c"
+    },
+    {
+      "id": "browser-rechecks",
+      "command": "PLAYWRIGHT_BASE_URL=http://127.0.0.1:1425 npx playwright test src/tests/browser/artifactLibrary.browser.spec.ts src/tests/browser/uiScale.browser.spec.ts src/tests/browser/composerContext.browser.spec.ts --workers=1",
+      "status": "passed",
+      "note": "5/5, includes real artifact library desktop/narrow, both appearance samples and composer geometry/preview.",
+      "localLog": "/tmp/liteasy-context-browser-recheck.log",
+      "logSha256": "5cb581693114871263a9571fd7825c5f2688fe86435ab8173cd2eb9b5eea4b09"
+    },
+    {
+      "id": "browser-selection-recheck",
+      "command": "npx playwright test src/tests/browser/selectionLookup.browser.spec.ts -g \"automatically queries\"",
+      "status": "passed",
+      "note": "1/1 without changing the test or lookup implementation.",
+      "localLog": "/tmp/liteasy-selection-lookup-review.log",
+      "logSha256": "7fc4dba625fb895eeb2c2925e81545d6a06b45accbfb4fa9963091746abfbbf9"
+    },
+    {
+      "id": "browser-catalog-final",
+      "command": "npx playwright test src/tests/browser/contextCatalog.browser.spec.ts --workers=1",
+      "status": "passed",
+      "note": "5/5; S2-S4 screenshots refreshed after translations, detail checkbox and facet changes. 10k sample separately refreshed with 10000 items actually mounted.",
+      "localLog": "/tmp/catalog-final-browser.log",
+      "logSha256": "5127318d046cf96142860b5baf2ebcb0985b56f0c3e109e0ee64cdb8109022d2"
+    },
+    {
+      "id": "browser-images-final",
+      "command": "npx playwright test src/tests/browser/contextPreview.browser.spec.ts --workers=1",
+      "status": "passed",
+      "note": "5/5 real PNG/JPEG/SVG decode and canvas checks, including corrupt bytes.",
+      "localLog": "/tmp/liteasy-thumbnail-offscreen-browser.log",
+      "logSha256": "773fb2991a95ff787e3025c9d982e123b7022b19b8eecba74aaba40bc279b3a4"
+    },
+    {
+      "id": "home-final",
+      "command": "npx vitest run src/tests/assistantViewTruth.test.tsx src/tests/assistantHistoryPersistence.test.tsx",
+      "status": "passed",
+      "note": "2 files / 14 tests passed after compact recent-conversation list and translated empty status.",
+      "localLog": "/tmp/liteasy-context-home-final.log",
+      "logSha256": "5c1b6360b45ea2241ad970a001d1dcd0a742e7e045c1975b17d10ff894ce5a4b"
+    },
+    {
+      "id": "home-browser",
+      "command": "npx playwright test src/tests/browser/applicationAppearance.browser.spec.ts --workers=1",
+      "status": "passed",
+      "note": "1/1 after updating a stale test from native select to existing Fluent OptionPicker and current Fluent dark surface colors; appearance selection and persistence assertions remain. Added to ci:ui-browser.",
+      "localLog": "/tmp/liteasy-context-home-browser.log",
+      "logSha256": "81f7beadfd8f96e49882cb77ed701ad16926dfbece4be02d9abc501a2f443ba7"
+    },
+    {
+      "id": "build",
+      "command": "npm run build",
+      "status": "passed",
+      "note": "Includes schema generation, TypeScript, Vite and production asset verification. Existing large-chunk warnings may remain.",
+      "localLog": "/tmp/liteasy-context-build-final.log",
+      "logSha256": "0e039bb4c9b28fa734f0f60548d4104d5cf6b46eb30f365bb6db8ea10fc54516"
+    },
+    {
+      "id": "contracts",
+      "command": "npm run ci:contracts",
+      "status": "passed",
+      "note": "Passed in a clean detached worktree at 0eda14ac; generated files and lockfiles unchanged. Subsequent amendment changes this validation record only.",
+      "localLog": "/tmp/liteasy-context-contracts.log",
+      "logSha256": "bf4e346f8ed3516b1e038c6266e7e3285b77eb6847c3404d215341a90c448f08",
+      "productTree": "df31e20a12a94755050510c9590648c30e1bfc92"
+    }
+  ],
+  "knownLimitations": [
+    "Windows old running 0.1.50 was read only; current code 0.1.51 not installed or tested in WebView2.",
+    "No full Installer CI requested or reported as passed.",
+    "Initial full-suite failures were closed through targeted final reruns, not described as a second full-suite pass.",
+    "Existing React act/inert and occasional Tabster teardown warnings were observed; no tests were removed or skipped to silence them.",
+    "The appearance browser test initially failed on old native-select and old palette assumptions; only its interaction/assertions were updated to the existing Fluent baseline."
+  ],
+  "reproduce": "Run commands in products/liteasy/apps/desktop except workflow script checks. Browser runs used an independently started Vite on port 1425 because unused-local-port probing stalls in this environment."
+}

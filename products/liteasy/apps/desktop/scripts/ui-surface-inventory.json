@@ -58,6 +58,11 @@
         "connectPublicAgentSession",
         "reconcileSavedSend",
         "captureContextInsertion",
+        "composerHistory",
+        "applyComposerDraft",
+        "resetComposerDraft",
+        "changeComposerInput",
+        "moveComposerHistory",
         "addComposerContextTokens",
         "addComposerContextToken",
         "resolveComposerContextToken",
@@ -568,6 +573,9 @@
       "symbols": [
         "getActiveTrigger",
         "AssistantComposer",
+        "tokenLocator",
+        "removeToken",
+        "tokenPreview",
         "openAssetBrowser",
         "selectMenuItem",
         "advanceBrowserInsertion",
@@ -789,6 +797,7 @@
       "batch": "M3",
       "owner": "M3 surface owner / shared UI review",
       "symbols": [
+        "prepareMentions",
         "remarkAssistantContext",
         "AssistantUserMarkdown"
       ],
@@ -820,7 +829,8 @@
         "addResolved",
         "addPreview",
         "addSelection",
-        "createAsset"
+        "createAsset",
+        "selectMany"
       ],
       "interactions": [
         "Dialog",
@@ -834,13 +844,13 @@
       "styles": [
         "./contextAssetBrowser.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
         "semanticSection": false,
         "infoPopover": false,
         "filterPopover": false,
-        "optionPicker": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -855,15 +865,14 @@
       "batch": "M3",
       "owner": "M3 surface owner / shared UI review",
       "symbols": [
-        "bounded",
-        "resize",
+        "resizeContextThumbnail",
         "ContextAssetThumbnail"
       ],
       "interactions": [],
       "styles": [
         "./contextAssetThumbnail.css"
       ],
-      "migration": "inherited-semantic-surface",
+      "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
         "semanticSection": false,
@@ -2424,6 +2433,31 @@
       "interactions": [],
       "styles": [],
       "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
+      "path": "src/app/features/markdown/ContentExcerpt.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "symbols": [
+        "ContentExcerpt"
+      ],
+      "interactions": [],
+      "styles": [],
+      "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
         "semanticSection": false,
@@ -4839,16 +4873,17 @@
         "choose"
       ],
       "interactions": [
+        "InfoPopover",
         "button"
       ],
       "styles": [
         "./resourceReferences.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
         "semanticSection": false,
-        "infoPopover": false,
+        "infoPopover": true,
         "filterPopover": false,
         "optionPicker": false,
         "commandMenu": false,
@@ -4866,6 +4901,7 @@
       "owner": "M4 surface owner / shared UI review",
       "symbols": [
         "ResourceReferenceView",
+        "sourceLocator",
         "ResourceLink",
         "ResourceEmbed"
       ],
@@ -7065,6 +7101,9 @@
         "ContextSummary",
         "DisclosureSection",
         "SourceDisclosure",
+        "useLocalPopover",
+        "escape",
+        "changeOpen",
         "InfoPopover",
         "FilterPopover",
         "OptionPicker",

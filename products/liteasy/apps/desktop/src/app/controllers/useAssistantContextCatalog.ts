@@ -1,3 +1,5 @@
+import { contextKind } from "../features/assistant/contextCatalogQuery";
+import { formatFromName, type SearchMetadata } from "../features/search/searchQuery";
 import { catalogSearchMetadata, noteSearchMetadata } from "../features/search/searchMetadata";
 import type { ReadingCatalogEntry } from "../features/library/readingCatalog.types";
 import { parseLiteasyPath } from "../features/resource-filesystem/liteasyPath";
@@ -8,7 +10,7 @@ import { createNoteFileService, subscribeNoteFiles } from "../features/note-file
 import { ARTIFACT_CONTEXT_MIME } from "../features/object-transfer/contextTransfer";
 import { makeObjectTransfer, OBJECT_TRANSFER_MIME } from "../features/object-transfer/objectTransfer";
 import { refOf, type ObjectEnvelope, type ObjectRef } from "../features/objects/object.types";
-import type { ObjectRepository } from "../features/objects/objectRepository";
+import type { ObjectCatalogEntry, ObjectRepository } from "../features/objects/objectRepository";
 import type { ObjectWorkbenchPort } from "../features/objects/objectWorkbenchPort";
 
 import { createNoteFileCatalogIndex, type CatalogFile } from "../features/note-files/noteFileCatalogIndex";
@@ -58,7 +60,7 @@ export function useAssistantContextCatalog(input: {
   const papers = useStableCatalogItems(input.papers ?? []);
   const files = useMemo(() => createNoteFileService(scopeId, () => latest.current.repository.scopeId), [scopeId]);
   const [fileState, setFileState] = useState({ scopeId, items: [] as CatalogFile[] });
-  const [titleState, setTitleState] = useState({ scopeId, items: [] as Array<{ objectId: string; title: string; kind?: ObjectEnvelope["kind"] }> });
+  const [titleState, setTitleState] = useState({ scopeId, items: [] as ObjectCatalogEntry[] });
   const [helpArticles, setHelpArticles] = useState<HelpArticleEntry[]>([]);
   const [annotationState, setAnnotationState] = useState({ scopeId, items: [] as NotesItem[] });
   const catalog = fileState.scopeId === scopeId ? fileState.items : [];
@@ -88,8 +90,8 @@ export function useAssistantContextCatalog(input: {
     const refresh = async () => {
       const version = ++readVersion;
       const [index, readingFiles] = await Promise.all([input.repository.searchTitles("", Number.MAX_SAFE_INTEGER), reading.list()]);
-      const readingIds = new Set(readingFiles.map((file) => file.ref.objectId));
-      const next = index.map((item) => readingIds.has(item.objectId) ? { ...item, kind: "source.document" as const } : item);
+      const readingById = new Map(readingFiles.map((file) => [file.ref.objectId, file]));
+      const next = index.map((item) => readingById.has(item.objectId) ? { ...item, kind: "source.document" as const, format: readingById.get(item.objectId)!.format } : item);
       if (!disposed && version === readVersion) setTitleState((old) => old.scopeId === scopeId && JSON.stringify(old.items) === JSON.stringify(next) ? old : { scopeId, items: next });
     };
     void refresh().catch(() => undefined);
@@ -116,6 +118,9 @@ export function useAssistantContextCatalog(input: {
 
   return useMemo(() => {
     const projects = (input.projects?.catalog ?? []).filter(({ project }) => project.scopeId === scopeId);
+    const projectObjectIds = new Set(projects.flatMap(({ assets }) => assets.flatMap((asset) => asset.ref ? [asset.ref.objectId] : [])));
+    const objectById = new Map(objects.filter((object) => object.scopeId === scopeId).map((object) => [object.objectId, object]));
+    const titleById = new Map(titles.map((entry) => [entry.objectId, entry]));
     function assertCurrentScope() {
       if (latest.current.repository.scopeId !== scopeId) throw new Error("账号已切换，请重新选择上下文。");
     }
@@ -145,7 +150,7 @@ export function useAssistantContextCatalog(input: {
       ...artifacts.map((artifact) => ({
         id: `artifact-${artifact.artifactId}`, trigger: "@" as const, label: artifact.title,
         resourcePath: liteasyPath(scopeId, { kind: "artifact", artifactId: artifact.artifactId }),
-        category: "产物", description: "使用生成内容作为参考，保留来源关系。", preview: contextPreviewText(artifactContextText(artifact)),
+        category: "产物", preview: contextPreviewText(artifactContextText(artifact)),
         readOnly: true,
         detail: artifact.sourcePath ?? artifact.resultPath ?? `产物/${artifact.type === "thin_reading" ? "薄读" : "生成文档"}/${artifact.title}`,
         resolveToken: () => resolveTransfer(ARTIFACT_CONTEXT_MIME, artifact.artifactId),
@@ -153,7 +158,8 @@ export function useAssistantContextCatalog(input: {
       ...catalog.map((file) => ({
         id: `file-${file.mountId}-${file.path}`, trigger: "@" as const, label: file.name, detail: file.location,
         resourcePath: liteasyPath(scopeId, { kind: "external-file", mountId: file.mountId, path: file.path }),
-        category: /\.canvas$/i.test(file.name) ? "白板" : "笔记", description: "从连接的文件夹读取，加入时固定当前版本。",
+        searchMetadata: { format: formatFromName(file.name), origin: "external", kind: /\.canvas$/i.test(file.name) ? "board" : "note" },
+        category: /\.canvas$/i.test(file.name) ? "白板" : "笔记",
         readOnly: /\.canvas$/i.test(file.name),
         loadPreview: async () => {
           assertCurrentScope();
@@ -188,7 +194,7 @@ export function useAssistantContextCatalog(input: {
           return { ...await resolveObject(ref), detail: file.location };
         },
       })),
-      ...objects.filter((object) => object.scopeId === scopeId && !projects.some(({ assets }) => assets.some((asset) => asset.ref?.objectId === object.objectId))).map((object) => ({
+      ...objects.filter((object) => object.scopeId === scopeId && !projectObjectIds.has(object.objectId)).map((object) => ({
         id: `saved-${object.objectId}`, trigger: "@" as const, label: object.title,
         resourcePath: liteasyPath(scopeId, { kind: "object", ref: refOf(object), followLatest: true }),
         category: object.kind === "source.document" ? "阅读文件" : object.kind === "workspace.board" ? "白板" : object.kind === "content.fragment" ? "摘录" : object.kind === "artifact.document" ? "产物" : object.kind === "conversation.message" ? "对话" : "笔记",
@@ -201,21 +207,19 @@ export function useAssistantContextCatalog(input: {
           assertCurrentScope();
           return readObjectContextPreview(input.repository, await input.repository.resolveLatest(object.objectId), assertCurrentScope, 1);
         } : undefined,
-        description: object.kind === "source.document" ? "原始来源只读；长文按本轮问题选段并标明覆盖范围。" : "加入时固定版本，可与其他论文或项目一起使用。",
         detail: `${object.kind === "workspace.board" ? "研究白板" : "笔记"}/${object.title}`,
         resolveToken: async () => resolveObject(refOf(await input.repository.resolveLatest(object.objectId))),
       })),
-      ...titles.filter((entry) => !objects.some((object) => object.scopeId === scopeId && object.objectId === entry.objectId) &&
-        !projects.some(({ assets }) => assets.some((asset) => asset.ref?.objectId === entry.objectId))).map((entry) => ({
+      ...titles.filter((entry) => !objectById.has(entry.objectId) && !projectObjectIds.has(entry.objectId)).map((entry) => ({
         id: `saved-${entry.objectId}`, trigger: "@" as const, label: entry.title,
         resourcePath: liteasyPath(scopeId, { kind: "object", ref: { objectId: entry.objectId, revision: "latest" }, followLatest: true }),
         category: entry.kind === "source.document" ? "阅读文件" : entry.kind === "workspace.board" ? "白板" : entry.kind === "content.fragment" ? "摘录" : entry.kind === "artifact.document" ? "产物" : entry.kind === "conversation.message" ? "对话" : entry.kind === "content.note" ? "笔记" : "已保存内容",
-        readOnly: entry.kind !== "content.note" && entry.kind !== "workspace.board", description: "加入时固定版本，正文按任务需要读取，可跨项目组合。",
+        readOnly: entry.kind !== "content.note" && entry.kind !== "workspace.board",
         resolveToken: async () => { assertCurrentScope(); return resolveObject(refOf(await input.repository.resolveLatest(entry.objectId))); },
         loadPreview: async () => { assertCurrentScope(); return readObjectContextPreview(input.repository, await input.repository.resolveLatest(entry.objectId), assertCurrentScope); },
       })),
       ...projects.flatMap(({ project, assets }): AssistantComposerSuggestion[] => {
-        const common = { projectId: project.projectId, projectTitle: project.title, trigger: "@" as const };
+        const common = { projectId: project.projectId, projectTitle: project.title, updatedAt: project.updatedAt, trigger: "@" as const };
         const resolveAsset = async (asset: typeof assets[number]) => {
           assertCurrentScope();
           if (asset.ref) return resolveObject(asset.role === "derived"
@@ -224,8 +228,7 @@ export function useAssistantContextCatalog(input: {
           throw new Error("资源当前不可读取，请刷新项目。");
         };
         return [{ ...common, id: `project-${project.projectId}`, label: project.title, category: "项目",
-          detail: `${assets.length} 项资产 · 可与其他项目组合`,
-          description: "包含已识别的原文、图片和后续成果。也可展开项目，只添加需要的资产。",
+          detail: `${assets.length} 项资产`,
           preview: contextPreviewText(assets.map((asset) => `• ${asset.title}${asset.page ? ` · 第 ${asset.page} 页` : ""}`).join("\n")) || "这个项目还没有资产。",
           unavailableReason: assets.length ? undefined : "尚无可读资产，论文解析完成后自动加入。可先创建笔记。",
           createNote: async (text) => {
@@ -245,9 +248,10 @@ export function useAssistantContextCatalog(input: {
           },
         }, ...assets.map((asset) => ({ ...common, id: `project-asset-${project.projectId}-${asset.assetId}`,
           resourcePath: asset.ref ? liteasyPath(scopeId, { kind: "object", ref: asset.ref, followLatest: asset.role === "derived" }) : asset.artifactId ? liteasyPath(scopeId, { kind: "artifact", artifactId: asset.artifactId }) : undefined,
+          searchMetadata: { kind: asset.kind, origin: asset.role === "source" ? "import" : "unknown" },
           label: asset.title, category: ({ text: "原文", image: "图片", note: "笔记", board: "白板", artifact: "产物", excerpt: "摘录" })[asset.kind],
           readOnly: asset.role === "source" || (asset.kind !== "note" && asset.kind !== "board"), detail: `${project.title}${asset.page ? ` · 第 ${asset.page} 页` : ""}`,
-          description: asset.role === "source" || asset.kind === "text" || asset.kind === "image" ? "论文来源只读。修改请创建副本，原文与原图始终保留。" : "可跨论文、跨项目组合引用。",
+          summary: asset.description,
           preview: asset.artifactId ? contextPreviewText(artifactContextText(artifacts.find((artifact) => artifact.artifactId === asset.artifactId) ?? { title: asset.title })) : asset.description,
           loadPreview: asset.ref ? async () => {
             assertCurrentScope();
@@ -273,7 +277,7 @@ export function useAssistantContextCatalog(input: {
           contextRefs: [{ type: "setting" as const, key }] },
       })),
       ...helpArticles.map((article) => ({ id: `help-${article.ref.providerId}-${article.id}`, trigger: "@" as const,
-        label: article.title, category: "帮助", description: article.summary, readOnly: true,
+        label: article.title, category: "帮助", summary: article.summary, description: article.summary, readOnly: true,
         loadPreview: async () => {
           assertCurrentScope();
           const document = await createHelpCatalog(builtinHelpProviders).read(article.ref, { locale: "zh-CN", signal: new AbortController().signal });
@@ -297,7 +301,8 @@ export function useAssistantContextCatalog(input: {
       ...annotations.map((note) => {
         const project = projects.find((entry) => entry.project.paperId === note.paper?.id)?.project;
         return { id: `annotation-${note.key}`, trigger: "@" as const, label: note.title, category: "批注",
-          projectId: project?.projectId, projectTitle: project?.title, detail: note.source,
+          projectId: project?.projectId, projectTitle: project?.title, detail: note.source, resourcePath: liteasyPath(scopeId, note.target),
+          searchMetadata: { ...noteSearchMetadata(note), kind: "annotation", origin: note.labels?.includes("personal") ? "user" : "unknown" },
           loadPreview: async () => {
             assertCurrentScope();
             if (!note.annotation || !note.paper) return { text: contextPreviewText(note.text) };
@@ -306,13 +311,12 @@ export function useAssistantContextCatalog(input: {
             return { text: contextPreviewText([material.text, material.quote && material.quote !== material.text ? `引用原文：${material.quote}` : ""].filter(Boolean).join("\n\n")),
               images: Object.values(material.images).map((url, index) => ({ url, label: `${note.title} · 图片 ${index + 1}` })) };
           },
-          description: "同时添加评论与引用原文，保留页码和出处。",
           resolveToken: () => resolvePath(liteasyPath(scopeId, note.target)),
         };
       }),
       ...artifacts.flatMap((artifact) => (artifact.thinReadingDocument?.annotations ?? []).filter((note) => note.body.trim()).map((note) => ({
         id: `artifact-annotation-${artifact.artifactId}-${note.id}`, trigger: "@" as const, category: "批注", label: note.body.split("\n")[0].slice(0, 100),
-        detail: artifact.title, preview: contextPreviewText(note.body), description: "生成产物中的个人批注。",
+        detail: artifact.title, preview: contextPreviewText(note.body),
         resolveToken: () => resolvePath(liteasyPath(scopeId, { kind: "artifact-annotation", artifactId: artifact.artifactId, annotationId: note.id })),
       }))),
     ];
@@ -320,14 +324,30 @@ export function useAssistantContextCatalog(input: {
       try { const target = parseLiteasyPath(entry.liteasyPath!, scopeId); return [target.kind === "paper" ? `paper:${target.paperId}` : target.kind === "object" ? `object:${target.ref.objectId}` : "", catalogSearchMetadata(entry)] as const; }
       catch { return ["", {}] as const; }
     }));
-    return suggestions.map((suggestion) => {
-      if (!suggestion.resourcePath) return suggestion;
-      try {
-        const target = parseLiteasyPath(suggestion.resourcePath, scopeId);
-        const metadata = metadataByPath.get(target.kind === "paper" ? `paper:${target.paperId}` : target.kind === "object" ? `object:${target.ref.objectId}` : "");
-        const object = target.kind === "object" ? objects.find((object) => object.objectId === target.ref.objectId) : undefined;
-        return { ...suggestion, searchMetadata: metadata ?? (target.kind === "external-file" || object ? noteSearchMetadata({ target, object } as NotesItem) : undefined) };
-      } catch { return suggestion; }
+    return suggestions.map((suggestion): AssistantComposerSuggestion => {
+      let metadata: SearchMetadata | undefined, object: ObjectEnvelope | undefined, indexed: ObjectCatalogEntry | undefined;
+      if (suggestion.resourcePath) {
+        try {
+          const target = parseLiteasyPath(suggestion.resourcePath, scopeId);
+          metadata = metadataByPath.get(target.kind === "paper" ? `paper:${target.paperId}` : target.kind === "object" ? `object:${target.ref.objectId}` : "");
+          indexed = target.kind === "object" ? titleById.get(target.ref.objectId) : undefined;
+          object = target.kind === "object" ? objectById.get(target.ref.objectId) : undefined;
+          if (!metadata && (target.kind === "external-file" || object)) metadata = noteSearchMetadata({ target, object } as NotesItem);
+        } catch { /* Unknown metadata stays unknown; titles are never identities. */ }
+      }
+      const kind = contextKind(suggestion);
+      const imageMime = object?.assets.find((asset) => asset.mediaType.startsWith("image/"))?.mediaType ?? indexed?.mediaTypes?.find((value) => value.startsWith("image/"));
+      const imageFormat = imageMime ? ({ "image/jpeg": "jpg", "image/svg+xml": "svg" }[imageMime] ?? imageMime.slice(6)) : undefined;
+      const payload = object?.kind === "content.note" ? object.content.payload : undefined;
+      const origin = suggestion.searchMetadata?.origin && suggestion.searchMetadata.origin !== "unknown" ? suggestion.searchMetadata.origin : payload?.userEditedAt && payload?.agentEditedAt ? "mixed" : payload?.userEditedAt ? "user" : payload?.agentEditedAt ? "agent" : payload?.origin === "external" ? "external" : object?.createdBy.type ?? indexed?.origin ?? suggestion.searchMetadata?.origin ?? "unknown";
+      const searchMetadata = { ...metadata, ...suggestion.searchMetadata, ...(indexed?.format ? { format: indexed.format } : {}), kind, origin,
+        ...(imageFormat && kind === "image" ? { format: imageFormat } : {}),
+        ...(!metadata?.format && !suggestion.searchMetadata?.format && ["help", "setting"].includes(kind) ? { format: "markdown" } : {}),
+      };
+      const cancellable = (read: AssistantComposerSuggestion["loadPreview"]): AssistantComposerSuggestion["loadPreview"] => read ? async (signal) => {
+        signal?.throwIfAborted(); assertCurrentScope(); const value = await read(signal); signal?.throwIfAborted(); assertCurrentScope(); return value;
+      } : undefined;
+      return { ...suggestion, loadPreview: cancellable(suggestion.loadPreview), loadThumbnail: cancellable(suggestion.loadThumbnail), scopeId, domain: ["help", "setting"].includes(kind) ? "application" : "research", updatedAt: object?.updatedAt ?? indexed?.updatedAt ?? suggestion.updatedAt, searchMetadata };
     });
   }, [input.entries, artifacts, objects, titles, helpArticles, annotations, input.repository, input.projects?.catalog, input.settings, catalog, files, scopeId]);
 }

@@ -111,3 +111,6 @@
 .content-view > small { display: block; color: var(--text-muted); margin-block: 4px; }
 .content-view__source { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
 .content-view .markdown-content__table-scroll { max-width: 100%; overflow-x: auto; }
+
+.content-excerpt { max-height: 4.5em; overflow: hidden; line-height: 1.5; color: var(--colorNeutralForeground2); }
+.content-excerpt .markdown-content > :first-child { margin-top: 0; }

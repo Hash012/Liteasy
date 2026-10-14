@@ -1,0 +1,1231 @@
+{
+  "count": 90,
+  "cases": [
+    {
+      "id": "A01",
+      "group": "文案与布局",
+      "scenario": "默认已填充状态",
+      "expected": "指定教学模板不出现在卡片/结果列表/默认详情正文中；帮助入口中保留不算失败。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts"
+      ],
+      "note": "53 AST候选逐项审阅、225 surface逐项记录覆盖；已清理本轮界面默认教学文案。全仓所有交互状态未全部运行验收，见ui-copy-review.json。"
+    },
+    {
+      "id": "A02",
+      "group": "文案与布局",
+      "scenario": "搜索入口",
+      "expected": "仅短占位“搜索资料”，可访问名称完整；高级语法帮助可找到而不常驻。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "A03",
+      "group": "文案与布局",
+      "scenario": "无预览焦点",
+      "expected": "右侧预览不占一整列；结果实际宽度增加，不仅隐藏内部文字。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "A04",
+      "group": "文案与布局",
+      "scenario": "正常卡片",
+      "expected": "展示标题/真实摘要/有用定位；缺摘要时不fallback到通用使用说明。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "A05",
+      "group": "文案与布局",
+      "scenario": "只读资产",
+      "expected": "不逐卡重复说明；显式编辑原始来源仍被服务层拒绝。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "A06",
+      "group": "文案与布局",
+      "scenario": "短定位",
+      "expected": "p./§/Fig等只来自已记录信息；多个同页图片仍能区分。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts"
+      ],
+      "note": "类型、格式和已有页/图信息用于元数据；未补造缺失Fig/页号。用户原库同页多图定位未实机核验。"
+    },
+    {
+      "id": "A07",
+      "group": "文案与布局",
+      "scenario": "重要错误",
+      "expected": "加载失败、权限冲突、源版本变化、保存失败仍能看到短状态与可执行动作。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts"
+      ],
+      "note": "读取失败/重试/不可用有可见反馈；各类真实权限、保存冲突、PDF版本失配未全部平台验收。"
+    },
+    {
+      "id": "A08",
+      "group": "文案与布局",
+      "scenario": "批选操作",
+      "expected": "一次批量选择只有一个主添加按钮，不出现含义冲突的“加入/选择此资产”。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "A09",
+      "group": "文案与布局",
+      "scenario": "空态",
+      "expected": "没有结果时有短原因/清除入口；不出现长教程挤占大面积。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "A10",
+      "group": "文案与布局",
+      "scenario": "操作可发现性",
+      "expected": "hover隐藏的次级操作在focus/选中和触屏也可用；组标题和核心身份不被隐藏。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts"
+      ],
+      "note": "显式选择与预览按钮、键盘回归已测；所有触屏及辅助技术组合未完成实机测试。"
+    },
+    {
+      "id": "B01",
+      "group": "目录与过滤",
+      "scenario": "默认研究域",
+      "expected": "帮助、设置不混入普通论文/图像结果，但应用资料域仍可找到并引用。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/contextCatalogQuery.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantContextCatalog.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantProjectCatalog.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "B02",
+      "group": "目录与过滤",
+      "scenario": "真实元数据",
+      "expected": "无文件扩展名的图片也有正确kind/MIME；paper、project、bibliographicType不混同。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/contextCatalogQuery.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantContextCatalog.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantProjectCatalog.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "B03",
+      "group": "目录与过滤",
+      "scenario": "多论文范围",
+      "expected": "选论文A和B时使用并集，结果不含C；跨项目别名不复制实体。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/contextCatalogQuery.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantContextCatalog.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantProjectCatalog.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "B04",
+      "group": "目录与过滤",
+      "scenario": "多内容类型",
+      "expected": "图片和批注使用OR，和论文范围组合时使用AND。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/contextCatalogQuery.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantContextCatalog.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantProjectCatalog.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "B05",
+      "group": "目录与过滤",
+      "scenario": "标签all",
+      "expected": "两个标签必须同时命中；空all不排除全部资产。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/contextCatalogQuery.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantContextCatalog.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantProjectCatalog.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "B06",
+      "group": "目录与过滤",
+      "scenario": "标签any",
+      "expected": "任一标签匹配即可；空any视为无该条件。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/contextCatalogQuery.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantContextCatalog.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantProjectCatalog.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "B07",
+      "group": "目录与过滤",
+      "scenario": "标签none",
+      "expected": "排除始终生效，与all/any合用有确定语义。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/contextCatalogQuery.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantContextCatalog.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantProjectCatalog.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "B08",
+      "group": "目录与过滤",
+      "scenario": "相关facet计数",
+      "expected": "当前查询下计算其它维度约束，忽略自身维度；与真实命中集合一致。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/contextCatalogQuery.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantContextCatalog.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantProjectCatalog.test.tsx"
+      ],
+      "note": "统一query计算kind/project/tag/format/type/origin的self-exclusion计数并显示于对应候选，含专门回归。"
+    },
+    {
+      "id": "B09",
+      "group": "目录与过滤",
+      "scenario": "分组计数",
+      "expected": "显示命中数/组总数时分母定义清晰；不把全库数当当前范围数。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/contextCatalogQuery.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantContextCatalog.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantProjectCatalog.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "B10",
+      "group": "目录与过滤",
+      "scenario": "时间",
+      "expected": "since包含、until不包含或产品明确的等价边界；时区保存/恢复无漂移。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/contextCatalogQuery.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantContextCatalog.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantProjectCatalog.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "B11",
+      "group": "目录与过滤",
+      "scenario": "来源未知",
+      "expected": "旧笔记unknown可被单独筛选；默认不因缺历史来源而被隐藏或认定纯AI。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/contextCatalogQuery.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantContextCatalog.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantProjectCatalog.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "B12",
+      "group": "目录与过滤",
+      "scenario": "保存与恢复",
+      "expected": "查询、分组、排序按scope持久化；旧type:book语法仍保留原文献类型意义。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/contextCatalogQuery.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantContextCatalog.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantProjectCatalog.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "C01",
+      "group": "选择语义",
+      "scenario": "组全选",
+      "expected": "只选当前筛选命中的可选择叶子，不能选该论文全部隐藏成员。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "C02",
+      "group": "选择语义",
+      "scenario": "展开组",
+      "expected": "只改变展开状态，不变更selected set或触发资产准备。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "C03",
+      "group": "选择语义",
+      "scenario": "Shift范围",
+      "expected": "依据当前稳定排序与可见逻辑序列，重复操作可预测。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "C04",
+      "group": "选择语义",
+      "scenario": "跨分页全选",
+      "expected": "全选命中集合不只选已加载60/100条，且不因此读取全部正文。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "C05",
+      "group": "选择语义",
+      "scenario": "改变查询/排序",
+      "expected": "已选引用保持不变，当前可见与已选总数区分清楚。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "C06",
+      "group": "选择语义",
+      "scenario": "资产暂不可用",
+      "expected": "已选资产留在核对清单并标明失败原因，不静默被过滤掉。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "C07",
+      "group": "选择语义",
+      "scenario": "同源别名",
+      "expected": "相同source revision+selector+projection经两个入口添加只出现一次。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "C08",
+      "group": "选择语义",
+      "scenario": "不同版本/选区",
+      "expected": "同名文献、相同文字不同位置、不同版本不被错误合并。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "C09",
+      "group": "选择语义",
+      "scenario": "整篇与片段",
+      "expected": "不存在默默把片段扩大成整篇的归并；重叠处理由用户明确确认。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "C10",
+      "group": "选择语义",
+      "scenario": "整个项目",
+      "expected": "加入时固定当次成员/版本，后来新增成员不自动进入旧会话manifest。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "C11",
+      "group": "选择语义",
+      "scenario": "部分失败",
+      "expected": "成功项与失败项正确计数，重试只处理失败项，不重复添加成功项。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "C12",
+      "group": "选择语义",
+      "scenario": "已选视图",
+      "expected": "完整核对所有已选，包含当前过滤不可见/不可用项；返回资料恢复原筛选。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetBrowser.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "D01",
+      "group": "精确来源定位",
+      "scenario": "同一行只选三个字",
+      "expected": "链接序列化/恢复、捕获和模型输入仍仅这三个字，不变为整行。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/resourceReferences.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/paperAnchorEntity.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。",
+      "detailEvidence": "resourceReferenceContext.test.tsx: exact word selections survive capture and model projection；resourceReferences.test.tsx选择词往返。"
+    },
+    {
+      "id": "D02",
+      "group": "精确来源定位",
+      "scenario": "重复quote",
+      "expected": "同页两处相同文本可定位选中的第二处，不能总跳第一个匹配。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/resourceReferences.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/paperAnchorEntity.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。",
+      "detailEvidence": "resourceReferenceContext.test.tsx: UTF16 selectors preserve the second repeated quote；带page:2 selector局部快照回归避免整对象首个quote。"
+    },
+    {
+      "id": "D03",
+      "group": "精确来源定位",
+      "scenario": "同名标题",
+      "expected": "两个相同章节名可用唯一位置选择器区分，不能猜一个。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/resourceReferences.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/paperAnchorEntity.test.tsx"
+      ],
+      "note": "重复标题使用行号唯一选择器；同名标题不猜首个匹配，原有resourceReferences覆盖。",
+      "detailEvidence": "resourceReferences.test.tsx重复标题拒绝猜测，并用唯一行范围表示。"
+    },
+    {
+      "id": "D04",
+      "group": "精确来源定位",
+      "scenario": "CRLF与Unicode",
+      "expected": "换行规范化和UTF-16/字节偏移定义一致；emoji/组合字符不截断范围。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/resourceReferences.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/paperAnchorEntity.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。",
+      "detailEvidence": "referenceCharacters使用LF规范化UTF16与Intl.Segmenter；resourceReferenceContext.test.tsx重复quote及emoji组合字符回归。Windows实际文件换行未实测。"
+    },
+    {
+      "id": "D05",
+      "group": "精确来源定位",
+      "scenario": "旋转PDF",
+      "expected": "0/90/180/270度页选择框与截图一致，不靠截图旋转后硬补位置。",
+      "status": "not-verified",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/resourceReferences.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/paperAnchorEntity.test.tsx"
+      ],
+      "note": "本轮未完成四角旋转的真实PDF选框/截图对照；现有PDF几何测试不能替代该场景。",
+      "detailEvidence": "未运行0/90/180/270旋转PDF的截图/坐标验收。本次仅传递已有rects，不生成或猜测新rects。"
+    },
+    {
+      "id": "D06",
+      "group": "精确来源定位",
+      "scenario": "CropBox/DPR",
+      "expected": "非零CropBox、缩放和DPR下标注范围仍准确且不越界。",
+      "status": "not-verified",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/resourceReferences.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/paperAnchorEntity.test.tsx"
+      ],
+      "note": "本轮未完成非零CropBox×缩放×DPR的原始PDF定位矩阵。",
+      "detailEvidence": "未运行非零CropBox/DPR/缩放的来源框实机验收；不能以PNG缩略图浏览器测试替代。"
+    },
+    {
+      "id": "D07",
+      "group": "精确来源定位",
+      "scenario": "页码双语义",
+      "expected": "PDF index和印刷页码/罗马页码分别保存，不发生off-by-one。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/resourceReferences.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/paperAnchorEntity.test.tsx"
+      ],
+      "note": "PDF索引与已记录页码继续沿用现有结构；罗马/印刷页标签独立持久化并未完整交付。",
+      "detailEvidence": "paperAnchorEntity.test.tsx保留物理page:3与displayPage:iii；缓存页映射保留原page。未做PDF页面双语义跨读取器实机验收。"
+    },
+    {
+      "id": "D08",
+      "group": "精确来源定位",
+      "scenario": "源已变化",
+      "expected": "documentHash不匹配时不把新PDF截图标为旧引用精确证据。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/resourceReferences.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/paperAnchorEntity.test.tsx"
+      ],
+      "note": "打开请求保留documentHash/rects/pageOnly，不能把page-only标作精确证据；未完成同路径替换PDF实机验证。",
+      "detailEvidence": "paperMetadataContext.test.tsx固定hash改变时拒绝读取；现有openPaperAnchor核对documentHash后才导航。未用替换PDF做Windows截图验收。"
+    },
+    {
+      "id": "D09",
+      "group": "精确来源定位",
+      "scenario": "旧版源存在",
+      "expected": "固定版本引用展示对应旧文档；用户打开最新是单独明确动作。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/resourceReferences.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/paperAnchorEntity.test.tsx"
+      ],
+      "note": "固定文字快照可回看；历史PDF二进制版本的保留/可获得性未交付完整验收，不能声明可显示旧PDF。",
+      "detailEvidence": "对象固定revision可读取；真实PDF导航仍依赖当前paper/sourcePath，hash改变时阻止打开，不会自动找到/展示旧PDF字节，亦未新增单独打开最新动作。"
+    },
+    {
+      "id": "D10",
+      "group": "精确来源定位",
+      "scenario": "原文件缺失",
+      "expected": "保留固定quote与来源元信息，明确text-only/unavailable，不全部空白。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/resourceReferences.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/paperAnchorEntity.test.tsx"
+      ],
+      "note": "锚点保留quote/版本及精度降级文案，未补造矩形；离线旧PDF不可获得场景未实机测试。",
+      "detailEvidence": "paperAnchorEntity.test.tsx缺失页码保留quote并显示来源位置未记录；固定snapshot与读取错误互不删除。未用用户真实缺失文件/权限数据验收。"
+    },
+    {
+      "id": "D11",
+      "group": "精确来源定位",
+      "scenario": "预览周边",
+      "expected": "视图可多显示上下文，但SelectionManifest与实际读取账本不被扩写。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/resourceReferences.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/paperAnchorEntity.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。",
+      "detailEvidence": "ResourceReferenceView用sourceContent区分exactSelection与viewContext；resourceReferenceContext.test.tsx验证模型输入只有选区且不含无关尾文。未独立审计整条模型读取账本。"
+    },
+    {
+      "id": "D12",
+      "group": "精确来源定位",
+      "scenario": "点击与hover",
+      "expected": "预览§2.4后点击打开仍是§2.4，fragment/selector不被candidate.path丢弃。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/resourceReferences.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/resourceReferenceContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/paperAnchorEntity.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。",
+      "detailEvidence": "sourcePreviewLifecycle.test.tsx打开保留C0:1；resourceReferences.test.tsx打开Title2保留fragment；selector快照测试保留selectorId来源。"
+    },
+    {
+      "id": "E01",
+      "group": "预览、加载与缓存",
+      "scenario": "真实PNG/JPEG",
+      "expected": "未经mock的解码产生有效图像和尺寸，真实data URL/字节可绘制。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetThumbnail.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/sourcePreviewLifecycle.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextPreview.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。",
+      "detailEvidence": "contextPreview.browser.spec.ts 5/5：真实PNG宽图/长图、JPEG，Image.decode后canvas绘制、像素alpha、尺寸/比例；Windows WebView2未验。"
+    },
+    {
+      "id": "E02",
+      "group": "预览、加载与缓存",
+      "scenario": "SVG及附件协议",
+      "expected": "允许的SVG/附件正确解码；危险脚本/外部资源不因预览被放开。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetThumbnail.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/sourcePreviewLifecycle.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextPreview.browser.spec.ts"
+      ],
+      "note": "真实SVG通过Image.decode与canvas像素测试；安全策略未放开，未穷举恶意SVG/跨域载荷。",
+      "detailEvidence": "真实SVG在Image上下文解码并光栅化通过，未插入DOM。未跑恶意SVG外部请求注入与Windows附件文件协议矩阵。"
+    },
+    {
+      "id": "E03",
+      "group": "预览、加载与缓存",
+      "scenario": "损坏图后修复",
+      "expected": "有真正重试动作，改变attempt/失效缓存后重读成功，不要求重启应用。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetThumbnail.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/sourcePreviewLifecycle.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextPreview.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。",
+      "detailEvidence": "ContextAssetThumbnail.test.tsx底层读取首次错误、点击重试后再次读取成功；browser坏字节decode失败验证。未用真实用户资产库坏图替换测试。"
+    },
+    {
+      "id": "E04",
+      "group": "预览、加载与缓存",
+      "scenario": "两个永久pending",
+      "expected": "第三个正常任务不被永远饿死；取消/worker隔离后真实资源并发仍有上限。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetThumbnail.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/sourcePreviewLifecycle.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextPreview.browser.spec.ts"
+      ],
+      "note": "排队/解码可取消且有15秒请求期限；ObjectRepository与平台读取接口无物理中断能力，不能证明永久挂起底层IO仍维持真实资源并发上限。",
+      "detailEvidence": "ContextAssetThumbnail.test.tsx两个pending、取消一项后第三项完成；Image.decode取消清src、队列等待项移除；sourcePreviewLifecycle timeout传递真实AbortSignal。但ObjectRepository/平台存储I/O无物理取消API，超时释放UI许可不能证明底层并发始终有界。"
+    },
+    {
+      "id": "E05",
+      "group": "预览、加载与缓存",
+      "scenario": "离屏/离开",
+      "expected": "不再需要的排队任务可取消，不能排空整个队列才响应当前hover。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetThumbnail.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/sourcePreviewLifecycle.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextPreview.browser.spec.ts"
+      ],
+      "note": "离屏取消正在读取/排队任务，重新入屏重启，已完成缩略图保留；新增两项回归通过。",
+      "detailEvidence": "ContextAssetThumbnail.test.tsx 9/9：observer持续观察rootMargin，离屏取消活动/排队，回到viewport重读；已完成小图保持不重读。新增2回归先失败后通过，日志/tmp/liteasy-thumbnail-offscreen-before.log和-after.log；底层存储物理取消限制仍见E04。"
+    },
+    {
+      "id": "E06",
+      "group": "预览、加载与缓存",
+      "scenario": "旧请求晚到",
+      "expected": "切条目、会话、账号或revision后，不展示旧结果也不写错缓存。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetThumbnail.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/sourcePreviewLifecycle.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextPreview.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。",
+      "detailEvidence": "thumbnail catalog卸载/loader替换拒绝晚结果；ResourceReferenceView清理abort，service检查账号active。未覆盖所有会话/账号/revision切换排列的实机测试。"
+    },
+    {
+      "id": "E07",
+      "group": "预览、加载与缓存",
+      "scenario": "hover副作用",
+      "expected": "不触发LLM、对象capture、创建笔记、选择变更或导航。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetThumbnail.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/sourcePreviewLifecycle.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextPreview.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。",
+      "detailEvidence": "ContextAssetThumbnail.test.tsx不调用loadPreview/capture；sourcePreviewLifecycle cache-only读取；paperMetadataContext不因发现资料或缓存读取调用ensurePaperImported。"
+    },
+    {
+      "id": "E08",
+      "group": "预览、加载与缓存",
+      "scenario": "未解析来源",
+      "expected": "hover不自动ensurePaperImported；显式准备有阶段、可取消和失败状态。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetThumbnail.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/sourcePreviewLifecycle.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextPreview.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。",
+      "detailEvidence": "AgentAssetReadOptions.preparation=cached阻止自动ensure；失败后显式解析正文按钮传allow、可取消，有15秒超时和保留error.code的trace。prepare本身尚未独立阶段UI/全部底层取消验收。"
+    },
+    {
+      "id": "E09",
+      "group": "预览、加载与缓存",
+      "scenario": "Escape",
+      "expected": "打开前的300ms内按Escape也取消timer；关闭后不自动重开。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetThumbnail.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/sourcePreviewLifecycle.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextPreview.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。",
+      "detailEvidence": "sourcePreviewLifecycle.test.tsx悬浮300ms之前Escape取消timer且无read；关闭同时终止旧打开请求。"
+    },
+    {
+      "id": "E10",
+      "group": "预览、加载与缓存",
+      "scenario": "浮窗可进入",
+      "expected": "鼠标移入、键盘focus和可触屏点击均能持续阅读，且不抢输入焦点。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetThumbnail.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/sourcePreviewLifecycle.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextPreview.browser.spec.ts"
+      ],
+      "note": "共享浮窗可focus/点击/hover，Esc与readonly回归通过；触屏和系统辅助技术未实机验收。",
+      "detailEvidence": "ResourceLink共用Fluent Popover，支持mouseover/focus和previewOnClick（键盘Enter/触屏click）；关闭时停止timer。未单独跑触屏与焦点连续阅读矩阵。"
+    },
+    {
+      "id": "E11",
+      "group": "预览、加载与缓存",
+      "scenario": "百次预览",
+      "expected": "缓存有容量上限，bitmap/objectURL/renderTask释放，内存趋势受控。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetThumbnail.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/sourcePreviewLifecycle.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextPreview.browser.spec.ts"
+      ],
+      "note": "缓存与诊断有上限、取消解码清理img.src、canvas临时资源释放；未完成大量切换后的原生内存趋势实测。",
+      "detailEvidence": "缩略图canvas最大320，decode清Image.src，画布清尺寸，不保留原图全局缓存；诊断trace限200条。未跑100次预览堆内存趋势/对象URL/renderTask真实资源计数压力测试。"
+    },
+    {
+      "id": "E12",
+      "group": "预览、加载与缓存",
+      "scenario": "阶段错误",
+      "expected": "missing/decode/timeout/permission等可区分；重试失败不会升级为全窗崩溃。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/ContextAssetThumbnail.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/sourcePreviewLifecycle.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/contextPreview.browser.spec.ts"
+      ],
+      "note": "decode/timeout/cancel/unavailable有分类与重试；底层权限错误依赖服务返回，真实Windows权限场景未验收。",
+      "detailEvidence": "previewRequest记录阶段、duration、原error.code；timeout单测和bad bytes浏览器/失败重试单测通过。未执行完整missing/permission/canvas-failure的Windows注入矩阵，用户截图首因仍unknown。"
+    },
+    {
+      "id": "F01",
+      "group": "笔记与内容渲染",
+      "scenario": "100条列表第一条",
+      "expected": "点开详情后同屏可见或就地展开，不需滚到底。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/notesPresentation.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/notesView.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/notesPersistenceAndFiles.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/notesView.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "F02",
+      "group": "笔记与内容渲染",
+      "scenario": "按论文与排序",
+      "expected": "论文分组、修改时间/页码/标题排序准确，组内有稳定末级排序键。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/notesPresentation.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/notesView.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/notesPersistenceAndFiles.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/notesView.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "F03",
+      "group": "笔记与内容渲染",
+      "scenario": "Markdown摘录",
+      "expected": "正文摘要中的强调/列表合理渲染；文件标题与路径保持字面。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/notesPresentation.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/notesView.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/notesPersistenceAndFiles.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/notesView.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "F04",
+      "group": "笔记与内容渲染",
+      "scenario": "TeX",
+      "expected": "10^{-1}和beta分式在声明为数学的内容中正常渲染，不显示原始分隔符。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/notesPresentation.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/notesView.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/notesPersistenceAndFiles.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/notesView.browser.spec.ts"
+      ],
+      "note": "共享ContentView渲染声明为数学的正文，不更改未知原文；原截图对应含beta/10^-1的真实资料未复验。"
+    },
+    {
+      "id": "F05",
+      "group": "笔记与内容渲染",
+      "scenario": "旧坏公式",
+      "expected": "不凭正则改写未知公式、代码或金额；提供原文核实/显式修正而非伪造。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/notesPresentation.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/notesView.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/notesPersistenceAndFiles.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/notesView.browser.spec.ts"
+      ],
+      "note": "未添加猜测公式的正则修复；正文经统一解析、原始来源可显式打开，固定选择不被重写。"
+    },
+    {
+      "id": "F06",
+      "group": "笔记与内容渲染",
+      "scenario": "结构化片段",
+      "expected": "表格/代码/公式不能被字符slice截成损坏AST；模型精确选区不因显示修复而改变。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/notesPresentation.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/notesView.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/notesPersistenceAndFiles.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/notesView.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "F07",
+      "group": "笔记与内容渲染",
+      "scenario": "浏览位置",
+      "expected": "展开/关闭、筛选/返回时保持合理焦点和滚动，不滚回顶端丢上下文。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/notesPresentation.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/notesView.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/notesPersistenceAndFiles.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/notesView.browser.spec.ts"
+      ],
+      "note": "详情移到所选行，关闭/目录切换和草稿回归通过；全部筛选/返回滚动焦点组合未穷举。"
+    },
+    {
+      "id": "F08",
+      "group": "笔记与内容渲染",
+      "scenario": "编辑保护",
+      "expected": "用户未保存草稿不因hover、来源刷新或切换预览被覆盖。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/notesPresentation.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/notesView.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/notesPersistenceAndFiles.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/notesView.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "G01",
+      "group": "输入框与mention",
+      "scenario": "单一呈现",
+      "expected": "正文mention已呈现的引用不在上方重复完整标签；manifest只含一份同源选择。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/inlineContext.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/AssistantComposer.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantUserMentions.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "G02",
+      "group": "输入框与mention",
+      "scenario": "短标签",
+      "expected": "默认短题+章节/页号，hover完整名称和原文；可访问名完整。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/inlineContext.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/AssistantComposer.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantUserMentions.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "G03",
+      "group": "输入框与mention",
+      "scenario": "独立删除",
+      "expected": "点主体预览不删除，×或明确删除键才移除相应引用。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/inlineContext.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/AssistantComposer.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantUserMentions.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "G04",
+      "group": "输入框与mention",
+      "scenario": "同名资源",
+      "expected": "两个同名不同source的mention都有独立ID，可预览各自来源。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/inlineContext.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/AssistantComposer.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantUserMentions.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "G05",
+      "group": "输入框与mention",
+      "scenario": "普通文字同名",
+      "expected": "正文恰好写了资源同名词不会自动被识别/替换成引用。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/inlineContext.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/AssistantComposer.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantUserMentions.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "G06",
+      "group": "输入框与mention",
+      "scenario": "IME",
+      "expected": "中文组合输入不被菜单/mention吞字；Enter提交与确认组合态区分。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/inlineContext.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/AssistantComposer.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantUserMentions.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts"
+      ],
+      "note": "保留native textarea、isComposing键盘保护；未进行真实中文输入法端到端验收。"
+    },
+    {
+      "id": "G07",
+      "group": "输入框与mention",
+      "scenario": "撤销重做",
+      "expected": "删除mention后undo恢复文本及引用关系；redo不留下幽灵token。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/inlineContext.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/AssistantComposer.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantUserMentions.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "G08",
+      "group": "输入框与mention",
+      "scenario": "复制粘贴",
+      "expected": "有结构化引用数据时校验scope/权限，纯文本粘贴不猜绑定错误来源。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/inlineContext.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/AssistantComposer.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantUserMentions.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts"
+      ],
+      "note": "Liteasy Path/结构化拖放仍经scope解析，纯文本不猜绑定；跨应用系统剪贴板完整结构化mention复制粘贴未交付。"
+    },
+    {
+      "id": "G09",
+      "group": "输入框与mention",
+      "scenario": "旧草稿",
+      "expected": "唯一对应可迁移；歧义时原文字保留、token作为附件显示，不丢用户输入。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/inlineContext.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/AssistantComposer.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantUserMentions.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts"
+      ],
+      "note": "旧草稿原文字保留、无显式范围的token显示为附件；不自动猜同名对应，尚未实现唯一对应自动迁移。"
+    },
+    {
+      "id": "G10",
+      "group": "输入框与mention",
+      "scenario": "异步插入",
+      "expected": "材料加载期间用户继续打字或切会话，回复不插错位置/会话。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/inlineContext.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantInlineContext.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/AssistantComposer.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/assistantUserMentions.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "H01",
+      "group": "自动命名",
+      "scenario": "首个有效回合",
+      "expected": "得到体现主题的短名，不是每条回复都新发一次命名请求。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/assistantSessionTitles.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantSessionHistory.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantHistoryPersistence.test.tsx"
+      ],
+      "note": "首个新完成有效回合只触发一次模型命名，历史恢复不会自动发模型请求；通过mock gateway并发与生命周期测试，未消费真实模型作主观标题质量验收。"
+    },
+    {
+      "id": "H02",
+      "group": "自动命名",
+      "scenario": "模型失败",
+      "expected": "本地回退有意义、重试有上限、不阻塞聊天或产生通知洪流。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/assistantSessionTitles.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantSessionHistory.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantHistoryPersistence.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "H03",
+      "group": "自动命名",
+      "scenario": "手工改名竞争",
+      "expected": "模型返回前用户改名，返回后仍保留人工名。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/assistantSessionTitles.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantSessionHistory.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantHistoryPersistence.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "H04",
+      "group": "自动命名",
+      "scenario": "持久化snapshot",
+      "expected": "正常保存和重启不会用规则名覆盖已完成的模型名。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/assistantSessionTitles.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantSessionHistory.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantHistoryPersistence.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "H05",
+      "group": "自动命名",
+      "scenario": "会话生命周期",
+      "expected": "切换/归档/删除/账户变化或消息指纹过期时，旧响应不能写入错误目标。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/assistantSessionTitles.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantSessionHistory.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantHistoryPersistence.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "H06",
+      "group": "自动命名",
+      "scenario": "任务关联",
+      "expected": "标题变化不混淆direct chat与workflow会话，不改artifactId或重新发任务。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/assistantSessionTitles.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantSessionHistory.test.ts",
+        "products/liteasy/apps/desktop/src/tests/assistantHistoryPersistence.test.tsx"
+      ],
+      "note": "已由本轮产品代码及所列受影响回归验证；范围为自动化测试/浏览器测试资料，不代表用户Windows原库验收。"
+    },
+    {
+      "id": "I01",
+      "group": "平台与最终回归",
+      "scenario": "Windows实机",
+      "expected": "Tauri/WebView2真实用户资料可选可预览，记录版本和首因修复证据。",
+      "status": "not-verified",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/notesView.browser.spec.ts"
+      ],
+      "note": "2026-10-14 Windows只读检查显示正在运行F:\\Tool\\Liteasy\\liteasy-desktop.exe 0.1.50；本轮代码0.1.51未打包安装，不可替代当前源码验收。"
+    },
+    {
+      "id": "I02",
+      "group": "平台与最终回归",
+      "scenario": "浏览器对照",
+      "expected": "普通浏览器测试与实机结果分别保存，不能只用fake fixture声明成功。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/notesView.browser.spec.ts"
+      ],
+      "note": "Linux Chromium真实解码/组件交互与Windows未验结果分别记录。Tauri原生当前版本未运行。"
+    },
+    {
+      "id": "I03",
+      "group": "平台与最终回归",
+      "scenario": "缩放",
+      "expected": "100/150/200%及窄面板下，无固定空列、按钮遮挡或不可见焦点。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/notesView.browser.spec.ts"
+      ],
+      "note": "Composer 100/150/200%几何、窄Notes/资料详情浏览器通过；当前Windows/WebView2 DPI矩阵未验。"
+    },
+    {
+      "id": "I04",
+      "group": "平台与最终回归",
+      "scenario": "主题",
+      "expected": "暗色/浅色和高对比条件下图、文字、选择、焦点可分辨，popup继承同一theme。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/notesView.browser.spec.ts"
+      ],
+      "note": "保留FluentProvider/token；现有浏览器主题高对比门禁覆盖通用控件，新资料全矩阵未独立验收。"
+    },
+    {
+      "id": "I05",
+      "group": "平台与最终回归",
+      "scenario": "多语言",
+      "expected": "中英文长标题/翻译不撑爆，新增文案纳入现有i18n。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/notesView.browser.spec.ts"
+      ],
+      "note": "新文案接入zh-CN/en-US并通过生成类型/缺失检查；全应用英文覆盖及所有长文案截图未验。"
+    },
+    {
+      "id": "I06",
+      "group": "平台与最终回归",
+      "scenario": "大型目录",
+      "expected": "10k轻量项可查询分组，初始不全读正文；记录机器与P50/P95/DOM数，不捏造结果。",
+      "status": "pass",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/notesView.browser.spec.ts"
+      ],
+      "note": "10k元数据查询实测、记录P50/P95/DOM/机器；数据见evidence/catalog-query-performance.json。不读所有正文。"
+    },
+    {
+      "id": "I07",
+      "group": "平台与最终回归",
+      "scenario": "账号隔离",
+      "expected": "历史、缓存、筛选偏好、悬浮结果与已选草稿遵守scope隔离。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/notesView.browser.spec.ts"
+      ],
+      "note": "scope查询偏好、异步预览、会话标题与mention跨会话迟到结果回归通过；真实多账号原生存储全流程未验。"
+    },
+    {
+      "id": "I08",
+      "group": "平台与最终回归",
+      "scenario": "旧产物回归",
+      "expected": "产物库等上一轮风险路径正常；损坏条目局部错误不得整窗退出，也不得删用户数据掩盖。",
+      "status": "partial",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/browser/contextCatalog.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/composerContext.browser.spec.ts",
+        "products/liteasy/apps/desktop/src/tests/browser/notesView.browser.spec.ts"
+      ],
+      "note": "产物库/导出及局部错误有既有浏览器回归；最终验证记录列明初跑失败与复跑结果，未删除任何用户数据。"
+    }
+  ],
+  "reviewDate": "2026-10-14",
+  "baselineCommit": "07b2747d",
+  "platform": "Linux / Chromium",
+  "nativeWindowsVerified": false,
+  "statusMeaning": {
+    "pass": "所列自动化证据范围内通过",
+    "partial": "已实现并有部分验证，仍有明确缺项",
+    "not-verified": "不能证明所述完整验收条件"
+  },
+  "summary": {
+    "partial": 26,
+    "pass": 61,
+    "not-verified": 3
+  }
+}

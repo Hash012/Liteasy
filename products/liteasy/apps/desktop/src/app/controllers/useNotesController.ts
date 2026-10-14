@@ -473,10 +473,10 @@ export function useNotesController(input: {
       const [nextFolders, nextReferences, paperProjects, importedObjects, nextLabels] = await Promise.all([
         notes.listFolders(), notes.listReferences(), projects.listProjects(), notes.importedObjectIds(), notes.listLabels(),
       ]);
-      const paperMembership = new Map<string, string>();
+      const paperMembership = new Map<string, { id: string; title: string }>();
       for (const project of paperProjects) {
         for (const asset of await projects.listAssets(project.projectId)) {
-          if (asset.ref) paperMembership.set(asset.ref.objectId, project.title);
+          if (asset.ref) paperMembership.set(asset.ref.objectId, { id: project.paperId, title: project.title });
         }
       }
       const sourceOf = (object: ObjectEnvelope) => {
@@ -491,7 +491,7 @@ export function useNotesController(input: {
           const source = objectMap.get(ref.objectId);
           if (!source) continue;
           if (source.kind === "artifact.document") artifact ??= source.title;
-          if (source.kind === "source.document" || (source.kind === "content.fragment" && source.content.payload.anchors.some((anchor) => anchor.type === "pdf"))) paper ??= source.title;
+          if (source.kind === "source.document" || (source.kind === "content.fragment" && source.content.payload.anchors.some((anchor) => anchor.type === "pdf"))) paper ??= { id: `object:${source.objectId}`, title: source.title };
           pending.push(...source.provenance.sourceRefs);
         }
         return { paper, artifact };
@@ -514,7 +514,8 @@ export function useNotesController(input: {
                 : "default/note";
           const item = fromObject(object, folder);
           if (source.artifact) item.source = `产物笔记 · ${source.artifact}`;
-          else if (source.paper) item.source = `论文笔记 · ${source.paper}`;
+          else if (source.paper) item.source = `论文笔记 · ${source.paper.title}`;
+          if (source.paper) item.paperIdentity = source.paper;
           if (boardMembers.has(object.objectId))
             item.source = `研究白板 · ${boardMembers.get(object.objectId)}`;
           if (importedObjects.has(object.objectId)) {

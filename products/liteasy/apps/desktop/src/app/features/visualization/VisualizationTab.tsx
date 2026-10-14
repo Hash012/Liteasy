@@ -18,7 +18,7 @@ export function VisualizationTab({ data }: { data: VisualizationTabData }) {
   );
   return (
     <main className="visualization-tab" aria-label={`放大查看：${data.title}`}>
-      <header><span>VISUALIZATION</span><h1>{data.title}</h1><p>独立标签页支持缩放、拖动与完整查看。</p></header>
+      <header><span>VISUALIZATION</span><h1>{data.title}</h1></header>
       {data.kind === "html_demo" ? (
         <HtmlDemoPreview
           description={data.description}

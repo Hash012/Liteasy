@@ -1,26 +1,32 @@
+import { InfoPopover } from "../../shared/ui/productPrimitives";
+import { useUiTranslation } from "../../shared/i18n/useUiTranslation";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@fluentui/react-components";
 import { OpenRegular } from "@fluentui/react-icons";
 import { ResourceReferencesContext } from "./ResourceReferencesContext";
-import { headingReference, referenceFragment, referenceHeadings, referenceLines, type ReferenceRange } from "./referenceText";
+import { headingReference, referenceCharacters, referenceFragment, referenceHeadings, referenceLines, type ReferenceRange } from "./referenceText";
 import type { ReferenceDocument } from "./resourceReferenceService";
 import "./resourceReferences.css";
 
 export function ReferenceContentPicker({ path, fragment = "", onChoose, actionLabel = "插入引用", disabled = false }: {
   path: string; fragment?: string; onChoose(document: ReferenceDocument, range: ReferenceRange): void | Promise<void>; actionLabel?: string; disabled?: boolean;
 }) {
+  const { tChinese } = useUiTranslation();
   const references = useContext(ResourceReferencesContext);
   const [limit, setLimit] = useState(12000), [attempt, setAttempt] = useState(0);
   const [document, setDocument] = useState<ReferenceDocument>(), [error, setError] = useState("");
   const [selection, setSelection] = useState<ReferenceRange>(), [busy, setBusy] = useState(false), [page, setPage] = useState(0);
   const anchor = useRef<number>();
+  const cancellation = useRef<AbortController>();
+  const prepare = useRef(false);
   const body = useRef<HTMLDivElement>(null);
   useEffect(() => { setLimit(12000); setPage(0); setSelection(undefined); anchor.current = undefined; }, [path]);
   useEffect(() => {
     if (!references) return;
-    const abort = new AbortController();
+    const preparation = prepare.current ? "allow" : "cached"; prepare.current = false;
+    const abort = new AbortController(); cancellation.current = abort;
     setDocument(undefined); setSelection(undefined); setError("");
-    void references.service.document(path, limit, abort.signal).then((value) => {
+    void references.service.document(path, limit, abort.signal, preparation).then((value) => {
       if (abort.signal.aborted) return;
       setDocument(value);
 
@@ -51,10 +57,10 @@ export function ReferenceContentPicker({ path, fragment = "", onChoose, actionLa
     const offset = (element: HTMLElement, node: Node, end: number) => { const r = window.document.createRange(); r.selectNodeContents(element); r.setEnd(node, end); return r.toString().length; };
     const start = Number(first.dataset.referenceLineText), end = Number(last.dataset.referenceLineText);
     try {
-      const value = referenceLines(document.text, start, end, document.complete);
       const begin = offset(first, range.startContainer, range.startOffset), finish = offset(last, range.endContainer, range.endOffset);
-      const text = start === end ? lines[start - 1].slice(begin, finish) : [lines[start - 1].slice(begin), ...lines.slice(start, end - 1), lines[end - 1].slice(0, finish)].join("\n");
-      if (text.trim()) { setSelection({ ...value, text, label: `${value.label} · 选中文字` }); setError(""); }
+      const lineOffset = (line: number) => lines.slice(0, line - 1).reduce((total, value) => total + value.length + 1, 0);
+      const value = referenceCharacters(document.text, lineOffset(start) + begin, lineOffset(end) + finish, document.complete);
+      if (value.text.trim()) { setSelection(value); setError(""); }
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
   async function choose() {
@@ -66,10 +72,11 @@ export function ReferenceContentPicker({ path, fragment = "", onChoose, actionLa
   }
   return <section className="reference-content-picker" aria-label="选择引用内容">
     <header><strong>打开内容</strong><Button size="small" icon={<OpenRegular />} onClick={() => { void Promise.resolve(references?.open(path)).catch((e) => setError(String(e))); }}>打开原文件</Button></header>
-    {!document && !error ? <p role="status">正在读取内容…</p> : null}
-    {error ? <p role="alert">{error} <Button size="small" onClick={() => setAttempt((value) => value + 1)}>重新载入</Button></p> : null}
+    {!document && !error ? <p role="status">正在读取内容…<Button size="small" onClick={() => { cancellation.current?.abort(); setError(tChinese("preview.cancelled", "已取消读取。")); }}>{tChinese("preview.cancelRead", "取消读取")}</Button></p> : null}
+    {error ? <p role="alert">{error} <Button size="small" onClick={() => setAttempt((value) => value + 1)}>重新载入</Button>{/正文尚未就绪/.test(error) ? <Button size="small" onClick={() => { prepare.current = true; setAttempt((value) => value + 1); }}>{tChinese("preview.prepareText", "解析正文")}</Button> : null}</p> : null}
     {document ? <>
-      <p className="reference-hint">{document.asset.kind === "paper" || document.asset.kind === "source.document" ? "以下为已提取文本的行号。" : "源文本行号，不随显示换行改变。"}点击标题选章节；点击行号、Shift+点击或直接选中文字。</p>
+      <p className="reference-hint">{document.asset.kind === "paper" || document.asset.kind === "source.document" ? "以下为已提取文本的行号。" : "源文本行号，不随显示换行改变。"}</p>
+      <InfoPopover label={tChinese("reference.selection.help", "选择引用帮助")}><p>{tChinese("reference.selection.guidance", "点击标题选章节；点击行号、Shift+点击或直接选中文字。")}</p></InfoPopover>
       {headings.length ? <nav className="reference-heading-list" aria-label="引用标题目录">{headings.map((heading) => <Button key={heading.line} size="small" appearance="subtle" style={{ paddingLeft: 6 + (heading.level - 1) * 8 }}
         onClick={() => { try { setSelection(headingReference(document.text, heading, document.complete)); setPage(Math.floor((heading.line - 1) / 200)); setError(""); } catch (e) { setError(e instanceof Error ? e.message : String(e)); } }}>
         {heading.title}<small>L{heading.line}–{heading.endLine}{!heading.complete ? " · 尚未完整" : ""}</small></Button>)}</nav> : null}

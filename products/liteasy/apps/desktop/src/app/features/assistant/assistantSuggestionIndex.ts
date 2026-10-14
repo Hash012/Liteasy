@@ -1,4 +1,5 @@
-import { compileSearchQuery, formatFromName } from "../search/searchQuery";
+import { contextKind } from "./contextAssetMetadata";
+import { compileSearchQuery, formatFromName, type SearchMetadata } from "../search/searchQuery";
 import type { AssistantComposerSuggestion } from "./assistant.types";
 
 type SuggestionTrigger = AssistantComposerSuggestion["trigger"];
@@ -8,6 +9,7 @@ type IndexedSuggestion = {
   searchable: string;
   original: string;
   page: boolean;
+  metadata: SearchMetadata;
 };
 
 type SearchResult = {
@@ -28,6 +30,14 @@ export type AssistantSuggestionIndex = {
     options?: { includePages?: boolean }
   ) => AssistantComposerSuggestion[];
 };
+
+const metadataCache = new WeakMap<AssistantComposerSuggestion, SearchMetadata>();
+export function assistantSuggestionMetadata(suggestion: AssistantComposerSuggestion, label = suggestion.label): SearchMetadata {
+  const cached = metadataCache.get(suggestion); if (cached) return cached;
+  const fallbackFormat = suggestion.category === "论文" ? "pdf" : suggestion.category === "白板" ? "canvas" : suggestion.category === "笔记" ? "markdown" : (/\.[a-z0-9]{1,8}(?:[?#]|$)/i.test(label) ? formatFromName(label) : undefined);
+  const metadata = { kind: contextKind(suggestion), origin: "unknown", format: fallbackFormat, assetType: suggestion.category === "笔记" ? "note" : suggestion.category === "白板" ? "board" : undefined, tags: suggestion.keywords, ...suggestion.searchMetadata, updatedAt: suggestion.updatedAt ?? suggestion.searchMetadata?.updatedAt };
+  metadataCache.set(suggestion, metadata); return metadata;
+}
 
 const indexes = new WeakMap<readonly AssistantComposerSuggestion[], AssistantSuggestionIndex>();
 const MAX_CACHED_SEARCHES = 32;
@@ -59,9 +69,10 @@ export function createAssistantSuggestionIndex(
     if (seen.has(suggestion.id)) continue;
     seen.add(suggestion.id);
     const label = suggestion.label;
-    const original = [label, suggestion.detail, suggestion.category, suggestion.projectTitle, suggestion.description, ...(suggestion.keywords ?? []), getAssistantReadOnlyLabel(suggestion)].filter(Boolean).join(" ");
+    const original = [label, suggestion.detail, suggestion.category, suggestion.projectTitle, suggestion.summary, ...(suggestion.keywords ?? []), ...(suggestion.searchMetadata?.tags ?? [])].filter(Boolean).join(" ");
     buckets[suggestion.trigger].push({
       suggestion,
+      metadata: assistantSuggestionMetadata(suggestion, label),
       original,
       searchable: normalize(original),
       page: suggestion.token?.kind === "page"
@@ -106,9 +117,7 @@ export function createAssistantSuggestionIndex(
         for (const candidate of candidates) {
           if (candidate.page && !allowPages) continue;
           if (advanced) {
-            const suggestion = candidate.suggestion;
-            const fallbackFormat = suggestion.category === "论文" ? "pdf" : suggestion.category === "白板" ? "canvas" : suggestion.category === "笔记" ? "markdown" : formatFromName(suggestion.label);
-            if (!compiled.matches(candidate.original, suggestion.searchMetadata ?? { format: fallbackFormat, assetType: suggestion.category === "笔记" ? "note" : suggestion.category === "白板" ? "board" : undefined, tags: suggestion.keywords })) continue;
+            if (!compiled.matches(candidate.original, candidate.metadata)) continue;
           } else if (!parts.every((part) => candidate.searchable.includes(part))) continue;
           matches.push(candidate);
           if (matches.length >= resultLimit) break;

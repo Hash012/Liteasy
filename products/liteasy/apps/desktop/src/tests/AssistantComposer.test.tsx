@@ -232,8 +232,8 @@ test("shows context names without trigger prefixes and preserves removal and com
     contextTokens={[{ id: "book", kind: "paper", label: "@Field Guide", detail: "Book source", prompt: "Read guide" }]}
     suggestions={[{ id: "thin", label: "生成薄读", trigger: "/", insertText: "/生成薄读" }]} />);
   const context = screen.getByRole("button", { name: "移除上下文：@Field Guide" });
-  expect(context).toHaveTextContent(/^Field Guide$/);
-  expect(context).toHaveAttribute("title", "Book source");
+  expect(screen.getByRole("button", { name: "预览上下文：@Field Guide" })).toHaveTextContent(/^Field Guide$/);
+  expect(context).toHaveTextContent("");
   fireEvent.click(context);
   expect(remove).toHaveBeenCalledWith("book");
   expect(document.querySelectorAll(".assistant-command-chip")).toHaveLength(1);

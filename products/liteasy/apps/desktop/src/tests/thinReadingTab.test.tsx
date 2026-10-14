@@ -1690,6 +1690,6 @@ test.each([false, true])("opens the actual PDF locator from the Evidence Lens on
   await user.click(lens.getByRole("button", { name: /篇来源/ }));
   await user.click(lens.getByRole("button", { name: "查看全部证据" }));
   await user.click(lens.getAllByRole("button", { name: "打开原文" })[0]);
-  expect(onOpenEvidence).toHaveBeenCalledWith({ evidenceId: "evidence-attention-self-attention", page: 2, paperId: "paper-attention", quote: "Self-attention replaces recurrence in the encoder." });
+  expect(onOpenEvidence).toHaveBeenCalledWith({ evidenceId: "evidence-attention-self-attention", page: 2, pageOnly: true, paperId: "paper-attention", quote: "Self-attention replaces recurrence in the encoder." });
   expect(lens.getByRole("button", { name: /篇来源/ })).not.toHaveTextContent("有支持");
 });

@@ -52,7 +52,10 @@ test("searches all mounted paths and sends the selected file body via fixed cont
   expect(await screen.findByRole("button", { name: /review.md/ })).toBeInTheDocument();
   expect(files.readFile).not.toHaveBeenCalled();
   await user.keyboard("{Enter}");
+  await user.click(await screen.findByRole("button", { name: "预览上下文：review.md" }));
   expect(await screen.findByRole("button", { name: "移除上下文：review.md" })).toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "预览上下文：review.md" })).toHaveLength(1);
+  await user.keyboard("{Escape}");
   expect(files.readFile).toHaveBeenCalledWith("vault", "project/methods/review.md");
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "解释这个笔记");
   await user.click(screen.getByRole("button", { name: "发送" }));
@@ -123,4 +126,17 @@ test("reuses candidates for new arrays with unchanged entries and invalidates ch
   expect(result.current.suggestions.slice(0, 2).map((item) => item.label)).toEqual(["另一份薄读", "首份薄读"]);
   rerender({ records: [{ ...artifacts[1], title: "更新后的薄读" }, artifacts[0]] });
   expect(result.current.suggestions[0].label).toBe("更新后的薄读");
+});
+
+test("publishes real file format and source metadata without reading bodies", async () => {
+  const scopeId = crypto.randomUUID();
+  const hook = renderHook(() => {
+    const workbench = useObjectWorkbenchController({ scopeId, getApi: () => { throw new Error("No model expected"); }, getPapers: () => [], getSettings: () => createSettingsStore().getState(), openEvidence: vi.fn() });
+    return useAssistantContextCatalog({ artifacts: [], objects: workbench.objects, repository: workbench.repository, port: workbench.port });
+  });
+  await waitFor(() => expect(hook.result.current.some((item) => item.label === "review.md")).toBe(true));
+  expect(hook.result.current.find((item) => item.label === "review.md")?.searchMetadata).toMatchObject({ kind: "note", format: "markdown", origin: "external" });
+  expect(hook.result.current.find((item) => item.category === "设置")).toMatchObject({ domain: "application", scopeId });
+  expect(files.readFile).not.toHaveBeenCalled();
+  hook.unmount();
 });

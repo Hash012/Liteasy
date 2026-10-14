@@ -2,15 +2,20 @@ import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { ContextAssetThumbnail } from "./ContextAssetThumbnail";
 import "../models/assistantModelPicker.css";
 import { displayPath } from "../resource-filesystem/displayPath";
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Popover, PopoverSurface, PopoverTrigger, Slider, Tooltip, useRestoreFocusTarget } from "@fluentui/react-components";
 import { thinkingDepths, thinkingDepthLabels, type ThinkingDepth } from "./thinkingDepth";
-import { AddRegular, BrainCircuitRegular, EyeRegular, FlashRegular, GridRegular, MicRegular, SendRegular } from "@fluentui/react-icons";
+import { DismissRegular, AddRegular, BrainCircuitRegular, EyeRegular, FlashRegular, GridRegular, MicRegular, SendRegular } from "@fluentui/react-icons";
 import type { AgentContextUsage, AssistantComposerSuggestion, AssistantContextToken } from "./assistant.types";
-import { createAssistantSuggestionIndex, getAssistantReadOnlyLabel } from "./assistantSuggestionIndex";
+import { createAssistantSuggestionIndex } from "./assistantSuggestionIndex";
 import { ContextAssetBrowser } from "./ContextAssetBrowser";
 import { ContextUsageIndicator } from "./ContextUsageIndicator";
-import { inlineContextParts, insertContextNames, type ContextInsertion } from "./inlineContext";
+import { inlineContextParts, insertContextNames, shortContextName, type ContextInsertion } from "./inlineContext";
+
+import { useUiTranslation } from "../../shared/i18n/useUiTranslation";
+import { ResourceLink } from "../resource-links/ResourceReferenceView";
+import { ResourceReferencesContext } from "../resource-links/ResourceReferencesContext";
+import { liteasyPath } from "../resource-filesystem/liteasyPath";
 
 const emptySuggestions: AssistantComposerSuggestion[] = [];
 
@@ -37,6 +42,7 @@ type AssistantComposerProps = {
   onCancelEdit?: () => void;
   onAddContextToken?: (token: AssistantContextToken, insertion?: ContextInsertion) => void;
   onInputChange: (value: string) => void;
+  onHistoryChange?: (direction: -1 | 1) => void;
   onPasteLiteasyPath?: (path: string) => void;
   onResolveContextToken?: (resolve: () => Promise<AssistantContextToken>, insertion?: ContextInsertion) => void | Promise<boolean | void>;
   onRemoveContextToken?: (tokenId: string) => void;
@@ -75,6 +81,7 @@ export function AssistantComposer({
   onCancelEdit,
   onAddContextToken,
   onInputChange,
+  onHistoryChange,
   onPasteLiteasyPath,
   onResolveContextToken,
   onRemoveContextToken,
@@ -84,6 +91,8 @@ export function AssistantComposer({
   suggestions = emptySuggestions,
   voiceInputMessage
 }: AssistantComposerProps) {
+  const { tChinese } = useUiTranslation();
+  const references = useContext(ResourceReferencesContext);
   const localInputRef = useRef<HTMLTextAreaElement>(null);
   const editorRef = inputRef ?? localInputRef;
   const menuId = useId();
@@ -109,9 +118,23 @@ export function AssistantComposer({
   }, [activeIndex, menuId]);
   const highlightRef = useRef<HTMLDivElement>(null);
   const suggestionIndex = useMemo(() => createAssistantSuggestionIndex(suggestions), [suggestions]);
+  function tokenLocator(token: AssistantContextToken) {
+    const ref = token.contextRefs?.find(value => "objectId" in value);
+    return ref && "objectId" in ref && references ? liteasyPath(references.service.scope, { kind: "object", ref }) : token.resourcePath;
+  }
+  function removeToken(token: AssistantContextToken) {
+    return <Tooltip content={tChinese("context.composer.remove", "移除上下文：{{label}}", { label: token.label })} relationship="label"><Button appearance="subtle" size="small" icon={<DismissRegular />} aria-label={tChinese("context.composer.remove", "移除上下文：{{label}}", { label: token.label })} onClick={() => onRemoveContextToken?.(token.id)} /></Tooltip>;
+  }
+  function tokenPreview(token: AssistantContextToken, label: string) {
+    const locator = tokenLocator(token);
+    return locator && references ? <ResourceLink locator={locator} ariaLabel={token.label} previewOnClick actions={removeToken(token)}><span title={token.label}>{label}</span></ResourceLink>
+      : <Popover positioning="above" trapFocus={false}><PopoverTrigger disableButtonEnhancement><Button appearance="transparent" className="assistant-context-preview-trigger" aria-label={tChinese("context.composer.preview", "预览上下文：{{label}}", { label: token.label })}>{label}</Button></PopoverTrigger><PopoverSurface aria-label={tChinese("context.composer.previewTitle", "上下文预览")}><strong>{token.label}</strong><p>{displayPath(token.detail ?? tChinese("context.composer.unavailable", "来源预览不可用"))}</p>{removeToken(token)}</PopoverSurface></Popover>;
+  }
+  const inputParts = inlineContextParts(input, contextTokens);
+  const mentionedIds = new Set(inputParts.flatMap(part => part.token ? [part.token.id] : []));
   const highlightedInput = useMemo(() => {
     return inlineContextParts(input, contextTokens).map((part, index) => {
-      if (part.token) return <mark className="assistant-command-chip assistant-inline-context" key={index}>{part.text}</mark>;
+      if (part.token) return <mark className="assistant-command-chip assistant-inline-context" key={index}>{tokenPreview(part.token, part.text)}</mark>;
       if (!part.text.includes("/")) return part.text;
       const highlighted = [];
       let offset = 0;
@@ -130,7 +153,7 @@ export function AssistantComposer({
       if (plainStart < part.text.length) highlighted.push(part.text.slice(plainStart));
       return <span key={index}>{highlighted}</span>;
     });
-  }, [input, contextTokens, suggestionIndex]);
+  }, [input, contextTokens, suggestionIndex, references, onRemoveContextToken, tChinese]);
   const activeTrigger = dismissed ? null : getActiveTrigger(input, Math.min(caret, input.length));
   const visibleSuggestions = activeTrigger
     ? suggestionIndex.search(activeTrigger.trigger, activeTrigger.query)
@@ -159,7 +182,7 @@ export function AssistantComposer({
   function advanceBrowserInsertion(token: AssistantContextToken) {
     const insertion = browserInsertion.current;
     if (!insertion) return;
-    const next = insertContextNames(insertion.input, [token], insertion);
+    const next = insertContextNames(insertion.input, [{ ...token, label: shortContextName(token) }], insertion);
     browserInsertion.current = { input: next.input, start: next.caret, end: next.caret };
   }
 
@@ -179,8 +202,8 @@ export function AssistantComposer({
     const afterTrigger = input.slice(activeTrigger.end);
     if (suggestion.token || suggestion.resolveToken) {
       const insertion = { input, start: activeTrigger.start, end: activeTrigger.end };
-      if (suggestion.resolveToken) void onResolveContextToken?.(suggestion.resolveToken, insertion);
-      else if (suggestion.token) onAddContextToken?.(suggestion.token, insertion);
+      if (suggestion.resolveToken) void onResolveContextToken?.(async () => ({ ...await suggestion.resolveToken!(), resourcePath: suggestion.resourcePath }), insertion);
+      else if (suggestion.token) onAddContextToken?.({ ...suggestion.token, resourcePath: suggestion.resourcePath }, insertion);
       setDismissed(true);
       editorRef.current?.focus();
       return;
@@ -213,20 +236,11 @@ export function AssistantComposer({
       {voiceInputMessage ? (
         <div className="assistant-voice-placeholder">{voiceInputMessage}</div>
       ) : null}
-      {contextTokens.length > 0 ? (
+      {contextTokens.some(token => !mentionedIds.has(token.id)) ? (
         <div aria-label="已添加到对话上下文" className="assistant-context-token-row">
-          {contextTokens.map((token) => (
-            <button
-              aria-label={`移除上下文：${token.label}`}
-              className={`assistant-context-token ${token.kind}`}
-              key={token.id}
-              onClick={() => onRemoveContextToken?.(token.id)}
-              title={displayPath(token.detail ?? token.prompt)}
-              type="button"
-            >
-              <strong>{token.label.replace(/^[@/$]/, "")}</strong>
-            </button>
-          ))}
+          {contextTokens.filter(token => !mentionedIds.has(token.id)).map(token => <span className={`assistant-context-token ${token.kind}`} key={token.id}>
+            {tokenPreview(token, shortContextName(token))}{removeToken(token)}
+          </span>)}
         </div>
       ) : null}
       {menuItemCount > 0 ? (
@@ -250,8 +264,8 @@ export function AssistantComposer({
                 <strong>{suggestion.label}</strong>
                 {suggestion.trigger === "@" && (suggestion.category || suggestion.projectTitle || suggestion.readOnly) ?
                   <span className="assistant-suggestion-metadata">{[suggestion.category, suggestion.projectTitle,
-                    getAssistantReadOnlyLabel(suggestion)].filter(Boolean).join(" · ")}</span> : null}
-                {suggestion.unavailableReason || suggestion.description ? <span>{suggestion.unavailableReason ?? suggestion.description}</span> : null}
+                    undefined].filter(Boolean).join(" · ")}</span> : null}
+                {suggestion.unavailableReason ? <span>{suggestion.unavailableReason}</span> : null}
                 {suggestion.detail ? <span>{suggestion.detail}</span> : null}
               </span>
             </button>
@@ -268,7 +282,7 @@ export function AssistantComposer({
         </div>
       ) : null}
       <div className="assistant-input-editor">
-      <div aria-hidden="true" className="assistant-input-highlight" ref={highlightRef}>{highlightedInput}{"\n"}</div>
+      <div className="assistant-input-highlight" ref={highlightRef}>{highlightedInput}{"\n"}</div>
       <textarea
         onPaste={(event) => {
           const text = event.clipboardData.getData("text/plain").trim();
@@ -294,6 +308,11 @@ export function AssistantComposer({
         }}
         onSelect={(event) => { setCaret(event.currentTarget.selectionStart); }}
         onKeyDown={(event) => {
+          if (onHistoryChange && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing && (event.key.toLowerCase() === "z" || event.key.toLowerCase() === "y")) {
+            event.preventDefault();
+            onHistoryChange(event.key.toLowerCase() === "y" || event.shiftKey ? 1 : -1);
+            return;
+          }
           if (menuItemCount && !event.nativeEvent.isComposing) {
             if (event.key === "Escape") { event.preventDefault(); setDismissed(true); return; }
             if (event.key === "ArrowDown" || event.key === "ArrowUp") {

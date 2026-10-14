@@ -1,0 +1,291 @@
+[
+  {
+    "id": "S1",
+    "requirements": [
+      {
+        "id": "S1-01",
+        "text": "按修改时间/类别等排序",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S1-notes.png"
+        ]
+      },
+      {
+        "id": "S1-02",
+        "text": "按论文分区而非扁平混排",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S1-notes.png"
+        ]
+      },
+      {
+        "id": "S1-03",
+        "text": "就地或可见详情展开",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S1-notes.png"
+        ]
+      },
+      {
+        "id": "S1-04",
+        "text": "来源hover呈现原文区域和参考位置",
+        "status": "partial",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S1-notes.png"
+        ],
+        "note": "共享预览/渲染已接入；原PDF图像位置、缺失元数据或原始数学内容未完成Windows实机核验。"
+      },
+      {
+        "id": "S1-05",
+        "text": "多标签、类型驱动过滤",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S1-notes.png"
+        ]
+      },
+      {
+        "id": "S1-06",
+        "text": "Markdown强调语法不裸露",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S1-notes.png"
+        ]
+      },
+      {
+        "id": "S1-07",
+        "text": "10^{-1}与beta分式等采用可读数学渲染",
+        "status": "partial",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S1-notes.png"
+        ],
+        "note": "共享预览/渲染已接入；原PDF图像位置、缺失元数据或原始数学内容未完成Windows实机核验。"
+      }
+    ],
+    "before": "screenshots/notes.png",
+    "after": "evidence/S1-notes.png",
+    "environment": "Linux Chromium; controlled fixtures; same pixel dimensions as review image"
+  },
+  {
+    "id": "S2",
+    "requirements": [
+      {
+        "id": "S2-01",
+        "text": "删除标题下的长篇教学说明",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S2-context-papers.png"
+        ]
+      },
+      {
+        "id": "S2-02",
+        "text": "搜索占位简化为搜索资料",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S2-context-papers.png"
+        ]
+      },
+      {
+        "id": "S2-03",
+        "text": "删除每张论文卡重复整篇论文问答说明",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S2-context-papers.png"
+        ]
+      },
+      {
+        "id": "S2-04",
+        "text": "删除空预览区教学并回收整列",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S2-context-papers.png"
+        ]
+      },
+      {
+        "id": "S2-05",
+        "text": "分类与项目不混淆内容种类/文献类型/应用资料",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S2-context-papers.png"
+        ]
+      }
+    ],
+    "before": "screenshots/context-papers.png",
+    "after": "evidence/S2-context-papers.png",
+    "environment": "Linux Chromium; controlled fixtures; same pixel dimensions as review image"
+  },
+  {
+    "id": "S3",
+    "requirements": [
+      {
+        "id": "S3-01",
+        "text": "结果区足够大并提高实际可选条目数量",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S3-context-images.png"
+        ]
+      },
+      {
+        "id": "S3-02",
+        "text": "真实缩略图显示及可恢复失败",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S3-context-images.png"
+        ]
+      },
+      {
+        "id": "S3-03",
+        "text": "第xx页原图改精简但可区分的定位标签",
+        "status": "partial",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S3-context-images.png"
+        ],
+        "note": "共享预览/渲染已接入；原PDF图像位置、缺失元数据或原始数学内容未完成Windows实机核验。"
+      },
+      {
+        "id": "S3-04",
+        "text": "删除原始内容只读等常驻重复说明",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S3-context-images.png"
+        ]
+      },
+      {
+        "id": "S3-05",
+        "text": "来源hover可看原图在原文的位置",
+        "status": "partial",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S3-context-images.png"
+        ],
+        "note": "共享预览/渲染已接入；原PDF图像位置、缺失元数据或原始数学内容未完成Windows实机核验。"
+      }
+    ],
+    "before": "screenshots/context-images.png",
+    "after": "evidence/S3-context-images.png",
+    "environment": "Linux Chromium; controlled fixtures; same pixel dimensions as review image"
+  },
+  {
+    "id": "S4",
+    "requirements": [
+      {
+        "id": "S4-01",
+        "text": "正文不能无限正在读取",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S4-context-details.png"
+        ]
+      },
+      {
+        "id": "S4-02",
+        "text": "打开内容/摘要/选择/加入对话消除互相争抢主操作",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S4-context-details.png"
+        ]
+      },
+      {
+        "id": "S4-03",
+        "text": "删除重复只读参考与教学说明",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S4-context-details.png"
+        ]
+      },
+      {
+        "id": "S4-04",
+        "text": "加载失败明确短因+真正的重试和取消",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S4-context-details.png"
+        ]
+      }
+    ],
+    "before": "screenshots/context-loading.png",
+    "after": "evidence/S4-context-details.png",
+    "environment": "Linux Chromium; controlled fixtures; same pixel dimensions as review image"
+  },
+  {
+    "id": "S5",
+    "requirements": [
+      {
+        "id": "S5-01",
+        "text": "最近对话不堆大矩形按钮",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "products/liteasy/apps/desktop/src/tests/AssistantHistoryPanel.test.tsx",
+          "products/liteasy/apps/desktop/src/tests/assistantSessionTitles.test.ts"
+        ],
+        "note": "有组件/协调器回归；S5仅展示composer，不能作为历史列表或模型命名截图证据。"
+      },
+      {
+        "id": "S5-02",
+        "text": "AI有意义自动命名且不覆盖手工名",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "products/liteasy/apps/desktop/src/tests/AssistantHistoryPanel.test.tsx",
+          "products/liteasy/apps/desktop/src/tests/assistantSessionTitles.test.ts"
+        ],
+        "note": "有组件/协调器回归；S5仅展示composer，不能作为历史列表或模型命名截图证据。"
+      },
+      {
+        "id": "S5-03",
+        "text": "上下文单一呈现不重复一整行标题",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S5-composer.png"
+        ]
+      },
+      {
+        "id": "S5-04",
+        "text": "短标题+章节号，完整标题放浮窗",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S5-composer.png"
+        ]
+      },
+      {
+        "id": "S5-05",
+        "text": "浮窗显示原文视图而非仅title工具提示",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S5-composer.png"
+        ]
+      },
+      {
+        "id": "S5-06",
+        "text": "点击上下文先预览，删除有独立动作",
+        "status": "implemented-browser-reviewed",
+        "evidence": [
+          "acceptance.json",
+          "evidence/S5-composer.png"
+        ]
+      }
+    ],
+    "before": "screenshots/composer.png",
+    "after": "evidence/S5-composer.png",
+    "environment": "Linux Chromium; controlled fixtures; same pixel dimensions as review image"
+  }
+]

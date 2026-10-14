@@ -25,6 +25,7 @@ export function resolveObjectAnchor(
     };
   if (anchor.type !== "pdf" && anchor.type !== "text")
     return { status: "unresolved", reason: "需要专业内容定位器。" };
+  if (anchor.type === "text" && anchor.normalization === "lf-utf16") source = { ...source, text: source.text.replace(/\r\n?/g, "\n") };
   if (
     (anchor.type === "pdf" && source.page !== anchor.page) ||
     (anchor.type === "text" && source.blockId !== anchor.blockId)

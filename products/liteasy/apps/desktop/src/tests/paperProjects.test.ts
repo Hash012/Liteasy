@@ -135,12 +135,12 @@ test("missing sources and account changes cannot create dangling or cross-accoun
 test("title search exposes current kind and revision while accepting older compact indexes", async () => {
   const f = fixture();
   const note = await f.objects.create({ kind: "content.note", title: "旧索引笔记", content: { schema: "liteasy.note/v1", payload: { text: "正文", origin: "user" } } });
-  expect(await f.objects.searchTitles()).toEqual([{ objectId: note.objectId, title: note.title, kind: note.kind, revision: note.revision }]);
+  expect(await f.objects.searchTitles()).toEqual([{ objectId: note.objectId, title: note.title, kind: note.kind, revision: note.revision, updatedAt: note.updatedAt, mediaTypes: [], origin: note.createdBy.type }]);
   const row = (await f.storage.get(`title/${note.objectId}`))!;
   await f.storage.commit([{ key: row.key, expected: row.version, row: { ...row, value: { objectId: note.objectId, title: note.title, lifecycle: "active" } } }]);
   expect(await f.objects.searchTitles()).toEqual([{ objectId: note.objectId, title: note.title }]);
   const updated = await f.objects.editNote(refOf(note), "编辑会升级索引");
-  expect(await f.objects.searchTitles()).toEqual([{ objectId: note.objectId, title: note.title, kind: note.kind, revision: updated.revision }]);
+  expect(await f.objects.searchTitles()).toEqual([{ objectId: note.objectId, title: note.title, kind: note.kind, revision: updated.revision, updatedAt: updated.updatedAt, mediaTypes: [], origin: updated.createdBy.type }]);
 });
 
 

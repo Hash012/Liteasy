@@ -34,7 +34,8 @@ import type {
 } from "../app/features/note-files/noteFileService";
 
 const gateway = vi.hoisted(() => ({ create: vi.fn() }));
-vi.mock("../app/features/note-files/noteFileService", () => ({
+vi.mock("../app/features/note-files/noteFileService", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../app/features/note-files/noteFileService")>(),
   createNoteFileService: gateway.create,
   subscribeNoteFiles: () => () => undefined,
 }));

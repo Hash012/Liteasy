@@ -37,12 +37,12 @@ export function AssistantHistoryPanel({ activeSessionId, history, kind, archived
     <Checkbox label="查看归档" checked={archived} onChange={(_, data) => { setLocalArchived(!!data.checked); onArchivedChange?.(!!data.checked); }} />
     {visible.length === 0 ? <div className="assistant-history-empty">暂无历史会话或匹配记录。</div> : <ul className="assistant-history-list">
       {visible.map((session) => <li className={`assistant-history-item product-contextual-owner${session.id === activeSessionId ? " active" : ""}`} key={session.id}>
-        <Button appearance="subtle" aria-label={`${session.id === activeSessionId ? "当前会话：" : onOpenSession ? "打开会话：" : "恢复会话："}${session.title}`} className="assistant-history-restore" onClick={() => openSession?.(session.id)} type="button">
+        <Button appearance="subtle" title={`${session.title} · ${kindLabels[session.kind ?? "conversation"]} · ${statusLabels[session.status ?? "idle"]}`} aria-label={`${session.id === activeSessionId ? "当前会话：" : onOpenSession ? "打开会话：" : "恢复会话："}${session.title}`} className="assistant-history-restore" onClick={() => openSession?.(session.id)} type="button">
           {session.title}
         </Button>
         <div className="assistant-history-item-meta">
           {session.id === activeSessionId ? <span>当前</span> : null}
-          <span className="assistant-history-item-kind">{kindLabels[session.kind ?? "conversation"]} · {statusLabels[session.status ?? "idle"]}</span>
+          {session.kind === "artifact_generation" || (session.status && !["idle", "completed"].includes(session.status)) ? <span className="assistant-history-item-kind">{kindLabels[session.kind ?? "conversation"]} · {statusLabels[session.status ?? "idle"]}</span> : null}
           {session.pinned ? <span>已置顶</span> : null}
           {session.updatedAt && (!session.readAt || session.updatedAt > session.readAt) && session.id !== activeSessionId ? <span>有新内容</span> : null}
           <Tooltip content={`${session.messageCount ?? session.messages.length} 条消息 · ${getModeLabel(session.mode)}${session.updatedAt ? ` · ${new Date(session.updatedAt).toLocaleString()}` : ""}`} relationship="description"><time tabIndex={0} dateTime={session.updatedAt}>{session.updatedAt ? new Date(session.updatedAt).toLocaleDateString() : "会话信息"}</time></Tooltip>

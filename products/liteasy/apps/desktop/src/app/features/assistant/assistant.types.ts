@@ -87,6 +87,9 @@ export type AgentActivity = {
 };
 
 export type AssistantContextToken = {
+  /** Explicit user-inserted ranges in the associated draft/message, never inferred from titles. */
+  mentions?: Array<{ id: string; start: number; end: number; text: string }>;
+  resourcePath?: string;
   contextRefs?: import("../context/objectContext").ContextRef[];
   detail?: string;
   id: string;
@@ -96,6 +99,9 @@ export type AssistantContextToken = {
 };
 
 export type AssistantComposerSuggestion = {
+  scopeId?: string;
+  domain?: "research" | "application";
+  updatedAt?: string;
   searchMetadata?: import("../search/searchQuery").SearchMetadata;
   /** Canonical locator for shared references and selecting content fragments. */
   resourcePath?: string;
@@ -105,12 +111,14 @@ export type AssistantComposerSuggestion = {
   projectId?: string;
   projectTitle?: string;
   description?: string;
+  /** Searchable resource summary; interaction instructions must not be stored here. */
+  summary?: string;
   keywords?: string[];
   readOnly?: boolean;
   unavailableReason?: string;
   preview?: string;
-  loadThumbnail?: () => Promise<import("./contextAssetPreview").ContextAssetPreview>;
-  loadPreview?: () => Promise<import("./contextAssetPreview").ContextAssetPreview>;
+  loadThumbnail?: (signal?: AbortSignal) => Promise<import("./contextAssetPreview").ContextAssetPreview>;
+  loadPreview?: (signal?: AbortSignal) => Promise<import("./contextAssetPreview").ContextAssetPreview>;
   /** Preserve the source; create a separately editable project asset. */
   createEditableCopy?: () => Promise<AssistantContextToken>;
   createNote?: (text: string) => Promise<AssistantContextToken>;

@@ -1,6 +1,20 @@
+import { messageWithFallback } from "../../shared/i18n/i18n";
 export type ReferenceHeading = { title: string; level: number; line: number; endLine: number; complete: boolean };
-export type ReferenceRange = { start: number; end: number; text: string; fragment: string; label: string };
+export type ReferenceRange = { start: number; end: number; text: string; fragment: string; label: string; offsets?: { start: number; end: number; unit: "utf16-lf" } };
 export function normalizeReferenceText(text: string) { return text.replace(/\r\n?/g, "\n"); }
+/** Half-open UTF-16 offsets in LF-normalized source, never in rendered/soft-wrapped text. */
+export function referenceCharacters(text: string, start: number, end: number, complete = true): ReferenceRange {
+  text = normalizeReferenceText(text);
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end <= start || end > text.length || (!complete && end === text.length)) {
+    throw new Error(messageWithFallback("context.selection.invalidCharacters", "字符范围无效或尚未完整载入，请重新选择。"));
+  }
+  const boundaries = new Set(Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text), (part) => part.index));
+  boundaries.add(text.length);
+  if (!boundaries.has(start) || !boundaries.has(end)) throw new Error(messageWithFallback("context.selection.splitCharacter", "选区不能截断字符，请重新选择。"));
+  const first = text.slice(0, start).split("\n").length;
+  const last = text.slice(0, end).split("\n").length;
+  return { start: first, end: last, text: text.slice(start, end), fragment: `C${start}:${end}`, label: `第 ${first}–${last} 行 · 选中文字`, offsets: { start, end, unit: "utf16-lf" } };
+}
 export function referenceHeadings(text: string, complete = true): ReferenceHeading[] {
   const lines = normalizeReferenceText(text).split("\n");
   const headings: ReferenceHeading[] = [];
@@ -28,6 +42,9 @@ export function referenceLines(text: string, start: number, end: number, complet
   return { start, end, text: lines.slice(start - 1, end).join("\n"), fragment: `L${start}:${end}`, label: `第 ${start}–${end} 行` };
 }
 export function referenceFragment(text: string, fragment: string, complete = true): ReferenceRange {
+  const characters = fragment.match(/^C(\d+):(\d+)$/);
+  if (characters) return referenceCharacters(text, Number(characters[1]), Number(characters[2]), complete);
+  if (/^C\d/.test(fragment)) throw new Error(messageWithFallback("context.selection.invalidSelector", "字符位置格式无效。"));
   const lines = normalizeReferenceText(text).split("\n");
   const range = fragment.match(/^L(\d+)(?::(\d+))?$/);
   if (range) return referenceLines(text, Number(range[1]), Number(range[2] ?? range[1]), complete);

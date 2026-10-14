@@ -4,7 +4,7 @@ import { useMemo, useRef } from "react";
 import type { AssistantComposerSuggestion } from "../features/assistant/assistant.types";
 import { createResourceReferenceService } from "../features/resource-links/resourceReferenceService";
 import type { ResourceReferences } from "../features/resource-links/ResourceReferencesContext";
-import { referenceLines } from "../features/resource-links/referenceText";
+import { referenceFragment } from "../features/resource-links/referenceText";
 import type { AgentAssetService } from "../features/resource-filesystem/agentAssetService";
 import { liteasyPath, parseLiteasyPath } from "../features/resource-filesystem/liteasyPath";
 import { refOf } from "../features/objects/object.types";
@@ -45,24 +45,29 @@ export function useResourceLinksController(input: { repository: ObjectRepository
     open: async (path) => { await latest.current.open(path); },
     async capture(document, range) {
       await service.verify(document);
-      const selected = referenceLines(document.text, range.start, range.end, document.complete);
-      if (!range.text.trim() || !selected.text.includes(range.text) || range.text.length > 80000) throw new Error("选区已失效，请重新选择文字。");
+      const selected = referenceFragment(document.text, range.fragment, document.complete);
+      if (!range.text.trim() || selected.text !== range.text || range.text.length > 80000) throw new Error("选区已失效，请重新选择文字。");
+      const start = selected.offsets?.start ?? document.text.split("\n").slice(0, selected.start - 1).reduce((total, line) => total + line.length + 1, 0);
+      const end = start + selected.text.length;
       const repository = latest.current.repository;
       if (repository.scopeId !== scope) throw new Error("账号已切换，请重新选择。");
       let parsed;
       try { parsed = parseLiteasyPath(document.asset.path, scope); } catch { /* A registered adapter can supply its own resource locator. */ }
       const snapshotKey = `reference:${await hashText(JSON.stringify([scope, document.asset.path, document.asset.revision, document.text]))}`;
-      const source = parsed?.kind === "object" && document.asset.revision
+      const source = parsed?.kind === "object" && document.asset.revision && !document.source && !parsed.ref.selectorId
         ? await repository.get({ objectId: parsed.ref.objectId, revision: document.asset.revision })
-        : await repository.create({ kind: "source.document", sourceReferences: document.asset.sourceReferences, sourceResolution: document.asset.sourceResolution, title: `${document.asset.title}（引用时快照）`,
-          content: { schema: "liteasy.source-document/v1", payload: { paperId: snapshotKey, availability: "local", text: document.text,
+        : await repository.create({ kind: "source.document", sourceRefs: parsed?.kind === "object" && document.asset.revision ? [{ ...parsed.ref, revision: document.asset.revision }] : undefined, sourceReferences: document.asset.sourceReferences, sourceResolution: document.asset.sourceResolution, title: `${document.asset.title}（引用时快照）`,
+          content: { schema: "liteasy.source-document/v1", payload: { paperId: document.source?.paperId ?? snapshotKey, documentHash: document.source?.documentHash, pages: document.source?.pages.map(({ page, text }) => ({ page, text })), availability: "local", text: document.text,
             legacyKey: snapshotKey,
             abstractText: [`来源：${document.asset.path}`, `读取版本：${document.asset.revision ?? "内容快照"}`,
-              document.complete ? "完整读取。" : "选取时已载入的部分正文，不代表全文。"].join("\n") } } });
-      const object = await repository.create({ kind: "content.fragment", title: `${document.asset.title} · ${range.label}`,
+              document.complete ? "完整读取。" : "选取时已载入的部分正文，不代表全文。"].join("\n") } } }, snapshotKey);
+      const page = document.source?.pages.find((page) => start >= page.start && end <= page.end);
+      const selectionKey = `reference-selection:${await hashText(JSON.stringify([scope, refOf(source), start, end, range.text]))}`;
+      const object = await repository.create({ kind: "content.fragment", title: `${source.title} · 第 ${selected.start}–${selected.end} 行`,
+        sourceReferences: document.asset.sourceReferences, sourceResolution: document.asset.sourceResolution,
         sourceRefs: [refOf(source)], content: { schema: "liteasy.fragment/v1", payload: { text: range.text, partial: true,
-          anchors: [{ type: "text", sourceRef: refOf(source), blockId: `L${range.start}:${range.end}`,
-            quote: { exact: range.text, prefix: "", suffix: "" } }] } } });
+          anchors: [...(page ? [{ type: "pdf" as const, sourceRef: refOf(source), documentHash: document.source?.documentHash, page: page.page, rects: [], precision: "page" as const, extractor: "cached-text", normalization: "lf-utf16", quote: { exact: range.text, prefix: "", suffix: "" } }] : []), { type: "text", sourceRef: refOf(source), blockId: `C${start}:${end}`,
+            normalization: "lf-utf16", range: { start, end }, quote: { exact: range.text, prefix: document.text.slice(Math.max(0, start - 48), start), suffix: document.text.slice(end, end + 48) } }] } } }, selectionKey);
       if (latest.current.repository.scopeId !== scope) throw new Error("账号已切换，请重新选择。");
       return { id: `reference-${object.objectId}`, kind: "object", label: object.title, prompt: "", detail: `第 ${range.start}–${range.end} 行 · 已固定引用内容`, contextRefs: [refOf(object)] };
     },

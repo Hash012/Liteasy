@@ -59,3 +59,26 @@
 }
 
 .context-asset-badges > .context-asset-editable { color: var(--colorPaletteGreenForeground1); background: var(--colorPaletteGreenBackground1); border-color: var(--colorPaletteGreenBorder1); }
+
+.context-asset-workspace { grid-template-columns: 184px minmax(0, 1fr); }
+.context-asset-workspace.has-preview { grid-template-columns: 184px minmax(240px, 1fr) minmax(280px, 380px); }
+.context-asset-query-toolbar, .context-asset-group-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.context-asset-query-toolbar > .search-options { margin-right: auto; }
+.context-asset-group-heading { justify-content: space-between; border-bottom: 1px solid var(--colorNeutralStroke2); }
+.context-asset-grid.is-list { grid-template-columns: 1fr; gap: 4px; }
+.context-asset-grid.is-list .context-asset-card { align-items: center; }
+.context-asset-grid.is-list .context-asset-card-preview { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; }
+.context-asset-grid.is-list .context-asset-card-heading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.context-asset-grid.is-gallery .context-asset-card { flex-wrap: wrap; }
+.context-asset-grid.is-gallery .context-asset-thumbnail { flex-basis: calc(100% - 40px); }
+.context-asset-preview-close { align-self: flex-end; }
+.context-asset-preview-text { white-space: normal; }
+@media (max-width: 900px) {
+  .context-asset-workspace.has-preview { grid-template-columns: 148px minmax(200px, 1fr); }
+  .context-asset-workspace.has-preview > .context-asset-preview { grid-column: 2; grid-row: 1; max-height: none; border: 0; padding: 0; background: var(--colorNeutralBackground1); z-index: var(--layer-panel); }
+  .context-asset-workspace.has-preview > .context-asset-results { display: none; }
+}
+@media (max-width: 560px) {
+  .context-asset-workspace, .context-asset-workspace.has-preview { grid-template-columns: 110px minmax(0, 1fr); }
+  .context-asset-grid.is-list .context-asset-card-preview { display: flex; }
+}

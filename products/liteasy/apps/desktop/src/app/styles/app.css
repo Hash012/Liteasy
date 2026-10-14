@@ -6223,3 +6223,11 @@ button.pdf-overlay-mark:focus-visible {
 .dock-region-actions > button[data-tab-overflow] { width:auto; min-width:40px; padding-inline:4px; }
 .dock-tab { font-size:var(--fontSizeBase300, 13px); }
 @media (pointer: coarse) { .dock-tab, .dock-region-actions > button { min-height:44px; } .dock-tab-close { min-width:44px; min-height:44px; right:0; } .dock-dynamic-tab.has-close > .dock-tab { padding-right:48px; } }
+
+/* Explicit mention ranges use the same short text in the editor and its mirror. */
+.assistant-input-highlight { z-index: var(--layer-panel); }
+.assistant-input-highlight .assistant-inline-context { pointer-events: auto; }
+.assistant-context-preview-trigger,
+.assistant-input-highlight .resource-reference-link { font: inherit; line-height: inherit; letter-spacing: inherit; color: inherit; padding: 0; margin: 0; border: 0; background: transparent; text-decoration: none; }
+.assistant-context-token { display: inline-flex; align-items: center; }
+.assistant-context-token > button { flex: 0 0 auto; }

@@ -45,6 +45,8 @@ test("attaches an unparsed paper as metadata without reading PDF bytes or parsed
   expect(read.text).toContain("正文版本未固定");
   expect(read.text).toContain("论文总页数未知");
   expect(read.asset.path).toBe(path);
+  expect(read.source?.paperId).toBe("cicada");
+  expect(read.source?.pages.map((page) => read.text.slice(page.start, page.end))).toEqual(["Cicada introduction", "Cicada experiments"]);
   expect(loadUserPaperArtifact).toHaveBeenCalledTimes(1);
   expect(f.readPaperBytes).not.toHaveBeenCalled();
   f.hook.unmount();
@@ -104,6 +106,8 @@ test("parses only when the Agent explicitly reads an unparsed paper and keeps ab
   await act(async () => { refs = await hook.result.current.port.capturePaperContext!(["cicada"]); });
   expect(ensurePaperImported).not.toHaveBeenCalled();
   const path = liteasyPath(scopeId, { kind: "object", ref: refs[0] });
+  await expect(hook.result.current.agentAssets.read(path, { preparation: "cached" })).rejects.toThrow("正文尚未就绪");
+  expect(ensurePaperImported).not.toHaveBeenCalled();
   expect((await hook.result.current.agentAssets.read(path)).text).toContain("Full body.");
   expect(ensurePaperImported).toHaveBeenCalledTimes(1);
   await act(async () => { refs = await hook.result.current.port.capturePaperContext!(["cicada"]); });

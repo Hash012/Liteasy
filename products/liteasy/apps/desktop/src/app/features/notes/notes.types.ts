@@ -23,6 +23,8 @@ export type NotesReference = {
   createdAt: string;
 };
 export type NotesItem = {
+  paperIdentity?: { id: string; title: string };
+  page?: number;
   labels?: import("./noteLabels").NoteLabel[];
   paperAnchors?: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity[];
   key: string;

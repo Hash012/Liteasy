@@ -325,6 +325,9 @@ type PdfReaderProps = {
 
 
 export type PdfEvidenceTarget = {
+  sourceRects?: Array<{ x: number; y: number; width: number; height: number }>;
+  documentHash?: string;
+  pageOnly?: boolean;
   searchAnnotation?: { id: string; quote: string };
   evidenceId: string;
   page: number;
@@ -1180,6 +1183,10 @@ function PdfPageView({
   function updateTargetHighlightRects() {
     const textLayer = textLayerRef.current;
     const pageElement = pageShellRef.current;
+    if (focused && targetEvidence && targetEvidence.paperId === activePaper?.id && targetEvidence.page === pageNumber && (targetEvidence.sourceRects?.length || targetEvidence.pageOnly)) {
+      const rects = targetEvidence.sourceRects?.map((rect) => ({ left: rect.x, top: rect.y, width: rect.width, height: rect.height })) ?? [];
+      setTargetHighlightRects(rects); onEvidenceHighlightResolved?.(rects.length > 0); return;
+    }
     if (
       focused &&
       targetEvidence?.textExtraction === "ocr" &&

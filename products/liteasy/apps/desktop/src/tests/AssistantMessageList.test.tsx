@@ -5,7 +5,7 @@ import { AssistantMessageList } from "../app/features/assistant/AssistantMessage
 import type { AssistantMessage } from "../app/features/assistant/assistant.types";
 
 describe("AssistantMessageList", () => {
-  test("shortens context titles to 20 characters without changing the source or copied message", async () => {
+  test("keeps legacy context attachments short without guessing bindings from ordinary message text", async () => {
     const user = userEvent.setup();
     const title = "Larimar: Large Language Models with Episodic Memory Control";
     const content = `${title} Cicada 请比较两篇论文`;
@@ -20,7 +20,8 @@ describe("AssistantMessageList", () => {
     expect(chips[0]).toHaveTextContent("Larimar: Large Langu…");
     expect(chips[1]).toHaveTextContent("Cicada");
     expect(chips[0].parentElement).toHaveAttribute("title", `${title}\n本地文献库`);
-    expect(container.querySelector(".assistant-user-message-content .assistant-inline-context")).toHaveAttribute("aria-label", title);
+    expect(container.querySelector(".assistant-user-message-content .assistant-inline-context")).not.toBeInTheDocument();
+    expect(container.querySelector(".assistant-user-message-content")).toHaveTextContent(content);
     await user.click(screen.getByRole("button", { name: "复制消息" }));
     expect(writeText).toHaveBeenCalledWith(`[${title}] [Cicada] ${content}`);
     expect(tokens[0].label).toBe(title);

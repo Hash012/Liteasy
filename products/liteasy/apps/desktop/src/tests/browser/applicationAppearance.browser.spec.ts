@@ -12,9 +12,9 @@ test("appearance follows the system and an explicit choice persists across launc
   const settings = page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "设置", exact: true });
   await settings.click();
   const appearance = page.getByRole("combobox", { name: "外观", exact: true });
-  await expect(appearance).toHaveValue("system");
-  await expect(page.locator(".activity-bar")).toHaveCSS("background-color", "rgb(31, 31, 31)");
-  await expect(page.locator(".reader-layout-button:not(.active)").first()).toHaveCSS("background-color", "rgb(31, 31, 31)");
+  await expect(appearance).toHaveText("跟随系统");
+  await expect(page.locator(".activity-bar")).toHaveCSS("background-color", "rgb(41, 41, 41)");
+  await expect(page.locator(".reader-layout-button:not(.active)").first()).toHaveCSS("background-color", "rgb(41, 41, 41)");
   const assistantHome = page.getByRole("region", { name: "助手首页", exact: true });
   await expect(assistantHome.getByRole("heading", { name: "开始新对话", exact: true })).toBeVisible();
   await expect(assistantHome).toHaveCSS("color", "rgb(255, 255, 255)");
@@ -25,7 +25,8 @@ test("appearance follows the system and an explicit choice persists across launc
   await page.keyboard.press("Escape");
   await appearance.scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("appearance-dark.png"), fullPage: true, animations: "disabled" });
-  await appearance.selectOption("light");
+  await appearance.click();
+  await page.getByRole("option", { name: "浅色", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "light");
   await expect(page.locator(".activity-bar")).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await expect(assistantHome).toHaveCSS("color", "rgb(36, 36, 36)");
@@ -33,8 +34,9 @@ test("appearance follows the system and an explicit choice persists across launc
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "light");
   if (!(await appearance.isVisible())) await settings.click();
-  await expect(appearance).toHaveValue("light");
-  await appearance.selectOption("system");
+  await expect(appearance).toHaveText("浅色");
+  await appearance.click();
+  await page.getByRole("option", { name: "跟随系统", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");
   await page.emulateMedia({ colorScheme: "light" });
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "light");

@@ -1,0 +1,5388 @@
+{
+  "schema": "liteasy.ui-copy-review/v1",
+  "reviewDate": "2026-10-14",
+  "candidateInput": "/tmp/liteasy-copy-candidates.json",
+  "inventoryInput": "products/liteasy/apps/desktop/scripts/ui-surface-inventory.json",
+  "coverage": {
+    "scannedSourceFiles": 950,
+    "reviewedCandidates": 53,
+    "inventorySurfaces": 225,
+    "decisionCounts": {
+      "remove": 5,
+      "status": 9,
+      "help": 28,
+      "keep": 9,
+      "summary": 2
+    },
+    "allSurfacesRuntimeAccepted": false
+  },
+  "method": [
+    "逐条读取53项候选及所在条件/控件，区分默认教学与错误、权限、读取范围和主动帮助。",
+    "逐条对照现有surface记录；无候选命中不等于完成文案或视觉验收。",
+    "不删除aria/alt、状态或来源范围说明，不增加lint豁免；保留帮助、设置、主动导览。"
+  ],
+  "limits": [
+    "Candidates are not deletion instructions.",
+    "Aria/alt/title and explicit alert/status/log content are excluded to avoid unsafe blanket cleanup.",
+    "Dynamic i18n, CSS layout, and user-generated content require separate review.",
+    "This scanner does not establish coverage of non-TSX frameworks.",
+    "AST脚本未覆盖动态i18n、CSS、用户正文和非TSX框架。",
+    "浏览器fixture与Windows真实平台证据分开；本报告没有Windows通过结论。"
+  ],
+  "candidates": [
+    {
+      "file": "products/liteasy/apps/desktop/src/app/controllers/assistant/AssistantSessionController.tsx",
+      "line": 964,
+      "column": 38,
+      "slot": "description",
+      "text": "整篇论文问答；也可在项目中按页选择原文或图片。",
+      "reasons": [
+        "known-review-template",
+        "instructional-copy-review"
+      ],
+      "inMappedList": true,
+      "decision": "remove",
+      "owner": "assistant",
+      "literalOccurrences": 1,
+      "id": "COPY-001",
+      "reason": "默认论文候选教学不是材料摘要；已移除，具体来源信息由目录元数据提供。",
+      "surface": "src/app/controllers/assistant/AssistantSessionController.tsx",
+      "reviewedSourceSha256": "31cc9f5da6c21c080ddab4aa3f392914c576416f44cd7c8cf6d1a8ae9c792ced",
+      "originalLine": 964,
+      "currentLine": null,
+      "originalLiteralStillPresent": false,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "removed"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/controllers/assistant/AssistantSessionController.tsx",
+      "line": 2594,
+      "column": 18,
+      "slot": "jsx-text",
+      "text": "可以直接对话；分析文献时，用 @ 添加资料。尚未读取任何论文。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "remove",
+      "owner": "assistant",
+      "literalOccurrences": 1,
+      "id": "COPY-002",
+      "reason": "首页输入教学已移除；保留“尚未添加资料”这项实际上下文状态。",
+      "surface": "src/app/controllers/assistant/AssistantSessionController.tsx",
+      "reviewedSourceSha256": "31cc9f5da6c21c080ddab4aa3f392914c576416f44cd7c8cf6d1a8ae9c792ced",
+      "originalLine": 2594,
+      "currentLine": null,
+      "originalLiteralStillPresent": false,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "removed"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/controllers/paperTranslationController.ts",
+      "line": 172,
+      "column": 15,
+      "slot": "detail",
+      "text": "翻译服务必须使用 HTTPS，只有本机开发服务可以使用 HTTP。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "status",
+      "owner": "controllers",
+      "literalOccurrences": 1,
+      "id": "COPY-003",
+      "reason": "只在不安全翻译端点失败时显示，HTTPS/本机开发边界影响用户修复配置，不能当教学删除。",
+      "surface": "src/app/features/pdf/PdfReader.tsx",
+      "reviewedSourceSha256": "109e4b74be2ac1c4616fc61928f547aee16281764f5766f3419eadf67c4a60b7",
+      "originalLine": 172,
+      "currentLine": 172,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/controllers/useAssistantContextCatalog.ts",
+      "line": 231,
+      "column": 24,
+      "slot": "description",
+      "text": "包含已识别的原文、图片和后续成果。也可展开项目，只添加需要的资产。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": true,
+      "decision": "remove",
+      "owner": "assistant",
+      "literalOccurrences": 1,
+      "id": "COPY-004",
+      "reason": "映射到每个项目的相同教学不区分资料；已以真实项目内容摘要和资产数替代。",
+      "surface": "src/app/features/assistant/ContextAssetBrowser.tsx",
+      "reviewedSourceSha256": "26851f98f59b92a5c2cce99f2b1d10b6e0c6138068b5577debd59849da1659d9",
+      "originalLine": 231,
+      "currentLine": null,
+      "originalLiteralStillPresent": false,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "removed"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/controllers/useReadingLibraryController.ts",
+      "line": 144,
+      "column": 78,
+      "slot": "description",
+      "text": "此格式已保存原文件，暂不支持内置阅读。可导出后使用对应应用打开。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "status",
+      "owner": "controllers",
+      "literalOccurrences": 1,
+      "id": "COPY-005",
+      "reason": "仅不支持内置阅读的文件显示，明确原文件已保存及可导出，避免误以为导入丢失。",
+      "surface": "src/app/features/library/ReadingLibraryCatalog.tsx",
+      "reviewedSourceSha256": "dab304251eeed7bdda08504ad9cef63ae8159eda88f23c2c2064508d887364ee",
+      "originalLine": 144,
+      "currentLine": 144,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/account/LightweightLoginDialog.tsx",
+      "line": 64,
+      "column": 52,
+      "slot": "jsx-text",
+      "text": "也可以暂不登录，在设置 → AI 接入中配置自己的 API key。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "account",
+      "literalOccurrences": 1,
+      "id": "COPY-006",
+      "reason": "登录对话框提供合法的暂不登录路径和设置入口，帮助用户选择访问方式，非默认材料卡片说明。",
+      "surface": "src/app/features/account/LightweightLoginDialog.tsx",
+      "reviewedSourceSha256": "c253e9ab7c9f796538a54af5776a9171a116954d53951b7a9b52b7e9be590362",
+      "originalLine": 64,
+      "currentLine": 64,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/agent-core/AgentSettingsPanel.tsx",
+      "line": 76,
+      "column": 37,
+      "slot": "hint",
+      "text": "限制每次请求的上下文容量；请勿超过所用模型支持的容量。长篇资料按需分段读取，输入框会显示估算占用。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "agent-core",
+      "literalOccurrences": 1,
+      "id": "COPY-007",
+      "reason": "设置字段说明上下文上限、模型容量和估算含义，直接影响用户选择；保留在设置而非正文卡片。",
+      "surface": "src/app/features/agent-core/AgentSettingsPanel.tsx",
+      "reviewedSourceSha256": "446bcce48d222327b4ab4cafbe4b136a8cc24fdaeadddbc5bb3f5b313c5efd3c",
+      "originalLine": 76,
+      "currentLine": 76,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/ai-workbench/AiWorkbenchDialog.tsx",
+      "line": 83,
+      "column": 105,
+      "slot": "jsx-text",
+      "text": "没有找到论文，请先在文献库导入 PDF。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "status",
+      "owner": "ai-workbench",
+      "literalOccurrences": 1,
+      "id": "COPY-008",
+      "reason": "论文列表为空时的定位说明，指出导入入口；有数据后不出现。",
+      "surface": "src/app/features/ai-workbench/AiWorkbenchDialog.tsx",
+      "reviewedSourceSha256": "a444f0326776258d6876b3bb8f910a8b340c811584a386de90a8b87f22417e53",
+      "originalLine": 83,
+      "currentLine": 83,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactTabs.tsx",
+      "line": 705,
+      "column": 27,
+      "slot": "placeholder",
+      "text": "粘贴论文正文、引用、页码、读书笔记，或说明希望补强的章节……",
+      "reasons": [
+        "long-placeholder"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "artifacts",
+      "literalOccurrences": 1,
+      "id": "COPY-009",
+      "reason": "补充材料输入框的占位示例，说明可输入证据/页码/请求；输入后自然消失。",
+      "surface": "src/app/features/artifacts/ArtifactTabs.tsx",
+      "reviewedSourceSha256": "3fd405e5461fdb4cb4c72f0da4dba8bd2f2bf782a608702ffcb649ee5bac6284",
+      "originalLine": 705,
+      "currentLine": 705,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/device-control/DeviceControlPanel.tsx",
+      "line": 18,
+      "column": 8,
+      "slot": "jsx-text",
+      "text": "开启后，已配对的手机可以请求打开文献、提取文字和同步资料库。桌面需保持运行；关闭后暂停领取新任务。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "keep",
+      "owner": "device-control",
+      "literalOccurrences": 1,
+      "id": "COPY-010",
+      "reason": "设备任务开关的权限、桌面在线依赖及关闭行为，属于启用前必须了解的影响。",
+      "surface": "src/app/features/device-control/DeviceControlPanel.tsx",
+      "reviewedSourceSha256": "c58504b6ca89a8d9297cac06b333ef779e3b536a9e2583319aebb65b9bd97395",
+      "originalLine": 18,
+      "currentLine": 18,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/extensions/ExtensionViews.tsx",
+      "line": 73,
+      "column": 574,
+      "slot": "description",
+      "text": "试试扩展名称、页面名称或命令，也可以清除筛选。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "remove",
+      "owner": "extensions",
+      "literalOccurrences": 1,
+      "id": "COPY-011",
+      "reason": "无匹配标题和清除筛选按钮已经充分表达状态及动作；删除重复搜索/清除教学。",
+      "surface": "src/app/features/extensions/ExtensionViews.tsx",
+      "reviewedSourceSha256": "95b5a491c2749a927307d997866bbb2f11048e715bcb69dd234172172a29c0c5",
+      "originalLine": 73,
+      "currentLine": null,
+      "originalLiteralStillPresent": false,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "removed"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/global-search/GlobalSearchDialog.tsx",
+      "line": 20,
+      "column": 65,
+      "slot": "jsx-expression",
+      "text": "搜索文献、笔记、批注… 支持 \"完整短语\"",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "global-search",
+      "literalOccurrences": 1,
+      "id": "COPY-012",
+      "reason": "搜索输入占位符的完整短语语法示例，无用户输入时出现，帮助发现实际支持的查询能力。",
+      "surface": "src/app/features/global-search/GlobalSearchDialog.tsx",
+      "reviewedSourceSha256": "76ae549022a8215a7255f168790def5d057c67f9008715ef2154381bfedc26a9",
+      "originalLine": 20,
+      "currentLine": 20,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/global-search/workspaceSearchSource.ts",
+      "line": 152,
+      "column": 160,
+      "slot": "detail",
+      "text": "资产当前不可读取；可能已移除或格式不受支持。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "status",
+      "owner": "global-search",
+      "literalOccurrences": 1,
+      "id": "COPY-013",
+      "reason": "检索资产失败状态明确不可读取而不是空结果，必须保留失效来源事实。",
+      "surface": "src/app/features/global-search/GlobalSearchDialog.tsx",
+      "reviewedSourceSha256": "c436cbb4f28d711f715cb3ad403d432b76f27db948f375418bb4e298a576c80d",
+      "originalLine": 152,
+      "currentLine": 152,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/help/HelpPanel.tsx",
+      "line": 88,
+      "column": 61,
+      "slot": "jsx-text",
+      "text": "从一个任务开始，也可以随时查阅完整手册。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "help",
+      "literalOccurrences": 1,
+      "id": "COPY-014",
+      "reason": "属于用户主动打开的帮助首页，指向任务路线与完整手册；不是常驻工作卡片。",
+      "surface": "src/app/features/help/HelpPanel.tsx",
+      "reviewedSourceSha256": "6fbe3affd6201144f68e0a57f3e4529401e7f78316b1b9650779e45e83d9f930",
+      "originalLine": 88,
+      "currentLine": 88,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/library/LibraryLocationPanel.tsx",
+      "line": 125,
+      "column": 13,
+      "slot": "jsx-text",
+      "text": "检测到多个旧版本遗留的本地库。请选择一个作为当前库；未选目录不会合并或删除。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "keep",
+      "owner": "library",
+      "literalOccurrences": 1,
+      "id": "COPY-015",
+      "reason": "旧库迁移选择明确不合并、不删除未选目录，是数据保留语义，必须保留。",
+      "surface": "src/app/features/library/LibraryLocationPanel.tsx",
+      "reviewedSourceSha256": "c23381399deefeff0a96dbbc60f5bbbb4af633eacfd0bb0bfdaf7941a682abf8",
+      "originalLine": 125,
+      "currentLine": 125,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/library/bibliographicFields.ts",
+      "line": 6,
+      "column": 64,
+      "slot": "placeholder",
+      "text": "2026、2026-10 或 2026-10-02",
+      "reasons": [
+        "long-placeholder"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "library",
+      "literalOccurrences": 1,
+      "id": "COPY-016",
+      "reason": "出版日期字段允许的精度示例，不能当泛用教学移除。",
+      "surface": "src/app/features/library/BibliographicMetadataEditor.tsx",
+      "reviewedSourceSha256": "752c58b41403966cb373fd015758908ce6963c5ab0686d4fa80cf3bb4fdd0bb8",
+      "originalLine": 6,
+      "currentLine": 6,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/local-recovery/ProfileRecoveryPanel.tsx",
+      "line": 38,
+      "column": 8,
+      "slot": "jsx-text",
+      "text": "不携带登录凭据、插件授权和外部目录访问权。已关联的外部笔记复制为新配置拥有的文件；缺失或不支持的附件会阻止备份。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "keep",
+      "owner": "local-recovery",
+      "literalOccurrences": 1,
+      "id": "COPY-017",
+      "reason": "备份恢复的凭据/授权排除和附件失败边界，避免用户误认备份覆盖范围。",
+      "surface": "src/app/features/local-recovery/ProfileRecoveryPanel.tsx",
+      "reviewedSourceSha256": "51c9837188eb85fbeb68491945f51dcd918975eee573e17d886fea6f1f630a9b",
+      "originalLine": 38,
+      "currentLine": 38,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/markdown/ContentView.tsx",
+      "line": 20,
+      "column": 60,
+      "slot": "jsx-text",
+      "text": "此处仅预览前 200,000 个字符；完整内容仍保存在来源中，请分段读取。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "status",
+      "owner": "markdown",
+      "literalOccurrences": 1,
+      "id": "COPY-018",
+      "reason": "仅超长原文触发的实际读取/展示上限，必须保留完整来源与预览范围区别。",
+      "surface": "src/app/features/markdown/ContentView.tsx",
+      "reviewedSourceSha256": "7e3f497ce4cbcec99b44ad587f7fdca82ad0d6c884a3f52931b9a3767529347c",
+      "originalLine": 20,
+      "currentLine": 20,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/markdown/MarkdownEditingToolbar.tsx",
+      "line": 79,
+      "column": 65,
+      "slot": "content",
+      "text": "格式工具 · 支持 Ctrl/⌘ B、I、K",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "markdown",
+      "literalOccurrences": 1,
+      "id": "COPY-019",
+      "reason": "已在Tooltip中按需显示格式快捷键，不占用默认正文空间。",
+      "surface": "src/app/features/markdown/MarkdownEditingToolbar.tsx",
+      "reviewedSourceSha256": "af495e785119d9d87da0a038fb140a66eba89094eb18a5683139164e4ddfbd1d",
+      "originalLine": 79,
+      "currentLine": 79,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/models/ModelConnectionPanel.tsx",
+      "line": 130,
+      "column": 155,
+      "slot": "placeholder",
+      "text": "https://api.example.com/v1",
+      "reasons": [
+        "long-placeholder"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "models",
+      "literalOccurrences": 1,
+      "id": "COPY-020",
+      "reason": "模型API基础地址占位示例，涉及合法配置格式。",
+      "surface": "src/app/features/models/ModelConnectionPanel.tsx",
+      "reviewedSourceSha256": "b4d2fdbeca5c35ba33aa8b19cb2af8fac1fee258b563f9680d0951f32510e6d8",
+      "originalLine": 130,
+      "currentLine": 130,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/models/modelProviders.ts",
+      "line": 43,
+      "column": 53,
+      "slot": "hint",
+      "text": "填写包含版本路径的 API 基础地址，支持 OpenAI Chat Completions 或 Anthropic Messages。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "models",
+      "literalOccurrences": 1,
+      "id": "COPY-021",
+      "reason": "自定义模型提供商设置的协议与版本路径要求，用户需要此信息配置服务。",
+      "surface": "src/app/features/models/ModelConnectionPanel.tsx",
+      "reviewedSourceSha256": "7f9c7d796432dd700b37ff4310f22f29f95ced76f1bf8501460c97f29af96de5",
+      "originalLine": 43,
+      "currentLine": 43,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/notes/NotesInlineEditor.tsx",
+      "line": 45,
+      "column": 24,
+      "slot": "jsx-text",
+      "text": "重新载入会放弃此处草稿，请先复制需要保留的内容。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "keep",
+      "owner": "notes",
+      "literalOccurrences": 1,
+      "id": "COPY-022",
+      "reason": "只在放弃未保存草稿的确认时显示，不可逆操作的必要说明。",
+      "surface": "src/app/features/notes/NotesInlineEditor.tsx",
+      "reviewedSourceSha256": "6dcb2dac03787cf880b979c6888a474a7a6e193169e1e1832d1a8dc4f0d9db30",
+      "originalLine": 45,
+      "currentLine": 45,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/object-surface/ObjectSurface.tsx",
+      "line": 151,
+      "column": 21,
+      "slot": "content",
+      "text": "拖入白板或对话；点击复制带来源链接的文字",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "object-surface",
+      "literalOccurrences": 1,
+      "id": "COPY-023",
+      "reason": "已在Tooltip中说明来源链接的拖放/复制操作，保留键盘可达帮助。",
+      "surface": "src/app/features/object-surface/ObjectSurface.tsx",
+      "reviewedSourceSha256": "e5104f32169abbede04ed8859855e2c682c0daba8f00dde1eac55c9fd3ceedee",
+      "originalLine": 151,
+      "currentLine": 151,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/onboarding/onboarding.ts",
+      "line": 12,
+      "column": 18,
+      "slot": "description",
+      "text": "文献库可以整理 PDF、电子书、Markdown 和其他文件。点击导入按钮，或把文件拖到目标文件夹，即可开始。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "onboarding",
+      "literalOccurrences": 1,
+      "id": "COPY-024",
+      "reason": "用户主动启动的导览第1步，目标即教学，不属于默认卡片。",
+      "surface": "src/app/features/onboarding/OnboardingTour.tsx",
+      "reviewedSourceSha256": "b9e357a9a019cf8bd4812ae740222a1bfbde92d083efcfce577bbb2e96a765c3",
+      "originalLine": 12,
+      "currentLine": 12,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/onboarding/onboarding.ts",
+      "line": 15,
+      "column": 18,
+      "slot": "description",
+      "text": "打开的文献、笔记和设置都会显示在这里。现在展示的是阅读指南；打开自己的文件后，可以选中文字添加高亮、批注或提问。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "onboarding",
+      "literalOccurrences": 1,
+      "id": "COPY-025",
+      "reason": "主动导览解释阅读区与选区操作，保留针对当前步骤的教学。",
+      "surface": "src/app/features/onboarding/OnboardingTour.tsx",
+      "reviewedSourceSha256": "b9e357a9a019cf8bd4812ae740222a1bfbde92d083efcfce577bbb2e96a765c3",
+      "originalLine": 15,
+      "currentLine": 15,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/onboarding/onboarding.ts",
+      "line": 21,
+      "column": 18,
+      "slot": "description",
+      "text": "顶部搜索框可以查找文献、笔记、批注和正文。结合标签、文件格式与正则表达式，逐步缩小结果范围。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "onboarding",
+      "literalOccurrences": 1,
+      "id": "COPY-026",
+      "reason": "主动导览的检索能力说明，帮助用户完成搜索任务。",
+      "surface": "src/app/features/onboarding/OnboardingTour.tsx",
+      "reviewedSourceSha256": "b9e357a9a019cf8bd4812ae740222a1bfbde92d083efcfce577bbb2e96a765c3",
+      "originalLine": 21,
+      "currentLine": 21,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/onboarding/onboarding.ts",
+      "line": 24,
+      "column": 18,
+      "slot": "description",
+      "text": "设置按用途分类，也可以直接搜索。先选择界面与阅读字体、深浅主题和数据目录；使用 AI 前，在“AI 与助手”中配置可用模型。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "onboarding",
+      "literalOccurrences": 1,
+      "id": "COPY-027",
+      "reason": "主动导览的设置入口和模型配置前置条件，保留。",
+      "surface": "src/app/features/onboarding/OnboardingTour.tsx",
+      "reviewedSourceSha256": "b9e357a9a019cf8bd4812ae740222a1bfbde92d083efcfce577bbb2e96a765c3",
+      "originalLine": 24,
+      "currentLine": 24,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/onboarding/onboarding.ts",
+      "line": 27,
+      "column": 18,
+      "slot": "description",
+      "text": "在右侧输入问题，通过模型选择器切换模型。思考强度按钮中可以同时调整回答速度、严谨程度和系统提示词。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "onboarding",
+      "literalOccurrences": 1,
+      "id": "COPY-028",
+      "reason": "主动导览的对话输入与思考设置介绍，保留。",
+      "surface": "src/app/features/onboarding/OnboardingTour.tsx",
+      "reviewedSourceSha256": "b9e357a9a019cf8bd4812ae740222a1bfbde92d083efcfce577bbb2e96a765c3",
+      "originalLine": 27,
+      "currentLine": 27,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/onboarding/onboarding.ts",
+      "line": 30,
+      "column": 18,
+      "slot": "description",
+      "text": "点击添加上下文，选择文件、论文或笔记片段；也可以从文献库直接拖进输入框，或输入 @ 搜索。正文中会插入资料名称。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "onboarding",
+      "literalOccurrences": 1,
+      "id": "COPY-029",
+      "reason": "主动导览的上下文添加入口和显式引用行为说明，保留；正文身份现由mention区间维护。",
+      "surface": "src/app/features/onboarding/OnboardingTour.tsx",
+      "reviewedSourceSha256": "b9e357a9a019cf8bd4812ae740222a1bfbde92d083efcfce577bbb2e96a765c3",
+      "originalLine": 30,
+      "currentLine": 30,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/onboarding/onboarding.ts",
+      "line": 36,
+      "column": 18,
+      "slot": "description",
+      "text": "导览结束后，文献库、阅读区、AI 与运行记录会保持展开。点击文献库导入一份资料，按手册中的第一条路线试一试。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "onboarding",
+      "literalOccurrences": 1,
+      "id": "COPY-030",
+      "reason": "主动导览结束步骤说明恢复后的工作区和帮助入口，不是常驻工作区教学。",
+      "surface": "src/app/features/onboarding/OnboardingTour.tsx",
+      "reviewedSourceSha256": "b9e357a9a019cf8bd4812ae740222a1bfbde92d083efcfce577bbb2e96a765c3",
+      "originalLine": 36,
+      "currentLine": 36,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/paper-reading/LiteratureGuideControls.tsx",
+      "line": 33,
+      "column": 50,
+      "slot": "jsx-text",
+      "text": "为论文添加简明讲解，点击原文虚线即可查看。关闭此窗口后，任务仍会继续。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "keep",
+      "owner": "paper-reading",
+      "literalOccurrences": 1,
+      "id": "COPY-031",
+      "reason": "AI标注任务窗口说明关闭后继续运行，涉及异步任务生命周期；不应因精简隐藏后台工作事实。",
+      "surface": "src/app/features/paper-reading/LiteratureGuideControls.tsx",
+      "reviewedSourceSha256": "961d1df070a86fb080f5daadc47ea71d0e00f15cee883baa5393ab8b5bba41e7",
+      "originalLine": 33,
+      "currentLine": 33,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/paper-reading/PaperReadingNavigator.tsx",
+      "line": 45,
+      "column": 15,
+      "slot": "jsx-text",
+      "text": "正文没有可识别的章节标题。可以使用查找或书签定位。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "status",
+      "owner": "paper-reading",
+      "literalOccurrences": 1,
+      "id": "COPY-032",
+      "reason": "只有章节索引为空时显示，说明缺少可识别标题并提供查找/书签替代。",
+      "surface": "src/app/features/paper-reading/PaperReadingNavigator.tsx",
+      "reviewedSourceSha256": "faa42491ae23d63d69b89aba219027f780b0e3a9dbb7fc20a756d3115c75a791",
+      "originalLine": 45,
+      "currentLine": 45,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/paper-services/PaperServicesSettingsPanel.tsx",
+      "line": 60,
+      "column": 39,
+      "slot": "hint",
+      "text": "用于没有文字层的 PDF，可离线识别；识别结果支持页级定位。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "paper-services",
+      "literalOccurrences": 1,
+      "id": "COPY-033",
+      "reason": "扫描PDF的OCR设置说明离线能力和页级定位精度，影响用户配置。",
+      "surface": "src/app/features/paper-services/PaperServicesSettingsPanel.tsx",
+      "reviewedSourceSha256": "8544d6e8415a516458b9ddf437d1dc065c03485a38714c4ca5a8aaa5c31841cf",
+      "originalLine": 60,
+      "currentLine": 60,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/paper-services/PaperServicesSettingsPanel.tsx",
+      "line": 85,
+      "column": 14,
+      "slot": "jsx-text",
+      "text": "本地提取可用于薄读；配置 MinerU 并解析论文后，可以使用图文阅读模式。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "paper-services",
+      "literalOccurrences": 1,
+      "id": "COPY-034",
+      "reason": "论文服务设置解释本地提取与图文模式前置条件；保留在配置表面。",
+      "surface": "src/app/features/paper-services/PaperServicesSettingsPanel.tsx",
+      "reviewedSourceSha256": "8544d6e8415a516458b9ddf437d1dc065c03485a38714c4ca5a8aaa5c31841cf",
+      "originalLine": 85,
+      "currentLine": 85,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/pdf/PaperReviewSharePanel.tsx",
+      "line": 49,
+      "column": 30,
+      "slot": "jsx-text",
+      "text": "共享前请先配置 Liteasy 评论连接；开启后仅共享本次快照，编辑评论后需更新。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "keep",
+      "owner": "pdf",
+      "literalOccurrences": 1,
+      "id": "COPY-035",
+      "reason": "共享前的连接要求和只共享快照范围，涉及数据公开与后续更新语义。",
+      "surface": "src/app/features/pdf/PaperReviewSharePanel.tsx",
+      "reviewedSourceSha256": "a60bab8de1a2e5c483aac012871df8c112aa3991702c2060fded78a63b0a4c03",
+      "originalLine": 49,
+      "currentLine": 49,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/pdf/PdfMarkdownTextBox.tsx",
+      "line": 304,
+      "column": 23,
+      "slot": "placeholder",
+      "text": "输入 Markdown、公式 $E=mc^2$ 或代码块…",
+      "reasons": [
+        "long-placeholder"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "pdf",
+      "literalOccurrences": 1,
+      "id": "COPY-036",
+      "reason": "批注输入占位示例，说明支持的Markdown/公式语法；不是保存后的批注正文。",
+      "surface": "src/app/features/pdf/PdfMarkdownTextBox.tsx",
+      "reviewedSourceSha256": "c5840921e956c4d446d2ab1dd2712ab678f4374d77c80cba3070a5da6b5d7e9f",
+      "originalLine": 304,
+      "currentLine": 304,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/profile/AcademicProfileForm.tsx",
+      "line": 175,
+      "column": 25,
+      "slot": "placeholder",
+      "text": "例如：熟悉数据库并发控制；机器学习还在入门。留空时默认均衡讲解。",
+      "reasons": [
+        "long-placeholder"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "profile",
+      "literalOccurrences": 1,
+      "id": "COPY-037",
+      "reason": "学术资料表单占位示例说明领域熟悉度和留空行为，影响模型个性化选择。",
+      "surface": "src/app/features/profile/AcademicProfileForm.tsx",
+      "reviewedSourceSha256": "8f89acdfaf70217f1db889844f6fe8d62a4e075fc08bf598d63b975170eec63d",
+      "originalLine": 175,
+      "currentLine": 175,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/profile/ProfileMemoryPanel.tsx",
+      "line": 36,
+      "column": 179,
+      "slot": "placeholder",
+      "text": "例如：事务处理与分布式数据库；回答先给结论，再解释依据",
+      "reasons": [
+        "long-placeholder"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "profile",
+      "literalOccurrences": 1,
+      "id": "COPY-038",
+      "reason": "记忆编辑表单占位示例，用户正在明确编辑偏好，保留。",
+      "surface": "src/app/features/profile/ProfileMemoryPanel.tsx",
+      "reviewedSourceSha256": "51d89f48c0b8954e9ba916ccce7589ce1541c4feccc91abe25487c08d710dabf",
+      "originalLine": 36,
+      "currentLine": 36,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/recommendations/RecommendationIntelligenceSettings.tsx",
+      "line": 42,
+      "column": 8,
+      "slot": "jsx-text",
+      "text": "围绕文献内容、你的阅读问题和研究方向排序。未配置语义服务时使用本地词项匹配；随时可以关闭。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "recommendations",
+      "literalOccurrences": 1,
+      "id": "COPY-039",
+      "reason": "推荐设置说明排序依据、无语义服务的回退和可关闭性，属于设置决策信息。",
+      "surface": "src/app/features/recommendations/RecommendationIntelligenceSettings.tsx",
+      "reviewedSourceSha256": "a1d624bf3f8affe28a4f590d809664d959030981257e21cfba3a2a7b2e31f886",
+      "originalLine": 42,
+      "currentLine": 42,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/resource-links/ReferenceContentPicker.tsx",
+      "line": 75,
+      "column": 152,
+      "slot": "jsx-text",
+      "text": "点击标题选章节；点击行号、Shift+点击或直接选中文字。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "resource-links",
+      "literalOccurrences": 1,
+      "id": "COPY-040",
+      "reason": "选区教学已移入InfoPopover；源文本行号/抽取行号精度说明仍可见，避免混淆PDF页码。",
+      "surface": "src/app/features/resource-links/ReferenceContentPicker.tsx",
+      "reviewedSourceSha256": "2594a44e3a4c6a75c1c01791d3519226306e1c88c343f687727ce96f44f4524e",
+      "originalLine": 75,
+      "currentLine": 79,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "unit-interaction",
+        "test": "src/tests/resourceReferences.test.tsx: selection guidance is available on demand while source-line precision stays visible",
+        "runtimeGap": "尚无真实Windows/WebView2交互证据。"
+      },
+      "implementation": "moved-to-InfoPopover"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/resource-links/WikiLinkEditor.tsx",
+      "line": 73,
+      "column": 72,
+      "slot": "jsx-text",
+      "text": "没有匹配项。点击 ＋ 浏览所有文件，或继续输入名称。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "status",
+      "owner": "resource-links",
+      "literalOccurrences": 1,
+      "id": "COPY-041",
+      "reason": "引用编辑器仅无匹配项显示，解释仍可浏览资料；不是每项材料的默认摘要。",
+      "surface": "src/app/features/resource-links/WikiLinkEditor.tsx",
+      "reviewedSourceSha256": "807d53b2c5405f9b33786bf18f62aa867803b88ae47c88c0a137d81ed04d81ef",
+      "originalLine": 73,
+      "currentLine": 73,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/search/SearchFilterFields.tsx",
+      "line": 76,
+      "column": 66,
+      "slot": "jsx-text",
+      "text": "，可与筛选组合。支持 i、m、s，不支持环视与反向引用。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "search",
+      "literalOccurrences": 1,
+      "id": "COPY-042",
+      "reason": "已位于检索语法InfoPopover，说明正则支持范围和限制，不占默认列表空间。",
+      "surface": "src/app/features/search/SearchFilterFields.tsx",
+      "reviewedSourceSha256": "fb72a64da5d61b1951356fef1860ace21553c7118cc57f6c7a5b4b91714d0e52",
+      "originalLine": 76,
+      "currentLine": 82,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/selection-lookup/SelectionLookupSettingsPanel.tsx",
+      "line": 61,
+      "column": 12,
+      "slot": "jsx-text",
+      "text": "英文单词与短语先查询词典。未收录时可翻译选段；AI 翻译需点击确认。英英词典提供英文释义。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "keep",
+      "owner": "selection-lookup",
+      "literalOccurrences": 1,
+      "id": "COPY-043",
+      "reason": "设置说明词典优先和AI翻译须确认，涉及真实请求行为与用户控制。",
+      "surface": "src/app/features/selection-lookup/SelectionLookupSettingsPanel.tsx",
+      "reviewedSourceSha256": "547d15f4b4c21e07afdd17624666accd89c2358e9eb2dc3485ed4d3381d146e7",
+      "originalLine": 61,
+      "currentLine": 61,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/settings/AnnotationSyncSettingsPanel.tsx",
+      "line": 8,
+      "column": 44,
+      "slot": "hint",
+      "text": "仅支持 HTTPS；未配置时，公开批注保留在本地等待同步。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "keep",
+      "owner": "settings",
+      "literalOccurrences": 1,
+      "id": "COPY-044",
+      "reason": "同步端点设置明确HTTPS要求和未配置时本地保留状态，防止误以为已经共享。",
+      "surface": "src/app/features/settings/AnnotationSyncSettingsPanel.tsx",
+      "reviewedSourceSha256": "0029b826d1bd0dff7ad95a269017577bc55f1665a1995f2bfb4abad69a5601e2",
+      "originalLine": 8,
+      "currentLine": 8,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/settings/AnnotationSyncSettingsPanel.tsx",
+      "line": 9,
+      "column": 62,
+      "slot": "placeholder",
+      "text": "https://intuecho.example.com",
+      "reasons": [
+        "long-placeholder"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "settings",
+      "literalOccurrences": 1,
+      "id": "COPY-045",
+      "reason": "同步端点占位URL是配置格式示例。",
+      "surface": "src/app/features/settings/AnnotationSyncSettingsPanel.tsx",
+      "reviewedSourceSha256": "0029b826d1bd0dff7ad95a269017577bc55f1665a1995f2bfb4abad69a5601e2",
+      "originalLine": 9,
+      "currentLine": 9,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/settings/DataLocationSettings.tsx",
+      "line": 41,
+      "column": 14,
+      "slot": "jsx-text",
+      "text": "请先保存正在编辑的内容并等待生成任务结束。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "keep",
+      "owner": "settings",
+      "literalOccurrences": 1,
+      "id": "COPY-046",
+      "reason": "目录更改后的重启操作提醒保存编辑和等待任务，保护未保存数据与运行生命周期。",
+      "surface": "src/app/features/settings/DataLocationSettings.tsx",
+      "reviewedSourceSha256": "0b81419d80c395c7cc87c651942787740edde6f44c33fd94e2cab595c2c19195",
+      "originalLine": 41,
+      "currentLine": 41,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/settings/DataLocationSettings.tsx",
+      "line": 46,
+      "column": 16,
+      "slot": "jsx-text",
+      "text": "浏览器版数据保存在当前浏览器；可在 Notes 中连接文件夹。桌面版支持自定义本地数据目录。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "help",
+      "owner": "settings",
+      "literalOccurrences": 1,
+      "id": "COPY-047",
+      "reason": "数据位置设置解释当前浏览器/桌面能力差异与外部目录入口，避免错误配置期望。",
+      "surface": "src/app/features/settings/DataLocationSettings.tsx",
+      "reviewedSourceSha256": "0b81419d80c395c7cc87c651942787740edde6f44c33fd94e2cab595c2c19195",
+      "originalLine": 46,
+      "currentLine": 46,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/thin-reading/ThinReadingTab.tsx",
+      "line": 149,
+      "column": 18,
+      "slot": "description",
+      "text": "把证据支持的步骤和关系整理成流程图。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "summary",
+      "owner": "thin-reading",
+      "literalOccurrences": 1,
+      "id": "COPY-048",
+      "reason": "快捷命令描述区分流程图的步骤/关系输出，并限定证据来源，不是材料通用使用说明。",
+      "surface": "src/app/features/thin-reading/ThinReadingTab.tsx",
+      "reviewedSourceSha256": "cb76feb2c4fe31aa921e3c12e32d72a2a9cfd908ce4db3340a6489357c913735",
+      "originalLine": 149,
+      "currentLine": 149,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/thin-reading/ThinReadingTab.tsx",
+      "line": 156,
+      "column": 18,
+      "slot": "description",
+      "text": "把证据支持的部件和连接关系整理成结构图。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "summary",
+      "owner": "thin-reading",
+      "literalOccurrences": 1,
+      "id": "COPY-049",
+      "reason": "快捷命令描述区分结构图的部件/连接输出，具有实际选择价值。",
+      "surface": "src/app/features/thin-reading/ThinReadingTab.tsx",
+      "reviewedSourceSha256": "cb76feb2c4fe31aa921e3c12e32d72a2a9cfd908ce4db3340a6489357c913735",
+      "originalLine": 156,
+      "currentLine": 156,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/thin-reading/ThinReadingTab.tsx",
+      "line": 1532,
+      "column": 31,
+      "slot": "emptySourcesMessage",
+      "text": "这些概念还没有检索到可验证的关联文献。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "status",
+      "owner": "thin-reading",
+      "literalOccurrences": 1,
+      "id": "COPY-050",
+      "reason": "明确关联文献尚不可验证，不能用空白或已就绪状态替代。",
+      "surface": "src/app/features/thin-reading/ThinReadingTab.tsx",
+      "reviewedSourceSha256": "cb76feb2c4fe31aa921e3c12e32d72a2a9cfd908ce4db3340a6489357c913735",
+      "originalLine": 1532,
+      "currentLine": 1532,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/VisualizationTab.tsx",
+      "line": 21,
+      "column": 65,
+      "slot": "jsx-text",
+      "text": "独立标签页支持缩放、拖动与完整查看。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "remove",
+      "owner": "visualization",
+      "literalOccurrences": 1,
+      "id": "COPY-051",
+      "reason": "独立可视化标题页的通用缩放/拖动说明不增加实际内容，已删除；图表操作控件保留。",
+      "surface": "src/app/features/visualization/VisualizationTab.tsx",
+      "reviewedSourceSha256": "b3a815e636486d1ec734e3933a37f3b3709075f72a87a4c9d8da7e55700d88cf",
+      "originalLine": 21,
+      "currentLine": null,
+      "originalLiteralStillPresent": false,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "removed"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/workflow-studio/WorkflowBindingEditor.tsx",
+      "line": 27,
+      "column": 55,
+      "slot": "placeholder",
+      "text": "留空使用完整值，如 asset.path / selection.0",
+      "reasons": [
+        "long-placeholder"
+      ],
+      "inMappedList": true,
+      "decision": "help",
+      "owner": "workflow-studio",
+      "literalOccurrences": 1,
+      "id": "COPY-052",
+      "reason": "工作流字段路径的占位语法与留空行为，直接影响参数绑定正确性。",
+      "surface": "src/app/features/workflow-studio/WorkflowBindingEditor.tsx",
+      "reviewedSourceSha256": "c8230d40699ca4cebf4b3844033e65273e719756c098d171e4fe9b05d083a2f6",
+      "originalLine": 27,
+      "currentLine": 27,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    },
+    {
+      "file": "products/liteasy/apps/desktop/src/app/features/workflow-studio/WorkflowStudio.tsx",
+      "line": 135,
+      "column": 38,
+      "slot": "jsx-text",
+      "text": "此项目尚无对应文件；可在源码中查看现有项目文件。",
+      "reasons": [
+        "instructional-copy-review"
+      ],
+      "inMappedList": false,
+      "decision": "status",
+      "owner": "workflow-studio",
+      "literalOccurrences": 1,
+      "id": "COPY-053",
+      "reason": "工作流项目无对应文件时显示，引导查看实际存在文件，不冒充生成完成。",
+      "surface": "src/app/features/workflow-studio/WorkflowStudio.tsx",
+      "reviewedSourceSha256": "41a25ae180b8636756f3bbb9f83a02d4e8e389ed20a8bf5f3e6a9f882c2909cc",
+      "originalLine": 135,
+      "currentLine": 135,
+      "originalLiteralStillPresent": true,
+      "verification": {
+        "level": "static-only",
+        "method": "Read candidate and enclosing source expression; verify current literal and control placement",
+        "runtimeGap": "该精确状态/语言/权限分支未逐项做真实页面验收。"
+      },
+      "implementation": "retained"
+    }
+  ],
+  "surfaces": [
+    {
+      "path": "src/app/controllers/LocalFileOperationsTool.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/controllers/assistant/AssistantSessionController.tsx",
+      "batch": "M3",
+      "owner": "M3 surface owner / shared UI review",
+      "checkedCandidateCount": 2,
+      "candidateIds": [
+        "COPY-001",
+        "COPY-002"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/controllers/useCommunitySourceController.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/account/AccountDataExportPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/account/LightweightLoginDialog.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-006"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/agent-core/AgentSettingsPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-007"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/agent-work/AgentLiveWorkPanel.tsx",
+      "batch": "M3",
+      "owner": "M3 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/ai-prompts/GenerationPromptContext.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/ai-prompts/GenerationPromptDialog.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/ai-prompts/GenerationPromptEditor.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/ai-workbench/AiWorkbenchDialog.tsx",
+      "batch": "M3",
+      "owner": "M3 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-008"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/artifacts/ArtifactExportMenu.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/artifacts/ArtifactLibraryPane.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/artifacts/ArtifactTabs.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-009"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/assistant/AgentActivityCard.tsx",
+      "batch": "M3",
+      "owner": "M3 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/assistant/AssistantComposer.tsx",
+      "batch": "M3",
+      "owner": "M3 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/assistant/AssistantContextPanel.tsx",
+      "batch": "M3",
+      "owner": "M3 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/assistant/AssistantHistoryPanel.tsx",
+      "batch": "M3",
+      "owner": "M3 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/assistant/AssistantMarkdown.tsx",
+      "batch": "M3",
+      "owner": "M3 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/assistant/AssistantMessageList.tsx",
+      "batch": "M3",
+      "owner": "M3 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/assistant/AssistantPane.tsx",
+      "batch": "M3",
+      "owner": "M3 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/assistant/AssistantSessionToolbar.tsx",
+      "batch": "M3",
+      "owner": "M3 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/assistant/AssistantUserMarkdown.tsx",
+      "batch": "M3",
+      "owner": "M3 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/assistant/ContextAssetBrowser.tsx",
+      "batch": "M3",
+      "owner": "M3 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-004"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/assistant/ContextAssetThumbnail.tsx",
+      "batch": "M3",
+      "owner": "M3 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/assistant/ContextUsageIndicator.tsx",
+      "batch": "M3",
+      "owner": "M3 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/associations/AssociationGraphLayer.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/boards/BoardLayoutTools.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/boards/ObjectPlacementCard.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/boards/ObjectWorkbench.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/citation-graph/CitationGraphCanvas.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/citation-graph/CitationGraphDialog.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/device-control/DeviceControlPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-010"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/dock/DockEmptyState.tsx",
+      "batch": "M2",
+      "owner": "M2 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/dock/DockRegion.tsx",
+      "batch": "M2",
+      "owner": "M2 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/dock/DockSurfaceSlot.tsx",
+      "batch": "M2",
+      "owner": "M2 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/document-export/DocumentExportDialog.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/document-export/ExportPdfPreview.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/evidence/components/EvidenceLens.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/evidence/components/MessageEvidence.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/extensions/ExtensionActions.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/extensions/ExtensionMetadata.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/extensions/ExtensionSettings.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/extensions/ExtensionViews.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-011"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/extensions/ReaderExtensionActions.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/extensions/SchemaFields.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/forum/LiteratureResolutionDialog.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/forum/LiteratureVersionRelations.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/forum/usePublicationPreview.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/generative-ui/DynamicCanvas.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/generative-ui/GeneratedMindMap.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/generative-ui/SlideDeckView.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/global-search/GlobalSearchDialog.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 2,
+      "candidateIds": [
+        "COPY-012",
+        "COPY-013"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/help/HelpPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-014"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/import/ImportButton.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/import/MineruMarkdown.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/import/PaperResourceTab.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/layered-reading/ObsidianLikeGraphCanvas.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/library/BibliographicMetadataEditor.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-016"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/library/LibraryFacetFilters.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/library/LibraryFileList.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/library/LibraryItemIcon.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/library/LibraryLocationPanel.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-015"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/library/LibraryMetadataEditor.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/library/LibraryPane.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/library/LibraryTagChips.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/library/ReadingCatalogDetails.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/library/ReadingLibraryCatalog.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-005"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/local-archive/LocalArchivePanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/local-diagnostics/LocalDiagnosticsPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/local-file-operations/LocalFileOperationsPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/local-mcp/LocalMcpSettingsPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/local-recovery/ProfileRecoveryPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-017"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/markdown/ContentExcerpt.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/markdown/ContentView.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-018"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/markdown/MarkdownContent.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/markdown/MarkdownEditingToolbar.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-019"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/markdown/MarkdownEditor.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/markdown/MarkdownFontControl.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/markdown/MarkdownLiveEditor.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/markdown/MarkdownSourceEditor.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/mermaid/MermaidPreview.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/metadata/DocumentMetadataSyncPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/models/AssistantModelPicker.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/models/ModelConnectionPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 2,
+      "candidateIds": [
+        "COPY-020",
+        "COPY-021"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/note-files/ExternalNoteEditor.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/notes/NoteLabelFilter.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/notes/NotesFolderTree.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/notes/NotesInlineEditor.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-022"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/notes/NotesPanel.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "browser-fixture",
+        "tests": [
+          "src/tests/browser/notesView.browser.spec.ts"
+        ],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/notes/SaveArtifactPageButton.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/object-surface/ObjectAssetImage.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/object-surface/ObjectSurface.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-023"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/onboarding/OnboardingTour.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 7,
+      "candidateIds": [
+        "COPY-024",
+        "COPY-025",
+        "COPY-026",
+        "COPY-027",
+        "COPY-028",
+        "COPY-029",
+        "COPY-030"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/organization/OrganizationAccessDetails.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/organization/OrganizationActivityInbox.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/organization/OrganizationCreateDialog.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/organization/OrganizationEntryDialog.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/organization/OrganizationGovernancePanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/organization/OrganizationInvitationPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/organization/OrganizationInviteConfirmDialog.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/organization/OrganizationJoinDialog.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/organization/OrganizationLeaveConfirmDialog.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/organization/OrganizationMemberGovernancePanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/organization/OrganizationOverview.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/organization/OrganizationSidebarPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/organization/OrganizationSpacePanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/organization/OrganizationStoragePolicyPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/paper-anchors/PaperAnchorReferences.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/paper-projects/PaperNoteEditor.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/paper-reading/LiteratureGuideControls.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-031"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/paper-reading/PaperReadingNavigator.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-032"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/paper-reading/PaperReadingWorkspace.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/paper-reading/ReadingMarginComments.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/paper-services/PaperServicesSettingsPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 2,
+      "candidateIds": [
+        "COPY-033",
+        "COPY-034"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/PaperReviewSharePanel.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-035"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/PaperSelectionTools.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/PdfAnnotationEditor.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/PdfAnnotationMarkdown.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/PdfAnnotationReview.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/PdfAnnotationStatus.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/PdfAnnotationsOverview.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/PdfAppearanceControl.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/PdfInkLayer.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/PdfMarkdownTextBox.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-036"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/PdfOutline.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/PdfPagesOverview.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/PdfPaneResizeHandle.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/PdfReader.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-003"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/PdfReaderToolbar.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/PdfSelectionMenu.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/PdfThumbnail.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/QuickAskProvenance.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/QuickAskSurface.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/pdf/pdf-whiteboard/PdfWhiteboard.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/profile/AcademicArchiveDialog.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/profile/AcademicProfileForm.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-037"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/profile/ClearProfileConfirmDialog.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/profile/PersonalCenterPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/profile/ProfileMemoryPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-038"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/quick-ask-presets/QuickAskPresetManager.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/quick-ask-presets/QuickAskPresetPicker.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/reading-library/ReadingDocumentReader.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/reading-library/ReadingLibrarySurface.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/recommendations/RecommendationDetails.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/recommendations/RecommendationDownload.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/recommendations/RecommendationIntelligenceSettings.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-039"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/recommendations/RecommendationList.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/recommendations/RecommendationStyleControl.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/research-loop/ResearchWorkbench.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/resource-filesystem/ResourceLocationButton.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/resource-links/ReferenceContentPicker.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-040"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/resource-links/ResourceReferenceView.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/resource-links/WikiLinkEditor.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-041"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/resource-tags/ResourceTagChips.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/search/DocumentFindBar.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/search/SearchFilterFields.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-042"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/search/SearchOptions.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/selection-lookup/SelectionLookupCard.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/selection-lookup/SelectionLookupSettingsPanel.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-043"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/settings/AnnotationSyncSettingsPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 2,
+      "candidateIds": [
+        "COPY-044",
+        "COPY-045"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/settings/DataLocationSettings.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 2,
+      "candidateIds": [
+        "COPY-046",
+        "COPY-047"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/settings/GenerationPromptSettingsPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/settings/LanguageSettingsRow.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/settings/RecommendationSettingsPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/settings/SystemFontPicker.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/settings/ViewSettingsPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/spaces/SpaceOperationsPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/theme/ApplicationThemeProvider.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/thin-reading/SourceFigureSelectionOverlay.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/thin-reading/ThinReadingGenerationStatus.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/thin-reading/ThinReadingGraphView.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/thin-reading/ThinReadingMarkdown.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/thin-reading/ThinReadingMindMap.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/thin-reading/ThinReadingSourceFigures.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/thin-reading/ThinReadingTab.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 3,
+      "candidateIds": [
+        "COPY-048",
+        "COPY-049",
+        "COPY-050"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/thin-reading/ThinReadingVisualizationRegion.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visual-blocks/AssetImage.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visual-blocks/BlockAppearanceEditor.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visual-blocks/BlockComposer.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visual-blocks/ComponentTreeView.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visual-blocks/CompositePrimitives.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visual-blocks/DerivedBlockContent.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visual-blocks/GrantedImage.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visual-blocks/VisualBlockBase.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visualization/HtmlDemoPreview.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visualization/VisualizationArtifactHost.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visualization/VisualizationTab.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-051"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visualization/renderers/Geometry3DCanvas.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visualization/renderers/biologyStructureRenderer.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visualization/renderers/circuitRenderer.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visualization/renderers/functionPlotRenderer.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visualization/renderers/geometry2dRenderer.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visualization/renderers/geometry3dRenderer.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visualization/renderers/physicsDiagramRenderer.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visualization/renderers/physicsProcessRenderer.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visualization/renderers/rasterIllustrationRenderer.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visualization/renderers/reactionProcessRenderer.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/visualization/renderers/semanticGraphRenderer.tsx",
+      "batch": "M5",
+      "owner": "M5 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/webdav/WebDavSettingsPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/workbench/LiteasyMark.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/workbench/WorkbenchCommandsDialog.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/workbench/WorkbenchPage.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/workbench/WorkbenchWelcome.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/workflow-studio/StudioCardPreview.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/workflow-studio/StudioGraph.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/workflow-studio/WorkflowBindingEditor.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-052"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/workflow-studio/WorkflowStudio.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 1,
+      "candidateIds": [
+        "COPY-053"
+      ],
+      "conclusion": "逐项保留必要状态/帮助/权限说明；删除重复默认教学或移入帮助，详见候选记录。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/workflows/WorkflowViews.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/features/workspace/WorkspacePageSwitcher.tsx",
+      "batch": "M2",
+      "owner": "M2 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/layout/ActivityBar.tsx",
+      "batch": "M2",
+      "owner": "M2 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/layout/AppDialogs.tsx",
+      "batch": "M2",
+      "owner": "M2 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/layout/AppShell.tsx",
+      "batch": "M2",
+      "owner": "M2 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/layout/AssistantSidebar.tsx",
+      "batch": "M2",
+      "owner": "M2 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/layout/DockLayoutControls.tsx",
+      "batch": "M2",
+      "owner": "M2 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/layout/FileStatusBar.tsx",
+      "batch": "M2",
+      "owner": "M2 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/layout/ImmersiveReadingControls.tsx",
+      "batch": "M2",
+      "owner": "M2 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/layout/LeftPane.tsx",
+      "batch": "M2",
+      "owner": "M2 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/layout/PaneResizer.tsx",
+      "batch": "M2",
+      "owner": "M2 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/layout/ReaderPane.tsx",
+      "batch": "M2",
+      "owner": "M2 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/layout/SettingsPane.tsx",
+      "batch": "M2",
+      "owner": "M2 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/layout/WorkspaceCommandBar.tsx",
+      "batch": "M2",
+      "owner": "M2 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/shared/ui/SurfaceErrorBoundary.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/shared/ui/VisuallyHidden.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    },
+    {
+      "path": "src/app/shared/ui/productPrimitives.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "checkedCandidateCount": 0,
+      "candidateIds": [],
+      "conclusion": "本轮53条AST候选未命中；仅核对既有UI清单记录，不据此宣称该表面文案已全面优化。",
+      "reviewScope": "Inventory entry and matched copy candidates; no blanket source or page acceptance",
+      "runtimeEvidence": {
+        "level": "static-only",
+        "tests": [],
+        "gaps": [
+          "未验证该表面的全部权限、错误、多语言和窄容器分支。",
+          "未完成Windows Tauri/WebView2真实资料验收。"
+        ]
+      }
+    }
+  ],
+  "unmappedCandidateIds": []
+}

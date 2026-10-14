@@ -23,7 +23,7 @@ function setup(resolve = vi.fn(async () => note)) {
   const view = render(<ObjectWorkbenchContext.Provider value={port}>
     <AssistantPane agentClient={createFrontendAgentClient(api)} onGenerateArtifact={generate}
       contextSuggestions={[{ id: "note", label: "CicN", trigger: "@", resolveToken: resolve },
-        { id: "paper", label: "Cicada", trigger: "@", token: { ...note, id: "paper", label: "Cicada" } }]}
+        { id: "paper", label: "Cicada", trigger: "@", token: { ...note, id: "paper", label: "Cicada", contextRefs: [{ objectId: "cicada", revision: "v1" }] } }]}
       selectedSetStatus={{ importedCount: 0, selectedCount: 0, selectionLocked: false }} />
   </ObjectWorkbenchContext.Provider>);
   const input = screen.getByPlaceholderText("输入你的问题或命令") as HTMLTextAreaElement;
@@ -56,6 +56,8 @@ test.each(["mention", "browser", "path", "drop"])("%s inserts the name in prose 
   expect(container.querySelector(".assistant-user-message-content strong.assistant-inline-context")).toHaveTextContent("CicN");
   await user.click(screen.getByRole("button", { name: "编辑消息" }));
   expect(input).toHaveValue("往 CicN 里面写入 hello");
+  expect(screen.queryByLabelText("已添加到对话上下文")).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "预览上下文：CicN" }));
   expect(screen.getByRole("button", { name: "移除上下文：CicN" })).toBeInTheDocument();
 });
 
@@ -70,7 +72,8 @@ test("batch additions preserve order at the original caret and do not duplicate 
   // The picker remains modal for batch additions; the composer is deliberately
   // hidden from the accessibility tree until the user returns to the chat.
   await user.click(screen.getAllByRole("button", { name: "返回对话" })[0]);
-  await waitFor(() => expect(screen.getAllByRole("button", { name: /^移除上下文：/ })).toHaveLength(2));
+  await waitFor(() => expect(screen.getAllByRole("button", { name: /^预览上下文：/ })).toHaveLength(2));
+  expect(screen.queryByLabelText("已添加到对话上下文")).not.toBeInTheDocument();
 });
 
 test("resolving a mention retains text typed while waiting and inserts nothing on failure", async () => {
@@ -82,8 +85,16 @@ test("resolving a mention retains text typed while waiting and inserts nothing o
   fireEvent.change(input, { target: { value: "请往 @CicN 里面写入 hello" } });
   await act(async () => { finish(note); });
   expect(input).toHaveValue("请往 CicN 里面写入 hello");
-  await user.click(screen.getByRole("button", { name: "移除上下文：CicN" }));
+  await user.click(screen.getByRole("button", { name: "预览上下文：CicN" }));
   expect(input).toHaveValue("请往 CicN 里面写入 hello");
+  await user.click(screen.getByRole("button", { name: "移除上下文：CicN" }));
+  expect(input).toHaveValue("请往  里面写入 hello");
+  await user.click(input);
+  await user.keyboard("{Control>}z{/Control}");
+  expect(input).toHaveValue("请往 CicN 里面写入 hello");
+  expect(screen.getByRole("button", { name: "预览上下文：CicN" })).toBeInTheDocument();
+  await user.keyboard("{Control>}{Shift>}z{/Shift}{/Control}");
+  expect(input).toHaveValue("请往  里面写入 hello");
   resolve.mockRejectedValueOnce(new Error("资源读取失败"));
   placeCaret(input, "往 @CicN 里面写入", 7);
   await user.click(screen.getByRole("button", { name: /^@ CicN/ }));
@@ -115,9 +126,10 @@ test("a context name containing 薄读 never becomes a generation command, but e
   expect(submit.mock.calls[0][0]).toMatchObject({ input: { message: "注意力薄读 请解释核心方法" } });
   expect(generate).not.toHaveBeenCalled();
   await user.click(screen.getByRole("button", { name: "编辑消息" }));
-  fireEvent.change(input, { target: { value: "根据 注意力薄读 生成 PPT" } });
+  input.setSelectionRange(input.value.length, input.value.length);
+  await user.keyboard(" 生成 PPT");
   await user.click(screen.getByRole("button", { name: "更新并发送" }));
-  await waitFor(() => expect(generate).toHaveBeenCalledWith("ppt", undefined, expect.stringContaining("根据 注意力薄读 生成 PPT"), note.contextRefs, getGenerationPrompt("ppt"), expect.objectContaining({ kind: "conversation_action", parentConversationId: expect.any(String), triggerMessageId: expect.any(String) })));
+  await waitFor(() => expect(generate).toHaveBeenCalledWith("ppt", undefined, expect.stringContaining("注意力薄读 请解释核心方法 生成 PPT"), note.contextRefs, getGenerationPrompt("ppt"), expect.objectContaining({ kind: "conversation_action", parentConversationId: expect.any(String), triggerMessageId: expect.any(String) })));
 });
 
 test("adjacent resources remain separate tags and native paths only appear in normalized tooltips", async () => {
@@ -129,10 +141,13 @@ test("adjacent resources remain separate tags and native paths only appear in no
   await user.type(input, "@Cicada");
   await user.click(screen.getByRole("button", { name: /^@ Cicada/ }));
   expect(container.querySelectorAll(".assistant-input-highlight .assistant-inline-context")).toHaveLength(2);
-  expect(screen.getByRole("button", { name: "移除上下文：CicN" })).toHaveAttribute("title", String.raw`D:\LiteasyData\AgentMem\Larimar.pdf`);
+  await user.click(screen.getByRole("button", { name: "预览上下文：CicN" }));
+  expect(screen.getByLabelText("上下文预览")).toHaveTextContent(String.raw`D:\LiteasyData\AgentMem\Larimar.pdf`);
+  await user.click(input);
   await user.click(screen.getByRole("button", { name: "发送" }));
   await screen.findByText("已处理。");
-  const tags = container.querySelectorAll(".assistant-message-token");
+  expect(container.querySelectorAll(".assistant-message-token")).toHaveLength(0);
+  const tags = container.querySelectorAll(".assistant-user-message-content .assistant-inline-context");
   expect(tags).toHaveLength(2);
   expect(tags[0]).toHaveTextContent(/^CicN$/);
   expect(tags[0]).toHaveAttribute("title", `CicN\n${String.raw`D:\LiteasyData\AgentMem\Larimar.pdf`}`);
@@ -170,4 +185,44 @@ test("a follow-up preserves the last context reading until its own request repor
   await user.hover(screen.getByRole("meter"));
   expect(await screen.findByRole("tooltip")).toHaveTextContent("完整载入 1 轮");
   view.unmount(); api.dispose();
+});
+
+
+test("removing repeated mentions keeps the intervening resource and undo restores both", async () => {
+  const { input, user, submit } = setup();
+  for (const label of ["CicN", "Cicada", "CicN"]) {
+    await user.type(input, `@${label}`);
+    await user.click(screen.getByRole("button", { name: new RegExp(`^@ ${label}`) }));
+  }
+  expect(input).toHaveValue("CicN Cicada CicN ");
+  await user.click(screen.getAllByRole("button", { name: "预览上下文：CicN" })[0]);
+  await user.click(screen.getByRole("button", { name: "移除上下文：CicN" }));
+  expect(input).toHaveValue(" Cicada  ");
+  expect(screen.getByRole("button", { name: "预览上下文：Cicada" })).toBeInTheDocument();
+  await user.click(input);
+  await user.keyboard("{Control>}z{/Control}");
+  expect(input).toHaveValue("CicN Cicada CicN ");
+  await user.keyboard("{Control>}{Shift>}z{/Shift}{/Control}");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+  await screen.findByText("已处理。");
+  expect(submit.mock.calls[0][0]).toMatchObject({ contextRefs: [{ objectId: "cicada", revision: "v1" }] });
+});
+
+test("sending trims whitespace without losing reference identity or restoring a previous draft on undo", async () => {
+  const { input, user, container, submit, generate } = setup(vi.fn(async () => ({ ...note, label: "注意力薄读" })));
+  await user.type(input, "  @CicN");
+  await user.click(screen.getByRole("button", { name: /^@ CicN/ }));
+  await user.type(input, "请解释核心方法  ");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+  await screen.findByText("已处理。");
+  expect(generate).not.toHaveBeenCalled();
+  expect(submit.mock.calls[0][0]).toMatchObject({ contextRefs: note.contextRefs });
+  expect(container.querySelector(".assistant-user-message-content .assistant-inline-context")).toHaveTextContent("注意力薄读");
+  await user.click(input);
+  await user.keyboard("{Control>}z{/Control}");
+  expect(input).toHaveValue("");
+  await user.click(screen.getByRole("button", { name: "编辑消息" }));
+  await user.click(input);
+  await user.keyboard("{Control>}z{/Control}");
+  expect(input).toHaveValue("注意力薄读 请解释核心方法");
 });

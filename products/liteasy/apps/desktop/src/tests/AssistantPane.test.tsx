@@ -1722,7 +1722,7 @@ test.each(["mention", "path"] as const)("lazy paper %s forwards identity without
   } else {
     fireEvent.paste(input, { clipboardData: { getData: () => "liteasy://papers/cicada?scope=local" } });
   }
-  expect(await screen.findByRole("button", { name: "移除上下文：Cicada" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "预览上下文：Cicada" })).toBeInTheDocument();
   expect(fixture.prepare).not.toHaveBeenCalled();
   await user.type(input, "先介绍一下这篇论文");
   await user.click(screen.getByRole("button", { name: "发送" }));
@@ -1748,7 +1748,7 @@ test.each([["生成PPT", "ppt"], ["/制作提纲", "tree"]] as const)("lazy pape
   const user = userEvent.setup();
   const input = screen.getByPlaceholderText("输入你的问题或命令");
   fireEvent.paste(input, { clipboardData: { getData: () => "liteasy://objects/cicn-note?scope=local&revision=note-v1" } });
-  expect(await screen.findByRole("button", { name: "移除上下文：CicN" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "预览上下文：CicN" })).toBeInTheDocument();
   await user.type(input, command);
   await user.click(screen.getByRole("button", { name: "发送" }));
   await waitFor(() => expect(fixture.prepare).toHaveBeenCalledWith(["cicada"]));

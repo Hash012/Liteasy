@@ -65,6 +65,7 @@ describe("paper anchor entities", () => {
     const entity = paperAnchorEntitySchema.parse(paperAnchorFromObject({
       id: "saved-fragment", paperId: "paper-1", paperTitle: "Source", anchor: selector,
     }));
+    expect(paperAnchorOpenRequest(entity)).toMatchObject({ sourceRects: selector.rects, documentHash: selector.documentHash });
     expect(entity.source.selector).toEqual(selector);
     expect(entity.source.objectRef).toEqual(selector.sourceRef);
     expect(entity.presentation.location).toBe("第 iii 页");

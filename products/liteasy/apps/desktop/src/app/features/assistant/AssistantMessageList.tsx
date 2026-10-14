@@ -11,6 +11,7 @@ import type {
   AssistantMessage,
   AssistantMode
 } from "./assistant.types";
+import { inlineContextParts } from "./inlineContext";
 import { compactContextLabel } from "./assistantPresentation";
 import { DynamicCanvas } from "../generative-ui/DynamicCanvas";
 import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
@@ -165,7 +166,9 @@ export function AssistantMessageList({
   const selectedText = useRef("");
   const selectedMessageId = useRef("");
   const captureInput = (message: AssistantMessage) => {
-    const paperAnchors = collectPaperAnchors(message.paperAnchors ?? [], paperAnchorsFromCitations(message.citations ?? [], papers, message.id));
+    const mentioned = new Set(inlineContextParts(message.content, message.contextTokens ?? []).flatMap(part => part.token ? [part.token.id] : []));
+        const attachments = message.contextTokens?.filter(token => !mentioned.has(token.id)) ?? [];
+        const paperAnchors = collectPaperAnchors(message.paperAnchors ?? [], paperAnchorsFromCitations(message.citations ?? [], papers, message.id));
     const text = copyAnswerWithEvidence({ ...message, content: message.content || message.agentActivity?.generatedContent || "" }, paperAnchors, workbench?.scopeId);
     const excerpt = selectedMessageId.current === message.id && selectedText.current && text.includes(selectedText.current)
       ? selectedText.current : text;
@@ -203,6 +206,8 @@ export function AssistantMessageList({
         if (message.kind === "task_reference" && message.taskReference) return <article key={message.id} data-message-id={message.id} className="assistant-task-reference" aria-label="任务引用">
           <strong>{message.taskReference.title}</strong><Button size="small" onClick={() => onOpenTask?.(message.taskReference!.taskId)}>查看任务</Button>
         </article>;
+        const mentioned = new Set(inlineContextParts(message.content, message.contextTokens ?? []).flatMap(part => part.token ? [part.token.id] : []));
+        const attachments = message.contextTokens?.filter(token => !mentioned.has(token.id)) ?? [];
         const paperAnchors = collectPaperAnchors(message.paperAnchors ?? [], paperAnchorsFromCitations(message.citations ?? [], papers, message.id));
         return (
           <article
@@ -212,9 +217,9 @@ export function AssistantMessageList({
             data-message-id={message.id}
           >
             <div className={`assistant-message ${message.role}`}>
-              {message.contextTokens?.length ? (
+              {attachments.length ? (
                 <div className="assistant-message-token-row">
-                  {message.contextTokens.map((token) => (
+                  {attachments.map((token) => (
                     <span className={`assistant-message-token ${token.kind}`} key={token.id} aria-label={token.label} title={contextTokenTitle(token)} tabIndex={0}>
                       <strong>{compactContextLabel(token.label)}</strong>
                     </span>

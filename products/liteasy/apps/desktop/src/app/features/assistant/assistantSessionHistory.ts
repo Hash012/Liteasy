@@ -19,7 +19,9 @@ export type AssistantSessionHistoryItem = {
   schemaVersion?: "liteasy.assistant-session/v2";
   scopeId?: string;
   origin?: AssistantOrigin;
-  titleSource?: "automatic" | "user";
+  titleSource?: "automatic" | "model" | "user";
+  titleVersion?: number;
+  titleNaming?: import("./assistantSessionTitles").SessionTitleNaming;
   lifecycle?: "active" | "archived" | "tombstoned";
   pinned?: boolean;
   readAt?: string;
@@ -214,7 +216,7 @@ export function snapshotAssistantSession({
       : session.status && ["cancelled", "unknown", "interrupted"].includes(session.status)
         ? session.status
         : "idle",
-    title: session.titleSource === "user" ? session.title : getConversationTitle(state.messages, session.title),
+    title: (session.titleSource === "user" || session.titleSource === "model") ? session.title : getConversationTitle(state.messages, session.title),
     messagesLoaded: true,
     messageCount: state.messages.length,
     updatedAt: state.messages.length !== session.messages.length || state.pending !== (session.status === "running")
@@ -355,7 +357,7 @@ export function createArtifactTaskSession(
     ],
     mode: "qa",
     status,
-    title: previous?.titleSource === "user" ? previous.title : title,
+    title: (previous?.titleSource === "user" || previous?.titleSource === "model") ? previous.title : title,
     updatedAt: previous?.status === status && previous.artifactTaskId === task.id ? previous.updatedAt : timestamp
   };
 }

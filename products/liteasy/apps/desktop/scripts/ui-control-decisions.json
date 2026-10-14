@@ -188,22 +188,22 @@
       "fingerprint": "b6759fc80d029c89dc790d38",
       "file": "products/liteasy/apps/desktop/src/app/controllers/useNotesController.ts",
       "rule": "embedded-details",
-      "reviewedGitBlob": "8b8ba723dbae044d2e277bffb248739bcf328918",
+      "reviewedGitBlob": "c79f6d4f26f180138586b68de371863aafadf306",
       "decision": "keep-content",
       "owner": "notes-and-boards",
       "renderedSurface": "导出的 Markdown 原文引用",
-      "reason": "生成的用户文档内容保留 HTML details/summary 的语义，不是应用壳层控件。",
+      "reason": "已复核导出引用的 details/summary：本次仅补论文身份元数据，原文引用 HTML 仍属于导出的用户文档，不是应用壳层控件。",
       "acceptanceTest": "src/tests/boardFiles.test.ts; src/tests/notesPersistenceAndFiles.test.tsx"
     },
     {
       "fingerprint": "64dcf947a1d42d9f897dd4d6",
       "file": "products/liteasy/apps/desktop/src/app/controllers/useNotesController.ts",
       "rule": "embedded-summary",
-      "reviewedGitBlob": "8b8ba723dbae044d2e277bffb248739bcf328918",
+      "reviewedGitBlob": "c79f6d4f26f180138586b68de371863aafadf306",
       "decision": "keep-content",
       "owner": "notes-and-boards",
       "renderedSurface": "导出的 Markdown 原文引用",
-      "reason": "生成的用户文档内容保留 HTML details/summary 的语义，不是应用壳层控件。",
+      "reason": "已复核导出引用的 details/summary：本次仅补论文身份元数据，原文引用 HTML 仍属于导出的用户文档，不是应用壳层控件。",
       "acceptanceTest": "src/tests/boardFiles.test.ts; src/tests/notesPersistenceAndFiles.test.tsx"
     },
     {

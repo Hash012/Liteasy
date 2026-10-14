@@ -1,5 +1,5 @@
 import { OptionPicker } from "../../shared/ui/productPrimitives";
-import { SearchOptions } from "../search/SearchOptions";
+import { SearchFilterFields } from "../search/SearchFilterFields";
 import { Button, Checkbox, Input, Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
 import { FilterRegular } from "@fluentui/react-icons";
 import { isAiOnlyNote, noteLabelEntries, type NoteLabel } from "./noteLabels";
@@ -22,12 +22,11 @@ export function NoteLabelFilter({ value, onChange, query, onQueryChange, compact
       </Button></Tooltip></PopoverTrigger>
       <PopoverSurface aria-label="笔记标签筛选" className="notes-filter-popover">
         {onQueryChange && <Input aria-label="搜索批注内容" placeholder="搜索原文或批注" value={query ?? ""} onChange={(_, data) => onQueryChange(data.value)} />}
-        {onQueryChange && <SearchOptions query={query ?? ""} onChange={onQueryChange} tags={noteLabelEntries.map(([, label]) => label)} />}
+        {onQueryChange && <SearchFilterFields query={query ?? ""} onChange={onQueryChange} tags={noteLabelEntries.map(([, label]) => label)} />}
         <label>包含标签<OptionPicker aria-label="包含笔记标签" value={String(value.label ?? "")} onValueChange={nextValue => onChange({ ...value, label: nextValue as NoteLabel | "" })} options={[{ value: String(""), label: String("\u5168\u90E8\u7B14\u8BB0") }, ...(noteLabelEntries.map(([id, title]) => ({ value: String(id), label: String(title) })))]} /></label>
         <Checkbox label="隐藏翻译结果" checked={value.hideTranslations} onChange={(_, data) => onChange({ ...value, hideTranslations: data.checked === true })} />
         <Checkbox label="隐藏查词结果" checked={value.hideLookup} onChange={(_, data) => onChange({ ...value, hideLookup: data.checked === true })} />
         <Checkbox label="隐藏纯 AI 内容" checked={value.hideAiOnly} onChange={(_, data) => onChange({ ...value, hideAiOnly: data.checked === true })} />
-        <small>按已记录的来源和编辑痕迹筛选；来源不明的旧笔记会保留。</small>
       </PopoverSurface>
     </Popover>
     {count > 0 && <Button size="small" appearance="subtle" onClick={() => { onChange(emptyNoteFilter); onQueryChange?.(""); }}>清除筛选</Button>}

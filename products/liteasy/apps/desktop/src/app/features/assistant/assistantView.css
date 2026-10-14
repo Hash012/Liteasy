@@ -23,3 +23,11 @@
   border: 1px solid var(--colorNeutralStroke1);
   max-width: 100%;
 }
+
+.assistant-history-panel .assistant-history-list { gap: 4px; }
+.assistant-history-panel .assistant-history-item { padding: 6px 8px; border-radius: 4px; }
+.assistant-history-panel .assistant-history-restore { display: block; max-width: 100%; padding-right: 28px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.assistant-history-panel .assistant-history-item-meta { margin-top: 2px; }
+
+.assistant-recent-conversations { list-style: none; margin: 4px 0; padding: 0; }
+.assistant-recent-conversations .fui-Button { display: block; width: 100%; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

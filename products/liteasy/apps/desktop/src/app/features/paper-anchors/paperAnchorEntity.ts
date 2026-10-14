@@ -165,6 +165,9 @@ export function paperAnchorLabel(anchor: PaperAnchorEntity) {
 export function paperAnchorOpenRequest(anchor: PaperAnchorEntity) {
   if (!anchor.locator.page) return undefined;
   return {
+    ...(anchor.source.documentHash ? { documentHash: anchor.source.documentHash } : {}),
+    ...(anchor.source.selector?.type === "pdf" && anchor.source.selector.rects.length ? { sourceRects: anchor.source.selector.rects } : {}),
+    ...(anchor.locator.precision === "page" && !(anchor.source.selector?.type === "pdf" && anchor.source.selector.rects.length) ? { pageOnly: true } : {}),
     evidenceId: anchor.id,
     paperId: anchor.source.paperId,
     page: anchor.locator.page,

@@ -1,8 +1,9 @@
 import { RE2JS } from "re2js";
 
-export type SearchMetadata = { tags?: readonly string[]; format?: string; assetType?: string };
+export type SearchMetadata = { tags?: readonly string[]; format?: string; assetType?: string; kind?: string; origin?: string; updatedAt?: string };
 export type SearchRange = { start: number; end: number };
-export type SearchFacet = "tag" | "format" | "type";
+export type SearchFacet = "tag" | "tag-any" | "format" | "type" | "kind" | "origin" | "since" | "until";
+export type SearchFacetCounts = Partial<Record<SearchFacet, ReadonlyMap<string, number>>>;
 type Token = { raw: string; value: string; field?: SearchFacet; exclude?: boolean; regex?: boolean; flags?: string };
 export const searchFormat = (value = "") => ({ md: "markdown", text: "txt", htm: "html", azw: "mobi", azw3: "mobi", kfx: "mobi" }[value.toLowerCase().replace(/^\./, "")] ?? value.toLowerCase().replace(/^\./, ""));
 export const formatFromName = (name = "") => searchFormat(name.split(/[?#]/)[0].split(".").at(-1) ?? "");
@@ -15,7 +16,7 @@ function tokenize(query: string): Token[] {
   while (i < query.length) {
     if (/\s/u.test(query[i])) { i++; continue; }
     const start = i;
-    const prefix = /^(-?)(tag|format|type|re|regex):/i.exec(query.slice(i));
+    const prefix = /^(-?)(tag-any|tag|format|type|kind|origin|since|until|re|regex):/i.exec(query.slice(i));
     if (prefix) i += prefix[0].length;
     let value = "", quoted = false, quote = "";
     const slash = query[i] === "/" && !prefix;
@@ -90,7 +91,7 @@ export function compileSearchQuery(query: string, options: { phrase?: boolean; m
     }
   } catch (cause) { error = cause instanceof Error ? cause.message : String(cause); }
   const needles = terms.map((term) => matchText(term, options.matchCase).trim());
-  const facets = (["tag", "format", "type"] as const).map((field) => ({ field,
+  const facets = (["tag", "tag-any", "format", "type", "kind", "origin", "since", "until"] as const).map((field) => ({ field,
     selected: tokens.filter((token) => token.field === field).map((token) => ({ ...token,
       normalized: field === "format" ? searchFormat(token.value) : normalizeSearchValue(token.value) })),
   })).filter(({ selected }) => selected.length);
@@ -98,10 +99,12 @@ export function compileSearchQuery(query: string, options: { phrase?: boolean; m
   const metadata = (item: SearchMetadata = {}) => {
     if (error) return false;
     if (!facets.length) return true;
-    const tags = facets.some(({ field }) => field === "tag") ? new Set((item.tags ?? []).map(normalizeSearchValue)) : undefined;
+    const tags = facets.some(({ field }) => field === "tag" || field === "tag-any") ? new Set((item.tags ?? []).map(normalizeSearchValue)) : undefined;
     for (const { field, selected } of facets) {
-      const has = (token: typeof selected[number]) => field === "tag" ? tags!.has(token.normalized) : field === "format"
-        ? searchFormat(item.format) === token.normalized : normalizeSearchValue(item.assetType ?? "") === token.normalized;
+      const has = (token: typeof selected[number]) => field === "tag" || field === "tag-any" ? tags!.has(token.normalized) : field === "format"
+        ? searchFormat(item.format) === token.normalized : field === "since" || field === "until"
+          ? Boolean(item.updatedAt) && Number.isFinite(Date.parse(token.value)) && (field === "since" ? Date.parse(item.updatedAt!) >= Date.parse(token.value) : Date.parse(item.updatedAt!) < Date.parse(token.value))
+          : normalizeSearchValue((field === "type" ? item.assetType : item[field]) ?? "") === token.normalized;
       if (selected.some((token) => token.exclude && has(token))) return false;
       const included = selected.filter((token) => !token.exclude);
       if (included.length && !(field === "tag" ? included.every(has) : included.some(has))) return false;

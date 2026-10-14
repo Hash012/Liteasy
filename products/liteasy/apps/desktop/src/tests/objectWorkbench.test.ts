@@ -615,3 +615,12 @@ test("board discovery skips unrelated bodies and still recognizes legacy title i
   expect((await f.repository.findBoard())?.objectId).toBe(board.objectId);
   expect(read).not.toHaveBeenCalledWith(`head/${unrelated.objectId}`);
 });
+
+test("title catalog carries real media and modification metadata without loading bodies", async () => {
+  const { repository, storage } = fixture();
+  const object = await repository.create({ ...note("无扩展名图片"), assets: [{ assetId: "image", mediaType: "image/png", byteLength: 12, sha256: "a".repeat(64) }] });
+  const get = vi.spyOn(storage, "get");
+  const entries = await repository.searchTitles("无扩展名图片");
+  expect(entries).toEqual([expect.objectContaining({ objectId: object.objectId, updatedAt: object.updatedAt, mediaTypes: ["image/png"], origin: "user" })]);
+  expect(get.mock.calls.some(([key]) => key.startsWith("head/") || key.startsWith("revision/"))).toBe(false);
+});

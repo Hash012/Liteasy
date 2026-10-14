@@ -1,19 +1,19 @@
 import { useId, useMemo, useState } from "react";
 import { Button, Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
 import { ChevronDownRegular, ChevronRightRegular, FilterRegular, DismissRegular } from "@fluentui/react-icons";
-import { compileSearchQuery, updateSearchFacet } from "./searchQuery";
+import { compileSearchQuery, updateSearchFacet, type SearchFacetCounts } from "./searchQuery";
 import { SearchFilterFields, searchConditionLabel } from "./SearchFilterFields";
 import "./search.css";
 
 /** One query representation for every search surface, including saved searches. */
-export function SearchOptions({ query, onChange, tags = [], presentation = "popover" }: {
-  query: string; onChange(value: string): void; tags?: readonly string[]; presentation?: "popover" | "inline";
+export function SearchOptions({ query, onChange, tags = [], facetCounts, presentation = "popover" }: {
+  query: string; onChange(value: string): void; tags?: readonly string[]; facetCounts?: SearchFacetCounts; presentation?: "popover" | "inline";
 }) {
   const [expanded, setExpanded] = useState(false);
   const id = useId();
   const compiled = useMemo(() => compileSearchQuery(query), [query]);
   const facets = compiled.tokens.filter((token) => token.field);
-  const content = <SearchFilterFields query={query} onChange={onChange} tags={tags} />;
+  const content = <SearchFilterFields query={query} onChange={onChange} tags={tags} facetCounts={facetCounts} />;
   return <div className={`search-options${presentation === "inline" ? " search-options-inline" : ""}`}>
     {presentation === "inline" ? <>
       <div className="search-filter-toggle-row">

@@ -9,11 +9,11 @@ function suggestion(id: string, label: string, detail?: string): AssistantCompos
 describe("assistant suggestion index", () => {
   it("searches category, project and source metadata together and reveals pages in the asset browser", () => {
     const source: AssistantComposerSuggestion = { ...suggestion("source", "图 1"), category: "图片",
-      projectTitle: "注意力研究", description: "编码器结构", keywords: ["Transformer"], readOnly: true };
+      projectTitle: "注意力研究", summary: "编码器结构", keywords: ["Transformer"], readOnly: true };
     const page: AssistantComposerSuggestion = { ...suggestion("page", "论文页面"),
       token: { id: "p1", label: "第 1 页", kind: "page", prompt: "内容" } };
     const index = createAssistantSuggestionIndex([source, page]);
-    expect(index.search("@", "注意力 图片 结构 transformer 只读")).toEqual([source]);
+    expect(index.search("@", "注意力 图片 结构 transformer")).toEqual([source]);
     expect(index.search("@", "")).toEqual([source]);
     expect(index.search("@", "", Infinity, { includePages: true })).toEqual([source, page]);
     expect(index.search("@", "论文")).toEqual([]);
@@ -150,4 +150,12 @@ it("supports regex and metadata conditions without poisoning later incremental q
   expect(index.search("@", '"Memory 42"')).toEqual([first]);
   expect(index.search("@", '/Memory|')).toEqual([]);
   expect(index.search("@", '/Memory|unknown/')).toEqual([first, second]);
+});
+
+
+it("does not index helper prose as resource content", () => {
+  const item = { ...suggestion("a", "研究笔记"), description: "加入时固定版本并保留来源关系", summary: "编码器性能测量" };
+  const index = createAssistantSuggestionIndex([item]);
+  expect(index.search("@", "固定版本")).toEqual([]);
+  expect(index.search("@", "性能测量")).toEqual([item]);
 });

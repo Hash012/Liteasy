@@ -1,6 +1,8 @@
+import { useUiTranslation } from "../../shared/i18n/useUiTranslation";
 import { OptionPicker } from "../../shared/ui/productPrimitives";
 import "../../features/assistant/assistantView.css";
 import { createAssistantSessionService } from "./assistantSessionService";
+import { useAssistantSessionTitles } from "./useAssistantSessionTitles";
 import { registerQuickAskTransfer } from "../../features/pdf/quickAskTransfer";
 import { getAccountSessionGeneration } from "../../features/account/accountSessionStorage";
 import { assistantContentRevision, hasAssistantContent, type AssistantView } from "../../features/assistant/assistantView";
@@ -27,7 +29,7 @@ import { useObjectWorkbench } from "../../features/objects/objectWorkbenchPort";
 import { hasResourceContextTransfer, readContextPaper } from "../../features/object-transfer/contextTransfer";
 import { contextRefSchema, type ContextRef } from "../../features/context/objectContext";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { contextInstructionText, insertContextNames, type ContextInsertion } from "../../features/assistant/inlineContext";
+import { adaptContextMentions, contextInstructionText, insertContextMentions, mapContextMentions, type ContextInsertion } from "../../features/assistant/inlineContext";
 import { Button, Input } from "@fluentui/react-components";
 import { AssistantSessionToolbar } from "../../features/assistant/AssistantSessionToolbar";
 import { AssistantComposer } from "../../features/assistant/AssistantComposer";
@@ -409,6 +411,7 @@ export function AssistantSessionController({
   ]);
   const [composerContextTokens, setComposerContextTokens] = useState<AssistantContextToken[]>([]);
   const promptTask = artifactPromptTask(requestedArtifactType(contextInstructionText(input, composerContextTokens)));
+  const { tChinese } = useUiTranslation();
   const [readerContexts, setReaderContexts] = useState<ReaderConversationContext[]>([]);
   const [cancellingSession, setCancellingSession] = useState(false);
   const [historyReady, setHistoryReady] = useState(!historyPersistence);
@@ -425,6 +428,11 @@ export function AssistantSessionController({
   const draftRef = useRef({ input, tokens: composerContextTokens, readerContexts });
   draftRef.current = { input, tokens: composerContextTokens, readerContexts };
   const contextCaretRef = useRef<{ input: string; caret: number; sessionId: string }>();
+  useAssistantSessionTitles({
+    scope: objectWorkbench?.scopeId ?? "local", ready: historyReady, sessions: sessionHistory,
+    registry: sessionRegistryRef, getSettings: () => settingsStoreRef.current.getState(),
+    modelTransport, publish: setSessionHistory
+  });
   useLayoutEffect(() => {
     const pending = contextCaretRef.current;
     if (!pending) return;
@@ -803,13 +811,52 @@ export function AssistantSessionController({
       end: inputRef.current?.selectionEnd ?? value.length };
   }
 
-  function addComposerContextTokens(tokens: AssistantContextToken[], insertion = captureContextInsertion()) {
-    const nextTokens = [...new Map([...draftRef.current.tokens, ...tokens].map((token) => [token.id, token])).values()];
-    const next = insertContextNames(draftRef.current.input, tokens, insertion);
-    draftRef.current = { ...draftRef.current, input: next.input, tokens: nextTokens };
-    contextCaretRef.current = { ...next, sessionId: activeSessionIdRef.current };
-    setComposerContextTokens(nextTokens);
+  const composerUndoRef = useRef<{ key: string; position: number; entries: Array<{ input: string; tokens: AssistantContextToken[]; readerContexts: ReaderConversationContext[] }> }>({ key: "", position: -1, entries: [] });
+  function composerHistory() {
+    const key = `${objectWorkbench?.scopeId ?? "local"}:${activeSessionIdRef.current}`;
+    if (composerUndoRef.current.key !== key) composerUndoRef.current = { key, position: -1, entries: [] };
+    return composerUndoRef.current;
+  }
+  function applyComposerDraft(update: { input: string; tokens: AssistantContextToken[]; readerContexts?: ReaderConversationContext[] }, record = true) {
+    const next = { input: update.input, tokens: update.tokens, readerContexts: update.readerContexts ?? draftRef.current.readerContexts };
+    const history = composerHistory();
+    if (record) {
+      const before = { ...draftRef.current };
+      history.entries = history.entries.slice(0, history.position + 1);
+      if (JSON.stringify(history.entries.at(-1)) !== JSON.stringify(before)) history.entries.push(before);
+      history.entries.push(next);
+      history.entries = history.entries.slice(-100);
+      history.position = history.entries.length - 1;
+    }
+    draftRef.current = { ...draftRef.current, ...next };
+    setComposerContextTokens(next.tokens);
+    setReaderContexts(next.readerContexts);
     setInput(next.input);
+  }
+  function resetComposerDraft(next: { input: string; tokens: AssistantContextToken[]; readerContexts: ReaderConversationContext[] }) {
+    const history = composerHistory();
+    history.entries = [next];
+    history.position = 0;
+    applyComposerDraft(next, false);
+  }
+  function changeComposerInput(value: string) {
+    applyComposerDraft({ input: value, tokens: mapContextMentions(draftRef.current.input, value, draftRef.current.tokens) });
+  }
+  function moveComposerHistory(direction: -1 | 1) {
+    const history = composerHistory();
+    const position = history.position + direction;
+    if (position < 0 || position >= history.entries.length) return;
+    if (JSON.stringify(history.entries[history.position]) !== JSON.stringify(draftRef.current)) {
+      resetComposerDraft(draftRef.current);
+      return;
+    }
+    history.position = position;
+    applyComposerDraft(history.entries[position], false);
+  }
+  function addComposerContextTokens(tokens: AssistantContextToken[], insertion = captureContextInsertion()) {
+    const next = insertContextMentions(draftRef.current.input, draftRef.current.tokens, tokens, insertion);
+    applyComposerDraft(next);
+    contextCaretRef.current = { input: next.input, caret: next.caret, sessionId: activeSessionIdRef.current };
   }
 
   function addComposerContextToken(token: AssistantContextToken, insertion?: ContextInsertion) {
@@ -826,6 +873,7 @@ export function AssistantSessionController({
       addComposerContextToken(token, insertion);
       return true;
     } catch (error) {
+      if (error && typeof error === "object" && "alreadyAdded" in error && error.alreadyAdded === true) return true;
       if (mountedRef.current && activeSessionIdRef.current === sessionId)
         setContextDropMessage(error instanceof Error ? error.message : "添加上下文失败，请重试。");
       return false;
@@ -889,13 +937,19 @@ export function AssistantSessionController({
   }
 
   function removeComposerContextToken(tokenId: string) {
-    setReaderContexts((contexts) => contexts.filter((context) =>
-      `pdf-selection-${[context.paperId ?? "unknown-paper", context.page, context.excerpt].join("::")}` !== tokenId
-    ));
     lastReaderContextKeyRef.current = null;
-    setComposerContextTokens((currentTokens) =>
-      currentTokens.filter((token) => token.id !== tokenId)
-    );
+    const token = draftRef.current.tokens.find(value => value.id === tokenId);
+    let nextInput = draftRef.current.input;
+    let tokens = draftRef.current.tokens.filter(value => value.id !== tokenId);
+    for (const mention of [...(token?.mentions ?? [])].sort((a, b) => b.start - a.start)) {
+      if (nextInput.slice(mention.start, mention.end) !== mention.text) continue;
+      const previous = nextInput;
+      nextInput = previous.slice(0, mention.start) + previous.slice(mention.end);
+      tokens = mapContextMentions(previous, nextInput, tokens);
+    }
+    applyComposerDraft({ input: nextInput, tokens, readerContexts: draftRef.current.readerContexts.filter(context =>
+      `pdf-selection-${[context.paperId ?? "unknown-paper", context.page, context.excerpt].join("::")}` !== tokenId
+    ) });
   }
 
   function buildComposerSuggestions(): AssistantComposerSuggestion[] {
@@ -925,7 +979,7 @@ export function AssistantSessionController({
       return {
         detail: paper.sourcePath ?? "整篇论文",
         searchMetadata: catalogSearchMetadata(searchEntries.find((entry) => entry.id === paper.id) ?? { id: paper.id, title: paper.title, format: "pdf", subjects: paper.literature?.subjects }),
-        category: "论文", description: "整篇论文问答；也可在项目中按页选择原文或图片。", readOnly: true,
+        category: "论文",  readOnly: true,
         preview: contextPreviewText((importedChunksByPaperId[paper.id] ?? []).map((chunk) => `第 ${chunk.page} 页\n${chunk.snippet}`).join("\n\n")) ||
           [paper.title, paper.authors?.length ? `作者：${typeof paper.authors === "string" ? paper.authors : paper.authors.join("、")}` : "",
             "尚未读取论文正文。添加后将准备可用内容；解析完成后可在项目中预览原文和图片。"].filter(Boolean).join("\n\n"),
@@ -2030,7 +2084,7 @@ export function AssistantSessionController({
       syncAssistant();
       void persistConversation().catch(() => {});
     });
-    const artifactType = requestedArtifactType(contextInstructionText(turn.message, turn.contextTokens));
+    const artifactType = requestedArtifactType(contextInstructionText(turn.message, adaptContextMentions(turn.userContent, turn.message, turn.contextTokens)));
     // The artifact workflow creates a task, submits its artifactType to the main Agent,
     // and saves the specialist result. Keep slash shortcuts on that complete path.
     if (artifactType && (artifactType === "thin_reading" || getActivePublicAgentClient())) {
@@ -2133,10 +2187,8 @@ export function AssistantSessionController({
       (message) => message.id !== messageId
     );
     assistantStoreRef.current.replaceMessages(messages);
-    setInput(turn.userContent);
-    setComposerContextTokens(turn.contextTokens);
-    setReaderContexts(turn.readerContexts);
-    const task = artifactPromptTask(requestedArtifactType(contextInstructionText(turn.message, turn.contextTokens)));
+    resetComposerDraft({ input: turn.userContent, tokens: turn.contextTokens, readerContexts: turn.readerContexts });
+    const task = artifactPromptTask(requestedArtifactType(contextInstructionText(turn.message, adaptContextMentions(turn.userContent, turn.message, turn.contextTokens))));
     setGenerationPrompts((drafts) => ({ ...drafts, [task]: turn.systemPrompt }));
     syncAssistant();
     inputRef.current?.focus();
@@ -2178,7 +2230,8 @@ export function AssistantSessionController({
   }
 
   function updateSessionMetadata(id: string, patch: Partial<AssistantSessionHistoryItem>) {
-    sessionRegistryRef.current = sessionRegistryRef.current.map((item) => item.id === id ? { ...item, ...patch } : item);
+    sessionRegistryRef.current = sessionRegistryRef.current.map((item) => item.id === id ? { ...item, ...patch,
+      ...(patch.titleSource === "user" ? { titleVersion: (item.titleVersion ?? 0) + 1 } : {}) } : item);
     setSessionHistory([...sessionRegistryRef.current]);
   }
 
@@ -2207,7 +2260,7 @@ export function AssistantSessionController({
   async function handleSend() {
     if (!historyReadyRef.current || contextDropCount > 0) return;
     let currentState = assistantStoreRef.current.getState();
-    const contextTokensForTurn = [...composerContextTokens];
+    let contextTokensForTurn = [...composerContextTokens];
     const referencedPaperIds = contextTokensForTurn
       .filter((token) => token.kind === "paper")
       .map((token) => token.id.replace(/^paper-/, ""));
@@ -2223,7 +2276,9 @@ export function AssistantSessionController({
       return;
     }
 
-    const requestedType = requestedArtifactType(contextInstructionText(adapted.runtimeInput.message, contextTokensForTurn));
+    contextTokensForTurn = adaptContextMentions(input, adapted.userMessageContent, contextTokensForTurn);
+    const runtimeTokens = adaptContextMentions(adapted.userMessageContent, adapted.runtimeInput.message, contextTokensForTurn);
+    const requestedType = requestedArtifactType(contextInstructionText(adapted.runtimeInput.message, runtimeTokens));
     if (composerContextTokens.some((token) => token.contextRefs?.length) &&
       requestedType !== "ppt" && requestedType !== "tree" && (adapted.runtimeInput.mode === "command" || requestedType)) {
       setContextDropMessage("已加入的内容支持提问、审阅、生成演示文稿和大纲；当前命令尚不支持这些资源。");
@@ -2265,7 +2320,7 @@ export function AssistantSessionController({
     userMessage.contextSnapshotRefs = selectedContextRefs(contextTokensForTurn);
     assistantStoreRef.current.addMessage(userMessage);
 
-    const turnPromptTask = artifactPromptTask(requestedArtifactType(contextInstructionText(adapted.runtimeInput.message, contextTokensForTurn)));
+    const turnPromptTask = artifactPromptTask(requestedArtifactType(contextInstructionText(adapted.runtimeInput.message, runtimeTokens)));
     const preparedTurn: QueuedAssistantTurn = {
       systemPrompt: getGenerationPrompt(turnPromptTask, settingsStoreRef.current.getState(), generationPrompts[turnPromptTask]),
       thinkingDepth,
@@ -2299,8 +2354,9 @@ export function AssistantSessionController({
     sendLockRef.current.delete(sendTarget);
     if (owner.disposed) return;
     if (activeSessionIdRef.current === sendTarget) {
-      setComposerContextTokens([]); setReaderContexts([]); lastReaderContextKeyRef.current = null;
-      setInput(""); setEditingMessageId(null); setVoiceInputMessage(undefined);
+      resetComposerDraft({ input: "", tokens: [], readerContexts: [] });
+      lastReaderContextKeyRef.current = null;
+      setEditingMessageId(null); setVoiceInputMessage(undefined);
     }
     setGenerationPrompts((drafts) => ({ ...drafts, [turnPromptTask]: undefined }));
     if (currentState.pending) {
@@ -2325,16 +2381,14 @@ export function AssistantSessionController({
     }
 
     setEditingMessageId(message.id);
-    setInput(message.content);
-    setComposerContextTokens(message.contextTokens ?? []);
+    resetComposerDraft({ input: message.content, tokens: message.contextTokens ?? [], readerContexts: [] });
     setVoiceInputMessage(undefined);
     inputRef.current?.focus();
   }
 
   function cancelEdit() {
     setEditingMessageId(null);
-    setInput("");
-    setComposerContextTokens([]);
+    resetComposerDraft({ input: "", tokens: [], readerContexts: [] });
     inputRef.current?.focus();
   }
 
@@ -2356,7 +2410,7 @@ export function AssistantSessionController({
       owner.withTarget(targetId, syncAssistant); return;
     }
     if (owner.disposed) return;
-    if (activeSessionIdRef.current === targetId) { setInput(""); setEditingMessageId(null); setComposerContextTokens([]); }
+    if (activeSessionIdRef.current === targetId) { resetComposerDraft({ input: "", tokens: [], readerContexts: [] }); setEditingMessageId(null); }
     await owner.withTarget(targetId, () => executePreparedTurn(turn));
   }
 
@@ -2554,8 +2608,8 @@ export function AssistantSessionController({
         <h3>开始新对话</h3>
         {selectedPapers.length ? <><p>可使用的已选资料：{selectedPapers.map((paper) => paper.title).join("、")}</p>
           <Button onClick={() => { setInput(selectedPapers.length > 1 ? "比较这些论文的方法与证据" : "概述这篇论文的方法与证据"); setComposerContextTokens(selectedPapers.map((paper) => ({ id: `paper-${paper.id}`, kind: "paper", label: paper.title, prompt: `论文：${paper.title}` }))); }}>根据已选资料提问</Button>
-        </> : <p>可以直接对话；分析文献时，用 @ 添加资料。尚未读取任何论文。</p>}
-        {sessionHistory.filter((session) => session.id !== activeSessionId && session.lifecycle !== "archived" && session.lifecycle !== "tombstoned" && hasAssistantContent(session)).slice(0, 3).map((session) => <Button key={session.id} onClick={() => { void openSession(session.id); }}>最近：{session.title}</Button>)}
+        </> : <p>{tChinese("context.composer.noMaterials", "尚未添加资料")}</p>}
+        <ul className="assistant-recent-conversations" aria-label={tChinese("context.composer.recentConversations", "最近对话")}>{sessionHistory.filter((session) => session.id !== activeSessionId && session.lifecycle !== "archived" && session.lifecycle !== "tombstoned" && hasAssistantContent(session)).slice(0, 3).map((session) => <li key={session.id}><Button appearance="subtle" size="small" title={session.title} onClick={() => { void openSession(session.id); }}>{session.title}</Button></li>)}</ul>
         <Button appearance="subtle" onClick={() => setView({ kind: "history", filter: "conversations" })}>查看全部</Button>
       </section> : null}
       {!historyReady && !historyError ? <p role="status">正在恢复对话…</p> : null}
@@ -2643,7 +2697,8 @@ export function AssistantSessionController({
         onResolveContextToken={resolveComposerContextToken}
         contextLoading={contextDropCount > 0}
         onCancelEdit={cancelEdit}
-        onInputChange={setInput}
+        onInputChange={changeComposerInput}
+        onHistoryChange={moveComposerHistory}
         onPasteLiteasyPath={objectWorkbench?.resolveLiteasyPath ? (path) => { void addLiteasyPath(path); } : undefined}
         onRemoveContextToken={removeComposerContextToken}
         onSend={handleSend}

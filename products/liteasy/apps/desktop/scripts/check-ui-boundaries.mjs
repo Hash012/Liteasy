@@ -48,10 +48,17 @@ export function scanUiSource(file, text) {
     }
   }
   const visit = node => {
+    if (!/\/features\/(?:help|onboarding)\//.test(file) && (ts.isJsxText(node) || ts.isStringLiteral(node)) &&
+      /整篇论文问答；也可在项目中按页选择原文或图片|先看看内容|点击资产查看说明|搜索名称的一部分，或按类别、项目浏览/.test(node.text)) report("teaching-template", node.text);
+    if (/\/features\/(?:assistant|resource-links)\//.test(file) && ts.isNewExpression(node) && node.expression.getText(source) === "Map" &&
+      /\[\s*(?:\w+\.label|contextName\(\w+\))\s*,\s*\w+\s*\]/.test(node.getText(source))) report("reference-title-identity", node.getText(source));
+    if (ts.isJsxElement(node) && node.openingElement.attributes.properties.some(attr => ts.isJsxAttribute(attr) && attr.name.getText(source) === "className" &&
+      attr.initializer && /context-asset-card|asset-row|figure-tile/.test(attr.initializer.getText(source))) &&
+      node.children.some(child => ts.isJsxExpression(child) && child.expression && /\.(description|helpText)\b/.test(child.expression.getText(source)))) report("card-helper-prose", node.getText(source));
     if (ts.isImportDeclaration(node)) {
       const name = node.moduleSpecifier.text;
       if (/^(?:@mui\/|@radix-ui\/|antd$|@chakra-ui\/)/.test(name)) report("second-ui-system", name);
-      if (/^(?:react-markdown|marked|markdown-it)$/.test(name) && file !== "src/app/features/markdown/MarkdownContent.tsx") report("parallel-markdown", name);
+      if (/^(?:react-markdown|marked|markdown-it)$/.test(name) && !node.importClause?.isTypeOnly && file !== "src/app/features/markdown/MarkdownContent.tsx") report("parallel-markdown", name);
     }
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const tag = node.tagName.getText(source);
@@ -75,7 +82,7 @@ export function scanUiSource(file, text) {
 export function findingKey(finding) { return JSON.stringify([finding.file, finding.rule, finding.detail]); }
 export function uiSourceFiles(directory = path.join(root, "src/app")) {
   const files = [];
-  const walk = dir => { for (const entry of fs.readdirSync(dir, { withFileTypes: true })) { const file = path.join(dir, entry.name); if (entry.isDirectory()) walk(file); else if (/\.(tsx|css)$/.test(file)) files.push(file); } };
+  const walk = dir => { for (const entry of fs.readdirSync(dir, { withFileTypes: true })) { const file = path.join(dir, entry.name); if (entry.isDirectory()) walk(file); else if (/\.(tsx?|css)$/.test(file)) files.push(file); } };
   walk(directory);
   return files.sort();
 }

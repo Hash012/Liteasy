@@ -174,6 +174,7 @@ test("image previews read actual bytes lazily for both project sources and saved
   const write = vi.spyOn(env.storage, "commit");
   const hook = renderHook(() => useAssistantContextCatalog({ artifacts: [], objects: [object], repository: env.repository, port: env.port, projects }));
   await act(async () => {});
+  await waitFor(() => expect(hook.result.current.find((item) => item.category === "图片")?.searchMetadata).toMatchObject({ kind: "image", format: "png", origin: "import" }));
   expect(read).not.toHaveBeenCalled();
   for (const candidate of hook.result.current.filter((item) => item.category === "图片" || item.id === `saved-${object.objectId}`)) {
     const preview = await candidate.loadPreview!();

@@ -32,6 +32,7 @@ export type ObjectDraft = ObjectContent & {
   runId?: string;
   contextSnapshotId?: string;
 };
+export type ObjectCatalogEntry = { objectId: string; title: string; kind?: ObjectEnvelope["kind"]; revision?: string; paperId?: string; summary?: string; updatedAt?: string; mediaTypes?: string[]; origin?: string; format?: string };
 export type ObjectRepository = ReturnType<typeof createObjectRepository>;
 export function createObjectRepository(
   storage: ObjectStorage,
@@ -110,6 +111,12 @@ export function createObjectRepository(
             kind: object.kind,
             revision: object.revision,
             sourceLineage: objectSourceLineage(object),
+            updatedAt: object.updatedAt,
+            mediaTypes: [...new Set(object.assets.map((asset) => asset.mediaType))],
+            origin: object.kind === "content.note" && object.content.payload.userEditedAt && object.content.payload.agentEditedAt ? "mixed"
+              : object.kind === "content.note" && object.content.payload.userEditedAt ? "user"
+                : object.kind === "content.note" && object.content.payload.agentEditedAt ? "agent"
+                  : object.kind === "content.note" && object.content.payload.origin === "external" ? "external" : object.createdBy.type,
             ...(object.kind === "source.document" ? {
               paperId: object.content.payload.paperId,
               ...(object.content.payload.abstractText || isPaperMetadataReference(object) ? { summary: [
@@ -650,17 +657,18 @@ export function createObjectRepository(
       );
   }
   async function searchTitles(query = "", limit = 20) {
-    const results: Array<{ objectId: string; title: string; kind?: ObjectEnvelope["kind"]; revision?: string; paperId?: string; summary?: string }> = [];
+    const results: ObjectCatalogEntry[] = [];
     const normalized = query.toLocaleLowerCase();
     let after = "";
     do {
       const rows = await storage.list("title/", after, 1000);
       for (const row of rows) {
         after = row.key;
-        const entry = row.value as { objectId: string; title: string; lifecycle: string; kind?: ObjectEnvelope["kind"]; revision?: string; paperId?: string; summary?: string };
+        const entry = row.value as ObjectCatalogEntry & { lifecycle: string };
         if (entry.lifecycle === "active" && `${entry.title} ${entry.objectId}`.toLocaleLowerCase().includes(normalized)) {
           results.push({ objectId: entry.objectId, title: entry.title, ...(entry.kind ? { kind: entry.kind } : {}), ...(entry.revision ? { revision: entry.revision } : {}),
-            ...(entry.paperId ? { paperId: entry.paperId } : {}), ...(entry.summary ? { summary: entry.summary } : {}) });
+            ...(entry.paperId ? { paperId: entry.paperId } : {}), ...(entry.summary ? { summary: entry.summary } : {}),
+            ...(entry.updatedAt ? { updatedAt: entry.updatedAt } : {}), ...(entry.mediaTypes ? { mediaTypes: entry.mediaTypes } : {}), ...(entry.origin ? { origin: entry.origin } : {}) });
           if (results.length >= limit) return results;
         }
       }

@@ -34,3 +34,10 @@ describe("AssistantHistoryPanel", () => {
     expect(onRestoreSession).toHaveBeenCalledWith("session-1");
   });
 });
+
+test("keeps normal conversation rows compact while exposing exceptional status", () => {
+  const base: AssistantSessionHistoryItem = { id: "normal", title: "注意力机制", mode: "qa", status: "idle", messages: [] };
+  render(<AssistantHistoryPanel history={[base, { ...base, id: "failed", title: "失败会话", status: "failed" }]} />);
+  expect(screen.queryByText("普通对话 · 可继续")).not.toBeInTheDocument();
+  expect(screen.getByText("普通对话 · 失败")).toBeInTheDocument();
+});

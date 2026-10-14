@@ -32,7 +32,7 @@ export const assistantConversationSchema = z.object({
   scopeId: z.string().min(1),
   origin: assistantOriginSchema,
   title: z.string(),
-  titleSource: z.enum(["automatic", "user"]),
+  titleSource: z.enum(["automatic", "model", "user"]),
   lifecycle: z.enum(["active", "archived", "tombstoned"]),
   activeBranchId: z.string().min(1),
   parentConversationId: z.string().optional(),

@@ -43,6 +43,7 @@ export const anchorSchema = z.discriminatedUnion("type", [
     blockId: id,
     quote,
     range: range.optional(),
+    normalization: z.literal("lf-utf16").optional(),
   }),
   z.strictObject({
     type: z.literal("semantic"),

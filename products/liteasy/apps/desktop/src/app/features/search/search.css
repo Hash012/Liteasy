@@ -29,3 +29,4 @@
   .search-filter-grid { grid-template-columns: minmax(0, 1fr); }
   .search-filter-toggle-hint { display: none; }
 }
+.search-facet-count { margin-left: auto; padding-left: 12px; color: var(--colorNeutralForeground3); font-variant-numeric: tabular-nums; }

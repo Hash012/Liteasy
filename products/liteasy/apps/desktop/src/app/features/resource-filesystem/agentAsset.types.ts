@@ -17,8 +17,9 @@ export type AgentAsset = {
   structuredType?: { id: string; version: string };
 };
 export type AgentAssetSearch = { query: string; limit?: number; signal?: AbortSignal };
-export type AgentAssetReadOptions = { offset?: number; maxCharacters?: number; signal?: AbortSignal };
+export type AgentAssetReadOptions = { preparation?: "cached" | "allow"; offset?: number; maxCharacters?: number; signal?: AbortSignal };
 export type AgentAssetRead = {
+  source?: import("../resource-links/paperReferenceSource").PaperReferenceSource;
   asset: AgentAsset;
   content?: import("../markdown/contentFragment").ContentFragment;
   text: string;

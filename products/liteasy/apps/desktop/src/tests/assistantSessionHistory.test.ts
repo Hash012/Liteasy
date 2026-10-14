@@ -247,3 +247,11 @@ test("summarizes attached paper topics instead of putting their full names into 
   expect(session.title).toBe("Larimar · Cicada · 研究选题");
   expect(session.messages[0].content).toBe(user.content);
 });
+
+test("keeps a persisted model title when refreshing the conversation snapshot", () => {
+  const session = { ...createAssistantSession({ id: "named" }), title: "注意力机制", titleSource: "model" as const };
+  const snapshot = snapshotAssistantSession({ session, state: { mode: "qa", pending: false,
+    messages: [message("u", "user", "帮我解释一下这篇论文的注意力机制是什么")] } });
+  expect(snapshot.title).toBe("注意力机制");
+  expect(snapshot.titleSource).toBe("model");
+});

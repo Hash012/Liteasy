@@ -2,6 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { scanUiSource, checkUiFindings, checkUiInventory } from "./check-ui-boundaries.mjs";
 const file = "src/app/features/example/Example.tsx";
+test("default surfaces reject teaching templates and title-based reference identity", () => {
+  assert.ok(scanUiSource(file, '<p>整篇论文问答；也可在项目中按页选择原文或图片。</p>').some(item => item.rule === "teaching-template"));
+  assert.ok(scanUiSource("src/app/features/assistant/inlineContext.ts", 'const byTitle = new Map(tokens.map(token => [token.label, token]));').some(item => item.rule === "reference-title-identity"));
+  assert.ok(scanUiSource("src/app/features/assistant/AssetRow.tsx", '<article className="context-asset-card">{asset.description}</article>').some(item => item.rule === "card-helper-prose"));
+  assert.deepEqual(scanUiSource(file, '<p role="alert">权限不足，请重新登录。</p>'), []);
+  assert.deepEqual(scanUiSource("src/app/features/help/HelpPanel.tsx", '<p>整篇论文问答；也可在项目中按页选择原文或图片。</p>'), []);
+});
 for (const [rule, source] of [
   ["inline-ui-literal", 'export const X = () => <div style={{ color: "#fff", backgroundColor: "black" }}>text</div>;'],
   ["second-theme-root", 'export const X = () => <FluentProvider theme={custom}>x</FluentProvider>;'],

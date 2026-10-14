@@ -269,3 +269,9 @@
   .notes-item-menu, .notes-item-location { min-width: 44px; min-height: 44px; }
   .notes-item-location { right: 48px; }
 }
+
+.notes-paper-group { min-width: 0; }
+.notes-paper-group > h3 { display: flex; gap: 8px; align-items: center; margin: 12px 6px 4px; font-size: inherit; font-weight: 600; }
+.notes-paper-group > h3 > span { margin-left: auto; font-weight: 400; color: var(--colorNeutralForeground2); }
+.notes-item .notes-item-detail { margin: 4px 6px 6px; max-height: none; border-radius: 4px; }
+.notes-item-excerpt { margin: 0 12px 8px 30px; }

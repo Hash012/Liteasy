@@ -126,7 +126,8 @@ describe("shared reference UI", () => {
     window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
     fireEvent.mouseUp(line);
     await user.click(screen.getByRole("button", { name: "插入引用", exact: true }));
-    expect(chosen.mock.calls[0][1]).toMatchObject({ text: "explanation", fragment: "L4:4" });
+    expect(chosen.mock.calls[0][1]).toMatchObject({ text: "explanation" });
+    expect(referenceFragment(text, chosen.mock.calls[0][1].fragment).text).toBe("explanation");
     chosen.mockClear(); f.change("# Replaced\nNo longer the same text");
     await user.click(screen.getByRole("button", { name: "插入引用", exact: true }));
     expect(await screen.findByRole("alert")).toHaveTextContent("源文件已修改");
@@ -157,7 +158,7 @@ describe("shared reference UI", () => {
     expect(within(preview).queryByText("not selected")).toBeNull();
     await user.click(within(preview).getByRole("button", { name: "关闭引用预览" }));
     await user.click(screen.getByRole("link", { name: "笔记" }));
-    await waitFor(() => expect(f.refs.open).toHaveBeenCalledWith(f.path));
+    await waitFor(() => expect(f.refs.open).toHaveBeenCalledWith(`${f.path}#Title2`));
   });
   test("does not pair wiki syntax in code or during IME composition", async () => {
     function Editor() { const [value, change] = useState("```md\n"); return <MarkdownSourceEditor documentKey="note" value={value} onChange={change} />; }
@@ -170,4 +171,14 @@ describe("shared reference UI", () => {
     fireEvent.compositionEnd(editor);
     expect(editor).toHaveValue("中文[[");
   });
+});
+
+test("selection guidance is available on demand while source-line precision stays visible", async () => {
+  const f = fixture(); const user = userEvent.setup();
+  render(<ResourceReferencesContext.Provider value={f.refs}><ReferenceContentPicker path={f.path} onChoose={vi.fn()} /></ResourceReferencesContext.Provider>);
+  await screen.findByLabelText("带行号的原文");
+  expect(screen.getByText("源文本行号，不随显示换行改变。")).toBeInTheDocument();
+  expect(screen.queryByText("点击标题选章节；点击行号、Shift+点击或直接选中文字。")).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "选择引用帮助" }));
+  expect(screen.getByText("点击标题选章节；点击行号、Shift+点击或直接选中文字。")).toBeVisible();
 });

@@ -1,3 +1,4 @@
+import { paperReferenceText } from "../features/resource-links/paperReferenceSource";
 import { quickAskPresetResourceType } from "../features/quick-ask-presets/quickAskPresetResourceType";
 import { createSettingsStore } from "../features/settings/settings.store";
 import { getAccountSessionGeneration } from "../features/account/accountSessionStorage";
@@ -1087,17 +1088,19 @@ export function useObjectWorkbenchController(input: {
         options.signal?.throwIfAborted();
         if (!active()) throw new Error("账号已切换。");
         const chunks = latest.current.getImportedChunksForPaperId?.(paper.id) ?? [];
-        if (chunks.length) return `已保存的解析片段，覆盖页码：${[...new Set(chunks.map((chunk) => chunk.page))].sort((a, b) => a - b).join("、")}。仅代表以下已解析内容，不能据此确认全文覆盖。\n\n` +
-          chunks.map((chunk) => `第 ${chunk.page} 页\n${chunk.sourceMarkdown || chunk.snippet}`).join("\n\n");
+        if (chunks.length) return paperReferenceText({ paperId: paper.id, documentHash: paper.contentHash,
+          notice: `已保存的解析片段，覆盖页码：${[...new Set(chunks.map((chunk) => chunk.page))].sort((a, b) => a - b).join("、")}。仅代表以下已解析内容，不能据此确认全文覆盖。`,
+          pages: chunks.map((chunk) => ({ page: chunk.page, text: chunk.sourceMarkdown || chunk.snippet })) });
         const fulltext = normalizePaperFulltext(await loadUserPaperArtifact({ artifactKind: "fulltext", paperId: paper.id }));
         if (!active()) throw new Error("账号已切换。");
         options.signal?.throwIfAborted();
-        if (fulltext?.pages.some((page) => page.text.trim())) return `阅读器已缓存页码：${fulltext.pages.map((page) => page.page).join("、")}。论文总页数未知，不能将缓存视为完整全文。\n\n` +
-          fulltext.pages.map((page) => `第 ${page.page} 页\n${page.text}`).join("\n\n");
+        if (fulltext?.pages.some((page) => page.text.trim())) return paperReferenceText({ paperId: paper.id, documentHash: paper.contentHash,
+          notice: `阅读器已缓存页码：${fulltext.pages.map((page) => page.page).join("、")}。论文总页数未知，不能将缓存视为完整全文。`,
+          pages: fulltext.pages.map((page) => ({ page: page.page, text: page.text })) });
       };
       const ready = await readAvailable();
       if (ready) return ready;
-      if (latest.current.ensurePaperImported) {
+      if (options.preparation !== "cached" && latest.current.ensurePaperImported) {
         await latest.current.ensurePaperImported(paper, options.signal);
         const imported = await readAvailable();
         if (imported) return imported;

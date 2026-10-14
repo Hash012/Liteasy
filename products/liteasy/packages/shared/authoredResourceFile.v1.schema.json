@@ -443,6 +443,10 @@
                               "end"
                             ],
                             "additionalProperties": false
+                          },
+                          "normalization": {
+                            "type": "string",
+                            "const": "lf-utf16"
                           }
                         },
                         "required": [
