@@ -1,12 +1,11 @@
-import { useContextRankedRecommendations } from "./useContextRankedRecommendations";
+import { useState } from "react";
+import { useRecommendationFeed } from "../features/recommendations/useRecommendationFeed";
 import { useRecommendationContextController, type RecommendationResourceInput } from "./useRecommendationContextController";
-import { useLocalRecommendations } from "../features/recommendations/useLocalRecommendations";
-import { useRecommendationMetadataController } from "./useRecommendationMetadataController";
+import { hasRecommendationMetadata, useRecommendationMetadataController } from "./useRecommendationMetadataController";
 import type { PaperServiceConfig } from "../features/paper-services/paperServiceTransport";
 import type { RecommendationRuntimeInput } from "../features/recommendations/recommendationRuntime";
 import { useDocumentMetadataSync } from "../features/metadata/useDocumentMetadataSync";
 import type { DocumentMetadataTransport } from "../features/metadata/documentMetadataClient";
-import { useRecommendations } from "../features/recommendations/useRecommendations";
 import type { RecommendationTransport } from "../features/recommendations/recommendationClient";
 import type { RecommendationCacheTransport } from "../features/recommendations/recommendationCacheClient";
 import type { AccountSession } from "../features/account/account.types";
@@ -81,35 +80,18 @@ export function useKnowledgeSyncController({
   workspaceSourceKey
 }: UseKnowledgeSyncControllerInput) {
   const directRecommendations = localMode || Boolean(localService);
+  const [seed, setSeed] = useState<{ workspace: string; id: string; papers: Paper[]; resources?: RecommendationResourceInput }>();
+  const activeSeed = seed?.workspace === workspaceSourceKey ? seed : undefined;
   const metadata = useRecommendationMetadataController({ enabled: recommendationsEnabled,
-    papers: recommendationResources?.selected?.length ? [] : selectedPapers, workspace: workspaceSourceKey, prepare: prepareRecommendationPaper });
-  const context = useRecommendationContextController({ enabled: recommendationsEnabled, papers: metadata.papers, resources: recommendationResources, profile: researchProfile });
-  const cloudRecommendations = useRecommendations({
-    accountSession,
-    controlPlaneEndpoint,
-    recommendationCacheDeps,
-    recommendationCacheTransport,
-    recommendationFeedbackTransport,
-    recommendationGeneratorDeps,
-    recommendationTransport,
-    recommendationsEnabled: recommendationsEnabled && !directRecommendations && !metadata.blocked && !context.pending,
-    recommendationSortMode,
-    recommendationStyle,
-    personalizationVersion,
-    researchProfile: context.preferences.sendPrivateText && context.preferences.useProfile ? researchProfile : undefined,
-    selectedDocuments: context.context.documents.filter((doc) => context.preferences.sendPrivateText || !context.context.views.find((view) => view.id === doc.id)?.private),
-    selectedPapers: metadata.papers,
-    workspaceRevision,
-    workspaceSourceKey
-  });
-  const localRecommendations = useLocalRecommendations({ assets: recommendationResources?.assets, enabled: directRecommendations && recommendationsEnabled && !metadata.blocked, config: localService,
-    papers: metadata.papers, profile: researchProfile, context: context.pending ? undefined : context.context, contextPending: context.pending, preferences: context.preferences, scopeId: recommendationResources?.scope ?? "local", workspace: workspaceSourceKey, style: recommendationStyle ?? "balanced", sort: recommendationSortMode });
-  const cloudRanking = useContextRankedRecommendations({ assets: recommendationResources?.assets, enabled: !directRecommendations && recommendationsEnabled && context.preferences.hybridEnabled && !context.pending,
-    items: cloudRecommendations.recommendationItems, context: context.context, preferences: context.preferences,
-    scope: recommendationResources?.scope ?? "local", workspace: workspaceSourceKey, style: recommendationStyle ?? "balanced" });
-  const recommendations = directRecommendations ? localRecommendations : context.preferences.hybridEnabled ? { ...cloudRecommendations,
-    recommendationItems: cloudRanking.items, recommendationPending: cloudRecommendations.recommendationPending || cloudRanking.pending,
-    recommendationMessage: [cloudRecommendations.recommendationMessage, cloudRanking.warning].filter(Boolean).join(" ") } : cloudRecommendations;
+    papers: activeSeed?.papers ?? documents.filter(hasRecommendationMetadata).slice(0, 16), workspace: workspaceSourceKey, prepare: activeSeed ? prepareRecommendationPaper : undefined });
+  const context = useRecommendationContextController({ enabled: recommendationsEnabled, papers: metadata.papers,
+    resources: activeSeed?.resources ?? (recommendationResources ? { ...recommendationResources, selected: [] } : undefined), profile: researchProfile });
+  const recommendations = useRecommendationFeed({ enabled: recommendationsEnabled, direct: directRecommendations,
+    accountSession, endpoint: controlPlaneEndpoint, scope: recommendationResources?.scope ?? "local", workspace: workspaceSourceKey,
+    context: context.context, pending: context.pending || metadata.blocked, preferences: context.preferences, profile: researchProfile,
+    style: recommendationStyle ?? "balanced", config: localService, assets: recommendationResources?.assets,
+    transport: recommendationTransport, feedbackTransport: recommendationFeedbackTransport, generator: recommendationGeneratorDeps,
+    legacyCache: recommendationCacheDeps, seedId: activeSeed?.id });
   const documentMetadataSync = useDocumentMetadataSync({
     accountSession,
     controlPlaneEndpoint,
@@ -123,6 +105,9 @@ export function useKnowledgeSyncController({
     actions: {
       clearRecommendationCache: recommendations.clearRecommendationCache,
       refreshRecommendations: () => metadata.blocked ? metadata.retry() : recommendations.refreshRecommendations(),
+      exploreSelectedPapers: () => setSeed({ workspace: workspaceSourceKey, id: crypto.randomUUID(), papers: [...selectedPapers], resources: recommendationResources ? { ...recommendationResources, selected: [...(recommendationResources.selected ?? [])] } : undefined }),
+      showOrdinaryRecommendations: () => setSeed(undefined),
+      acceptPendingRecommendations: recommendations.acceptPending,
       recordRecommendationSaved: (recommendation: RecommendationItem) =>
         recommendations.recordRecommendationFeedback(recommendation, "saved"),
       dismissRecommendation: (recommendation: RecommendationItem) =>
@@ -131,10 +116,12 @@ export function useKnowledgeSyncController({
     },
     model: {
       localRecommendations: directRecommendations,
+      recommendationPendingSnapshot: recommendations.pendingSnapshot,
+      recommendationExploringSelection: Boolean(activeSeed),
       documentMetadataSyncMessage: documentMetadataSync.message,
       documentMetadataSyncResult: documentMetadataSync.lastResult,
       documentMetadataSyncStatus: documentMetadataSync.status,
-      recommendationItems: metadata.blocked ? [] : recommendations.recommendationItems,
+      recommendationItems: recommendations.recommendationItems,
       recommendationMessage: metadata.blocked ? metadata.message : recommendations.recommendationMessage,
       recommendationPending: metadata.blocked ? metadata.pending : recommendations.recommendationPending,
       recommendationStatus: metadata.blocked ? metadata.pending ? "loading" as const : "error" as const : recommendations.recommendationStatus

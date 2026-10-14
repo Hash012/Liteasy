@@ -1,3 +1,4 @@
+import type { RecommendationTask } from "./recommendationCoordinator";
 import type { AgentAssetService } from "../resource-filesystem/agentAssetService";
 import { hybridRank, diversify, cosine, keywords, terms, type Candidate } from "../../../../../../packages/recommendation-core/index.mjs";
 import { contentFingerprint, createSemanticIndex, type IndexRecord } from "../semantic-index/semanticIndexClient";
@@ -17,7 +18,7 @@ function link(title: string, path?: string) {
   const label = title.replace(/[\[\]\\\n]/g, " ").slice(0, 100);
   return path?.startsWith("liteasy://") ? `[《${label}》](${path.replace(/[()\s]/g, encodeURIComponent)})` : `《${label}》`;
 }
-export async function rankContextRecommendations(input: { assets?: AgentAssetService; items: RecommendationItem[]; context: RecommendationContext; preferences: RecommendationPreferences; scope: string; workspace: string;
+export async function rankContextRecommendations(input: { task?: RecommendationTask; assets?: AgentAssetService; items: RecommendationItem[]; context: RecommendationContext; preferences: RecommendationPreferences; scope: string; workspace: string;
   style: RecommendationStyle; signal: AbortSignal; active(): boolean }): Promise<{ items: RecommendationItem[]; warning: string }> {
   const { preferences, context } = input;
   const signal = AbortSignal.any([input.signal, AbortSignal.timeout(45_000)]);

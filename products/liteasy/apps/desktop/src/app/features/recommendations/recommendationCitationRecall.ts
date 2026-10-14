@@ -1,13 +1,15 @@
+import type { RecommendationTask } from "./recommendationCoordinator";
 import { paperServiceRequest, type PaperServiceConfig } from "../paper-services/paperServiceTransport";
 import type { RecommendationRequestDocument } from "./recommendation.types";
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" ? value as Record<string, unknown> : {};
 const list = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
 /** Bounded exact-ID graph expansion; provider URLs and keys stay within the configured adapter. */
-export async function recallCitations(config: PaperServiceConfig, seed: RecommendationRequestDocument, signal: AbortSignal) {
+export async function recallCitations(config: PaperServiceConfig, seed: RecommendationRequestDocument, signal: AbortSignal, task?: RecommendationTask) {
   if (!seed.doi) return [];
   const base = config.endpoint.replace(/\/+$/, "");
   const get = async (path: string) => {
-    const response = await paperServiceRequest(config, `${base}${path}`, { signal, timeoutMs: 8000, maxResponseBytes: 4 * 1024 * 1024 });
+    const request = () => paperServiceRequest(config, `${base}${path}`, { signal, timeoutMs: 8000, maxResponseBytes: 4 * 1024 * 1024 });
+    const response = task ? await task.request("provider", request) : await request();
     if (!response.ok) throw new Error(`引用关系查询返回 HTTP ${response.status}`);
     return object(await response.json());
   };

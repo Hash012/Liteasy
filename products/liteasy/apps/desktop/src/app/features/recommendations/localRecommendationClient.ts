@@ -1,3 +1,4 @@
+import type { RecommendationTask } from "./recommendationCoordinator";
 import { recallCitations } from "./recommendationCitationRecall";
 import { paperServiceRequest, type PaperServiceConfig } from "../paper-services/paperServiceTransport";
 import { readBibliographicMetadata } from "../paper-services/bibliographicMetadata";
@@ -20,7 +21,7 @@ function pdfUrl(item: Record<string, unknown>, provider: PaperServiceConfig["pro
   return undefined;
 }
 
-export async function fetchLocalRecommendations(config: PaperServiceConfig, queries: Array<string | RecommendationRequestDocument>, style: RecommendationStyle, signal: AbortSignal, options: { citations?: boolean; onCandidates?: (items: RecommendationItem[]) => void } = {}): Promise<RecommendationItem[]> {
+export async function fetchLocalRecommendations(config: PaperServiceConfig, queries: Array<string | RecommendationRequestDocument>, style: RecommendationStyle, signal: AbortSignal, options: { task?: RecommendationTask; citations?: boolean; onCandidates?: (items: RecommendationItem[]) => void } = {}): Promise<RecommendationItem[]> {
   const found = new Map<string, RecommendationItem>();
   const seeds = queries.slice(0, 16);
   const failures: unknown[] = [];
@@ -46,21 +47,22 @@ export async function fetchLocalRecommendations(config: PaperServiceConfig, quer
       url.searchParams.set("fields", "title,authors,year,externalIds,url,citationCount,publicationDate,abstract,fieldsOfStudy,venue,openAccessPdf");
       if (style === "frontier") url.searchParams.set("year", `${new Date().getUTCFullYear() - 2}-`);
     }
-    const response = await paperServiceRequest(config, url.href, { timeoutMs: 12_000, maxResponseBytes: 4 * 1024 * 1024, signal });
+    const request = () => paperServiceRequest(config, url.href, { timeoutMs: 12_000, maxResponseBytes: 4 * 1024 * 1024, signal });
+    const response = options.task ? await options.task.request("provider", request) : await request();
     signal.throwIfAborted();
-    if (!response.ok) throw new Error(`文献 API 返回 HTTP ${response.status}，请检查文献服务地址、密钥或配额。`);
+    if (!response.ok) throw Object.assign(new Error(`文献 API 返回 HTTP ${response.status}，请检查文献服务地址、密钥或配额。`), { status: response.status });
     const payload = record(await response.json());
     const items = array(config.provider === "crossref" ? record(payload.message).items : config.provider === "openalex" ? payload.results : payload.data);
     ingest(seed, items);
     if (options.citations && typeof seed !== "string" && graphSeeds.has(seed)) {
-      try { for (const result of await recallCitations(config, seed, signal)) ingest(seed, result.items, result.relation); }
+      try { for (const result of await recallCitations(config, seed, signal, options.task)) ingest(seed, result.items, result.relation); }
       catch { signal.throwIfAborted(); /* Topic results remain usable when a graph source is unavailable. */ }
     }
   }
   function ingest(seed: string | RecommendationRequestDocument, items: unknown[], relation: RecommendationItem["relation"] = "topic_search") {
     const label = typeof seed === "string" ? seed : seed.title;
     const group = groups.get(label) ?? []; groups.set(label, group);
-    for (const [index, raw] of items.entries()) {
+    for (const [index, raw] of items.slice(0, 200).entries()) {
       const item = record(raw);
       const title = readableBibliographicTitle(text(config.provider === "crossref" ? array(item.title)[0] : item.title ?? item.display_name));
       const doi = text(item.DOI ?? item.doi ?? record(item.externalIds).DOI).replace(/^https?:\/\/(?:dx\.)?doi.org\//i, "").toLowerCase();
@@ -93,7 +95,7 @@ export async function fetchLocalRecommendations(config: PaperServiceConfig, quer
     if (found.size) options.onCandidates?.([...found.values()].slice(0, 200));
   }
   let cursor = 0;
-  await Promise.all(Array.from({ length: Math.min(3, seeds.length) }, async () => {
+  await Promise.all(Array.from({ length: Math.min(2, seeds.length) }, async () => {
     while (cursor < seeds.length && !signal.aborted) {
       const seed = seeds[cursor++];
       try { await retrieve(seed); } catch (error) { signal.throwIfAborted(); failures.push(error); }

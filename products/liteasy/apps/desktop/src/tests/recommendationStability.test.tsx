@@ -71,7 +71,7 @@ test.each([true, false])("PDF position writes keep recommendations visible witho
   expect(await positions.load(paper.id, "sha256:book")).toBe(3);
 });
 
-test("related note edits rebuild in the background and replace recommendations without an empty frame", async () => {
+test("related note edits only update local context; explicit check replaces recommendations without an empty frame", async () => {
   const { scope, base } = setup();
   const frames: string[][] = [];
   const hook = renderHook(() => { const result = useKnowledgeSyncController(base); frames.push(result.model.recommendationItems.map((item) => item.id)); return result; });
@@ -83,6 +83,8 @@ test("related note edits rebuild in the background and replace recommendations w
   await waitFor(() => expect(build).toHaveBeenCalledTimes(2));
   expect(hook.result.current.model.recommendationItems.map((item) => item.id)).toEqual(["r1"]);
   await act(async () => nextContext.resolve({ ...contextFor(), views: [{ id: "annotation:new", title: "A new research question", text: "How is attention memory reduced?", kind: "annotation", provenance: "user-note", revision: "2", private: true }] }));
+  expect(fetchLocal).toHaveBeenCalledTimes(1);
+  act(() => { void hook.result.current.actions.refreshRecommendations(); });
   await waitFor(() => expect(fetchLocal).toHaveBeenCalledTimes(2));
   expect(hook.result.current.model.recommendationItems.map((item) => item.id)).toEqual(["r1"]);
   await act(async () => nextResults.resolve([{ ...candidate, id: "r2" }]));
