@@ -11,7 +11,7 @@ function Fixture() {
   const [selected, setSelected] = useState("");
   return <FluentProvider theme={dark ? webDarkTheme : webLightTheme}>
     <div className="app-frame workspace-frame">
-      <WorkspaceCommandBar windowControls={location.search.includes("native") ? {
+      <WorkspaceCommandBar onOpenSearch={location.search.includes("search") ? () => setSelected("global-search") : undefined} windowControls={location.search.includes("native") ? {
         available: true, maximized, error: "", minimize: () => setSelected("minimize"),
         toggleMaximize: () => setMaximized((value) => !value), close: () => setSelected("close")
       } : undefined} state={{
@@ -24,6 +24,7 @@ function Fixture() {
       }} />
       <main style={{ padding: 20, background: "var(--colorNeutralBackground1)", color: "var(--colorNeutralForeground1)" }}>
         <Button onClick={() => setDark((value) => !value)}>切换测试主题</Button>
+        <p>正文仍可选择复制</p>
         <p>{selected}</p>
       </main>
       <FileStatusBar status={{ name: "Lairmar.pdf", path: "/library/Lairmar.pdf", type: "PDF", pageCount: 18, size: 1782579, source: "local", indexState: "indexed", syncState: "synced" }} />

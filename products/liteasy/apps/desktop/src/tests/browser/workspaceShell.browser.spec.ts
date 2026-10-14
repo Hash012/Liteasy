@@ -163,3 +163,44 @@ test("native title-bar controls share one row with commands and never become dra
   await page.getByRole("button", { name: "切换测试主题" }).click();
   await page.screenshot({ path: testInfo.outputPath("unified-native-titlebar-dark.png"), animations: "disabled" });
 });
+
+for (const search of [false, true]) {
+  test(`native title-bar blank surfaces are draggable without selecting text (search: ${search})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 460 });
+    await page.goto(`/src/tests/browser/fixtures/workspace-shell.html?native${search ? "&search" : ""}`);
+    await expect(toolbar(page)).toBeVisible();
+    // Check actual hit targets across padding, both wings and gaps, including narrow layouts.
+    for (const width of [1280, 640]) {
+      await page.setViewportSize({ width, height: 460 });
+      const uncovered = await toolbar(page).evaluate((bar) => {
+        const rect = bar.getBoundingClientRect();
+        const missing = new Set<string>();
+        for (let x = rect.left + 1; x < rect.right; x += 3) {
+          for (const y of [rect.top + 2, rect.top + rect.height / 2, rect.bottom - 2]) {
+            const target = document.elementFromPoint(x, y);
+            if (target && bar.contains(target) && !target.closest("button") && !target.hasAttribute("data-tauri-drag-region")) {
+              missing.add(target.className);
+            }
+          }
+        }
+        return [...missing];
+      });
+      expect(uncovered).toEqual([]);
+    }
+    const top = (await toolbar(page).boundingBox())!;
+    await page.mouse.move(top.x + 1, top.y + 2);
+    await page.mouse.down();
+    await page.mouse.move(320, 150, { steps: 12 });
+    await page.mouse.up();
+    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe("");
+    await expect(toolbar(page)).toHaveCSS("user-select", "none");
+    await toolbar(page).getByRole("button", { name: "最小化窗口", exact: true }).click();
+    await expect(page.locator("main")).toContainText("minimize");
+    if (search) {
+      await toolbar(page).getByRole("button", { name: "搜索工作区", exact: true }).click();
+      await expect(page.locator("main")).toContainText("global-search");
+    }
+    await page.getByText("正文仍可选择复制", { exact: true }).dblclick();
+    expect(await page.evaluate(() => window.getSelection()?.toString().length)).toBeGreaterThan(0);
+  });
+}

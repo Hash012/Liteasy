@@ -28,6 +28,8 @@
   height: var(--shell-top-height);
   background: var(--colorNeutralBackground3);
   border-bottom: 1px solid var(--colorNeutralStroke2);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .shell-navigation,
@@ -117,7 +119,7 @@
   border-bottom-color: var(--colorNeutralStroke2);
 }
 
-.shell-workspace-title[data-tauri-drag-region] { user-select: none; align-self: stretch; line-height: var(--shell-top-height); }
+.shell-workspace-title[data-tauri-drag-region] { align-self: stretch; line-height: var(--shell-top-height); }
 .shell-window-controls { display: flex; flex: 0 0 auto; align-self: stretch; }
 .shell-window-controls > button { width: 46px; min-width: 46px; height: var(--shell-top-height); border: 0; border-radius: 0; }
 .shell-window-controls .shell-window-close:hover { background: var(--surface-hover); color: var(--text-primary); }

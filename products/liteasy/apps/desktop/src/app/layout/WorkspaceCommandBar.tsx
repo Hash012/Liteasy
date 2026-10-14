@@ -60,19 +60,21 @@ export function WorkspaceCommandBar({ state, windowControls, onOpenAi, onOpenSea
   const overflow = [...actions.filter((action) => !visibleIds.has(action.id)), ...(state.overflowActions ?? [])];
   const recovery = getRecoveryRuntime();
   const title = [...(state.breadcrumb?.map((item) => item.label) ?? []), state.title].filter(Boolean).join(" / ");
+  // Tauri hit-tests the event target, so each non-interactive surface needs the marker.
+  const dragRegion = windowControls?.available ? true : undefined;
   return (
-    <Toolbar ref={root} aria-label="工作区命令栏" className={`workspace-command-bar${onOpenSearch ? " has-global-search" : ""}`}>
-      <div className="shell-command-wing shell-command-wing-start">
-      <div className="shell-navigation">
+    <Toolbar ref={root} data-tauri-drag-region={dragRegion} aria-label="工作区命令栏" className={`workspace-command-bar${onOpenSearch ? " has-global-search" : ""}`}>
+      <div className="shell-command-wing shell-command-wing-start" data-tauri-drag-region={dragRegion}>
+      <div className="shell-navigation" data-tauri-drag-region={dragRegion}>
         <Tooltip content="后退" relationship="description"><Button className="shell-icon-button" appearance="subtle" aria-label="后退" disabled={!state.canGoBack} icon={<ArrowLeftRegular />} onClick={state.onGoBack} /></Tooltip>
         <Tooltip content="前进" relationship="description"><Button className="shell-icon-button" appearance="subtle" aria-label="前进" disabled={!state.canGoForward} icon={<ArrowRightRegular />} onClick={state.onGoForward} /></Tooltip>
         {state.onOpenPageHistory ? <Tooltip content="页面历史 · Ctrl+H" relationship="description"><Button className="shell-icon-button" appearance="subtle" aria-label="页面历史" icon={<HistoryRegular />} onClick={state.onOpenPageHistory} /></Tooltip> : null}
       </div>
-      <div className="shell-workspace-title" data-tauri-drag-region={windowControls?.available ? true : undefined} title={recovery ? `隔离恢复资料 · 离线 / ${title}` : title}>{recovery ? "隔离恢复资料 · 离线" : windowControls?.available && title ? `Liteasy · ${title}` : title || "Liteasy"}</div>
+      <div className="shell-workspace-title" data-tauri-drag-region={dragRegion} title={recovery ? `隔离恢复资料 · 离线 / ${title}` : title}>{recovery ? "隔离恢复资料 · 离线" : windowControls?.available && title ? `Liteasy · ${title}` : title || "Liteasy"}</div>
       </div>
       {onOpenSearch ? <Tooltip content={`搜索工作区 · ${commandShortcut("global-search")}`} relationship="description"><Button {...restoreSearchFocus} appearance="outline" className="shell-global-search" data-tour="global-search" icon={<SearchRegular />} aria-label="搜索工作区" title={`搜索工作区 · ${commandShortcut("global-search")}`} onClick={onOpenSearch}><span className="shell-global-search-label">搜索工作区</span><kbd>{commandShortcut("global-search")}</kbd></Button></Tooltip> : null}
-      <div className="shell-command-wing shell-command-wing-end">
-      <div className="shell-commands">
+      <div className="shell-command-wing shell-command-wing-end" data-tauri-drag-region={dragRegion}>
+      <div className="shell-commands" data-tauri-drag-region={dragRegion}>
         {onOpenAi ? <Tooltip content="选择论文并使用 AI 能力" relationship="description"><Button {...restoreAiFocus} appearance="primary" className="shell-ai-button" aria-label="AI 工作台" onClick={onOpenAi}>AI</Button></Tooltip> : null}
         {actions.filter((action) => visibleIds.has(action.id)).map((action) => <ActionButton key={action.id} action={action} />)}
         {overflow.length > 0 ? <Menu>
@@ -82,8 +84,8 @@ export function WorkspaceCommandBar({ state, windowControls, onOpenAi, onOpenSea
           <MenuPopover><ActionMenuItems actions={overflow} /></MenuPopover>
         </Menu> : null}
       </div>
-      {windowControls?.available ? <div className="shell-window-controls" role="group" aria-label="窗口控制">
-        {windowControls.error ? <span role="alert" className="shell-window-error">{windowControls.error}</span> : null}
+      {windowControls?.available ? <div className="shell-window-controls" data-tauri-drag-region={dragRegion} role="group" aria-label="窗口控制">
+        {windowControls.error ? <span role="alert" className="shell-window-error" data-tauri-drag-region={dragRegion}>{windowControls.error}</span> : null}
         <Tooltip content="最小化窗口" relationship="description"><Button appearance="subtle" aria-label="最小化窗口" icon={<SubtractRegular />} onClick={windowControls.minimize} /></Tooltip>
         <Tooltip content={windowControls.maximized ? "还原窗口" : "最大化窗口"} relationship="description"><Button appearance="subtle" aria-label={windowControls.maximized ? "还原窗口" : "最大化窗口"} icon={windowControls.maximized ? <SquareMultipleRegular /> : <SquareRegular />} onClick={windowControls.toggleMaximize} /></Tooltip>
         <Tooltip content="关闭窗口" relationship="description"><Button className="shell-window-close" appearance="subtle" aria-label="关闭窗口" icon={<DismissRegular />} onClick={windowControls.close} /></Tooltip>
