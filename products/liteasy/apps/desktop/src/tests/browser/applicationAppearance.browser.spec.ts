@@ -8,6 +8,8 @@ test("appearance follows the system and an explicit choice persists across launc
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
+  // A cold Vite launch must mount the application before checking its theme.
+  await expect(page.getByRole("navigation", { name: "左边栏导航" })).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");
   const settings = page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "设置", exact: true });
   await settings.click();
