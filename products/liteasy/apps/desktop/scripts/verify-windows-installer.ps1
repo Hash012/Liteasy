@@ -19,10 +19,11 @@ try {
     if (-not $setup.WaitForExit(180000)) { $setup.Kill(); throw "Silent installation timed out." }
     if ($setup.ExitCode -ne 0) { throw "Silent installation failed: $($setup.ExitCode)" }
     $report.installExitCode = $setup.ExitCode
-    $report.installedSha256 = (Get-FileHash $installed -Algorithm SHA256).Hash
-    # Tauri patches bundle metadata during NSIS packaging; compare AFTER bundling.
-    $report.releaseSha256 = (Get-FileHash $release -Algorithm SHA256).Hash
-    if ($report.installedSha256 -ne $report.releaseSha256) { throw "Installed executable differs from the packaged Release executable." }
+    # Tauri restores the unpatched Release file after packaging. Verify the
+    # installed bytes against precisely its NSIS marker patch, not a raw hash.
+    $payload = & node scripts/verify-windows-payload.mjs $release $installed
+    if ($LASTEXITCODE -ne 0) { throw "Installed executable differs from the expected NSIS payload." }
+    $report.payload = $payload | ConvertFrom-Json
     $report.executableBytes = (Get-Item $installed).Length
     $report.fileVersion = (Get-Item $installed).VersionInfo.FileVersion
     if (([Version]$report.fileVersion).ToString(3) -ne $version) { throw "Installed executable has the wrong version: $($report.fileVersion)" }
