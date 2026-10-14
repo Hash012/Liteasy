@@ -121,7 +121,8 @@ describe("shared reference UI", () => {
     const f = fixture(), chosen = vi.fn();
     render(<ResourceReferencesContext.Provider value={f.refs}><ReferenceContentPicker path={f.path} onChoose={chosen} /></ResourceReferencesContext.Provider>);
     const user = userEvent.setup();
-    const line = await screen.findByText("first explanation");
+    const numbered = await screen.findByLabelText("带行号的原文");
+    const line = within(numbered).getByText("first explanation");
     const range = document.createRange(); range.setStart(line.firstChild!, 6); range.setEnd(line.firstChild!, 17);
     window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
     fireEvent.mouseUp(line);
@@ -181,4 +182,16 @@ test("selection guidance is available on demand while source-line precision stay
   expect(screen.queryByText("点击标题选章节；点击行号、Shift+点击或直接选中文字。")).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "选择引用帮助" }));
   expect(screen.getByText("点击标题选章节；点击行号、Shift+点击或直接选中文字。")).toBeVisible();
+});
+
+test("BULK-04: the structure picker submits the real complement of an excluded paragraph", async () => {
+  const f = fixture(), chosen = vi.fn(async (_document: unknown, _ranges: unknown) => {});
+  render(<ResourceReferencesContext.Provider value={f.refs}><ReferenceContentPicker path={f.path} onChoose={vi.fn()} onChooseRanges={chosen} /></ResourceReferencesContext.Provider>);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("checkbox", { name: "选择完整文本，可排除下列片段" }));
+  await user.click(screen.getByRole("checkbox", { name: "排除 first explanation", exact: true }));
+  await user.click(screen.getByRole("button", { name: "插入引用", exact: true }));
+  expect(chosen).toHaveBeenCalledOnce();
+  const ranges = chosen.mock.calls[0][1] as unknown as { text: string }[];
+  expect(ranges.map(range => range.text).join("")).toBe(text.replace("first explanation", ""));
 });

@@ -75,7 +75,7 @@ export function WikiLinkEditor({ raw, target, onChange, onFinish, onHistory }: {
         <p className="reference-hint">Enter 完成 · 标题用 #标题 · 行范围用 #L1:3</p>
       </PopoverSurface>
     </Popover>
-    {browser ? <ContextAssetBrowser suggestions={references.suggestions} initialQuery={parsed.target.startsWith("liteasy://") ? "" : parsed.target}
+    {browser ? <ContextAssetBrowser purpose="reference" targetDraftId={`reference:${source ?? "editor"}`} suggestions={references.suggestions} initialQuery={parsed.target.startsWith("liteasy://") ? "" : parsed.target}
       onClose={() => { setBrowser(false); }} onChooseReference={choose} /> : null}
   </>;
 }

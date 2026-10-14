@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ContextAssetBrowser } from "../app/features/assistant/ContextAssetBrowser";
 import type { AssistantComposerSuggestion, AssistantContextToken } from "../app/features/assistant/assistant.types";
 
@@ -51,6 +51,8 @@ describe("ContextAssetBrowser", () => {
     await user.type(screen.getByRole("textbox", { name: "搜索全部上下文资产" }), "注意力 原文");
     expect(screen.queryByRole("checkbox", { name: "选择 实验记录" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("checkbox", { name: "选择 注意力论文原文" }));
+    expect(loadPreview).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "预览 注意力论文原文" }));
     expect(await screen.findByText("真实识别正文")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "注意力论文原文" })).toHaveAttribute("src", "data:image/png;base64,cHJldmlldw==");
     expect(loadPreview).toHaveBeenCalledOnce();
@@ -65,9 +67,9 @@ describe("ContextAssetBrowser", () => {
     const retry = vi.fn().mockRejectedValueOnce(new Error("文件暂不可读")).mockResolvedValue({ text: "重新读取的笔记" });
     render(<ContextAssetBrowser suggestions={[{ ...assets[0], loadPreview: delayed }, { ...assets[1], loadPreview: retry }]} onClose={vi.fn()} />);
     const user = userEvent.setup();
-    await user.click(screen.getByRole("checkbox", { name: "选择 注意力论文原文" }));
+    await user.click(screen.getByRole("button", { name: "预览 注意力论文原文" }));
     expect(screen.getByRole("status")).toHaveTextContent("正在读取预览");
-    await user.click(screen.getByRole("checkbox", { name: "选择 实验记录" }));
+    await user.click(screen.getByRole("button", { name: "预览 实验记录" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("文件暂不可读");
     await act(async () => { complete({ text: "已切走的原文" }); });
     expect(screen.queryByText("已切走的原文")).not.toBeInTheDocument();
@@ -230,3 +232,5 @@ it("restores query, grouping and sort within an account without carrying them to
   expect(screen.getByRole("combobox", { name: "资料分组" })).toHaveTextContent("按项目");
   expect(screen.getByRole("combobox", { name: "资料排序" })).toHaveTextContent("最近修改");
 });
+
+beforeEach(() => { for (const key of Object.keys(localStorage)) if (key.startsWith("liteasy:context-picker:")) localStorage.removeItem(key); });

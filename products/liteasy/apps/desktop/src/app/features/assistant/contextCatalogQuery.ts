@@ -8,9 +8,13 @@ export { contextKind, contextKindLabels, contextDomain } from "./contextAssetMet
 export const canSelectContextAsset = (asset: AssistantComposerSuggestion) => !asset.unavailableReason && Boolean(asset.token || asset.resolveToken);
 export type ContextCatalogQuery = { query?: string; domain?: "research" | "application"; projects?: readonly string[]; kinds?: readonly string[]; groupBy?: "none" | "project" | "kind"; sort?: "title" | "updated" };
 
+const indexes = new WeakMap<readonly AssistantComposerSuggestion[], ReturnType<typeof createAssistantSuggestionIndex>>();
+const collator = new Intl.Collator("zh-CN");
+
 /** One metadata-only snapshot drives totals, facet counts, groups and cross-page selection. */
 export function queryContextCatalog(catalog: readonly AssistantComposerSuggestion[], options: ContextCatalogQuery) {
-  const index = createAssistantSuggestionIndex(catalog);
+  let index = indexes.get(catalog);
+  if (!index) { index = createAssistantSuggestionIndex(catalog); indexes.set(catalog, index); }
   const textMatches = index.search("@", options.query ?? "", Infinity, { includePages: true });
   const inDomain = textMatches.filter((asset) => contextDomain(asset) === (options.domain ?? "research"));
   const matchesProject = (asset: AssistantComposerSuggestion) => !options.projects?.length || options.projects.includes(asset.projectId ?? "");
@@ -42,7 +46,7 @@ export function queryContextCatalog(catalog: readonly AssistantComposerSuggestio
   for (const [kind, count] of facetCounts.kind) kindCounts.set(kind, count);
   const matchingMemberships = inDomain.filter((asset) => matchesProject(asset) && matchesKind(asset));
   const matches = [...new Map(matchingMemberships.map((asset) => [asset.resourcePath ?? asset.id, asset])).values()].sort((a, b) =>
-    (options.sort === "updated" ? (Date.parse(b.updatedAt ?? "") || 0) - (Date.parse(a.updatedAt ?? "") || 0) : 0) || a.label.localeCompare(b.label, "zh-CN") || a.id.localeCompare(b.id));
+    (options.sort === "updated" ? (Date.parse(b.updatedAt ?? "") || 0) - (Date.parse(a.updatedAt ?? "") || 0) : 0) || collator.compare(a.label, b.label) || a.id.localeCompare(b.id));
   const selectable = (items: readonly AssistantComposerSuggestion[]) => items.filter((asset) => contextKind(asset) !== "project" && canSelectContextAsset(asset)).map((asset) => asset.id);
   const grouped = new Map<string, { id: string; title: string; items: AssistantComposerSuggestion[]; selectableIds: string[] }>();
   for (const asset of matches) {

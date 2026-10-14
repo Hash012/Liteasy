@@ -1,3 +1,4 @@
+import { usePickerReaderActivity } from "../controllers/useContextPickerCatalog";
 import { useResearchSkillsController } from "../controllers/useResearchSkillsController";
 import { ResearchSkillsContext } from "../features/research-skills/researchSkillsPort";
 import { withLocalResearchDocuments } from "../features/research-skills/researchArtifactClient";
@@ -1371,8 +1372,11 @@ export function AppShell({
     "page-history": () => workspaceShell.pageSwitcher.show("history"),
     "active-pages": () => workspaceShell.pageSwitcher.show("active")
   }, commandAvailability);
+  const libraryPaperInventory = projectLibraryPaperInventory({ scopeId: objectWorkbench.repository.scopeId,
+    papers: workspaceState.papers, artifacts: artifactCatalog, projects: paperProjects, artifactState: artifactCatalogLoadState,
+    extractionState: paperServices.catalogState, importJobs: importJobsByDocumentId, getResources: getPaperMineruResources });
   const resourceLinks = useResourceLinksController({ repository: objectWorkbench.repository, assets: objectWorkbench.agentAssets,
-    entries: readingLibrary.entries, suggestions: assistantContextSuggestions, papers: workspaceState.papers, loadPdfSource: loadPaperPdfBytes, open: openAgentAsset });
+    entries: readingLibrary.entries, suggestions: assistantContextSuggestions, papers: workspaceState.papers, pickerSources: { projects: paperProjects.catalog, objects: objectWorkbench.objects, artifacts: artifactCatalog, inventories: libraryPaperInventory, activePaperId: activeReaderPaper?.id }, loadPdfSource: loadPaperPdfBytes, capturePaperFulltext: objectWorkbench.port.capturePaperFulltextContext, open: openAgentAsset });
   const artifactSessionNavigation = useArtifactSessionNavigationController({
     tasks: artifactTasks, scopeId: assistantScopeId,
     openAssistant: () => workbenchNavigation.open("assistant")
@@ -1674,9 +1678,6 @@ export function AppShell({
   const topPaneSize = bottomPaneVisible
     ? `minmax(0, ${100 - paneLayout.layout.bottom}fr)`
     : "minmax(0, 1fr)";
-  const libraryPaperInventory = projectLibraryPaperInventory({ scopeId: objectWorkbench.repository.scopeId,
-    papers: workspaceState.papers, artifacts: artifactCatalog, projects: paperProjects, artifactState: artifactCatalogLoadState,
-    extractionState: paperServices.catalogState, importJobs: importJobsByDocumentId, getResources: getPaperMineruResources });
 
   function openPaperInReader(paperId: string) {
     setLibraryExpanded(false);
@@ -2718,6 +2719,8 @@ export function AppShell({
     ],
     openSettings: () => openDockedLeftRailView("settings")
   });
+
+  usePickerReaderActivity({ scope: objectWorkbench.repository.scopeId, activePaperId: activeReaderPaper?.id, visible: workspaceShell.activeSurfaceId === `pdf-${activeReaderPaper?.id}` });
 
   const aiWorkbench = useAiWorkbenchController({
     scopeId: objectWorkbench.repository.scopeId,

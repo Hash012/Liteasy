@@ -205,3 +205,19 @@ test("PDF preview rejects missing files and late bytes after an account switch",
   hook.rerender({ ...first, papers: [{ id: "pdf", title: "PDF", sourcePath: "" }] });
   await expect(hook.result.current.service.pdf(path)).rejects.toThrow("重新关联");
 });
+
+test("BULK-04: captured complementary ranges deliver no excluded paragraph to model context", async () => {
+  const f = await fixture();
+  const { result } = renderHook(() => useResourceLinksController({ repository: f.repository, assets: f.assets, suggestions: [], papers: [], open: vi.fn() }));
+  const document = await result.current.service.document(f.path), cut = document.text.indexOf("requested evidence");
+  const tokens = await Promise.all([referenceCharacters(document.text, 0, cut), referenceCharacters(document.text, cut + "requested evidence".length, document.text.length)].map(range => result.current.capture(document, range)));
+  const context = await resolveContextSnapshot({ repository: f.repository, refs: tokens.flatMap(token => token.contextRefs!), purpose: "chat", persist: false });
+  expect(context.entries.map(entry => entry.text).join("")).toBe(document.text.replace("requested evidence", ""));
+});
+test("whole-source and verified fragment overlap is delivered once; another version remains independent", async () => {
+  const f = await fixture();
+  const { result } = renderHook(() => useResourceLinksController({ repository: f.repository, assets: f.assets, suggestions: [], papers: [], open: vi.fn() }));
+  const document = await result.current.service.document(f.path), token = await result.current.capture(document, referenceFragment(document.text, "Title1"));
+  const context = await resolveContextSnapshot({ repository: f.repository, refs: [...token.contextRefs!, refOf(f.source)], purpose: "chat", persist: false });
+  expect(context.entries).toHaveLength(1); expect(context.entries[0].ref).toEqual(refOf(f.source));
+});

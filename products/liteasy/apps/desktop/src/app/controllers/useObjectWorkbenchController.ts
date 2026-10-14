@@ -624,6 +624,11 @@ export function useObjectWorkbenchController(input: {
     },
     isOpen: visible,
     close,
+    async validateCompleteContext(refs, question) {
+      const resolved = await resolveContextSnapshot({ repository, refs, purpose: "核对所选范围", question, policy: "balanced", persist: false, active,
+        describeSetting: key => describeObjectSetting(key, latest.current.getSettings()) });
+      if (resolved.entries.some(entry => entry.coverage && entry.coverage.status !== "full")) throw new Error("所选内容超出本轮预算，无法完整读取。请移除部分内容或选择较小片段后重试。");
+    },
     async capturePaperContext(paperIds) {
       const refs: ObjectRef[] = [];
       for (const paperId of [...new Set(paperIds)]) {

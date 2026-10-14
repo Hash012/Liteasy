@@ -3,6 +3,8 @@ import type { AssistantComposerSuggestion, AssistantContextToken } from "../assi
 import type { ReferenceDocument, ResourceReferenceService } from "./resourceReferenceService";
 import type { ReferenceRange } from "./referenceText";
 export type ResourceReferences = {
+  picker?: { catalog: import("../context-picker/catalogPort").ContextCatalogPort; activePaperId?: string; workspaceId?: string };
+  resolvePickerToken?(member: import("../context-picker/selectionPlan").PlannedMember): Promise<AssistantContextToken>;
   service: ResourceReferenceService;
   suggestions: AssistantComposerSuggestion[];
   open(path: string): void | Promise<void>;

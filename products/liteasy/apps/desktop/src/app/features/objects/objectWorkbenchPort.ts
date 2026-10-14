@@ -55,6 +55,7 @@ export type ObjectWorkbenchPort = {
   >;
   capturePaperContext?(paperIds: string[]): Promise<ObjectRef[]>;
   capturePaperFulltextContext?(paperIds: string[]): Promise<ObjectRef[]>;
+  validateCompleteContext?(refs: ContextRef[], question: string): Promise<void>;
   captureArtifactPage?(input: {
     paperAnchors?: import("../paper-anchors/paperAnchorEntity").PaperAnchorEntity[];
     artifactId: string;

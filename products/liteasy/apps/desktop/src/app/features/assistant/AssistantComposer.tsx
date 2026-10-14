@@ -432,7 +432,7 @@ export function AssistantComposer({
           />
         </Tooltip>
       </div>
-      {browserQuery !== null ? <ContextAssetBrowser key={contextScopeId} suggestions={suggestions} contextTokens={contextTokens} initialPreviewId={browserPreviewId}
+      {browserQuery !== null ? <ContextAssetBrowser key={contextScopeId} purpose="context" targetDraftId={contextScopeId} draftText={input} suggestions={suggestions} contextTokens={contextTokens} initialPreviewId={browserPreviewId}
         initialQuery={browserQuery} onAddContextToken={onAddContextToken ? (token) => {
           onAddContextToken(token, browserInsertion.current);
           advanceBrowserInsertion(token);

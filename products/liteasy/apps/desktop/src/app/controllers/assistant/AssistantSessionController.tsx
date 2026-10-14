@@ -2281,6 +2281,13 @@ export function AssistantSessionController({
     const researchTarget = owner.target();
     if (sendLockRef.current.has(researchTarget)) return;
     try {
+      if (composerContextTokens.some(token => token.requireCompleteContext)) {
+        sendLockRef.current.add(researchTarget);
+        setResearchStarting(true);
+        if (!objectWorkbench?.validateCompleteContext) throw new Error("当前服务无法核验所选范围，请改用支持完整上下文的会话。");
+        await objectWorkbench.validateCompleteContext(selectedContextRefs(composerContextTokens), input);
+        if (owner.target() !== researchTarget || owner.disposed) return;
+      }
       const command = selectedResearchSkill ? undefined : parseResearchSkillCommand(input);
       const selection = selectedResearchSkill ?? (command?.skill.ref ? { skill: command.skill.ref, roles: {}, preset: { id: "default", parameters: {} } } : undefined);
       if (selection) {

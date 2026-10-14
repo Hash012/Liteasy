@@ -14,10 +14,13 @@ import { subscribeObjectStorage } from "../features/objects/objectStorage";
 import { subscribeNoteFiles } from "../features/note-files/noteFileService";
 import { hashText } from "../features/context/objectContext";
 import { resolveReferencePdf } from "../features/resource-links/referencePdfSource";
+import { useContextPickerCatalog, type ContextPickerSources } from "./useContextPickerCatalog";
 
 export function useResourceLinksController(input: { repository: ObjectRepository; assets: AgentAssetService;
   entries?: ReadingCatalogEntry[];
+  pickerSources?: ContextPickerSources;
   loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
+  capturePaperFulltext?: (paperIds: string[]) => Promise<import("../features/objects/object.types").ObjectRef[]>;
   suggestions: AssistantComposerSuggestion[]; papers: Paper[]; open(path: string): void | Promise<unknown> }) {
   const latest = useRef(input); latest.current = input;
   const scope = input.repository.scopeId;
@@ -29,6 +32,7 @@ export function useResourceLinksController(input: { repository: ObjectRepository
       return { id: `paper-${paper.id}`, kind: "object", label: paper.title, prompt: "", contextRefs: attachments.flatMap((item) => item.refs) }; },
   }))], [input.entries, input.suggestions, input.papers, scope]);
   const catalog = useRef(suggestions); catalog.current = suggestions;
+  const picker = useContextPickerCatalog({ ...input.pickerSources, scope, entries: input.entries, suggestions });
   const service = useMemo(() => createResourceReferenceService({ scope, assets: input.assets,
     active: () => latest.current.repository.scopeId === scope,
     async loadPdf(path, signal) {
@@ -54,7 +58,30 @@ export function useResourceLinksController(input: { repository: ObjectRepository
       return () => {};
     },
   }), [scope, input.assets]);
-  return useMemo<ResourceReferences>(() => ({ service, suggestions,
+  return useMemo<ResourceReferences>(() => ({ service, suggestions, picker,
+    async resolvePickerToken(member) {
+      if (latest.current.repository.scopeId !== scope) throw new Error("账号已切换，请重新选择。");
+      if (!member.path) throw new Error("此资产没有可解析的资源路径。");
+      let path = member.path;
+      const target = parseLiteasyPath(path.split("#")[0], scope);
+      if (target.kind === "paper" && member.completeText) {
+        const current = latest.current, paper = current.papers.find(paper => paper.id === target.paperId);
+        if (!paper?.sourcePath || !current.loadPdfSource || !current.capturePaperFulltext) throw new Error("无法核验完整原文，请打开原文件，或选择已有文字片段。");
+        const refs = await current.capturePaperFulltext([target.paperId]);
+        const { originalPdfPageCount } = await import("../features/pdf/pdfSourcePageCount");
+        const count = await originalPdfPageCount(await current.loadPdfSource(paper.sourcePath));
+        const source = refs[0] ? await current.repository.get(refs[0]) : undefined;
+        const pages = source?.kind === "source.document" ? new Set(source.content.payload.pages?.map(page => page.page)) : new Set<number>();
+        if (pages.size !== count || Array.from({ length: count }, (_, index) => index + 1).some(page => !pages.has(page))) throw new Error("原文尚未完整解析，不能按全文加入。请完成解析或明确选择已有片段。");
+        if (latest.current.repository.scopeId !== scope) throw new Error("账号已切换，请重新选择。");
+        return { id: member.id, kind: "object", label: paper.title, prompt: "", detail: `全文文本 · ${count} 页`, requireCompleteContext: true, resourcePath: path, contextRefs: refs };
+      }
+      if (target.kind === "object" && member.revision) path = liteasyPath(scope, { kind: "object", ref: { ...target.ref, revision: member.revision } });
+      const attachments = await latest.current.assets.context(path);
+      if (latest.current.repository.scopeId !== scope) throw new Error("账号已切换，请重新选择。");
+      if (!attachments.length) throw new Error("此资产暂不可加入上下文。");
+      return { id: member.id, kind: "object", label: attachments[0].title, prompt: "", resourcePath: path, contextRefs: attachments.flatMap(item => item.refs) };
+    },
     open: async (path) => { await latest.current.open(path); },
     async capture(document, range) {
       await service.verify(document);
@@ -84,5 +111,5 @@ export function useResourceLinksController(input: { repository: ObjectRepository
       if (latest.current.repository.scopeId !== scope) throw new Error("账号已切换，请重新选择。");
       return { id: `reference-${object.objectId}`, kind: "object", label: object.title, prompt: "", detail: `第 ${range.start}–${range.end} 行 · 已固定引用内容`, contextRefs: [refOf(object)] };
     },
-  }), [service, suggestions, scope]);
+  }), [service, suggestions, scope, picker]);
 }

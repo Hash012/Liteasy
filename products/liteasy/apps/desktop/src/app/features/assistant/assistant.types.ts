@@ -87,6 +87,8 @@ export type AgentActivity = {
 };
 
 export type AssistantContextToken = {
+  /** A picker selection is explicit coverage, never permission to silently trim it. */
+  requireCompleteContext?: boolean;
   /** Explicit user-inserted ranges in the associated draft/message, never inferred from titles. */
   mentions?: Array<{ id: string; start: number; end: number; text: string }>;
   resourcePath?: string;

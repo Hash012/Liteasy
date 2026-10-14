@@ -826,12 +826,16 @@
       "owner": "M3 surface owner / shared UI review",
       "symbols": [
         "ContextAssetBrowser",
+        "ContextAssetBrowserContent",
         "toggleSelection",
         "addResolved",
         "addPreview",
         "addSelection",
         "createAsset",
-        "selectMany"
+        "selectMany",
+        "selectNodes",
+        "containerMembers",
+        "keyboard"
       ],
       "interactions": [
         "Dialog",
@@ -839,8 +843,7 @@
         "DialogBody",
         "DialogContent",
         "DialogSurface",
-        "DialogTitle",
-        "button"
+        "DialogTitle"
       ],
       "styles": [
         "./contextAssetBrowser.css"
@@ -1095,6 +1098,37 @@
       ],
       "styles": [
         "./citationGraph.css"
+      ],
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
+      "path": "src/app/features/context-picker/PickerNavigation.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "symbols": [
+        "PickerNavigation"
+      ],
+      "interactions": [
+        "Popover",
+        "PopoverSurface",
+        "PopoverTrigger"
+      ],
+      "styles": [
+        "./contextPicker.css"
       ],
       "migration": "product-primitives",
       "disclosure": {

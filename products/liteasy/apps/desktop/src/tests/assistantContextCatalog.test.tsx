@@ -140,3 +140,12 @@ test("publishes real file format and source metadata without reading bodies", as
   expect(files.readFile).not.toHaveBeenCalled();
   hook.unmount();
 });
+
+test("BULK-10: complete-selection validation blocks partial balanced delivery and leaves the source intact", async () => {
+  const scopeId = crypto.randomUUID(); let workbench!: ObjectWorkbenchController;
+  function Harness() { workbench = useObjectWorkbenchController({ scopeId, getApi: () => { throw new Error("No model expected"); }, getPapers: () => [], getSettings: () => createSettingsStore().getState(), openEvidence: vi.fn() }); return null; }
+  render(<Harness />);
+  const source = await workbench.repository.create({ kind: "content.note", title: "完整长文", content: { schema: "liteasy.note/v1", payload: { text: "完整的证据文本。".repeat(12000), origin: "user" } } });
+  await expect(workbench.port.validateCompleteContext!([{ objectId: source.objectId, revision: source.revision }], "概述全文")).rejects.toThrow("无法完整读取");
+  expect((await workbench.repository.get({ objectId: source.objectId, revision: source.revision })).revision).toBe(source.revision);
+});

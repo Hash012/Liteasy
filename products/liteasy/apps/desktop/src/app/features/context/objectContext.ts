@@ -127,6 +127,7 @@ export async function resolveContextSnapshot(input: {
       `所选内容过多，每轮最多 ${input.policy === "balanced" ? 500 : 100} 项，请按项目或章节分批添加。`,
     );
   const seen = new Set<string>();
+  const wholeRefs = new Set(input.refs.filter(ref => "objectId" in ref && !ref.selectorId).map(ref => "objectId" in ref ? JSON.stringify([ref.objectId, ref.revision]) : ""));
   for (const raw of input.refs) {
     assertActive();
     const ref = contextRefSchema.parse(raw);
@@ -142,6 +143,17 @@ export async function resolveContextSnapshot(input: {
       const object = await input.repository.get(ref as ObjectRef);
       assertActive();
       if (object.scopeId !== snapshot.scopeId) throw new ObjectStoreError("object_forbidden", "内容不属于当前账号。");
+      // A verified exact excerpt of an explicitly selected whole version adds no new text.
+      // Image assets, notes, edits and other revisions keep their independent meaning.
+      if (ref.selectorId?.startsWith("page:") && wholeRefs.has(JSON.stringify([ref.objectId, ref.revision])) && object.kind === "source.document") continue;
+      if (!ref.selectorId && object.kind === "content.fragment" && !object.assets.length) {
+        const anchor = object.content.payload.anchors.find(anchor => anchor.type === "text" && anchor.range && wholeRefs.has(JSON.stringify([anchor.sourceRef.objectId, anchor.sourceRef.revision])));
+        if (anchor?.type === "text" && anchor.range && anchor.quote.exact === object.content.payload.text) {
+          const source = await input.repository.get(anchor.sourceRef); assertActive();
+          if (source.scopeId !== snapshot.scopeId) throw new ObjectStoreError("object_forbidden", "内容不属于当前账号。");
+          if (objectText(source).slice(anchor.range.start, anchor.range.end) === object.content.payload.text) continue;
+        }
+      }
       title = object.title;
       if (!ref.selectorId && object.assets.length) images = object.assets.filter((asset) => asset.mediaType.startsWith("image/"));
       paperAnchors = object.paperAnchors;

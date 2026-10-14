@@ -283,3 +283,5 @@ test("shows context details on ring hover and focus, including actual usage abov
   fireEvent.focus(ring);
   expect(await screen.findByRole("tooltip")).toHaveTextContent("50,000 tokens");
 });
+
+beforeEach(() => { for (const key of Object.keys(localStorage)) if (key.startsWith("liteasy:context-picker:")) localStorage.removeItem(key); });
