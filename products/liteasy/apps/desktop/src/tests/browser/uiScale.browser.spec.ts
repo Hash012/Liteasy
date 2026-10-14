@@ -15,6 +15,8 @@ for (const sample of [
   await page.getByRole("button", { name: "制作扩展", exact: true }).click();
   await page.getByRole("button", { name: "开始离线演示", exact: true }).click();
   const studio = page.locator(".workflow-studio");
+  // Creating the demo is asynchronous; responsive controls mount with the editor.
+  await expect(studio.locator(".studio-editor")).toBeVisible();
   const properties = studio.getByRole("button", { name: "属性", exact: true });
   if (await properties.isVisible()) await properties.click();
   await studio.getByRole("button", { name: "研究问题", exact: true }).click();
