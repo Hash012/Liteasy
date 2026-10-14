@@ -4,6 +4,7 @@ import type { AssistantContextToken, AssistantMessage, AssistantMode, AssistantS
 import type { ReaderConversationContext } from "./assistantContext.types";
 import type { ArtifactTask, ArtifactType } from "../artifacts/artifact.types";
 import { presentArtifactFailure } from "../artifacts/artifactFailurePresentation";
+import { artifactDiagnostic, type ArtifactDiagnostic } from "../artifacts/artifactDiagnostic";
 import { projectArtifactTaskMessage } from "./assistantArtifactActivity";
 
 export type AssistantTaskStartResult = string | { message: string; taskIds: string[] };
@@ -31,7 +32,7 @@ export type AssistantSessionHistoryItem = {
   sourceTaskId?: string;
   resultRefs?: ObjectRef[];
   taskBinding?: AssistantTaskBinding;
-  taskRuns?: Array<{ id: string; taskId: string; status: AssistantSessionStatus; messages: AssistantMessage[]; artifactId?: string; resultRefs?: ObjectRef[] }>;
+  taskRuns?: Array<{ id: string; taskId: string; status: AssistantSessionStatus; messages: AssistantMessage[]; artifactId?: string; resultRefs?: ObjectRef[]; diagnostic?: ArtifactDiagnostic }>;
   taskInput?: {
     taskId: string;
     workflowId: string;
@@ -257,13 +258,13 @@ export function createArtifactTaskSession(
 ): AssistantSessionHistoryItem {
   const sessionId = getArtifactTaskSessionId(task.id, task);
   const title = `生成：${artifactTypeLabels[task.type]}`;
-  const failurePresentation = task.failure
+  const failurePresentation = task.status === "failed" && task.failure
     ? presentArtifactFailure(task.failure, options.developerDiagnostics)
     : undefined;
   const progressMessage = [
     failurePresentation?.message ?? task.message,
     `阶段：${artifactStageLabels[task.stage]}`,
-    task.failure
+    task.status === "failed" && task.failure && options.developerDiagnostics
       ? [
           "\n错误信息：",
           `- 错误编号：${failurePresentation?.code}`,
@@ -319,7 +320,7 @@ export function createArtifactTaskSession(
     : [{ content: progressMessage, id: `${sessionId}:progress`, role: "assistant", runId }];
   const taskRuns = (previous?.taskRuns ?? []).filter((run) => !(task.agentRunId && run.taskId === task.id && run.status === "running" && run.id === `${task.id}:attempt:${task.attempt ?? 0}`));
   const runIndex = taskRuns.findIndex((run) => run.id === runId);
-  const attempt = { id: runId, taskId: task.id, status, messages: runMessages, artifactId: task.status === "completed" ? task.artifactId : undefined };
+  const attempt = { id: runId, taskId: task.id, status, messages: runMessages, diagnostic: artifactDiagnostic(task), artifactId: task.status === "completed" ? task.artifactId : undefined };
   if (runIndex < 0) taskRuns.push(attempt); else taskRuns[runIndex] = { ...taskRuns[runIndex], ...attempt };
   return {
     ...previous,

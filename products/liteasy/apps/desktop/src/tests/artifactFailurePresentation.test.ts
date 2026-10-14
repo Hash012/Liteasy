@@ -28,3 +28,26 @@ test("classifies transient model 5xx responses as service failures", () => {
     "thin_reading_validating"
   )).toBe("service_unavailable");
 });
+
+test.each([
+  ["HTTP 400 unsupported response_format", "结构化输出方式"],
+  ["模型输出达到长度上限", "没有完整生成"],
+  ["模型未提供正常完成回执", "模型连接"],
+  ["文档校验失败，未保存：引文无法定位", "结构或引用检查"],
+  ["timeout", "等待超时"],
+  ["disk full", "重试保存"],
+  ["context_length exceeded", "减少资料"],
+])("explains %s in actionable language", (message, expected) => {
+  const view = presentArtifactFailure({ failedStage: "generating_answer", message, occurredAt: "2026-10-15", recovery: [] });
+  expect(view.message).toContain(expected);
+});
+
+test("diagnostic context retains a bounded redacted cause and exact identity", async () => {
+  const { artifactDiagnostic } = await import("../app/features/artifacts/artifactDiagnostic");
+  const value = artifactDiagnostic({ id: "original-task", agentRunId: "original-run", type: "research_document", status: "failed", stage: "failed", progress: 0, message: "failed",
+    failure: { failedStage: "generating_answer", message: `Bearer abcdef-secret; api_key=private-key; ${"x".repeat(9000)}`, endpoint: "https://user:password@example.test/v1?token=secret", occurredAt: "2026-10-15T01:00:00Z", model: "chosen-model", provider: "chosen-provider", recovery: [] } })!;
+  expect(value.context.message.length).toBeLessThanOrEqual(4000);
+  expect(value.context.message).toContain("chosen-model");
+  expect(value.context.message).toContain("original-run");
+  expect(value.context.message).not.toMatch(/abcdef-secret|private-key|password|token=secret/);
+});

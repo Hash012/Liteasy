@@ -97,3 +97,64 @@ test("MCP rechecks structured assets, run snapshots and draft lineage before ret
   expect((await runner.replay(run.id)).nodes.end).toBe("SYNTHETIC_PRIVATE");
   expect(await f.drafts.get(draft.id)).toMatchObject({ sourcePaths: [path] });
 });
+
+test("repair drafts pin installed versions, keep durable history, and publish only validated new versions", async () => {
+  const f = fixture(), original = await f.packages.install(await paperLensPackage());
+  let state = (await f.packages.list())[0];
+  await f.packages.enable(state.id, true, state.revision);
+  const draft = await f.drafts.fork(f.packages, state.id, state.version);
+  expect(JSON.parse(draft.files["liteasy.extension.json"]).version).not.toBe(state.version);
+  const ai = await f.drafts.patch(draft.id, draft.revision, [{ path: "README.md", text: "AI repair proposal" }]);
+  expect((await f.packages.list())[0]).toMatchObject({ version: state.version, enabled: true });
+  const reloaded = createExtensionDraftStore(f.storage);
+  expect(await reloaded.history(draft.id)).toEqual(expect.arrayContaining([expect.objectContaining({ revision: ai.revision, source: "ai" }), expect.objectContaining({ revision: draft.revision })]));
+  const restored = await reloaded.restore(draft.id, ai.revision, draft.revision, "user");
+  expect(restored.files).toEqual(draft.files);
+  expect((await reloaded.revision(draft.id, ai.revision)).files["README.md"]).toBe("AI repair proposal");
+  await expect(reloaded.restore(draft.id, ai.revision, draft.revision)).rejects.toThrow("合并");
+  await expect(reloaded.publish(draft.id, f.packages)).rejects.toThrow("试跑");
+  await reloaded.saveReport(draft.id, await trialExtension(restored, () => true));
+  const published = await reloaded.publish(draft.id, f.packages);
+  expect((await f.packages.list())[0]).toMatchObject({ version: published.manifest.version, enabled: false });
+  expect((await f.packages.get(state.id, state.version)).digest).toBe(original.digest);
+  state = (await f.packages.list())[0];
+  await f.packages.rollback(state.id, original.manifest.version, state.revision);
+  expect((await f.packages.list())[0].version).toBe(original.manifest.version);
+});
+
+test("AI history restore cannot erase acceptance tests and a stale repair cannot replace a changed installation", async () => {
+  const f = fixture(); await f.packages.install(await paperLensPackage());
+  const state = (await f.packages.list())[0];
+  const draft = await f.drafts.fork(f.packages, state.id, state.version);
+  const changed = await f.drafts.patch(draft.id, draft.revision, [{ path: "tests/added.json", text: "{}" }]);
+  await expect(f.drafts.restore(draft.id, changed.revision, draft.revision, "ai")).rejects.toThrow("验收");
+  const restored = await f.drafts.restore(draft.id, changed.revision, draft.revision, "user");
+  await f.drafts.saveReport(draft.id, await trialExtension(restored, () => true));
+  await f.packages.enable(state.id, true, state.revision);
+  await expect(f.drafts.publish(draft.id, f.packages)).rejects.toThrow("已安装版本");
+  expect((await f.packages.list())[0]).toMatchObject({ enabled: true, version: state.version });
+});
+
+test("repair tools preserve source permissions and expose reversible edits without activation authority", async () => {
+  const f = fixture(), repository = createObjectRepository(f.storage, f.scope);
+  const assets = createAgentAssetService({ scopeId: f.scope, active: () => true });
+  const runner = createWorkflowRunner(f.storage, createOperationHost({ storage: f.storage, assets, scope: f.scope, enabled: () => true }), f.scope);
+  const service = createExtensionStudioService({ ...f, repository, runner, active: () => true, refresh: async () => undefined });
+  const pkg = await f.packages.install(await paperLensPackage(), null, ["restricted-source"]);
+  const args = { id: pkg.manifest.id, version: pkg.manifest.version };
+  await expect(service.call("liteasy_extension_fork", args, { writable: false })).rejects.toThrow("未授权");
+  const stat = vi.fn().mockRejectedValue(new Error("source denied"));
+  const externalAssets = { stat } as unknown as typeof assets;
+  await expect(service.call("liteasy_extension_fork", args, { writable: true, externalAssets })).rejects.toThrow("source denied");
+  expect(await f.drafts.list()).toEqual([]);
+  stat.mockResolvedValue({});
+  const draft = await service.call("liteasy_extension_fork", args, { writable: true, externalAssets }) as Awaited<ReturnType<typeof f.drafts.get>>;
+  expect(draft.sourcePaths).toEqual(["restricted-source"]);
+  const changed = await f.drafts.patch(draft.id, draft.revision, [{ path: "README.md", text: "repair" }]);
+  stat.mockRejectedValue(new Error("access revoked"));
+  await expect(service.call("liteasy_extension_history", { id: draft.id, revision: draft.revision }, { writable: false, externalAssets })).rejects.toThrow("access revoked");
+  await expect(service.call("liteasy_extension_restore", { id: draft.id, revision: draft.revision, expectedRevision: changed.revision }, { writable: true, externalAssets })).rejects.toThrow("access revoked");
+  expect((await f.drafts.get(draft.id)).revision).toBe(changed.revision);
+  expect(service.tools).not.toHaveProperty("liteasy_extension_enable");
+  expect(service.tools).not.toHaveProperty("liteasy_extension_publish");
+});

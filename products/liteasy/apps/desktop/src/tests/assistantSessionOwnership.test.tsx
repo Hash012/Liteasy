@@ -201,3 +201,24 @@ test("A02-04 navigating home and archiving a running conversation retain its liv
   expect(await screen.findByText("归档后仍完成")).toBeInTheDocument();
   expect(cancel).not.toHaveBeenCalled();
 });
+
+test("a failed task offers a redacted diagnostic attachment that is sent only after the user submits", async () => {
+  const send = vi.fn(async (input) => ({ ok: true, data: { apiVersion: "liteasy.agent/v1", createdAt: "now", status: "completed", input, idempotencyKey: "fixture", runId: "diagnosis", sessionId: "diagnosis-session", events: [] } }));
+  const client = { send, subscribe: () => () => {}, createSessionClient: vi.fn(() => client) } as unknown as FrontendAgentClient;
+  const task = { id: "failed-task", agentRunId: "opaque-run-uuid", type: "research_document" as const, status: "failed" as const, stage: "failed" as const, message: "failed", progress: 20,
+    failure: { failedStage: "generating_answer" as const, message: "HTTP 400 unsupported response_format; api_key=synthetic-secret", model: "chosen-model", provider: "chosen-provider", occurredAt: "2026-10-15T01:00:00Z", recovery: [] } };
+  render(<AssistantSessionController {...props} agentClient={client} artifactTasks={[task]} artifactSessionOpenRequest={{ requestId: "diagnose", taskId: task.id }} />);
+  const user = userEvent.setup();
+  expect(await screen.findByRole("alert")).toHaveTextContent("结构化输出方式");
+  expect(screen.getByText(/opaque-run-uuid/)).not.toBeVisible();
+  await user.click(screen.getByRole("button", { name: "让 AI 分析错误" }));
+  expect(send).not.toHaveBeenCalled();
+  expect(screen.getByText("任务诊断日志")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "发送", exact: true }));
+  await waitFor(() => expect(send).toHaveBeenCalledOnce());
+  const options = send.mock.calls[0][1] as { contextRefs: Array<{ type: string; message: string }> };
+  expect(options.contextRefs[0]).toMatchObject({ type: "diagnostic" });
+  expect(options.contextRefs[0].message).toContain("unsupported response_format");
+  expect(options.contextRefs[0].message).toContain("chosen-model");
+  expect(JSON.stringify(send.mock.calls)).not.toContain("synthetic-secret");
+});

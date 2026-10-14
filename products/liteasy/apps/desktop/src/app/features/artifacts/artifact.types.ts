@@ -122,6 +122,7 @@ export type ArtifactTaskFailure = {
   provider?: string;
   recovery: string[];
   traceId?: string;
+  request?: { connection: "direct" | "cloud"; protocol?: string; outputFormat?: string; maxOutputTokens: number; sourceCount: number };
 };
 
 export type ArtifactPreview = {

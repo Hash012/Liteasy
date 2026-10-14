@@ -98,3 +98,36 @@ test("deleted owners and stale sessions cannot commit", async () => {
 test.each(["```ts\n$research-read", "~~~\n$research-read", "`code $research-read", "$$formula $research-read"]) ("does not offer an executable picker inside literal text: %s", input => {
   expect(isResearchSkillPosition(input, input.lastIndexOf("$research-read"))).toBe(false);
 });
+
+test("research uses bounded streaming JSON requests accepted by strict schema providers", async () => {
+  const { createDirectModelClient } = await import("../app/features/models/directModelClient");
+  const { getModelProvider } = await import("../app/features/models/modelProviders");
+  const input = await fixture();
+  const progress = vi.fn();
+  const transport = vi.fn(async (request: import("../app/features/models/directModelTransport").DirectModelRequest) => {
+    expect(request.body).toMatchObject({ stream: true, max_tokens: 4000 });
+    const format = request.body.response_format as { json_schema: { schema: unknown } };
+    function check(value: unknown) {
+      if (!value || typeof value !== "object") return;
+      const node = value as Record<string, unknown>;
+      if (node.type === "object") expect(node.required).toEqual(Object.keys(node.properties as object));
+      Object.values(node).forEach(child => Array.isArray(child) ? child.forEach(check) : check(child));
+    }
+    check(format.json_schema.schema);
+    const answer = JSON.stringify({ ...input.draft, claims: [{ ...input.draft.claims[0], citations: [{ sourceId: "S1", quote: null }] }] });
+    request.onChunk?.(new TextEncoder().encode(`data: ${JSON.stringify({ choices: [{ delta: { content: answer }, finish_reason: "stop" }] })}\n\ndata: [DONE]\n\n`));
+    return "";
+  });
+  const generate = createDirectModelClient({ ...getModelProvider("openai"), outputFormat: "json_schema" }, transport);
+  const document = await generateResearchDocument({ ...input, generate, onProgress: progress });
+  expect(document.draft.claims[0].citations[0].quote).toBeNull();
+  expect(document.validation.citations).toBe("locatable");
+  expect(progress).toHaveBeenCalledWith("validating");
+  expect(transport).toHaveBeenCalledOnce();
+});
+
+test("accepts a single JSON code fence from prompt-mode models without consuming a repair", async () => {
+  const input = await fixture();
+  input.generate.mockResolvedValue({ answer: `\x60\x60\x60json\n${JSON.stringify(input.draft)}\n\x60\x60\x60` });
+  expect((await generateResearchDocument(input)).model.requests).toBe(1);
+});

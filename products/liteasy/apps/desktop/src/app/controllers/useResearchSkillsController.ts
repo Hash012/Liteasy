@@ -10,6 +10,7 @@ import type { SettingsState } from "../features/settings/settings.types";
 import type { ModelTransport } from "../features/models/modelHttpClient";
 import { getActiveModelProvider, getActiveModelEndpoint, getModelForSettings } from "../features/models/modelPolicy";
 import { createModelGatewayFromSettings } from "../features/models/modelRuntime";
+import { getDirectModelConfig, isDirectModelMode } from "../features/models/modelProviders";
 import { getAccountSessionGeneration } from "../features/account/accountSessionStorage";
 import { contextTokens } from "../features/context/contextSelection";
 import { hashText, resolveContextSnapshot } from "../features/context/objectContext";
@@ -20,6 +21,8 @@ import { researchDocumentMarkdown, researchSkillInvocationSchema, type ResearchD
 import { generateResearchDocument } from "../features/research-skills/researchDocumentGeneration";
 import { commitResearchDocument, researchArtifact, researchArtifactTab } from "../features/research-skills/researchDocumentCommit";
 import type { ResearchSkillsPort } from "../features/research-skills/researchSkillsPort";
+import { redactDiagnostic } from "../features/context/objectContext";
+import { presentArtifactFailure, resolveArtifactFailureCode } from "../features/artifacts/artifactFailurePresentation";
 
 export function useResearchSkillsController(input: {
   repository: ObjectRepository; projects: ReturnType<typeof createPaperProjectRepository>; destinations: ResearchDestination[];
@@ -120,11 +123,18 @@ export function useResearchSkillsController(input: {
       await checkpoint();
       operations.set(taskId, controller);
       const gateway = createModelGatewayFromSettings(settings, { cloudTransport: input.modelTransport });
-      const timeout = setTimeout(() => controller.abort(new Error("生成超时，请检查模型连接后重新发起")), 120000);
+      const timeout = setTimeout(() => controller.abort(new Error("生成超时，请减少资料或输出篇幅后重试")), 300000);
       void executeWorkflowSkill({ skillId: selected.skill.id, version: selected.skill.version, input: { requestId } }, {
         async runResearchDocument(call) {
           if (call.requestId !== requestId || call.skillId !== selected.skill.id || call.skillVersion !== selected.skill.version || !active()) throw new Error("方法调用绑定无效");
-          const document = await generateResearchDocument({ skill, invocation, snapshot, provider, model, signal: controller.signal, generate: gateway.generateAnswer });
+          const document = await generateResearchDocument({ skill, invocation, snapshot, provider, model, signal: controller.signal, generate: gateway.generateAnswer,
+            onProgress(stage) {
+              if (!active() || controller.signal.aborted) return;
+              const message = stage === "validating" ? "正在检查文档结构与来源引用" : stage === "repairing" ? "正在修复文档格式与引用" : "正在生成科研文档";
+              if (input.store.getTask(taskId)?.message === message) return;
+              input.store.updateTask(taskId, { stage: stage === "validating" ? "structuring_artifact" : "generating_answer", message });
+              input.sync();
+            } });
           controller.signal.throwIfAborted();
           if (!active()) throw new Error("账号已变化，未发布到当前账号");
           const artifactId = `research-${await hashText(`${scope}\0${requestId}\0document`)}`;
@@ -136,8 +146,16 @@ export function useResearchSkillsController(input: {
           return { artifactId, resourceUri: liteasyPath(scope, { kind: "artifact", artifactId }), message: "科研文档已保存" };
         }
       }).catch(async error => {
-        if (!active()) return;
-        input.store.failTask(taskId, { failedStage: input.store.getTask(taskId)?.stage ?? "generating_answer", message: error instanceof Error ? error.message : String(error), occurredAt: new Date().toISOString(), recovery: input.store.getTask(taskId)?.pendingResult ? ["重试保存已有结果"] : ["检查资料后重新发起"] });
+        if (!active() || input.store.getTask(taskId)?.status === "cancelled") return;
+        const reason = controller.signal.aborted ? controller.signal.reason ?? error : error;
+        const message = redactDiagnostic(reason instanceof Error ? reason.message : String(reason));
+        const failedStage = input.store.getTask(taskId)?.stage ?? "generating_answer";
+        const config = isDirectModelMode(settings) ? getDirectModelConfig(settings) : undefined;
+        const failure: NonNullable<ArtifactTask["failure"]> = { failedStage, message, code: resolveArtifactFailureCode(message, failedStage), provider, model, endpoint: redactDiagnostic(getActiveModelEndpoint(settings)),
+          request: { connection: config ? "direct" : "cloud", protocol: config?.protocol, outputFormat: config?.outputFormat, maxOutputTokens: invocation.budget.outputTokens, sourceCount: snapshot.entries.length },
+          occurredAt: new Date().toISOString(), recovery: input.store.getTask(taskId)?.pendingResult ? ["重试保存已有结果"] : ["查看诊断日志或让 AI 分析错误"] };
+        input.store.failTask(taskId, failure);
+        input.notice(presentArtifactFailure(failure).message);
         await checkpoint().catch(failure => input.notice(`任务检查点保存失败：${String(failure)}`));
       }).finally(() => { clearTimeout(timeout); operations.delete(taskId); });
       return { taskIds: [taskId], message: `正在使用“${skill.adapter.display.title}”，结果将保存到“${owner.title}”` };

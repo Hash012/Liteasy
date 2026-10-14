@@ -101,13 +101,13 @@ test("A02-03 selecting either run of task A cannot project task B's events", asy
   const tasks = [task("B", 2), task("A", 2), task("B", 1), task("A", 1)];
   const rendered = render(<AssistantSessionController {...props} artifactTasks={tasks} artifactSessionOpenRequest={{ requestId: "open-a", taskId: "A-2" }} />);
   await screen.findByRole("combobox", { name: "选择运行记录" });
-  expect(screen.getByText("薄读未完成：A 的第 2 次诊断")).toBeInTheDocument();
+  expect(screen.getByRole("alert")).toHaveTextContent("薄读未完成：A 的第 2 次诊断");
   expect(screen.queryByText(/B 的第/)).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("combobox", { name: "选择运行记录" }));
   await userEvent.click(screen.getByRole("option", { name: "第 1 次 · 失败" }));
-  expect(screen.getByText("薄读未完成：A 的第 1 次诊断")).toBeInTheDocument();
+  expect(screen.getByRole("alert")).toHaveTextContent("薄读未完成：A 的第 1 次诊断");
   rendered.rerender(<AssistantSessionController {...props} artifactTasks={[{ ...tasks[0], message: "B 的迟到更新" }, ...tasks.slice(1)]} artifactSessionOpenRequest={{ requestId: "open-a", taskId: "A-2" }} />);
-  expect(screen.getByText("薄读未完成：A 的第 1 次诊断")).toBeInTheDocument();
+  expect(screen.getByRole("alert")).toHaveTextContent("薄读未完成：A 的第 1 次诊断");
   expect(screen.queryByText(/B 的迟到更新/)).not.toBeInTheDocument();
 });
 

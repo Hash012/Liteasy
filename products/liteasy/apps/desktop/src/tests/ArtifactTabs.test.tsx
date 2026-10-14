@@ -656,7 +656,7 @@ describe("ArtifactTabs", () => {
       />
     );
 
-    expect(screen.getByText("请登录或重新登录 Liteasy 账号，再使用模型服务。")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("模型身份验证失败。请在设置 → AI 接入中检查密钥或重新登录当前接入的账号。");
     expect(screen.queryByText("正在生成薄读正文，完成后将在当前页面显示。")).not.toBeInTheDocument();
     expect(screen.queryByText("请先登录 Liteasy 账号，再使用云端模型服务。")).not.toBeInTheDocument();
     expect(screen.queryByText("不应展示的模型报文")).not.toBeInTheDocument();

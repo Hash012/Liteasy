@@ -184,3 +184,8 @@ test("bounded research calls forward the output cap without losing structured ou
   expect(buildDirectModelBody(openai, { ...input, maxOutputTokens: 1500 })).toHaveProperty("response_format");
   expect(() => buildDirectModelBody(openai, { ...input, maxOutputTokens: -1 })).toThrow("预算");
 });
+
+test("explains non-streaming output truncation before requiring the successful completion receipt", async () => {
+  const transport = async () => JSON.stringify({ choices: [{ message: { content: "partial JSON" }, finish_reason: "length" }] });
+  await expect(createDirectModelClient(openai, transport)({ ...input, requireTerminal: true })).rejects.toThrow("长度上限");
+});

@@ -1,4 +1,6 @@
 import { createRecommendationEvidenceStore } from "../../features/recommendations/recommendationEvidence";
+import { artifactDiagnostic, type ArtifactDiagnostic } from "../../features/artifacts/artifactDiagnostic";
+import { ArtifactFailurePanel } from "../../features/artifacts/ArtifactFailurePanel";
 import { loadRecommendationPreferences } from "../../features/recommendations/recommendationPreferences";
 import { ResearchSkillsContext } from "../../features/research-skills/researchSkillsPort";
 import { ResearchSkillSelectionView } from "../../features/research-skills/ResearchSkillSelection";
@@ -2250,6 +2252,15 @@ export function AssistantSessionController({
     } finally { taskDiscussionLocksRef.current.delete(taskId); }
   }
 
+  function analyzeTaskFailure(diagnostic: ArtifactDiagnostic) {
+    startNewSession("qa");
+    setSelectedResearchSkill(undefined);
+    resetComposerDraft({ input: "请根据这份诊断日志解释失败原因，区分模型连接、资料、方法和程序问题。如果问题来自插件，先读取对应版本，创建可回滚的修复草稿并验证，不要直接覆盖已启用版本。",
+      tokens: [{ id: `diagnostic:${crypto.randomUUID()}`, kind: "object", label: diagnostic.title,
+        prompt: "", contextRefs: [diagnostic.context], detail: diagnostic.summary }], readerContexts: [] });
+    inputRef.current?.focus();
+  }
+
   function updateSessionMetadata(id: string, patch: Partial<AssistantSessionHistoryItem>) {
     sessionRegistryRef.current = sessionRegistryRef.current.map((item) => item.id === id ? { ...item, ...patch,
       ...(patch.titleSource === "user" ? { titleVersion: (item.titleVersion ?? 0) + 1 } : {}) } : item);
@@ -2592,6 +2603,8 @@ export function AssistantSessionController({
   const taskMessages = selectedTaskRun?.messages ?? assistantState.messages;
   const selectedTaskStatus = selectedTaskRun?.status ?? activeSession?.status ?? "unknown";
   const taskFailure = selectedTaskStatus === "failed" ? [...taskMessages].reverse().find(message => message.role === "assistant" && message.content.trim())?.content : undefined;
+  const selectedFailureTask = artifactTasks.find(task => task.id === selectedTaskRun?.taskId || (!selectedTaskRun && task.id === activeSession?.artifactTaskId));
+  const taskDiagnostic = selectedTaskRun?.diagnostic ?? (selectedFailureTask && (!selectedTaskRun || selectedFailureTask.agentRunId === selectedTaskRun.id) ? artifactDiagnostic(selectedFailureTask) : undefined);
   const taskHasSavedResult = !!activeSession && (!!activeSession.taskBinding?.resultRefs.length || activeSession.taskRuns?.some((run) => run.status === "completed" && run.artifactId) || activeSession.status === "completed");
   const activeSessionRunning = activeSession?.kind === "artifact_generation"
     ? activeSession.status === "running"
@@ -2693,9 +2706,9 @@ export function AssistantSessionController({
           {selectedTaskStatus === "running" ? <Button onClick={() => void onCancelArtifactTask?.(activeSession.artifactTaskId!)}>停止生成</Button> : null}
         </div> : null}
         {activeSession.taskRuns?.length ? <div><span>运行记录</span><OptionPicker aria-label="选择运行记录" density="compact" value={selectedTaskRun?.id ?? ""} onValueChange={(runId) => setView({ kind: "task-detail", taskId: activeSession.id, runId })} options={activeSession.taskRuns.map((run, index) => ({ value: run.id, label: `第 ${index + 1} 次 · ${({ idle: "可继续", running: "运行中", completed: "已完成", failed: "失败", cancelled: "已终止", interrupted: "已中断", unknown: "待核对" } as const)[run.status]}` }))} /></div> : null}
-        {selectedTaskStatus === "failed" ? <div role="alert"><p>{taskFailure ? taskFailure.replace(/^薄读未完成：/, "") : "本次运行未完成，请查看运行详情。"}</p><p>核对资料与模型设置后，可从发起对话或 AI 工作台重新发起任务。</p></div> : null}
+        {selectedTaskStatus === "failed" ? taskDiagnostic ? <ArtifactFailurePanel diagnostic={taskDiagnostic} onAnalyze={() => analyzeTaskFailure(taskDiagnostic)} /> : <p role="alert">{taskFailure?.split("\n")[0] || "这次运行未完成。旧记录未保留具体原因，请重新运行以获取诊断日志。"}</p> : null}
       </section> : null}
-      {view.kind === "conversation" || view.kind === "task-detail" ? <AssistantTranscript task={view.kind === "task-detail"} details={view.kind === "task-detail" && activeSession ? <div className="assistant-run-origin"><p>来源：{activeSession.origin?.kind === "conversation_action" ? "从对话发起" : activeSession.origin?.kind === "workflow_entry" ? "AI 工作台" : "旧版来源未记录"}</p>{selectedTaskRun ? <p>运行标识：<code>{selectedTaskRun.id}</code></p> : null}<h4>运行日志</h4></div> : undefined}>
+      {view.kind === "conversation" || view.kind === "task-detail" && !taskDiagnostic ? <AssistantTranscript task={view.kind === "task-detail"} details={view.kind === "task-detail" && activeSession ? <div className="assistant-run-origin"><p>来源：{activeSession.origin?.kind === "conversation_action" ? "从对话发起" : activeSession.origin?.kind === "workflow_entry" ? "AI 工作台" : "旧版来源未记录"}</p>{developerDiagnostics && selectedTaskRun ? <p>技术关联：<code>{selectedTaskRun.id}</code></p> : null}<h4>运行日志</h4></div> : undefined}>
       <AssistantMessageList
         targetId={activeSessionId}
         scrollAnchor={activeSession?.scrollAnchor}

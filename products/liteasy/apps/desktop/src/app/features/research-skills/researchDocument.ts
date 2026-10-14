@@ -24,7 +24,7 @@ export const researchDraftSchema = z.strictObject({
   sections: z.array(z.strictObject({ id: z.string().regex(/^[a-z_]+$/), markdown: text(30000), sourceIds: z.array(sourceId).max(100) })).min(1).max(32),
   claims: z.array(z.strictObject({ id: z.string().regex(/^C[1-9][0-9]*$/), sectionId: z.string().regex(/^[a-z_]+$/), text: text(2000),
     kind: z.enum(["source_assertion", "inference", "hypothesis", "general_explanation"]),
-    citations: z.array(z.strictObject({ sourceId, quote: text(2000).optional() })).max(30), conditions: z.array(z.string().max(2000)).max(30) })).max(200),
+    citations: z.array(z.strictObject({ sourceId, quote: text(2000).nullable().optional() })).max(30), conditions: z.array(z.string().max(2000)).max(30) })).max(200),
   limitations: z.array(text(2000)).max(50), nextActions: z.array(text(2000)).max(12)
 });
 export type ResearchDraft = z.infer<typeof researchDraftSchema>;

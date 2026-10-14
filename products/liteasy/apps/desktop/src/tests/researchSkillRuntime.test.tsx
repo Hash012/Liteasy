@@ -61,6 +61,7 @@ test("failed save checkpoints validated bytes; reload retries save without regen
   await waitFor(() => expect(restored.store.getTask(taskId)?.pendingResult).toBeTruthy());
   await act(async () => { await next.result.current.retry(taskId); });
   expect(restored.store.getTask(taskId)?.status).toBe("completed");
+  expect(restored.store.getTask(taskId)?.failure).toBeUndefined();
   expect(model.generate).toHaveBeenCalledTimes(1);
 });
 
@@ -88,4 +89,35 @@ test("switching the local workspace scope removes old research projections and t
   view.rerender({ input: { ...second.input, store: first.input.store } });
   await waitFor(() => expect(first.input.store.getTask(taskId)).toBeUndefined());
   expect(first.input.store.getCatalog().some(item => item.researchDocument?.invocation.scopeId === first.scope)).toBe(false);
+});
+
+test("failed research retains the cause and model binding instead of only a generic failure", async () => {
+  const { input, request } = await fixture();
+  model.generate.mockRejectedValue(new Error("HTTP 400 unsupported response_format; api_key=synthetic-secret"));
+  const view = renderHook(() => useResearchSkillsController(input));
+  let taskId = "";
+  await act(async () => { taskId = (await view.result.current.start(request)).taskIds[0]; });
+  await waitFor(() => expect(input.store.getTask(taskId)?.status).toBe("failed"));
+  const failure = input.store.getTask(taskId)!.failure!;
+  expect(failure.message).toContain("unsupported response_format");
+  expect(failure.message).not.toContain("synthetic-secret");
+  expect(failure.provider).toBeTruthy(); expect(failure.model).toBeTruthy();
+  expect(input.notice).toHaveBeenCalledWith(expect.stringContaining("结构化输出方式"));
+  expect((await input.client.list()).filter(item => item.researchDocument?.invocation.scopeId === input.repository.scopeId)).toHaveLength(0);
+});
+
+test("a recorded failure survives app restart with its original diagnostic and time", async () => {
+  const { input, request } = await fixture();
+  model.generate.mockRejectedValue(new Error("模型输出达到长度上限"));
+  const view = renderHook(() => useResearchSkillsController(input));
+  let taskId = "";
+  await act(async () => { taskId = (await view.result.current.start(request)).taskIds[0]; });
+  await waitFor(() => expect(input.store.getTask(taskId)?.status).toBe("failed"));
+  const failure = structuredClone(input.store.getTask(taskId)!.failure);
+  await waitFor(async () => expect(JSON.stringify(await loadDurableEntries("artifact-tasks"))).toContain("模型输出达到长度上限"));
+  view.unmount();
+  const reloaded = { ...input, store: createArtifactStore(`${input.repository.scopeId}-reload`) };
+  renderHook(() => useResearchSkillsController(reloaded));
+  await waitFor(() => expect(reloaded.store.getTask(taskId)?.failure).toEqual(failure));
+  expect(model.generate).toHaveBeenCalledOnce();
 });

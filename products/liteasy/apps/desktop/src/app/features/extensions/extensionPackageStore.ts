@@ -10,6 +10,7 @@ export function createExtensionPackageStore(storage: ObjectStorage) {
   const changed = () => { for (const listener of listeners) listener(); };
   const stateKey = (id: string) => `extension-installation/${encodeURIComponent(id)}`;
   const packageKey = (id: string, version: string) => `extension-package/${encodeURIComponent(id)}/${encodeURIComponent(version)}`;
+  const lineageKey = (id: string, version: string) => `extension-package-lineage/${encodeURIComponent(id)}/${encodeURIComponent(version)}`;
   async function list(): Promise<ExtensionInstallation[]> {
     return (await storage.list("extension-installation/", "", 200)).flatMap((row) => {
       const parsed = installationSchema.safeParse(row.value);
@@ -42,9 +43,14 @@ export function createExtensionPackageStore(storage: ObjectStorage) {
   }
   return {
     list, get, active,
+    async sourcePaths(id: string, version: string): Promise<string[] | undefined> {
+      const row = await storage.get(lineageKey(id, version));
+      const parsed = z.array(z.string()).safeParse(row?.value);
+      return parsed.success ? parsed.data : undefined;
+    },
     async versions(id: string) { return (await storage.list(`extension-package/${encodeURIComponent(id)}/`, "", 200)).map((row) => decodeURIComponent(row.key.split("/").at(-1)!)); },
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
-    async install(input: unknown, expectedRevision: string | null = null) {
+    async install(input: unknown, expectedRevision: string | null = null, sourcePaths?: string[]) {
       const pkg = await validateExtensionPackage(input);
       const { id, version } = pkg.manifest;
       const key = stateKey(id), previous = await storage.get(key);
@@ -54,6 +60,7 @@ export function createExtensionPackageStore(storage: ObjectStorage) {
       const value = installationSchema.parse({ schema: "liteasy.extension-installation/v1", id, version, digest: pkg.digest, enabled: false, installedAt: new Date().toISOString() });
       await storage.commit([
         ...(immutable ? [] : [{ key: packageKey(id, version), expected: null, row: { key: packageKey(id, version), version: pkg.digest, value: pkg.bundle } }]),
+        ...(!immutable && sourcePaths ? [{ key: lineageKey(id, version), expected: null, row: { key: lineageKey(id, version), version: pkg.digest, value: [...new Set(sourcePaths)] } }] : []),
         { key, expected: expectedRevision, row: { key, version: crypto.randomUUID(), value } },
       ]);
       changed();

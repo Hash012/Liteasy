@@ -49,12 +49,12 @@ export function ExtensionLibrary() {
   const filtered = items.filter((item) => [item.pkg?.manifest.name, item.state.id, ...item.pkg?.manifest.contributes.views.map((view) => view.title) ?? [], ...item.pkg?.manifest.contributes.commands.map((command) => command.title) ?? []].join(" ").toLowerCase().includes(query.toLowerCase()));
   return <section className="extension-page" aria-label="扩展" aria-busy={loading}>
     <WorkbenchPageHeader title="扩展" description="把常用的阅读与研究步骤保存下来，下次继续使用。" actions={<><Button appearance="subtle" icon={<AddRegular />} onClick={host.openStudio}>制作扩展</Button><Button appearance="subtle" onClick={host.openRuns}>运行记录</Button></>} />
-    <div className="extension-toolbar"><Input aria-label="搜索扩展" placeholder="搜索扩展、页面或命令" value={query} onChange={(_, data) => setQuery(data.value)} /><Button icon={<ArrowUploadRegular />} disabled={busy} onClick={() => file.current?.click()}>导入本地包</Button><Button disabled={busy} onClick={() => void run(async () => { const previous = items.find((item) => item.state.id === "plugin.paper-lens"); await host.packages.store.install(await paperLensPackage(), previous?.state.revision ?? null); })}>添加论文比较板</Button></div>
+    <div className="extension-toolbar"><Input aria-label="搜索扩展" placeholder="搜索扩展、页面或命令" value={query} onChange={(_, data) => setQuery(data.value)} /><Button icon={<ArrowUploadRegular />} disabled={busy} onClick={() => file.current?.click()}>导入本地包</Button><Button disabled={busy} onClick={() => void run(async () => { const previous = items.find((item) => item.state.id === "plugin.paper-lens"); await host.packages.store.install(await paperLensPackage(), previous?.state.revision ?? null, []); })}>添加论文比较板</Button></div>
     <input hidden ref={file} type="file" accept=".json" onChange={(event) => { const selected = event.target.files?.[0]; event.target.value = ""; if (selected) void run(async () => {
       if (selected.size > 24 * 1024 * 1024) throw new Error("包文件超过 24 MB。");
       const pkg = await validateExtensionPackage(JSON.parse(await selected.text()));
       const previous = (await host.packages.store.list()).find((item) => item.id === pkg.manifest.id);
-      await host.packages.store.install(pkg.bundle, previous?.revision ?? null);
+      await host.packages.store.install(pkg.bundle, previous?.revision ?? null, []);
       setMessage("已导入。检查能力说明后启用。");
     }); }} />
     {message || host.error ? <p role="status">{message || host.error}</p> : null}
@@ -66,6 +66,8 @@ export function ExtensionLibrary() {
         {state.enabled && pkg?.manifest.contributes.views[0] ? <Button onClick={() => void run(() => host.openView(state.id, pkg.manifest.contributes.views[0].id))}>{pkg.manifest.contributes.views[0].title}</Button> : null}
       </div>
       <DisclosureSection title="管理与版本"><p>版本 {state.version}</p><Button disabled={!pkg} icon={<ArrowDownloadRegular />} onClick={() => pkg && downloadExtensionJson(`${state.id}-${state.version}.liteasy-extension.json`, pkg.bundle)}>导出</Button><Button disabled={busy} onClick={() => { if (window.confirm("卸载此扩展？已创建的笔记、白板和版本记录仍保留。")) void run(() => host.packages.store.uninstall(state.id, state.revision)); }}>卸载</Button>
+        {host.studio ? <Button disabled={busy || !!error} onClick={() => void run(async () => { const draft = await host.studio!.drafts.fork(host.packages.store, state.id, state.version); setMessage(`已创建“${draft.title}”，可在制作工作台选择并修改；当前版本仍可使用。`); host.openStudio(); })}>创建修复草稿</Button> : null}
+        <p>修复草稿会使用新版本号；旧版保留，可随时切回。切换版本后请核对并启用。</p>
         {(versions[state.id]?.length ?? 0) > 1 ? <OptionPicker aria-label={`切换 ${pkg?.manifest.name ?? state.id} 的版本`} value={state.version} disabled={busy} onValueChange={(value) => void run(() => host.packages.store.rollback(state.id, value, state.revision))} options={versions[state.id].map(version => ({ value: version, label: version }))} /> : null}
       </DisclosureSection>
       {state.enabled && pkg && (pkg.manifest.contributes.views.length > 1 || pkg.manifest.contributes.commands.length) ? <Menu><MenuTrigger disableButtonEnhancement><Button size="small">更多扩展入口</Button></MenuTrigger><MenuPopover><MenuList>{pkg.manifest.contributes.views.slice(1).map(view => <MenuItem key={view.id} onClick={() => void run(() => host.openView(state.id, view.id))}>{view.title}</MenuItem>)}{pkg.manifest.contributes.commands.map(command => <MenuItem key={command.id} onClick={() => void run(() => host.invoke(state.id, command.id))}>{command.title}</MenuItem>)}</MenuList></MenuPopover></Menu> : null}

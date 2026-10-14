@@ -7,6 +7,7 @@ import { downloadExtensionJson } from "../extensions/ExtensionViews";
 import { paperLensPackage } from "../extensions/paperLensPackage";
 import { buildExtensionPackage, validateExtensionPackage, type BoardTemplate, type ValidatedExtension } from "../extensions/extensionPackage";
 import type { ExtensionDraft, DraftChange, TrialReport } from "./extensionDraftStore";
+import { ExtensionDraftHistory } from "./ExtensionDraftHistory";
 import { StudioGraph } from "./StudioGraph";
 import { StudioCardPreview } from "./StudioCardPreview";
 import type { WorkflowDefinition } from "../workflows/workflowDefinition";
@@ -113,6 +114,7 @@ export function WorkflowStudio() {
     {draft ? <div className="studio-mode-row">{tutorial ? <><Badge appearance="tint">离线示例</Badge><span>示例与真实论文独立，不含真实证据。</span></> : null}<InfoPopover label="制作工作台帮助">{tutorialContent}<p>画布可缩放；选择卡片可在属性区阅读完整正文。调整面板不会重置视角。</p></InfoPopover></div>
       : <DisclosureSection className="studio-tutorial" title="查看离线示例" defaultOpen>{tutorialContent}</DisclosureSection>}
     {draft ? <>
+      <ExtensionDraftHistory store={model.drafts} draft={draft} disabled={dirty || busy} onRestore={choose} />
       <div className="studio-taskbar"><TabList selectedValue={tab} onTabSelect={(_, data) => switchTab(String(data.value))}><Tab value="composition">组合</Tab><Tab value="type">类型</Tab><Tab value="workflow">流程</Tab><Tab value="settings">设置</Tab><Tab value="source">源码</Tab><Tab value="api">API 目录</Tab></TabList><Button disabled={!edit.past.length || busy} onClick={() => { setEdit((current) => travelStudioHistory(current, "undo")); setPreview(undefined); setReport(undefined); }}>撤销</Button><Button disabled={!edit.future.length || busy} onClick={() => { setEdit((current) => travelStudioHistory(current, "redo")); setPreview(undefined); setReport(undefined); }}>重做</Button></div>
       {tab === "api" ? <div><p>共享基础能力：{blockRegistryCapabilities.join(" · ")}</p>{operationIds.map((id) => <DisclosureSection key={id} title={`${id} · ${operationCatalog[id].effect}`}><p>版本 {operationCatalog[id].version} · 重试 {operationCatalog[id].retry} · {operationCatalog[id].capability ?? "无额外权限"}</p></DisclosureSection>)}</div> : <>
         {paths.length > 1 || tab === "source" ? <OptionPicker aria-label="项目文件" value={path} onValueChange={(value) => { setPath(value); setSelectedNode(""); }} options={paths.map((file) => ({ value: file, label: file }))} /> : null}

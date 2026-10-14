@@ -182,14 +182,15 @@ test("projects safe artifact failures into the AI generation session", () => {
   }, undefined, () => 0);
 
   expect(failed.status).toBe("failed");
-  expect(failed.messages[0].content).toContain("错误信息");
-  expect(failed.messages[0].content).toContain("错误编号：model_authentication_failed");
-  expect(failed.messages[0].content).toContain("请登录或重新登录 Liteasy 账号，再使用模型服务。");
+  expect(failed.messages[0].content).not.toContain("错误编号");
+  expect(failed.messages[0].content).toContain("模型身份验证失败");
+  expect(failed.taskRuns?.[0].diagnostic?.context).toMatchObject({ type: "diagnostic", code: "model_authentication_failed" });
+  expect(failed.taskRuns?.[0].diagnostic?.context.message).toContain("OpenAI Responses API 请求失败（401）");
   expect(failed.messages[0].content).not.toContain("OpenAI Responses API");
   expect(failed.messages[0].content).not.toContain("http://127.0.0.1:8787");
   expect(failed.messages[0].content).not.toContain("Provider：openai");
   expect(failed.messages[0].content).not.toContain("Model：gpt-5.5");
-  expect(failed.messages[0].content).toContain("请联系管理员并提供失败时间");
+  expect(failed.messages[0].content).toContain("检查密钥");
 });
 
 test("classifies the desktop login preflight as model authentication failure", () => {
@@ -208,8 +209,8 @@ test("classifies the desktop login preflight as model authentication failure", (
     type: "thin_reading"
   }, undefined, () => 0);
 
-  expect(failed.messages[0].content).toContain("错误编号：model_authentication_failed");
-  expect(failed.messages[0].content).toContain("请登录或重新登录 Liteasy 账号，再使用模型服务。");
+  expect(failed.taskRuns?.[0].diagnostic?.context.code).toBe("model_authentication_failed");
+  expect(failed.messages[0].content).toContain("重新登录当前接入的账号");
   expect(failed.messages[0].content).not.toContain("生成任务未完成，请稍后重试");
   expect(failed.messages[0].content).not.toContain("内部异常");
 });
@@ -254,4 +255,13 @@ test("keeps a persisted model title when refreshing the conversation snapshot", 
     messages: [message("u", "user", "帮我解释一下这篇论文的注意力机制是什么")] } });
   expect(snapshot.title).toBe("注意力机制");
   expect(snapshot.titleSource).toBe("model");
+});
+
+test("retry progress uses its current stage while retaining the earlier failure diagnostic", () => {
+  const task = { id: "retry", agentRunId: "run", type: "research_document" as const, status: "failed" as const, stage: "failed" as const, progress: 80, message: "failed", failure: { failedStage: "saving_result" as const, message: "disk full", occurredAt: "2026-10-15", recovery: [] } };
+  const failed = createArtifactTaskSession(task);
+  const retry = createArtifactTaskSession({ ...task, status: "running", stage: "saving_result", message: "正在保存科研文档" }, failed);
+  expect(retry.messages[0].content).toContain("正在保存科研文档");
+  expect(retry.messages[0].content).not.toContain("磁盘空间不足");
+  expect(failed.taskRuns?.[0].diagnostic?.context.message).toContain("disk full");
 });

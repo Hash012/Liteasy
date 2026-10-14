@@ -115,7 +115,6 @@ export function createDirectModelClient(inputConfig: DirectModelConfig, transpor
       assertModelResponseSize(modelTextBytes(raw), MODEL_RESPONSE_LIMITS.wireBytes, "响应数据");
       const result = parseResponseJson(raw);
       const stop = config.protocol === "anthropic" ? result.stop_reason : result.choices?.[0]?.finish_reason;
-      if (input.requireTerminal && !["stop", "end_turn", "stop_sequence"].includes(stop)) throw new Error("模型未提供正常完成回执。");
       answer = textContent(config.protocol === "anthropic" ? result.content : result.choices?.[0]?.message?.content);
       const reasoning = config.protocol === "anthropic"
         ? (result.content ?? []).filter((part: { type: string }) => part.type === "thinking").map((part: { thinking: string }) => part.thinking).join("\n")
@@ -126,6 +125,7 @@ export function createDirectModelClient(inputConfig: DirectModelConfig, transpor
         input.onReasoningDelta?.(reasoning, reasoning);
       }
       if (stop === "length" || stop === "max_tokens") throw new Error("模型输出达到长度上限，请缩小生成范围后重试。");
+      if (input.requireTerminal && !["stop", "end_turn", "stop_sequence"].includes(stop)) throw new Error("模型未提供正常完成回执。");
       if (!answer.trim()) throw new Error("模型未返回文本，请检查所选模型是否支持对话。");
     }
     return { answer, ...(input.requireTerminal ? { terminal: "completed" as const } : {}), trace: { backend: "direct_api", endpoint: config.endpoint, mode: "live", provider: config.provider, source: "direct_api" } };
