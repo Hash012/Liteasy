@@ -112,11 +112,15 @@ test("ordinary Windows checks avoid production build, test execution, Release li
     "tauri -- build --no-bundle -- --locked",
     "tauri -- bundle --bundles nsis",
     "Get-FileHash",
-    "actions/upload-artifact@",
+    "name: Liteasy-windows-x64-installer",
+    "run: ./scripts/benchmark-recommendations-windows.ps1",
   ]) {
     const step = findStep(windows, "windows", command);
     assert.equal(expression(value(step, "if", 8)), "inputs.build-installer", command);
   }
+  const measurements = findStep(windows, "windows", "name: Liteasy-windows-recommendation-benchmark");
+  assert.equal(expression(value(measurements, "if", 8)), "inputs.build-installer && always()");
+  assert.match(measurements, /test-results\/recommendations-windows-benchmark\.json/);
   const productionSteps = steps(windows, "windows").filter((step) => step.includes("verify:production-assets"));
   assert.equal(productionSteps.length, 2);
   for (const step of productionSteps) assert.equal(expression(value(step, "if", 8)), "inputs.build-installer");

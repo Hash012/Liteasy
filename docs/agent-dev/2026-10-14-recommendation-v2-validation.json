@@ -1,0 +1,702 @@
+{
+  "schema": "liteasy.recommendation-v2-validation/v1",
+  "version": "0.1.53",
+  "spec": "Liteasy-Recommendation-v2-Spec.zip",
+  "date": "2026-10-14",
+  "releasePolicy": "Ship the scheduling/privacy/UI fixes independently. Optional generation and new reading/question collection remain off by default. This report does not claim all 69 end-to-end scenarios or human quality gates passed.",
+  "runtimeRoutes": [
+    "useKnowledgeSyncController -> useRecommendationFeed -> RecommendationFeedCoordinator -> fetchLocalRecommendations -> shared hybrid/slate core",
+    "useKnowledgeSyncController -> useRecommendationFeed -> RecommendationFeedCoordinator -> fetchCloudRecommendations (v1 <=3 seeds) -> shared hybrid/slate core"
+  ],
+  "producers": [
+    {
+      "path": "products/liteasy/apps/desktop/src/app/controllers/useContextPickerCatalog.ts",
+      "boundary": "Focused, visible PDF surface with recent real input; monotonic qualified activity >=30 seconds; stable paper/day ID.",
+      "example": {
+        "type": "qualified_reading_interval",
+        "sourceId": "paper:<paper-id>",
+        "producerActionId": "reading:<paper-id>:<UTC-day>"
+      }
+    },
+    {
+      "path": "products/liteasy/apps/desktop/src/app/features/pdf/pdfAnnotationPersistence.ts",
+      "boundary": "After annotation persistence succeeds; same semantic annotation revision supersedes its previous evidence; generated reviews are excluded.",
+      "example": {
+        "type": "annotation_committed",
+        "sourceId": "<annotation-resource-id>",
+        "revision": "<content-hash>"
+      }
+    },
+    {
+      "path": "products/liteasy/apps/desktop/src/app/controllers/assistant/AssistantSessionController.tsx",
+      "boundary": "After successful persisted user send; only original user input, never assistant output, streaming or unsent drafts.",
+      "example": {
+        "type": "user_question_committed",
+        "sourceId": "chat:<conversation-id>",
+        "revision": "<message-id>"
+      }
+    }
+  ],
+  "storage": "Existing object store: native SQLite IMMEDIATE transaction/CAS; IndexedDB equivalent for browser tests. recommendation/v2 records are excluded from device asset sync. Existing semantic_index retained.",
+  "limits": {
+    "candidates": 200,
+    "defaultSlate": 3,
+    "rerankCandidates": 24,
+    "newEmbeddingTexts": 60,
+    "providerRequestsPerRun": 6,
+    "providerRequestsPerAccountRollingDay": 12,
+    "providerConcurrency": 2,
+    "modelConcurrency": 1,
+    "embeddingRequestsPerRun": 8,
+    "rerankRequestsPerRun": 2,
+    "embeddingReservedTokensPerDay": 50000,
+    "generationCallsPerDay": 2,
+    "generationInputReservedTokensPerRun": 8000,
+    "generationInputReservedTokensPerDay": 12000,
+    "generationOutputCapPerCall": 1500,
+    "deadlineMs": 45000,
+    "providerTimeoutMs": 12000,
+    "note": "Account-wide provider/model caps are intentionally stricter than per-workspace caps. Unknown cloud upstream usage is disclosed. Tokens are conservative reservations, not claimed billed usage."
+  },
+  "validation": {
+    "desktopFullSuite": {
+      "status": "passed",
+      "runtimeCommit": "7cb9004e",
+      "method": "npm test -- --shard=1/2; npm test -- --shard=2/2 on frozen source",
+      "filesPassed": 596,
+      "filesSkipped": 5,
+      "testsPassed": 4232,
+      "testsSkipped": 9
+    },
+    "affectedTests": "Final scheduler/controller regression: 23 passed; topic feedback/lifecycle set: 27 passed; recommendation UI/full-text/undo: 10 passed; all included again in the frozen full suite.",
+    "browserRecommendations": "3 passed: light, dark, explicit OpenAlex PDF lookup; filters alone issue zero lookups.",
+    "rust": "1.98.1 locked all-targets no-default-features check and 9 object_store tests passed on Linux; Windows result separate.",
+    "workflowTests": "93 passed; workflow lint passed.",
+    "sharedCore": "8 tests passed, including all three v2 pure-function tests.",
+    "contracts": "Passed on clean release candidate with the same runtime/build/workflow code; lockfiles and generated contracts match Git. Only this validation report was amended afterward.",
+    "installer": "pending_final_Windows_CI",
+    "build": "npm run ci:smoke and npm run build passed on final runtime source."
+  },
+  "evaluation": {
+    "script": "products/liteasy/apps/desktop/scripts/evaluate-recommendation-v2.ts",
+    "snapshotCount": 60,
+    "sourceClusters": 30,
+    "provenance": "synthetic-engineering-fixtures",
+    "largestFixtureCandidateCount": 5,
+    "humanLabels": "pending-human-review",
+    "ndcgAt3": "not_run",
+    "offTopicRateAt3": "not_run",
+    "confidenceIntervals": "not_run",
+    "liveModelAblation": "not_run",
+    "defaultModelEnableGatePassed": false
+  },
+  "nativeBoundary": "Windows index benchmark uses 10k assets/50k fragments at 768 dimensions. Peak whole test-process RSS includes index creation; it is not claimed as incremental app RSS. This does not measure native window focus, sleep, first-screen latency or manual installer UX.",
+  "cases": [
+    {
+      "id": "REC-001",
+      "title": "选中风暴不刷新",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationV2Regression.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/recommendationStability.test.tsx"
+      ],
+      "boundary": "Cloud and direct normal feeds retain their snapshot through 20 selection changes; sort is local."
+    },
+    {
+      "id": "REC-002",
+      "title": "更改排序不联网",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationV2Regression.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/recommendationStability.test.tsx"
+      ],
+      "boundary": "Cloud and direct normal feeds retain their snapshot through 20 selection changes; sort is local."
+    },
+    {
+      "id": "REC-003",
+      "title": "显式种子冻结",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationMetadata.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/recommendationRuntime.test.ts"
+      ],
+      "boundary": "Explicit exploration freezes submitted papers, verifies metadata, and retains the three-document v1 request limit."
+    },
+    {
+      "id": "REC-004",
+      "title": "防抖不代替调度",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationV2Regression.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/recommendationStability.test.tsx"
+      ],
+      "boundary": "Cloud and direct normal feeds retain their snapshot through 20 selection changes; sort is local."
+    },
+    {
+      "id": "REC-005",
+      "title": "设置编辑不触发",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Settings use one explicit save; no dedicated end-to-end draft-request counter test."
+    },
+    {
+      "id": "REC-006",
+      "title": "新鲜缓存直接返回",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationCoordinator.test.ts"
+      ],
+      "boundary": "Durable CAS, two independent coordinators, late replies, cross-window cancellation, request reservation, shared cooldown and deadline checks."
+    },
+    {
+      "id": "REC-007",
+      "title": "重排不重新发现",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Sort and style remain local. Candidate reranking happens within an authorized refresh; there is no separate public rerank-only action."
+    },
+    {
+      "id": "REC-008",
+      "title": "到期工作合并",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationCoordinator.test.ts"
+      ],
+      "boundary": "Durable CAS, two independent coordinators, late replies, cross-window cancellation, request reservation, shared cooldown and deadline checks."
+    },
+    {
+      "id": "REC-009",
+      "title": "清缓存不复活",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationCoordinator.test.ts"
+      ],
+      "boundary": "Durable CAS, two independent coordinators, late replies, cross-window cancellation, request reservation, shared cooldown and deadline checks."
+    },
+    {
+      "id": "REC-010",
+      "title": "离线退化",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/localLiteratureMode.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/useKnowledgeSyncController.test.ts"
+      ],
+      "boundary": "Offline snapshot and persistent dismissal use the live controller; discovery requests and cloud feedback payloads are asserted."
+    },
+    {
+      "id": "REC-011",
+      "title": "模型同维度隔离",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationSemantic.test.ts",
+        "products/liteasy/apps/desktop/src/tests/recommendationEvidence.test.ts"
+      ],
+      "boundary": "Model-space isolation, vector validation, private-input exclusions, revision revalidation and evidence tombstones."
+    },
+    {
+      "id": "REC-012",
+      "title": "内容不变向量复用",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationSemantic.test.ts",
+        "products/liteasy/apps/desktop/src/tests/recommendationEvidence.test.ts"
+      ],
+      "boundary": "Model-space isolation, vector validation, private-input exclusions, revision revalidation and evidence tombstones."
+    },
+    {
+      "id": "REC-013",
+      "title": "StrictMode重复订阅",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "CAS coalesces independent callers; React StrictMode native-window acceptance was not separately executed."
+    },
+    {
+      "id": "REC-014",
+      "title": "跨窗口单飞",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationCoordinator.test.ts"
+      ],
+      "boundary": "Durable CAS, two independent coordinators, late replies, cross-window cancellation, request reservation, shared cooldown and deadline checks."
+    },
+    {
+      "id": "REC-015",
+      "title": "乱序回包",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationCoordinator.test.ts"
+      ],
+      "boundary": "Durable CAS, two independent coordinators, late replies, cross-window cancellation, request reservation, shared cooldown and deadline checks."
+    },
+    {
+      "id": "REC-016",
+      "title": "切换账户",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Scope fencing is exercised in context and semantic tests; the complete native multi-account scenario remains manual."
+    },
+    {
+      "id": "REC-017",
+      "title": "撤销外发权限",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationSemantic.test.ts",
+        "products/liteasy/apps/desktop/src/tests/recommendationEvidence.test.ts"
+      ],
+      "boundary": "Model-space isolation, vector validation, private-input exclusions, revision revalidation and evidence tombstones."
+    },
+    {
+      "id": "REC-018",
+      "title": "单订阅者离开",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Unmounted subscribers suppress UI writes while durable work can complete. Native multiple-subscriber teardown remains manual."
+    },
+    {
+      "id": "REC-019",
+      "title": "崩溃恢复",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Existing native object-store rollback/recovery tests pass; killing the installed app during a recommendation task is not_run."
+    },
+    {
+      "id": "REC-020",
+      "title": "睡眠恢复不补跑",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Rolling-day reservations prevent catch-up loops; actual Windows suspend/resume is not_run."
+    },
+    {
+      "id": "REC-021",
+      "title": "后台标签不算阅读",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationEvidence.test.ts",
+        "products/liteasy/packages/recommendation-core/v2.test.mjs"
+      ],
+      "boundary": "Consent and event projection tests, revision replacement and monotonic reader clock. These do not replace native foreground/sleep acceptance."
+    },
+    {
+      "id": "REC-022",
+      "title": "休眠时长不计",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationEvidence.test.ts",
+        "products/liteasy/packages/recommendation-core/v2.test.mjs"
+      ],
+      "boundary": "Consent and event projection tests, revision replacement and monotonic reader clock. These do not replace native foreground/sleep acceptance."
+    },
+    {
+      "id": "REC-023",
+      "title": "多窗口阅读去重",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Reading event IDs include paper and UTC day, with CAS deduplication. Actual two-window foreground transitions are not_run."
+    },
+    {
+      "id": "REC-024",
+      "title": "批注修订不重复",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationEvidence.test.ts",
+        "products/liteasy/packages/recommendation-core/v2.test.mjs"
+      ],
+      "boundary": "Consent and event projection tests, revision replacement and monotonic reader clock. These do not replace native foreground/sleep acceptance."
+    },
+    {
+      "id": "REC-025",
+      "title": "用户问题与AI答案分开",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Producer is after persisted user-message success, using original user input; no producer from assistant answers. Dedicated consent-on browser chat scenario is not_run."
+    },
+    {
+      "id": "REC-026",
+      "title": "自动preset不装成强偏好",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Generated quick-ask/AI annotation content is excluded unless user-edited; native preset producer acceptance is not_run."
+    },
+    {
+      "id": "REC-027",
+      "title": "事件重试幂等",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationEvidence.test.ts",
+        "products/liteasy/packages/recommendation-core/v2.test.mjs"
+      ],
+      "boundary": "Consent and event projection tests, revision replacement and monotonic reader clock. These do not replace native foreground/sleep acceptance."
+    },
+    {
+      "id": "REC-028",
+      "title": "删除证据完整遗忘",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationSemantic.test.ts",
+        "products/liteasy/apps/desktop/src/tests/recommendationEvidence.test.ts"
+      ],
+      "boundary": "Model-space isolation, vector validation, private-input exclusions, revision revalidation and evidence tombstones."
+    },
+    {
+      "id": "REC-029",
+      "title": "未点开不是负反馈",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "No non-click negative event is produced; this is a code-path review, not an online experiment."
+    },
+    {
+      "id": "REC-030",
+      "title": "候选池不等于曝光",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "IntersectionObserver requires at least half visibility for one second. Actual Windows minimization/exposure timing is not_run."
+    },
+    {
+      "id": "REC-031",
+      "title": "稍后看不减兴趣",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Snooze hides for seven days and does not change interest weights; dedicated native expiry acceptance is not_run."
+    },
+    {
+      "id": "REC-032",
+      "title": "已读不等于已掌握",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Read status hides the paper and reduces unread backlog; no mastery or proficiency state is inferred."
+    },
+    {
+      "id": "REC-033",
+      "title": "课题范围负反馈",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationCoordinator.test.ts",
+        "products/liteasy/apps/desktop/src/tests/RecommendationList.test.tsx"
+      ],
+      "boundary": "Topic-scoped negative feedback, local undo and zero replacement discovery calls."
+    },
+    {
+      "id": "REC-034",
+      "title": "忽略不补查",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/localLiteratureMode.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/useKnowledgeSyncController.test.ts"
+      ],
+      "boundary": "Offline snapshot and persistent dismissal use the live controller; discovery requests and cloud feedback payloads are asserted."
+    },
+    {
+      "id": "REC-035",
+      "title": "撤销反馈",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationCoordinator.test.ts",
+        "products/liteasy/apps/desktop/src/tests/RecommendationList.test.tsx"
+      ],
+      "boundary": "Topic-scoped negative feedback, local undo and zero replacement discovery calls."
+    },
+    {
+      "id": "REC-036",
+      "title": "多兴趣保留",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/packages/recommendation-core/v2.test.mjs",
+        "products/liteasy/apps/desktop/src/tests/recommendationRanking.test.ts",
+        "products/liteasy/apps/desktop/src/tests/recommendationQuality.test.ts"
+      ],
+      "boundary": "Coverage after relevance gating; no weak fillers; DOI/version identity without collapsing ambiguous titles."
+    },
+    {
+      "id": "REC-037",
+      "title": "高引用离题拦截",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/packages/recommendation-core/v2.test.mjs",
+        "products/liteasy/apps/desktop/src/tests/recommendationRanking.test.ts",
+        "products/liteasy/apps/desktop/src/tests/recommendationQuality.test.ts"
+      ],
+      "boundary": "Coverage after relevance gating; no weak fillers; DOI/version identity without collapsing ambiguous titles."
+    },
+    {
+      "id": "REC-038",
+      "title": "中英跨语言",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Existing engineering lexical/semantic fixtures are available; live cross-language model quality is pending human review."
+    },
+    {
+      "id": "REC-039",
+      "title": "少于三篇不补低质",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/packages/recommendation-core/v2.test.mjs",
+        "products/liteasy/apps/desktop/src/tests/recommendationRanking.test.ts",
+        "products/liteasy/apps/desktop/src/tests/recommendationQuality.test.ts"
+      ],
+      "boundary": "Coverage after relevance gating; no weak fillers; DOI/version identity without collapsing ambiguous titles."
+    },
+    {
+      "id": "REC-040",
+      "title": "近重复与版本合并",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/packages/recommendation-core/v2.test.mjs",
+        "products/liteasy/apps/desktop/src/tests/recommendationRanking.test.ts",
+        "products/liteasy/apps/desktop/src/tests/recommendationQuality.test.ts"
+      ],
+      "boundary": "Coverage after relevance gating; no weak fillers; DOI/version identity without collapsing ambiguous titles."
+    },
+    {
+      "id": "REC-041",
+      "title": "阅读队列满暂停推新",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationCoordinator.test.ts"
+      ],
+      "boundary": "Changing saved unread limits and automatic scheduling takes effect within the same feed; queue cap blocks discovery, raising it preserves saved items and permits one scheduled run."
+    },
+    {
+      "id": "REC-042",
+      "title": "不强迫探索占位",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/packages/recommendation-core/v2.test.mjs",
+        "products/liteasy/apps/desktop/src/tests/recommendationRanking.test.ts",
+        "products/liteasy/apps/desktop/src/tests/recommendationQuality.test.ts"
+      ],
+      "boundary": "Coverage after relevance gating; no weak fillers; DOI/version identity without collapsing ambiguous titles."
+    },
+    {
+      "id": "REC-043",
+      "title": "排序分数不是概率",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "UI does not describe ranking scores as probabilities. Manual language review remains separate."
+    },
+    {
+      "id": "REC-044",
+      "title": "幻觉候选ID拒绝",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationResearchEnhancer.test.ts",
+        "products/liteasy/packages/recommendation-core/v2.test.mjs"
+      ],
+      "boundary": "Strict candidate/evidence catalog and output schema, private-text exclusion, metadata basis, explicit adoption and source revision recheck."
+    },
+    {
+      "id": "REC-045",
+      "title": "证据越权拒绝",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationResearchEnhancer.test.ts",
+        "products/liteasy/packages/recommendation-core/v2.test.mjs"
+      ],
+      "boundary": "Strict candidate/evidence catalog and output schema, private-text exclusion, metadata basis, explicit adoption and source revision recheck."
+    },
+    {
+      "id": "REC-046",
+      "title": "摘要依据不编页码",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationResearchEnhancer.test.ts",
+        "products/liteasy/packages/recommendation-core/v2.test.mjs"
+      ],
+      "boundary": "Strict candidate/evidence catalog and output schema, private-text exclusion, metadata basis, explicit adoption and source revision recheck."
+    },
+    {
+      "id": "REC-047",
+      "title": "PDF提示注入无效",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Model prompt treats evidence as data and output is schema/catalog constrained; no authorized adversarial live-model evaluation was run."
+    },
+    {
+      "id": "REC-048",
+      "title": "向量非法安全退化",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationSemantic.test.ts",
+        "products/liteasy/apps/desktop/src/tests/recommendationEvidence.test.ts"
+      ],
+      "boundary": "Model-space isolation, vector validation, private-input exclusions, revision revalidation and evidence tombstones."
+    },
+    {
+      "id": "REC-049",
+      "title": "重排失败保持可读",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationSemantic.test.ts",
+        "products/liteasy/apps/desktop/src/tests/recommendationEvidence.test.ts"
+      ],
+      "boundary": "Model-space isolation, vector validation, private-input exclusions, revision revalidation and evidence tombstones."
+    },
+    {
+      "id": "REC-050",
+      "title": "私有衍生查询仍需授权",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Derived external queries have an independent default-off consent; full live-provider privacy audit is not_run."
+    },
+    {
+      "id": "REC-051",
+      "title": "429不无限重试",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationCoordinator.test.ts"
+      ],
+      "boundary": "Durable CAS, two independent coordinators, late replies, cross-window cancellation, request reservation, shared cooldown and deadline checks."
+    },
+    {
+      "id": "REC-052",
+      "title": "共享API key聚合限额",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationCoordinator.test.ts"
+      ],
+      "boundary": "Durable CAS, two independent coordinators, late replies, cross-window cancellation, request reservation, shared cooldown and deadline checks."
+    },
+    {
+      "id": "REC-053",
+      "title": "引用/分页也计数",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Direct search and citation requests share the same task reservation port. Legacy cloud upstream fan-out remains unknown."
+    },
+    {
+      "id": "REC-054",
+      "title": "认证失败不循环",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "401/403 share the cooldown path with 429; live expired-credential provider acceptance is not_run."
+    },
+    {
+      "id": "REC-055",
+      "title": "总deadline包含尾部",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationCoordinator.test.ts"
+      ],
+      "boundary": "Durable CAS, two independent coordinators, late replies, cross-window cancellation, request reservation, shared cooldown and deadline checks."
+    },
+    {
+      "id": "REC-056",
+      "title": "未知模型费用不编造",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Receipts mark monetary model cost unknown; no token-to-price conversion is invented."
+    },
+    {
+      "id": "REC-057",
+      "title": "模型请求预算独立",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Separate model ledger enforces serial calls, embedding/generation tokens and per-run caps. Real billed usage verification is not_run."
+    },
+    {
+      "id": "REC-058",
+      "title": "阅读时不重排",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationCoordinator.test.ts"
+      ],
+      "boundary": "Durable CAS, two independent coordinators, late replies, cross-window cancellation, request reservation, shared cooldown and deadline checks."
+    },
+    {
+      "id": "REC-059",
+      "title": "网络失败不清空",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationCoordinator.test.ts"
+      ],
+      "boundary": "Durable CAS, two independent coordinators, late replies, cross-window cancellation, request reservation, shared cooldown and deadline checks."
+    },
+    {
+      "id": "REC-060",
+      "title": "更多只读池",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/RecommendationList.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/recommendationFullText.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/recommendationList.browser.spec.ts"
+      ],
+      "boundary": "Local three-card slate/paging/filtering, explicit full-text check, keyboard/detail/download behavior and light/dark browser checks."
+    },
+    {
+      "id": "REC-061",
+      "title": "交互回归",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/RecommendationList.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/recommendationFullText.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/browser/recommendationList.browser.spec.ts"
+      ],
+      "boundary": "Local three-card slate/paging/filtering, explicit full-text check, keyboard/detail/download behavior and light/dark browser checks."
+    },
+    {
+      "id": "REC-062",
+      "title": "v1隐私不扩大",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationEvidence.test.ts",
+        "products/liteasy/packages/recommendation-core/v2.test.mjs"
+      ],
+      "boundary": "Consent and event projection tests, revision replacement and monotonic reader clock. These do not replace native foreground/sleep acceptance."
+    },
+    {
+      "id": "REC-063",
+      "title": "未来版本防覆盖",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Future preference versions are retained and writes rejected. Native downgrade acceptance is not_run."
+    },
+    {
+      "id": "REC-064",
+      "title": "旧缓存不冒充新快照",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Legacy public candidates are sanitized and seeded with zero freshness; this is source-reviewed, not a full native migration rehearsal."
+    },
+    {
+      "id": "REC-065",
+      "title": "v1服务最多三种子",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/src/tests/recommendationMetadata.test.tsx",
+        "products/liteasy/apps/desktop/src/tests/recommendationRuntime.test.ts"
+      ],
+      "boundary": "Explicit exploration freezes submitted papers, verifies metadata, and retains the three-document v1 request limit."
+    },
+    {
+      "id": "REC-066",
+      "title": "工程样例不变人工真值",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/scripts/evaluate-recommendation-v2.ts"
+      ],
+      "boundary": "60 synthetic engineering time snapshots, 30 source clusters, at most five actual fixture candidates. Human labels and live-model ablation remain pending."
+    },
+    {
+      "id": "REC-067",
+      "title": "按时间冻结防泄漏",
+      "assessment": "automated_component_coverage",
+      "evidence": [
+        "products/liteasy/apps/desktop/scripts/evaluate-recommendation-v2.ts"
+      ],
+      "boundary": "60 synthetic engineering time snapshots, 30 source clusters, at most five actual fixture candidates. Human labels and live-model ablation remain pending."
+    },
+    {
+      "id": "REC-068",
+      "title": "原生性能独立报告",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Installer workflow separately measures the Windows native SQLite index and peak process RSS. Report is pending the final CI run; foreground and installation remain manual."
+    },
+    {
+      "id": "REC-069",
+      "title": "云端上游扇出透明计量",
+      "assessment": "partial_or_manual_not_run",
+      "evidence": [],
+      "boundary": "Cloud v1 receipts explicitly mark upstreamProviderRequests as unknown-v1; only the client request is counted."
+    }
+  ]
+}

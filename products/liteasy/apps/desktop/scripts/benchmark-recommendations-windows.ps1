@@ -30,7 +30,7 @@ try {
   $process.WaitForExit()
   if ($process.ExitCode -ne 0) { throw $stderr.Result }
   $native = @($stdout.Result -split "`r?`n" | Where-Object { $_.StartsWith("{") } | ForEach-Object { $_ | ConvertFrom-Json }) | Select-Object -Last 1
-  $fusion = (& node ../../../packages/recommendation-core/benchmark.mjs) | ConvertFrom-Json
+  $fusion = (& node ../../packages/recommendation-core/benchmark.mjs) | ConvertFrom-Json
   if ($LASTEXITCODE -ne 0 -or -not $native) { throw "Benchmark did not return measurements." }
   $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name
   $memory = (Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory
