@@ -5,7 +5,9 @@ try {
   $target = [System.IO.Path]::GetFullPath($OutputPath)
   New-Item -ItemType Directory -Force -Path ([System.IO.Path]::GetDirectoryName($target)) | Out-Null
   $buildLog = "$target.build.log"
-  $messages = & cargo test --locked --no-default-features --release --no-run --message-format=json --manifest-path src-tauri/Cargo.toml 2> $buildLog
+  # Only build the unit-test harness. Integration tests also build the ordinary
+  # executable, which would replace the production binary with a devUrl build.
+  $messages = & cargo test --locked --no-default-features --release --bin liteasy-desktop --no-run --message-format=json --manifest-path src-tauri/Cargo.toml 2> $buildLog
   if ($LASTEXITCODE -ne 0) { throw "Benchmark build failed; see $buildLog" }
   $artifacts = @($messages | ForEach-Object { try { $_ | ConvertFrom-Json } catch {} } | Where-Object { $_.reason -eq "compiler-artifact" -and $_.profile.test -and $_.executable })
   $executable = ($artifacts | Where-Object { $_.target.name -eq "liteasy-desktop" } | Select-Object -Last 1).executable

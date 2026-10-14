@@ -114,6 +114,7 @@ test("ordinary Windows checks avoid production build, test execution, Release li
     "Get-FileHash",
     "name: Liteasy-windows-x64-installer",
     "run: ./scripts/benchmark-recommendations-windows.ps1",
+    "run: ./scripts/verify-windows-installer.ps1",
   ]) {
     const step = findStep(windows, "windows", command);
     assert.equal(expression(value(step, "if", 8)), "inputs.build-installer", command);
@@ -126,6 +127,24 @@ test("ordinary Windows checks avoid production build, test execution, Release li
   for (const step of productionSteps) assert.equal(expression(value(step, "if", 8)), "inputs.build-installer");
   const options = block(block(block(windows, "on", 0), "workflow_call", 2), "inputs", 4);
   assert.equal(value(block(options, "build-installer", 6), "default", 8), "false");
+});
+
+test("the final production build cannot be overwritten by benchmark or test builds before packaging", () => {
+  const pipeline = steps(windows, "windows");
+  const benchmark = pipeline.findIndex((step) => step.includes("run: ./scripts/benchmark-recommendations-windows.ps1"));
+  const release = pipeline.findIndex((step) => step.includes("tauri -- build --no-bundle -- --locked"));
+  const bundle = pipeline.findIndex((step) => step.includes("tauri -- bundle --bundles nsis"));
+  const startup = pipeline.findIndex((step) => step.includes("run: ./scripts/verify-windows-installer.ps1"));
+  const upload = pipeline.findIndex((step) => step.includes("name: Liteasy-windows-x64-installer"));
+  assert.ok(benchmark >= 0 && benchmark < release && release < bundle && bundle < startup && startup < upload);
+  for (const step of pipeline.slice(release + 1, bundle)) {
+    assert.doesNotMatch(step, /cargo (?:test|build|check)|benchmark-recommendations/);
+  }
+  const benchmarkScript = read("../../products/liteasy/apps/desktop/scripts/benchmark-recommendations-windows.ps1");
+  assert.match(benchmarkScript, /cargo test[^\n]*--bin liteasy-desktop[^\n]*--no-run/);
+  const startupEvidence = findStep(windows, "windows", "name: Liteasy-windows-installer-smoke");
+  assert.equal(expression(value(startupEvidence, "if", 8)), "inputs.build-installer && always()");
+  assert.match(startupEvidence, /test-results\/windows-installer-smoke\//);
 });
 
 test("development compilation has a real dev URL and keeps production features for installers", () => {
