@@ -980,8 +980,9 @@ test("starts a separate session from the session toolbar", async () => {
 
   await user.click(screen.getByRole("button", { name: "新建" }));
 
-  expect(screen.queryByText("/关闭联网推荐")).not.toBeInTheDocument();
+  expect(screen.queryByRole("log", { name: "对话消息" })).not.toBeInTheDocument();
   expect(screen.getByLabelText("助手首页")).toBeInTheDocument();
+  expect(within(screen.getByLabelText("助手首页")).getByRole("button", { name: "/关闭联网推荐" })).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "历史" }));
 
