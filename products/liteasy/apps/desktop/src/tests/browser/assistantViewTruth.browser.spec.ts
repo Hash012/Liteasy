@@ -21,7 +21,18 @@ test("assistant home, task list and selected run logs are exclusive with real pr
   await expect(page.getByLabel("助手首页")).toBeVisible();
   await expect(page.getByRole("log", { name: "对话消息" })).toHaveCount(0);
   await expect(page.locator(".assistant-save-status")).toHaveCount(0);
+  const recent = page.getByRole("list", { name: "最近对话" }).getByRole("button").first();
+  await expect(recent).toHaveText(/上次活动：.*\d{2}:\d{2}/);
+  await expect(recent).toHaveText(/\d+ 条消息/);
+  await expect(recent).toHaveCSS("cursor", "pointer");
+  await expect(recent).toHaveCSS("border-top-width", "1px");
+  await expect(recent.locator(".assistant-session-row-title")).toHaveCSS("font-size", "14px");
+  await expect(recent.locator(".assistant-session-row-meta")).toHaveCSS("font-size", "12px");
   await page.screenshot({ path: info.outputPath("home-dark.png") });
+  await page.getByRole("button", { name: "浅色", exact: true }).click();
+  await expect(recent).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(recent.locator(".assistant-session-row-meta")).toHaveCSS("color", "rgb(66, 66, 66)");
+  await page.screenshot({ path: info.outputPath("home-light.png") });
   await page.getByPlaceholder("输入你的问题或命令").fill("保留新草稿");
   await expect(page.getByText("已保存到此浏览器", { exact: true })).toBeVisible();
   await page.reload();

@@ -24,10 +24,27 @@
   max-width: 100%;
 }
 
-.assistant-history-panel .assistant-history-list { gap: 4px; }
-.assistant-history-panel .assistant-history-item { padding: 6px 8px; border-radius: 4px; }
-.assistant-history-panel .assistant-history-restore { display: block; max-width: 100%; padding-right: 28px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.assistant-history-panel .assistant-history-item-meta { margin-top: 2px; }
-
-.assistant-recent-conversations { list-style: none; margin: 4px 0; padding: 0; }
-.assistant-recent-conversations .fui-Button { display: block; width: 100%; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A single type scale for assistant chrome; document typography stays independent. */
+.assistant-pane { font-size: var(--fontSizeBase300, 14px); line-height: 1.5; }
+.assistant-pane > section > h3 { margin: 8px 0 12px; font-size: var(--fontSizeBase400, 16px); font-weight: 600; }
+.assistant-pane > section > p { margin: 8px 0 12px; font-size: var(--fontSizeBase300, 14px); }
+.assistant-recent-heading { margin: 20px 0 8px; font-size: var(--fontSizeBase300, 14px); font-weight: 600; }
+.assistant-recent-conversations, .assistant-history-panel .assistant-history-list { display: grid; gap: 6px; list-style: none; margin: 4px 0 8px; padding: 0; }
+.assistant-history-panel .assistant-history-item { padding: 0; border-radius: 6px; }
+.assistant-pane .assistant-recent-open, .assistant-history-panel .assistant-history-restore {
+  display: grid; grid-template-columns: 20px minmax(0, 1fr) 16px; align-items: center; gap: 8px;
+  width: 100%; max-width: 100%; padding: 8px 10px; text-align: left; white-space: normal;
+  border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; background: var(--colorNeutralBackground1);
+  color: var(--colorNeutralForeground1); font-size: var(--fontSizeBase300, 14px); cursor: pointer;
+}
+.assistant-pane .assistant-recent-open:hover, .assistant-history-panel .assistant-history-restore:hover { background: var(--colorNeutralBackground1Hover); border-color: var(--colorNeutralStroke1Hover); }
+.assistant-pane .assistant-recent-open:focus-visible, .assistant-history-panel .assistant-history-restore:focus-visible { outline: 2px solid var(--colorStrokeFocus2); outline-offset: 1px; }
+.assistant-session-row-icon, .assistant-session-row-chevron { display: flex; font-size: 18px; color: var(--colorNeutralForeground3); }
+.assistant-session-row-content { display: grid; gap: 3px; min-width: 0; }
+.assistant-session-row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.assistant-session-row-meta { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: var(--fontSizeBase200, 12px); color: var(--colorNeutralForeground2); font-weight: 400; line-height: 1.5; }
+.assistant-session-row-meta time { font-variant-numeric: tabular-nums; }
+.assistant-session-row-excerpt { color: var(--colorNeutralForeground3); font-size: var(--fontSizeBase200, 12px); font-weight: 400; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.assistant-history-panel .assistant-history-item-meta:empty { display: none; }
+.assistant-history-panel .assistant-history-item-meta:not(:empty) { padding: 0 10px 4px; }
+.assistant-history-item:has(> .product-contextual-actions) .assistant-history-restore { padding-right: 40px; }

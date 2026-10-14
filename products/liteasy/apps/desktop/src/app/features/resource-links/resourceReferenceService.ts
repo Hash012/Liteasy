@@ -3,10 +3,11 @@ import type { AgentAssetService } from "../resource-filesystem/agentAssetService
 import type { AgentAsset } from "../resource-filesystem/agentAsset.types";
 import { liteasyPath, parseLiteasyPath } from "../resource-filesystem/liteasyPath";
 import { decodeReference, normalizeReferenceText, splitReference } from "./referenceText";
+import type { ReferencePdf } from "./referencePdfSource";
 
 export type ReferenceCandidate = { path: string; title: string; detail?: string; kind?: string };
 export type ReferenceDocument = { source?: import("./paperReferenceSource").PaperReferenceSource; asset: AgentAsset; text: string; complete: boolean; limit: number; totalCharacters: number };
-export function createResourceReferenceService(input: { scope: string; assets: AgentAssetService; catalog(): ReferenceCandidate[]; active(): boolean; subscribe?(path: string, changed: () => void): () => void }) {
+export function createResourceReferenceService(input: { scope: string; assets: AgentAssetService; catalog(): ReferenceCandidate[]; active(): boolean; loadPdf?(path: string, signal: AbortSignal): Promise<ReferencePdf | undefined>; subscribe?(path: string, changed: () => void): () => void }) {
   function check(signal?: AbortSignal) { signal?.throwIfAborted(); if (!input.active()) throw new Error("账号已切换，请重新选择引用。"); }
   const name = (value: string) => value.trim().replace(/\.(md|markdown|pdf|epub|mobi|canvas)$/i, "").toLocaleLowerCase();
   const known = () => [...new Map(input.catalog().filter((item) => item.path).map((item) => [item.path, item])).values()];
@@ -18,6 +19,13 @@ export function createResourceReferenceService(input: { scope: string; assets: A
   }
   const service = {
     scope: input.scope,
+    async pdf(path: string, signal?: AbortSignal): Promise<ReferencePdf | undefined> {
+      check(signal);
+      if (!input.loadPdf) return undefined;
+      const result = await read(signal => input.loadPdf!(path, signal), signal);
+      check(signal);
+      return result;
+    },
     subscribe(path: string, changed: () => void) { return input.subscribe?.(path, changed) ?? (() => {}); },
     async search(query: string, signal?: AbortSignal): Promise<ReferenceCandidate[]> {
       check(signal);

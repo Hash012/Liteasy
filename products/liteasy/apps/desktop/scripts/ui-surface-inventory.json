@@ -644,6 +644,7 @@
       "batch": "M3",
       "owner": "M3 surface owner / shared UI review",
       "symbols": [
+        "AssistantSessionSummary",
         "AssistantHistoryPanel"
       ],
       "interactions": [
@@ -4264,6 +4265,33 @@
       "interactions": [],
       "styles": [],
       "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
+      "path": "src/app/features/pdf/PdfSourcePreview.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "symbols": [
+        "PdfSourcePreview"
+      ],
+      "interactions": [],
+      "styles": [
+        "./pdfSourcePreview.css"
+      ],
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
         "semanticSection": false,

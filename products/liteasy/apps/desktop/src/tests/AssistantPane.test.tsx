@@ -982,7 +982,7 @@ test("starts a separate session from the session toolbar", async () => {
 
   expect(screen.queryByRole("log", { name: "对话消息" })).not.toBeInTheDocument();
   expect(screen.getByLabelText("助手首页")).toBeInTheDocument();
-  expect(within(screen.getByLabelText("助手首页")).getByRole("button", { name: "/关闭联网推荐" })).toBeInTheDocument();
+  expect(within(screen.getByLabelText("助手首页")).getByRole("button", { name: "打开会话：/关闭联网推荐" })).toHaveTextContent("5 条消息 · 命令");
 
   await user.click(screen.getByRole("button", { name: "历史" }));
 

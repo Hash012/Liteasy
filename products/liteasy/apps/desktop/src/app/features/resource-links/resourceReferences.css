@@ -1,6 +1,6 @@
 .reference-content-picker { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .reference-content-picker > header, .reference-pagination { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.reference-hint { font-size: 12px; color: var(--colorNeutralForeground3); margin: 0; }
+.reference-hint { font-size: var(--fontSizeBase200, 12px); color: var(--colorNeutralForeground3); margin: 0; }
 .reference-heading-list { display: flex; flex-direction: column; max-height: 140px; overflow: auto; border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; }
 .reference-heading-list button { text-align: left; justify-content: space-between; gap: 8px; flex-shrink: 0; }
 .reference-heading-list small { color: var(--colorNeutralForeground3); white-space: nowrap; }
@@ -10,13 +10,13 @@
 .reference-numbered-lines button { user-select: none; border: 0; background: transparent; color: var(--colorNeutralForeground3); font-size: 11px; text-align: right; padding-right: 8px; cursor: pointer; }
 .reference-numbered-lines button:focus-visible { outline: 2px solid var(--colorBrandStroke1); }
 .reference-numbered-lines span { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; padding-right: 6px; }
-.reference-content-picker [role=alert] { font-size: 12px; color: var(--colorStatusDangerForeground1); }
+.reference-content-picker [role=alert] { font-size: var(--fontSizeBase200, 12px); color: var(--colorStatusDangerForeground1); }
 .resource-reference-link { color: var(--colorBrandForegroundLink); cursor: pointer; text-decoration: none; font-weight: 600; }
 .resource-reference-link:hover { text-decoration: underline; }
 .resource-reference-popover { width: min(480px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 12px; border-radius: 8px; }
 .resource-reference-view, .resource-embed { display: block; min-width: 0; }
 .resource-reference-view.is-embed { border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; padding: 12px; margin-block: 8px; max-height: 480px; overflow: auto; }
-.resource-reference-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 8px; color: var(--colorNeutralForeground2); font-size: 13px; }
+.resource-reference-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 8px; color: var(--colorNeutralForeground2); font-size: var(--fontSizeBase300, 14px); }
 .reference-close { float: right; }
 .context-asset-workspace:has(.reference-content-picker) { grid-template-columns: 150px minmax(190px, 1fr) minmax(320px, 1.4fr); }
 @media (max-width: 850px) { .context-asset-workspace:has(.reference-content-picker) { grid-template-columns: minmax(0, 1fr); overflow: auto; } .context-asset-workspace:has(.reference-content-picker) > nav { display: none; } .context-asset-workspace:has(.reference-content-picker) > aside { grid-column: 1; max-height: none; } }
@@ -30,3 +30,6 @@
 .wiki-reference-results small { color: var(--colorNeutralForeground3); font-weight: normal; }
 .wiki-reference-selected { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-block: 8px; }
 .notes-editor .markdown-source-editor { height: clamp(250px, 40vh, 500px); }
+
+.resource-reference-heading strong { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.resource-reference-heading > .fui-Tooltip, .resource-reference-heading > button { flex-shrink: 0; }

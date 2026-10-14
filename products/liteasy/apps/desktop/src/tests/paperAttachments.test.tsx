@@ -109,3 +109,17 @@ test("opening a pinned library revision does not silently substitute the latest 
   expect(result.current.session?.draft).toBe("Original revision");
   expect(refOf(result.current.session!.object)).toEqual(asset.ref);
 });
+
+test("opening a PDF preview page keeps its page target and verifies account scope", async () => {
+  const scope = crypto.randomUUID(), storage = createObjectStorage(scope, () => scope);
+  const repository = createObjectRepository(storage, scope), projects = createPaperProjectRepository(storage, scope);
+  const paper = { id: "preview-paper", title: "Original PDF", sourcePath: "/library/original.pdf" };
+  const openPaper = vi.fn();
+  const navigate = createAgentAssetNavigator({ repository, projects, files: createNoteFileService(scope, () => scope), active: () => true,
+    getPapers: () => [paper], openAttachment: vi.fn(), openObject: vi.fn(), openFile: vi.fn(), openPaper, openArtifact: vi.fn() });
+  const path = liteasyPath(scope, { kind: "paper", paperId: paper.id });
+  await navigate(`${path}#page=2`);
+  expect(openPaper).toHaveBeenCalledWith(paper, 2);
+  await expect(navigate(`${path}#page=0`)).rejects.toThrow("PDF 页码无效");
+  await expect(navigate(`${path.replace(scope, "different-scope")}#page=2`)).rejects.toThrow("账户");
+});

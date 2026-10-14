@@ -103,6 +103,7 @@ export function AssistantComposer({
   const editorRef = inputRef ?? localInputRef;
   const menuId = useId();
   const [caret, setCaret] = useState(input.length);
+  const [textSelected, setTextSelected] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const restoreContextFocus = useRestoreFocusTarget();
@@ -126,7 +127,12 @@ export function AssistantComposer({
   const suggestionIndex = useMemo(() => createAssistantSuggestionIndex(suggestions), [suggestions]);
   function tokenLocator(token: AssistantContextToken) {
     const ref = token.contextRefs?.find(value => "objectId" in value);
-    return ref && "objectId" in ref && references ? liteasyPath(references.service.scope, { kind: "object", ref }) : token.resourcePath;
+    if (ref && "objectId" in ref && references) return liteasyPath(references.service.scope, { kind: "object", ref });
+    if (token.resourcePath) return token.resourcePath;
+    // Restore pre-existing drafts and messages that predate source locators.
+    if (token.kind === "paper" && token.id.startsWith("paper-") && references)
+      return liteasyPath(references.service.scope, { kind: "paper", paperId: token.id.slice(6) });
+    return undefined;
   }
   function removeToken(token: AssistantContextToken) {
     return <Tooltip content={tChinese("context.composer.remove", "移除上下文：{{label}}", { label: token.label })} relationship="label"><Button appearance="subtle" size="small" icon={<DismissRegular />} aria-label={tChinese("context.composer.remove", "移除上下文：{{label}}", { label: token.label })} onClick={() => onRemoveContextToken?.(token.id)} /></Tooltip>;
@@ -295,7 +301,7 @@ export function AssistantComposer({
           </> : null}
         </div>
       ) : null}
-      <div className="assistant-input-editor">
+      <div className={`assistant-input-editor${textSelected ? " has-text-selection" : ""}`}>
       <div className="assistant-input-highlight" ref={highlightRef}>{highlightedInput}{"\n"}</div>
       <textarea
         onPaste={(event) => {
@@ -318,9 +324,10 @@ export function AssistantComposer({
         aria-activedescendant={menuItemCount ? `${menuId}-${Math.min(activeIndex, menuItemCount - 1)}` : undefined}
         onChange={(event) => {
           setCaret(event.target.selectionStart);
+          setTextSelected(event.target.selectionStart !== event.target.selectionEnd);
           onInputChange(event.target.value);
         }}
-        onSelect={(event) => { setCaret(event.currentTarget.selectionStart); }}
+        onSelect={(event) => { setCaret(event.currentTarget.selectionStart); setTextSelected(event.currentTarget.selectionStart !== event.currentTarget.selectionEnd); }}
         onKeyDown={(event) => {
           if (onHistoryChange && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing && (event.key.toLowerCase() === "z" || event.key.toLowerCase() === "y")) {
             event.preventDefault();

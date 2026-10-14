@@ -159,3 +159,49 @@ test("a page selector anchors its local offsets to the selected page snapshot", 
   expect(snapshot.provenance.sourceRefs).toContainEqual(selectedRef);
   expect(anchor).toMatchObject({ range: { start: 0, end: 4 }, quote: { exact: "same" } });
 });
+
+test("PDF source previews read original bytes without parsing Markdown, including pinned page fragments", async () => {
+  const f = await fixture();
+  const paper = { id: "original-pdf", title: "Scanned paper", sourcePath: "/library/scanned.pdf", contentHash: "hash-a" };
+  const bytes = new TextEncoder().encode("%PDF-original-bytes");
+  const loadPdfSource = vi.fn(async () => bytes);
+  const read = vi.spyOn(f.assets, "read");
+  const { result } = renderHook(() => useResourceLinksController({ repository: f.repository, assets: f.assets, suggestions: [], papers: [paper], loadPdfSource, open: vi.fn() }));
+  const path = liteasyPath(f.scope, { kind: "paper", paperId: paper.id });
+  expect(await result.current.service.pdf(`${path}#page=3`)).toEqual({ bytes, path, page: 3 });
+  expect(loadPdfSource).toHaveBeenCalledWith(paper.sourcePath);
+  expect(read).not.toHaveBeenCalled();
+  const source = await f.repository.create({ kind: "source.document", title: paper.title, content: { schema: "liteasy.source-document/v1", payload: {
+    paperId: paper.id, documentHash: "hash-a", text: "", availability: "local", legacyKey: paper.id
+  } } });
+  const fragment = await f.repository.create({ kind: "content.fragment", title: "Page 2", sourceRefs: [refOf(source)], content: { schema: "liteasy.fragment/v1", payload: {
+    text: "quoted evidence", partial: true, anchors: [{ type: "pdf", sourceRef: refOf(source), page: 2, quote: { exact: "quoted evidence", prefix: "", suffix: "" }, rects: [], extractor: "pdf", normalization: "lf-utf16", precision: "page" }]
+  } } });
+  expect(await result.current.service.pdf(liteasyPath(f.scope, { kind: "object", ref: refOf(fragment) }))).toMatchObject({ bytes, path, page: 2 });
+  expect(await result.current.service.pdf(liteasyPath(f.scope, { kind: "object", ref: { ...refOf(source), selectorId: "page:3" } }))).toMatchObject({ page: 3 });
+  await expect(result.current.service.pdf(`${path}#page=0`)).rejects.toThrow("页码无效");
+  const stale = await f.repository.create({ kind: "source.document", title: paper.title, content: { schema: "liteasy.source-document/v1", payload: {
+    paperId: paper.id, documentHash: "old-hash", text: "", availability: "local", legacyKey: "stale-pdf"
+  } } });
+  await expect(result.current.service.pdf(liteasyPath(f.scope, { kind: "object", ref: refOf(stale) }))).rejects.toThrow("原始 PDF 已更换");
+  // A derived note must still preview its own text, not some cited ancestor's PDF.
+  expect(await result.current.service.pdf(f.path)).toBeUndefined();
+  await expect(result.current.service.pdf(path.replace(f.scope, "other-account"))).rejects.toThrow("账户");
+});
+
+test("PDF preview rejects missing files and late bytes after an account switch", async () => {
+  const f = await fixture();
+  const path = liteasyPath(f.scope, { kind: "paper", paperId: "pdf" });
+  let finish!: (value: Uint8Array) => void;
+  const loadPdfSource = vi.fn(() => new Promise<Uint8Array>(resolve => { finish = resolve; }));
+  const first = { repository: f.repository, assets: f.assets, suggestions: [], papers: [{ id: "pdf", title: "PDF", sourcePath: "/library/a.pdf" }], loadPdfSource, open: vi.fn() };
+  const hook = renderHook(props => useResourceLinksController(props), { initialProps: first });
+  const read = hook.result.current.service.pdf(path);
+  await waitFor(() => expect(loadPdfSource).toHaveBeenCalledOnce());
+  const next = await fixture();
+  hook.rerender({ ...first, repository: next.repository, assets: next.assets });
+  finish(new Uint8Array([1, 2]));
+  await expect(read).rejects.toThrow("账号已切换");
+  hook.rerender({ ...first, papers: [{ id: "pdf", title: "PDF", sourcePath: "" }] });
+  await expect(hook.result.current.service.pdf(path)).rejects.toThrow("重新关联");
+});

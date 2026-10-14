@@ -27,12 +27,25 @@ describe("AssistantHistoryPanel", () => {
 
     render(<AssistantHistoryPanel history={history} onRestoreSession={onRestoreSession} />);
 
-    await user.hover(screen.getByText("会话信息"));
-    expect(await screen.findByText("1 条消息 · 问答")).toBeInTheDocument();
+    expect(screen.getByText("时间未记录")).toBeInTheDocument();
+    expect(screen.getByText("1 条消息 · 问答")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "恢复会话：你好" }));
 
     expect(onRestoreSession).toHaveBeenCalledWith("session-1");
   });
+});
+
+test("shows last activity with time, message count and latest question in the clickable row", async () => {
+  const open = vi.fn();
+  render(<AssistantHistoryPanel history={[{ id: "timed", title: "实验比较", mode: "qa", updatedAt: "2026-10-14T08:35:00.000Z", messageCount: 8,
+    messages: [{ id: "question", role: "user", content: "比较两个实验的误差" }] }]} onOpenSession={open} />);
+  const row = screen.getByRole("button", { name: "打开会话：实验比较" });
+  expect(row).toHaveTextContent(/上次活动：2026\/10\/14.*\d{2}:35/);
+  expect(row).toHaveTextContent("8 条消息");
+  expect(row).toHaveTextContent("比较两个实验的误差");
+  expect(row.querySelector("time")).toHaveAttribute("dateTime", "2026-10-14T08:35:00.000Z");
+  await userEvent.click(screen.getByText("比较两个实验的误差"));
+  expect(open).toHaveBeenCalledWith("timed");
 });
 
 test("keeps normal conversation rows compact while exposing exceptional status", () => {

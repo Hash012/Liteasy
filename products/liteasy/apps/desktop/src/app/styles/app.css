@@ -1184,6 +1184,8 @@ body {
 }
 
 .assistant-context-token {
+  min-width: 0;
+  gap: 3px;
   border: 1px solid var(--colorBrandStroke2);
   border-radius: 6px;
   background: var(--colorBrandBackground2);
@@ -1191,7 +1193,7 @@ body {
   cursor: pointer;
   font-size: calc(12px * var(--app-font-ratio, 1));
   max-width: 100%;
-  padding: 3px 7px;
+  padding: 0 4px 0 6px;
   overflow-wrap: anywhere;
 }
 
@@ -1215,6 +1217,8 @@ body {
 }
 
 .assistant-suggestion-item {
+  font-size: var(--fontSizeBase300, 14px);
+  line-height: 1.5;
   align-items: center;
   border: 0;
   border-radius: 8px;
@@ -1257,9 +1261,11 @@ body {
   white-space: nowrap;
 }
 
+.assistant-suggestion-main strong { font-weight: 600; }
+
 .assistant-suggestion-main span {
-  color: var(--text-primary);
-  font-size: calc(11px * var(--app-font-ratio, 1));
+  color: var(--text-secondary);
+  font-size: var(--fontSizeBase200, 12px);
 }
 
 .assistant-citation-card {
@@ -5933,8 +5939,8 @@ button.pdf-overlay-mark:focus-visible {
 .assistant-input-editor .assistant-input,
 .assistant-input-highlight {
   font: inherit;
-  font-size: calc(13px * var(--app-font-ratio, 1));
-  line-height: 1.8;
+  font-size: var(--fontSizeBase300, 14px);
+  line-height: 1.6;
   letter-spacing: normal;
   padding: 2px;
   white-space: pre-wrap;
@@ -6128,6 +6134,8 @@ button.pdf-overlay-mark:focus-visible {
 }
 
 .assistant-suggestion-menu.commands .assistant-suggestion-item {
+  font-size: var(--fontSizeBase300, 14px);
+  line-height: 1.5;
   border-radius: 4px;
   flex: 0 0 30px;
   gap: 6px;
@@ -6210,7 +6218,7 @@ button.pdf-overlay-mark:focus-visible {
 .assistant-task-reference { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border: 1px solid var(--line-1); border-radius: 6px; padding: 8px; margin: 8px; }
 .assistant-task-reference strong { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .assistant-task-discussion, .assistant-recovery-notice { padding: 8px; border-top: 1px solid var(--line-1); }
-.assistant-save-status { margin: 2px 8px; font-size: 11px; color: var(--text-2); }
+.assistant-save-status { margin: 2px 8px; font-size: var(--fontSizeBase200, 12px); color: var(--text-2); }
 .assistant-user-message-content .assistant-markdown { display: inline; }
 .assistant-user-message-content .assistant-markdown p { margin: 0; }
 .assistant-user-message-content table, .assistant-user-message-content pre { max-width: 100%; overflow-x: auto; }
@@ -6231,3 +6239,14 @@ button.pdf-overlay-mark:focus-visible {
 .assistant-input-highlight .resource-reference-link { font: inherit; line-height: inherit; letter-spacing: inherit; color: inherit; padding: 0; margin: 0; border: 0; background: transparent; text-decoration: none; }
 .assistant-context-token { display: inline-flex; align-items: center; }
 .assistant-context-token > button { flex: 0 0 auto; }
+
+/* Compact context chips: the remove action must not inherit the default 32px button. */
+.assistant-context-token-row { gap: 4px; align-items: center; }
+.assistant-context-token-row .assistant-context-token { border-radius: 4px; max-width: min(100%, 28em); min-height: 24px; font-size: var(--fontSizeBase200, 12px); line-height: 1.5; }
+.assistant-context-token-row .assistant-context-token > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; }
+.assistant-context-token-row .assistant-context-token .fui-Button { min-height: 22px; min-width: 22px; height: 22px; padding: 1px; border-radius: 3px; font: inherit; }
+.assistant-context-token-row .assistant-context-token .fui-Button__icon { font-size: 14px; width: 14px; height: 14px; }
+/* Let the native editor paint the selection. An opaque mirror would hide its white ink. */
+.assistant-input-editor.has-text-selection .assistant-input-highlight { visibility: hidden; }
+.assistant-input-editor.has-text-selection .assistant-input { color: var(--colorNeutralForeground1); }
+.assistant-input-editor .assistant-input::selection { color: var(--colorNeutralForegroundStaticInverted); background: var(--colorBrandBackgroundStatic); text-shadow: none; }

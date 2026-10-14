@@ -84,12 +84,15 @@ test("A02-09 only completed business turns contribute to the accessible announce
   expect(screen.getByText("legacy result_missing")).toBeInTheDocument();
 });
 
-test("A02-01 home names the selected source without claiming to have read it", () => {
-  render(<AssistantSessionController {...props} selectedPapers={[{ id: "p1", title: "离线合成论文" }]} />);
+test("A02-01 home names the selected source and persists an openable source locator without claiming to have read it", async () => {
+  const save = vi.fn(async (_value: AssistantHistorySnapshot) => {});
+  render(<AssistantSessionController {...props} historyPersistence={createAssistantHistoryPersistence({ load: async () => null, save })} selectedPapers={[{ id: "p1", title: "离线合成论文" }]} />);
+  await waitFor(() => expect(screen.queryByText("正在恢复对话…")).not.toBeInTheDocument());
   expect(screen.getByLabelText("助手首页")).toHaveTextContent("可使用的已选资料：离线合成论文");
   expect(screen.queryByRole("log")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "根据已选资料提问" }));
   expect((screen.getByPlaceholderText("输入你的问题或命令") as HTMLTextAreaElement).value).toContain("概述这篇论文");
+  await waitFor(() => expect(save.mock.calls.at(-1)?.[0].draft.tokens[0]).toMatchObject({ resourcePath: "liteasy://papers/p1?scope=local" }));
 });
 
 test("A02-03 selecting either run of task A cannot project task B's events", async () => {

@@ -10,6 +10,8 @@ html[data-app-css-zoom] .app-frame {
 /* Fluent portals inherit the same typography as their owner, including menus
    and dialogs rendered outside app-frame. Preserve the Fluent size hierarchy. */
 html .fluent-app-root {
+  font-size: var(--fontSizeBase300, 14px);
+  line-height: var(--lineHeightBase300, 20px);
   --fontSizeBase100: calc(10px * var(--app-font-ratio, 1));
   --fontSizeBase200: calc(12px * var(--app-font-ratio, 1));
   --fontSizeBase300: var(--app-font-size, 14px);
@@ -32,3 +34,8 @@ html .fluent-app-root {
 .app-frame .pane-header {
   font-size: calc(16px * var(--app-font-ratio, 1));
 }
+
+/* Match browser selection ink in light/dark surfaces and Fluent portals. */
+.fluent-app-root ::selection { color: var(--colorNeutralForegroundStaticInverted); background: var(--colorBrandBackgroundStatic); text-shadow: none; }
+/* PDF text is a transparent selection layer over the original painted page. */
+.fluent-app-root .pdf-text-layer span::selection { color: transparent; background: color-mix(in srgb, var(--colorBrandBackgroundStatic) 30%, transparent); }

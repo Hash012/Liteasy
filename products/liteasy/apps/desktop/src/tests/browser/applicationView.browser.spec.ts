@@ -39,7 +39,7 @@ test("application zoom and font settings persist while the frame stays inside th
   const originalFont = await fontPicker.evaluate((element) =>
     parseFloat(getComputedStyle(element).fontSize),
   );
-  const assistantText = page.locator(".assistant-context-toggle");
+  const assistantText = page.getByPlaceholder("输入你的问题或命令");
   const originalAssistantFont = await assistantText.evaluate((element) =>
     parseFloat(getComputedStyle(element).fontSize),
   );

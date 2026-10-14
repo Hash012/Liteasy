@@ -1,5 +1,5 @@
 import { useUiTranslation } from "../../shared/i18n/useUiTranslation";
-import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
 import { ArrowExpandRegular, DismissRegular } from "@fluentui/react-icons";
 import { ContentView } from "../markdown/ContentView";
@@ -10,7 +10,9 @@ import { writeAssetContextTransfer } from "../object-transfer/assetContextTransf
 import { ReferenceDepthContext, ReferenceSourceContext, ResourceReferencesContext } from "./ResourceReferencesContext";
 import { referenceFragment, splitReference } from "./referenceText";
 import type { ReferenceCandidate, ReferenceDocument } from "./resourceReferenceService";
+import type { ReferencePdf } from "./referencePdfSource";
 import "./resourceReferences.css";
+const PdfSourcePreview = lazy(() => import("../pdf/PdfSourcePreview"));
 
 export function ResourceReferenceView({ locator, source, embed = false, onResolved }: { locator: string; source?: string; embed?: boolean; onResolved?(candidate: ReferenceCandidate): void }) {
   const { tChinese } = useUiTranslation();
@@ -20,17 +22,22 @@ export function ResourceReferenceView({ locator, source, embed = false, onResolv
   const cancellation = useRef<AbortController>();
   const prepare = useRef(false);
   const [candidate, setCandidate] = useState<ReferenceCandidate>(), [document, setDocument] = useState<ReferenceDocument>();
+  const [pdf, setPdf] = useState<ReferencePdf>();
+  const [pdfPage, setPdfPage] = useState(1);
   const [error, setError] = useState(""), [limit, setLimit] = useState(12000), [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!references) return;
     const preparation = prepare.current ? "allow" : "cached"; prepare.current = false;
-    const abort = new AbortController(); cancellation.current = abort; setError(""); setDocument(undefined); setCandidate(undefined);
+    const abort = new AbortController(); cancellation.current = abort; setError(""); setDocument(undefined); setPdf(undefined); setCandidate(undefined);
     void references.service.resolve(locator, source, abort.signal).then(async (asset) => {
       if (abort.signal.aborted) return;
       setCandidate(asset); onResolved?.(asset);
       if (chain.length >= 2) return;
       if (chain.includes(asset.path)) throw new Error("此处存在循环引用，点击打开原文件。");
       if (asset.kind === "image" || /\.(png|jpe?g|webp|gif)(?:\?|$)/i.test(asset.path)) return;
+      const original = await references.service.pdf(sourceLocator(asset.path, locator), abort.signal);
+      if (abort.signal.aborted) return;
+      if (original) { setPdf(original); setPdfPage(original.page); return; }
       const value = await references.service.document(asset.path, limit, abort.signal, preparation);
       if (!abort.signal.aborted) setDocument(value);
     }).catch((e) => { if (!abort.signal.aborted) setError(previewErrorMessage(e)); });
@@ -48,13 +55,13 @@ export function ResourceReferenceView({ locator, source, embed = false, onResolv
     }
   } catch (e) { text = undefined; if (!error) fragment = e instanceof Error ? e.message : String(e); }
   return <span className={`resource-reference-view${embed ? " is-embed" : ""}`}>
-    <span className="resource-reference-heading"><strong>{candidate?.title || "引用内容"}</strong>{candidate && references ? <Tooltip content="打开原文件" relationship="label"><Button size="small" appearance="subtle" icon={<ArrowExpandRegular />} aria-label="打开原文件" onClick={() => { void Promise.resolve(references.open(sourceLocator(candidate.path, locator))).catch((e) => setError(String(e))); }} /></Tooltip> : null}</span>
+    <span className="resource-reference-heading"><strong>{candidate?.title || "引用内容"}</strong>{candidate && references ? <Tooltip content="打开原文件" relationship="label"><Button size="small" appearance="subtle" icon={<ArrowExpandRegular />} aria-label="打开原文件" onClick={() => { void Promise.resolve(references.open(pdf ? `${pdf.path}#page=${pdfPage}` : sourceLocator(candidate.path, locator))).catch((e) => setError(String(e))); }} /></Tooltip> : null}</span>
     {chain.length >= 2 ? <span>嵌套引用已折叠，请打开原文件继续阅读。</span> : error ? <span role="alert">{error}<Button size="small" onClick={() => setAttempt((value) => value + 1)}>重试</Button>{/正文尚未就绪/.test(error) ? <Button size="small" onClick={() => { prepare.current = true; setAttempt((value) => value + 1); }}>{tChinese("preview.prepareText", "解析正文")}</Button> : null}</span> : isImage && candidate ? <AssetImage source={candidate.path} alt={candidate.title} /> : document ? <>
       {!text && fragment ? <span role="status">{fragment}</span> : <ReferenceDepthContext.Provider value={[...chain, candidate!.path]}><ReferenceSourceContext.Provider value={candidate!.path}>
         <ContentView content={sourceContent({ text: document.text, path: candidate!.path, revision: document.asset.revision, scopeId: references?.service.scope ?? "legacy", start: selectionStart, end: selectionEnd })} renderResourceImage={(url, alt) => <AssetImage source={url} basePath={candidate!.path} alt={alt} />} allowRelativeImages />
       </ReferenceSourceContext.Provider></ReferenceDepthContext.Provider>}
       {!document.complete ? <span className="reference-hint">仅载入部分内容。<Button size="small" disabled={limit >= 80000} onClick={() => setLimit((value) => Math.min(value + 12000, 80000))}>继续载入</Button></span> : null}
-    </> : <span role="status">正在读取引用…<Button size="small" onClick={() => { cancellation.current?.abort(); setError(tChinese("preview.cancelled", "已取消读取。")); }}>{tChinese("preview.cancelRead", "取消读取")}</Button></span>}
+    </> : pdf ? <Suspense fallback={<span role="status">正在载入 PDF 预览…</span>}><PdfSourcePreview source={pdf} onPageChange={setPdfPage} /></Suspense> : <span role="status">正在读取引用…<Button size="small" onClick={() => { cancellation.current?.abort(); setError(tChinese("preview.cancelled", "已取消读取。")); }}>{tChinese("preview.cancelRead", "取消读取")}</Button></span>}
   </span>;
 }
 

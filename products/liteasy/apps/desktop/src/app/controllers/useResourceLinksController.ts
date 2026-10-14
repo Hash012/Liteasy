@@ -13,9 +13,11 @@ import type { Paper } from "../features/workspace/workspace.types";
 import { subscribeObjectStorage } from "../features/objects/objectStorage";
 import { subscribeNoteFiles } from "../features/note-files/noteFileService";
 import { hashText } from "../features/context/objectContext";
+import { resolveReferencePdf } from "../features/resource-links/referencePdfSource";
 
 export function useResourceLinksController(input: { repository: ObjectRepository; assets: AgentAssetService;
   entries?: ReadingCatalogEntry[];
+  loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
   suggestions: AssistantComposerSuggestion[]; papers: Paper[]; open(path: string): void | Promise<unknown> }) {
   const latest = useRef(input); latest.current = input;
   const scope = input.repository.scopeId;
@@ -29,6 +31,17 @@ export function useResourceLinksController(input: { repository: ObjectRepository
   const catalog = useRef(suggestions); catalog.current = suggestions;
   const service = useMemo(() => createResourceReferenceService({ scope, assets: input.assets,
     active: () => latest.current.repository.scopeId === scope,
+    async loadPdf(path, signal) {
+      const current = latest.current;
+      if (!current.loadPdfSource) return undefined;
+      const source = await resolveReferencePdf({ path, repository: current.repository, papers: current.papers, signal });
+      if (!source) return undefined;
+      signal.throwIfAborted();
+      const bytes = await current.loadPdfSource(source.paper.sourcePath!);
+      signal.throwIfAborted();
+      if (latest.current.repository.scopeId !== scope) throw new Error("账号已切换，请重新选择引用。");
+      return { bytes, page: source.page, path: source.path };
+    },
     catalog: () => catalog.current.map((item) => ({ path: item.resourcePath!, title: item.label, detail: item.detail, kind: item.category })),
     subscribe(path, changed) {
       try {

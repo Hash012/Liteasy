@@ -38,7 +38,7 @@ import { adaptContextMentions, contextInstructionText, insertContextMentions, ma
 import { Button, Input } from "@fluentui/react-components";
 import { AssistantSessionToolbar } from "../../features/assistant/AssistantSessionToolbar";
 import { AssistantComposer } from "../../features/assistant/AssistantComposer";
-import { AssistantHistoryPanel } from "../../features/assistant/AssistantHistoryPanel";
+import { AssistantHistoryPanel, AssistantSessionSummary } from "../../features/assistant/AssistantHistoryPanel";
 import { AssistantMessageList } from "../../features/assistant/AssistantMessageList";
 import type {
   AssistantConfirmationRequest,
@@ -902,6 +902,7 @@ export function AssistantSessionController({
       const paper = readContextPaper(data, availablePapers);
       const tokens: AssistantContextToken[] = paper ? [{
         id: `paper-${paper.id}`, kind: "paper", label: paper.title,
+        resourcePath: liteasyPath(objectWorkbench?.scopeId ?? "local", { kind: "paper", paperId: paper.id }),
         detail: "论文", prompt: `用户指定论文上下文：${paper.title}（paperId=${paper.id}）`,
       }] : (await objectWorkbench?.receiveContextDrop?.(data) ?? []).map((attachment) => ({
         id: `object-${JSON.stringify(attachment.ref)}`, kind: "object", label: attachment.title,
@@ -984,6 +985,7 @@ export function AssistantSessionController({
         detail: paper.sourcePath ?? "整篇论文",
         id: `paper-${paper.id}`,
         kind: "paper",
+        resourcePath: liteasyPath(objectWorkbench?.scopeId ?? "local", { kind: "paper", paperId: paper.id }),
         label: paper.title,
         prompt: `用户指定论文上下文：${paper.title}（paperId=${paper.id}）`
       };
@@ -997,6 +999,7 @@ export function AssistantSessionController({
         id: `paper-${paper.id}`,
         label: paper.title,
         token: paperToken,
+        resourcePath: paperToken.resourcePath,
         trigger: "@" as const
       };
     });
@@ -1009,11 +1012,13 @@ export function AssistantSessionController({
         preview: contextPreviewText((importedChunksByPaperId[paper.id] ?? []).filter((chunk) => chunk.page === page).map((chunk) => chunk.snippet).join("\n\n")),
         detail: `${paper.title} · 第 ${page} 页`,
         id: `page-${paper.id}-${page}`,
+        resourcePath: `${liteasyPath(objectWorkbench?.scopeId ?? "local", { kind: "paper", paperId: paper.id })}#page=${page}`,
         label: `${paper.title} p.${page}`,
         token: {
           detail: `第 ${page} 页`,
           id: `page-${paper.id}-${page}`,
           kind: "page",
+          resourcePath: `${liteasyPath(objectWorkbench?.scopeId ?? "local", { kind: "paper", paperId: paper.id })}#page=${page}`,
           label: paper.title,
           prompt: `用户指定论文页面上下文：${paper.title}（paperId=${paper.id}），第 ${page} 页。`
         },
@@ -1038,7 +1043,7 @@ export function AssistantSessionController({
     return [...artifactSlashSuggestions, ...commandSuggestions, ...paperSuggestions, ...contextSuggestions, ...pageSuggestions, ...skillSuggestions];
   }
 
-  const composerSuggestions = useMemo(buildComposerSuggestions, [availablePapers, contextSuggestions, importedChunksByPaperId, searchEntries]);
+  const composerSuggestions = useMemo(buildComposerSuggestions, [availablePapers, contextSuggestions, importedChunksByPaperId, searchEntries, objectWorkbench?.scopeId]);
 
   function setMode(mode: AssistantMode) {
     const adapted = adaptDefaultUiIntent({
@@ -2648,9 +2653,10 @@ export function AssistantSessionController({
       {view.kind === "home" ? <section aria-label="助手首页">
         <h3>开始新对话</h3>
         {selectedPapers.length ? <><p>可使用的已选资料：{selectedPapers.map((paper) => paper.title).join("、")}</p>
-          <Button onClick={() => { setInput(selectedPapers.length > 1 ? "比较这些论文的方法与证据" : "概述这篇论文的方法与证据"); setComposerContextTokens(selectedPapers.map((paper) => ({ id: `paper-${paper.id}`, kind: "paper", label: paper.title, prompt: `论文：${paper.title}` }))); }}>根据已选资料提问</Button>
+          <Button onClick={() => { setInput(selectedPapers.length > 1 ? "比较这些论文的方法与证据" : "概述这篇论文的方法与证据"); setComposerContextTokens(selectedPapers.map((paper) => ({ id: `paper-${paper.id}`, kind: "paper", label: paper.title, resourcePath: liteasyPath(objectWorkbench?.scopeId ?? "local", { kind: "paper", paperId: paper.id }), prompt: `论文：${paper.title}` }))); }}>根据已选资料提问</Button>
         </> : <p>{tChinese("context.composer.noMaterials", "尚未添加资料")}</p>}
-        <ul className="assistant-recent-conversations" aria-label={tChinese("context.composer.recentConversations", "最近对话")}>{sessionHistory.filter((session) => session.id !== activeSessionId && session.lifecycle !== "archived" && session.lifecycle !== "tombstoned" && hasAssistantContent(session)).slice(0, 3).map((session) => <li key={session.id}><Button appearance="subtle" size="small" title={session.title} onClick={() => { void openSession(session.id); }}>{session.title}</Button></li>)}</ul>
+        <h4 className="assistant-recent-heading">最近对话</h4>
+        <ul className="assistant-recent-conversations" aria-label={tChinese("context.composer.recentConversations", "最近对话")}>{sessionHistory.filter((session) => session.id !== activeSessionId && session.lifecycle !== "archived" && session.lifecycle !== "tombstoned" && hasAssistantContent(session)).sort((a, b) => (b.updatedAt ?? b.createdAt ?? "").localeCompare(a.updatedAt ?? a.createdAt ?? "")).slice(0, 3).map((session) => <li key={session.id}><Button className="assistant-recent-open" appearance="subtle" title={session.title} aria-label={`打开会话：${session.title}`} onClick={() => { void openSession(session.id); }}><AssistantSessionSummary session={session} /></Button></li>)}</ul>
         <Button appearance="subtle" onClick={() => setView({ kind: "history", filter: "conversations" })}>查看全部</Button>
       </section> : null}
       {!historyReady && !historyError ? <p role="status">正在恢复对话…</p> : null}

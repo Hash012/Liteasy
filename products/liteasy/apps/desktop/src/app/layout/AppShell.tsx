@@ -1287,7 +1287,7 @@ export function AppShell({
     openAttachment: paperAttachments.open,
     openObject: objectWorkbench.openLink,
     openFile: (file) => /\.canvas$/i.test(file.path) ? objectWorkbench.port.openBoardFile!(file) : externalNote.open(file),
-    openPaper: (paper) => openPaperInReader(paper.id),
+    openPaper: (paper, page) => page ? openEvidenceInReader({ paperId: paper.id, page, quote: "", pageOnly: true, evidenceId: `source-preview:${paper.id}:${page}` }) : openPaperInReader(paper.id),
     openArtifact: (id) => { artifactWorkflow.actions.openArtifact(id); activateArtifactSurface(id); }
   });
   const extensionWorkflows = useExtensionWorkflowController({ scope: objectWorkbench.repository.scopeId, assets: objectWorkbench.agentAssets, packages: objectWorkbench.extensions, settings: settingsState, modelTransport: effectiveModelTransport, open: async (path) => { await openAgentAsset(path); }, showRuns: () => workbenchNavigation.open("workflow-runs") });
@@ -1372,7 +1372,7 @@ export function AppShell({
     "active-pages": () => workspaceShell.pageSwitcher.show("active")
   }, commandAvailability);
   const resourceLinks = useResourceLinksController({ repository: objectWorkbench.repository, assets: objectWorkbench.agentAssets,
-    entries: readingLibrary.entries, suggestions: assistantContextSuggestions, papers: workspaceState.papers, open: openAgentAsset });
+    entries: readingLibrary.entries, suggestions: assistantContextSuggestions, papers: workspaceState.papers, loadPdfSource: loadPaperPdfBytes, open: openAgentAsset });
   const artifactSessionNavigation = useArtifactSessionNavigationController({
     tasks: artifactTasks, scopeId: assistantScopeId,
     openAssistant: () => workbenchNavigation.open("assistant")

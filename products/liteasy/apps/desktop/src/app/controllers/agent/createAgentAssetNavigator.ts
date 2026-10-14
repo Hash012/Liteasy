@@ -1,4 +1,5 @@
 import { revealResource } from "../../features/resource-links/resourceReveal";
+import { splitReference } from "../../features/resource-links/referenceText";
 import type { AssetOpenLocation } from "../../features/resource-filesystem/assetNavigation";
 import { parseLiteasyPath } from "../../features/resource-filesystem/liteasyPath";
 import { objectLink, refOf } from "../../features/objects/object.types";
@@ -19,12 +20,14 @@ export function createAgentAssetNavigator(input: {
   openAttachment: PaperAttachmentController["open"];
   openObject(link: string): Promise<void>;
   openFile(file: NoteFileSnapshot): void | Promise<void>;
-  openPaper(paper: Paper): void;
+  openPaper(paper: Paper, page?: number): void;
   openArtifact(id: string): void;
 }) {
   return async (path: string, location?: AssetOpenLocation) => {
     const check = () => { if (!input.active()) throw new Error("账号已切换，请重新打开文件。"); };
     check();
+    const reference = splitReference(path);
+    path = reference.target;
     if (path.startsWith("liteasy://resources/")) {
       if (!input.resolveResource) throw new Error("此资源类型未注册导航器。");
       const target = await input.resolveResource(path);
@@ -45,7 +48,10 @@ export function createAgentAssetNavigator(input: {
       const paper = input.getPapers().find((item) => item.id === target.paperId);
       if (!paper) throw new Error("论文已移出当前文库。");
       if (location && paper.contentHash !== location.revision) throw new Error("revision_unavailable：论文版本已变化。");
-      input.openPaper(paper); return;
+      const page = /^(?:page=|p\.?)(\d+)$/.exec(reference.fragment)?.[1];
+      if (page && (!Number.isSafeInteger(Number(page)) || Number(page) < 1)) throw new Error("PDF 页码无效。");
+      if (page) input.openPaper(paper, Number(page)); else input.openPaper(paper);
+      return;
     }
     if (target.kind === "artifact") { if (location) throw new Error("revision_unavailable：此产物尚不支持历史版本导航。"); input.openArtifact(target.artifactId); return; }
     if (target.kind !== "object") throw new Error("此链接暂不支持直接打开，请在文库中查看。");
