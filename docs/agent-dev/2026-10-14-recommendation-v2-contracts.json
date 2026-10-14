@@ -1,0 +1,133 @@
+{
+  "schema": "liteasy.recommendation-v2-implementation-contract/v1",
+  "specBaseline": "f4aa61609665758c8ae12144c8ed2f707167811d",
+  "implementationBaseline": "6369f11c740479048a72cff2c78ee848c3c638a3",
+  "baselineDrift": "Context picker and source preview work changed resource ports and added local picker ranking; external recommendation discovery still follows the audited selection-dependent hooks.",
+  "paths": [
+    {
+      "route": "cloud",
+      "flow": [
+        "AppShell.selectedPapers",
+        "useKnowledgeSyncController",
+        "useRecommendationMetadataController",
+        "useRecommendationContextController",
+        "useRecommendations",
+        "recommendationRuntime.fetchCloudRecommendations",
+        "v1/recommendations",
+        "useContextRankedRecommendations",
+        "recommendationHybridPipeline",
+        "RecommendationList"
+      ],
+      "problem": "selection/style/sort/workspace revision participate in effect identity; cache hits still refresh"
+    },
+    {
+      "route": "direct",
+      "flow": [
+        "AppShell.selectedPapers",
+        "useKnowledgeSyncController",
+        "useRecommendationContextController",
+        "useLocalRecommendations",
+        "localRecommendationClient.fetchLocalRecommendations",
+        "paperServiceRequest",
+        "recommendationHybridPipeline",
+        "RecommendationList"
+      ],
+      "problem": "selection/context participate in signature; cache lacks freshness; display can disappear when selection changes"
+    }
+  ],
+  "baselineRegression": {
+    "test": "src/tests/recommendationV2Regression.test.tsx",
+    "cloud": "20 toggles caused 10 extra generator calls",
+    "direct": "visible feed disappeared on deselection; 350 ms debounce batches repeated effects, not a stable-feed contract",
+    "note": "Deterministic local regression. These are adapter calls, not a measurement of upstream provider fan-out."
+  },
+  "storageDecision": {
+    "reuse": "features/objects/objectStorage.ts + src-tauri/src/object_store.rs",
+    "native": "Existing SQLite IMMEDIATE transactions and expected-version CAS already enforce desktop_identity.local_object_scope. Use recommendation/v2/ records for leases, reservations, events, profiles, tombstones and snapshots. No parallel database or vector service.",
+    "web": "Existing IndexedDB readwrite transactions implement the same CAS contract.",
+    "sync": "Explicitly exclude recommendation/v2/ from native and browser asset sync categories before storing private derived state.",
+    "vectors": "Keep existing semantic_index. Partition by model/endpoint/revision/dimensions/task/normalization; never compare vectors across spaces."
+  },
+  "contracts": {
+    "ports": "products/liteasy/packages/recommendation-core/v2.d.mts",
+    "defaults": {
+      "version": 2,
+      "enabled": true,
+      "feed": {
+        "displayCount": 3,
+        "automaticRefreshHours": 24,
+        "maximumAutomaticRunsPerRollingDay": 1,
+        "unreadQueueCap": 9,
+        "explorationMaximumPerSlate": 1,
+        "style": "balanced",
+        "applyNewSnapshot": "on_reentry_or_accept"
+      },
+      "signals": {
+        "highlights": true,
+        "userNotes": true,
+        "readingActivity": false,
+        "userQuestions": false,
+        "acceptedAgentInsights": false,
+        "explicitFeedback": true,
+        "confirmedProfile": true,
+        "historyWindowDays": 30,
+        "qualifiedReadingSeconds": 30,
+        "idleCutoffSeconds": 90,
+        "maxActiveFacets": 6
+      },
+      "privacy": {
+        "externalPrivateText": false,
+        "externalDerivedQueries": false,
+        "externalPrivateVectors": false,
+        "persistPrivateQueryVectors": false,
+        "syncDerivedState": false
+      },
+      "models": {
+        "generationEnabled": false,
+        "embeddingProviderRef": null,
+        "rerankerProviderRef": null,
+        "generationProviderRef": null
+      },
+      "limits": {
+        "candidateCount": 200,
+        "rerankCount": 24,
+        "newEmbeddingTextCountPerRun": 60,
+        "providerRequestsPerRun": 6,
+        "providerRequestsPerRollingDay": 12,
+        "providerConcurrency": 2,
+        "modelConcurrency": 1,
+        "generationCallsPerRollingDay": 2,
+        "generationInputTokensPerRun": 8000,
+        "generationOutputTokensPerRun": 2000,
+        "generationInputTokensPerRollingDay": 12000,
+        "generationOutputTokensPerRollingDay": 3000,
+        "embeddingTokensPerRollingDay": 50000,
+        "embeddingRequestsPerRun": 8,
+        "rerankerRequestsPerRun": 2,
+        "totalDeadlineMs": 45000,
+        "providerTimeoutMs": 12000
+      },
+      "cache": {
+        "candidateTtlHours": 24,
+        "metadataTtlHours": 168,
+        "maximumCachedCandidateSets": 8
+      }
+    },
+    "freshness": "Fresh display/candidate snapshots return without discovery, embedding or reranking. Legacy caches are stale pools.",
+    "identity": "owner + workspace + feed + policy epoch; selection changes cannot become a feed ID. Explicit exploration freezes submitted seeds.",
+    "publication": "Expected version CAS, source watermark, generation and lease fence must agree. Clear/invalidate cancels old work and waits already dispatched writes.",
+    "budgets": "Rolling 24h ledger; provider reservations count retries and citation expansion, model requests and tokens count separately. Legacy cloud reports unknown upstream usage; never claim a measured six-call upstream cap.",
+    "migration": "Preserve v1 annotations/profile/style/model references/private-text permissions. New reading/questions/generation permissions default off; future versions remain protected."
+  },
+  "plannedTests": [
+    "selection storm on cloud/direct",
+    "fresh snapshot / StrictMode / two-coordinator CAS lease",
+    "out-of-order publish / clear / revocation",
+    "three-item diversity slate / explicit exploration / pending publication",
+    "event idempotency / annotation supersession / reading clock / deletion",
+    "provider/model budgets / malformed vectors / v1 three-seed adapter",
+    "candidate/evidence allowlist for optional model output",
+    "time-frozen evaluation with human labels left pending"
+  ],
+  "qualityGate": "Model-assisted ranking remains disabled by default until authorized human-reviewed evidence and native performance are available; no synthetic fixture is relabeled as reviewed."
+}
