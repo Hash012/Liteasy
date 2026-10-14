@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
-import { createServer } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
@@ -15,24 +14,19 @@ export function verifyStartupEvidence(evidence) {
   assert.ok(evidence.nativeWindowSize?.width > 0 && evidence.nativeWindowSize?.height > 0, "Native window IPC failed");
 }
 
-async function unusedPort() {
-  const server = createServer();
-  await new Promise((accept, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", accept); });
-  const { port } = server.address();
-  await new Promise((accept) => server.close(accept));
-  return port;
-}
-
-async function verifyInstalledStartup(executable, output) {
+async function verifyInstalledStartup(executable, output, port) {
   assert.equal(process.platform, "win32", "This check must launch the actual Windows application");
+  assert.ok(Number.isInteger(port) && port > 0 && port <= 65535, "Expected the port configured by the disposable runner's WebView2 policy");
   const { chromium } = await import("@playwright/test");
   await mkdir(output, { recursive: true });
-  const port = await unusedPort();
   const endpoint = `http://127.0.0.1:${port}`;
-  // The CDP port exists only in this test process environment, never in shipping config.
+  // The PowerShell harness sets an app-specific HKLM policy on the disposable
+  // runner: WebView2 150+ ignores debug environment variables for elevated hosts.
+  const appEnvironment = { ...process.env };
+  delete appEnvironment.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS;
   const app = spawn(executable, [], {
     cwd: dirname(executable),
-    env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
+    env: { ...appEnvironment,
       WEBVIEW2_USER_DATA_FOLDER: join(dirname(executable), "smoke-webview-profile") },
     stdio: "ignore",
   });
@@ -96,7 +90,7 @@ async function verifyInstalledStartup(executable, output) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [executable, output] = process.argv.slice(2);
-  assert.ok(executable && output, "Usage: node verify-windows-startup.mjs <installed.exe> <output-directory>");
-  await verifyInstalledStartup(resolve(executable), resolve(output));
+  const [executable, output, port] = process.argv.slice(2);
+  assert.ok(executable && output && port, "Usage: node verify-windows-startup.mjs <installed.exe> <output-directory> <debug-port>");
+  await verifyInstalledStartup(resolve(executable), resolve(output), Number(port));
 }

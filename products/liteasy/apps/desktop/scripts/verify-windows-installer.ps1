@@ -27,8 +27,30 @@ try {
     $report.executableBytes = (Get-Item $installed).Length
     $report.fileVersion = (Get-Item $installed).VersionInfo.FileVersion
     if (([Version]$report.fileVersion).ToString(3) -ne $version) { throw "Installed executable has the wrong version: $($report.fileVersion)" }
-    & node scripts/verify-windows-startup.mjs $installed $output
-    if ($LASTEXITCODE -ne 0) { throw "Installed application failed the WebView2 startup check." }
+    # WebView2 150+ ignores debug environment variables on elevated CI runners.
+    # An app-specific HKLM policy still works, without changing the shipped EXE.
+    # https://github.com/MicrosoftEdge/WebView2Feedback/issues/5645
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    $listener.Start()
+    $debugPort = $listener.LocalEndpoint.Port
+    $listener.Stop()
+    $policyName = [System.IO.Path]::GetFileName($installed)
+    $policy = [Microsoft.Win32.Registry]::LocalMachine.CreateSubKey("SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments")
+    $policyCreated = $false
+    try {
+      if ($policy.GetValueNames() -contains $policyName) { throw "Refusing to overwrite an existing WebView2 policy for $policyName" }
+      $policy.SetValue($policyName, "--remote-debugging-port=$debugPort", [Microsoft.Win32.RegistryValueKind]::String)
+      $policyCreated = $true
+      & node scripts/verify-windows-startup.mjs $installed $output $debugPort
+      if ($LASTEXITCODE -ne 0) { throw "Installed application failed the WebView2 startup check." }
+    } finally {
+      if ($policyCreated) {
+        $policy.DeleteValue($policyName)
+        $report.debugPolicyRemoved = -not ($policy.GetValueNames() -contains $policyName)
+      }
+      $policy.Dispose()
+    }
+    if (-not $report.debugPolicyRemoved) { throw "Temporary WebView2 debug policy remained after verification." }
     $report.startup = Get-Content (Join-Path $output "startup.json") -Raw | ConvertFrom-Json
   } finally {
     $uninstaller = Join-Path $installDirectory "uninstall.exe"
