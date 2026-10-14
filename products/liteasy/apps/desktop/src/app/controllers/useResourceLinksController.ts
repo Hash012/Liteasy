@@ -13,6 +13,7 @@ import type { Paper } from "../features/workspace/workspace.types";
 import { subscribeObjectStorage } from "../features/objects/objectStorage";
 import { subscribeNoteFiles } from "../features/note-files/noteFileService";
 import { hashText } from "../features/context/objectContext";
+import { createPreviewResourceCache } from "../features/resource-links/previewResource";
 import { resolveReferencePdf } from "../features/resource-links/referencePdfSource";
 import { useContextPickerCatalog, type ContextPickerSources } from "./useContextPickerCatalog";
 
@@ -33,18 +34,30 @@ export function useResourceLinksController(input: { repository: ObjectRepository
   }))], [input.entries, input.suggestions, input.papers, scope]);
   const catalog = useRef(suggestions); catalog.current = suggestions;
   const picker = useContextPickerCatalog({ ...input.pickerSources, scope, entries: input.entries, suggestions });
+  const pdfBytes = useMemo(() => createPreviewResourceCache<Uint8Array>(3, 64 * 1024 * 1024, bytes => bytes.byteLength), [scope]);
   const service = useMemo(() => createResourceReferenceService({ scope, assets: input.assets,
     active: () => latest.current.repository.scopeId === scope,
-    async loadPdf(path, signal) {
+    async loadPdf(path, signal, intent, member) {
       const current = latest.current;
       if (!current.loadPdfSource) return undefined;
-      const source = await resolveReferencePdf({ path, repository: current.repository, papers: current.papers, signal });
+      const source = await resolveReferencePdf({ path, repository: current.repository, papers: current.papers, signal, intent, member });
       if (!source) return undefined;
       signal.throwIfAborted();
-      const bytes = await current.loadPdfSource(source.paper.sourcePath!);
+      const lease = pdfBytes.acquire(source.target.documentKey, async readSignal => {
+        const bytes = await current.loadPdfSource!(source.paper.sourcePath!);
+        readSignal.throwIfAborted();
+        if (/^[a-f0-9]{64}$/i.test(source.paper.contentHash ?? "")) {
+          const digest = await crypto.subtle.digest("SHA-256", bytes.slice().buffer);
+          const actual = [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, "0")).join("");
+          if (actual !== source.paper.contentHash!.toLowerCase()) throw new Error("原始 PDF 文件内容已变化，请重新导入后选择来源。");
+        }
+        return bytes;
+      }, signal);
+      let bytes: Uint8Array;
+      try { bytes = await lease.promise; } finally { lease.release(); }
       signal.throwIfAborted();
       if (latest.current.repository.scopeId !== scope) throw new Error("账号已切换，请重新选择引用。");
-      return { bytes, page: source.page, path: source.path };
+      return { bytes, page: source.page, path: source.path, documentKey: source.target.documentKey, target: source.target };
     },
     catalog: () => catalog.current.map((item) => ({ path: item.resourcePath!, title: item.label, detail: item.detail, kind: item.category })),
     subscribe(path, changed) {

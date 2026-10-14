@@ -168,7 +168,7 @@ test("PDF source previews read original bytes without parsing Markdown, includin
   const read = vi.spyOn(f.assets, "read");
   const { result } = renderHook(() => useResourceLinksController({ repository: f.repository, assets: f.assets, suggestions: [], papers: [paper], loadPdfSource, open: vi.fn() }));
   const path = liteasyPath(f.scope, { kind: "paper", paperId: paper.id });
-  expect(await result.current.service.pdf(`${path}#page=3`)).toEqual({ bytes, path, page: 3 });
+  expect(await result.current.service.pdf(`${path}#page=3`)).toEqual({ bytes, path, page: 3, documentKey: JSON.stringify([f.scope, paper.id, paper.contentHash]), target: { documentKey: JSON.stringify([f.scope, paper.id, paper.contentHash]), page: 3, precision: "page", region: undefined } });
   expect(loadPdfSource).toHaveBeenCalledWith(paper.sourcePath);
   expect(read).not.toHaveBeenCalled();
   const source = await f.repository.create({ kind: "source.document", title: paper.title, content: { schema: "liteasy.source-document/v1", payload: {
@@ -184,6 +184,7 @@ test("PDF source previews read original bytes without parsing Markdown, includin
     paperId: paper.id, documentHash: "old-hash", text: "", availability: "local", legacyKey: "stale-pdf"
   } } });
   await expect(result.current.service.pdf(liteasyPath(f.scope, { kind: "object", ref: refOf(stale) }))).rejects.toThrow("原始 PDF 已更换");
+  expect(loadPdfSource).toHaveBeenCalledOnce(); // Navigation reuses version-checked bytes.
   // A derived note must still preview its own text, not some cited ancestor's PDF.
   expect(await result.current.service.pdf(f.path)).toBeUndefined();
   await expect(result.current.service.pdf(path.replace(f.scope, "other-account"))).rejects.toThrow("账户");

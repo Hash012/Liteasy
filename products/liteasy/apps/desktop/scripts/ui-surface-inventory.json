@@ -869,7 +869,10 @@
         "DialogBody",
         "DialogContent",
         "DialogSurface",
-        "DialogTitle"
+        "DialogTitle",
+        "Popover",
+        "PopoverSurface",
+        "PopoverTrigger"
       ],
       "styles": [
         "./contextAssetBrowser.css"
@@ -1132,6 +1135,62 @@
         "infoPopover": false,
         "filterPopover": false,
         "optionPicker": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
+      "path": "src/app/features/context-picker/PickerAssetRow.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "symbols": [
+        "PickerAssetRow"
+      ],
+      "interactions": [
+        "Menu",
+        "MenuItem",
+        "MenuList",
+        "MenuPopover",
+        "MenuTrigger"
+      ],
+      "styles": [],
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
+        "commandMenu": true,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
+      "path": "src/app/features/context-picker/PickerImagePreview.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "symbols": [
+        "PickerImagePreview"
+      ],
+      "interactions": [],
+      "styles": [],
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5070,6 +5129,7 @@
       "owner": "M4 surface owner / shared UI review",
       "symbols": [
         "ResourceReferenceView",
+        "ResourceReferenceContent",
         "sourceLocator",
         "ResourceLink",
         "ResourceEmbed"
@@ -5082,7 +5142,7 @@
       "styles": [
         "./resourceReferences.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
         "semanticSection": false,

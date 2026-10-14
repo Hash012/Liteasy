@@ -13,13 +13,11 @@
 .reference-content-picker [role=alert] { font-size: var(--fontSizeBase200, 12px); color: var(--colorStatusDangerForeground1); }
 .resource-reference-link { color: var(--colorBrandForegroundLink); cursor: pointer; text-decoration: none; font-weight: 600; }
 .resource-reference-link:hover { text-decoration: underline; }
-.resource-reference-popover { width: min(480px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 12px; border-radius: 8px; }
+.resource-reference-popover { box-sizing: border-box; width: min(480px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 12px; border-radius: 8px; }
 .resource-reference-view, .resource-embed { display: block; min-width: 0; }
 .resource-reference-view.is-embed { border: 1px solid var(--colorNeutralStroke2); border-radius: 8px; padding: 12px; margin-block: 8px; max-height: 480px; overflow: auto; }
 .resource-reference-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 8px; color: var(--colorNeutralForeground2); font-size: var(--fontSizeBase300, 14px); }
 .reference-close { float: right; }
-.context-asset-workspace:has(.reference-content-picker) { grid-template-columns: 150px minmax(190px, 1fr) minmax(320px, 1.4fr); }
-@media (max-width: 850px) { .context-asset-workspace:has(.reference-content-picker) { grid-template-columns: minmax(0, 1fr); overflow: auto; } .context-asset-workspace:has(.reference-content-picker) > nav { display: none; } .context-asset-workspace:has(.reference-content-picker) > aside { grid-column: 1; max-height: none; } }
 .wiki-link-editor { width: min(560px, calc(100vw - 32px)); max-height: min(620px, 70vh); overflow: auto; border-radius: 8px; padding: 10px; }
 .wiki-link-field { display: flex; align-items: center; gap: 5px; position: sticky; top: -10px; background: var(--colorNeutralBackground1); z-index: 1; padding-block: 6px; }
 .wiki-link-field > span:not(.fui-Input) { color: var(--colorNeutralForeground3); }
@@ -33,3 +31,8 @@
 
 .resource-reference-heading strong { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
 .resource-reference-heading > .fui-Tooltip, .resource-reference-heading > button { flex-shrink: 0; }
+.reference-preview-actions { display: flex; justify-content: flex-end; gap: 4px; }
+.resource-reference-popover.is-picker-preview { width: min(760px, calc(100vw - 48px)); max-height: min(820px, calc(100dvh - 96px)); }
+.resource-reference-popover.is-picker-preview .source-pdf-stage { height: min(580px, calc(100dvh - 280px)); }
+.resource-reference-popover.is-expanded { position: fixed; inset: 24px !important; width: calc(100vw - 48px); height: calc(100dvh - 48px); max-height: none; transform: none !important; }
+.resource-reference-popover.is-expanded .source-pdf-stage { height: calc(100dvh - 230px); }

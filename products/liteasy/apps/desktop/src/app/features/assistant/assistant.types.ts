@@ -101,6 +101,10 @@ export type AssistantContextToken = {
 };
 
 export type AssistantComposerSuggestion = {
+  /** Version of this resource, independent of catalog updates and loader identity. */
+  resourceRevision?: string;
+  /** Structured location of this exact project member; never inferred from its title. */
+  sourceMember?: import("../resource-links/referencePdfSource").PdfSourceMember;
   researchSkill?: import("../research-skills/researchDocument").ResearchSkillRef;
   scopeId?: string;
   domain?: "research" | "application";

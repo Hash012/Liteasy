@@ -13,11 +13,11 @@ test("S2 default list keeps details lazy and selects only filtered paper results
   await expect(page.getByRole("button", { name: "列表", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("textbox", { name: "搜索全部上下文资产" }).fill("kind:paper");
   await page.getByRole("checkbox", { name: "全选筛选结果", exact: true }).check();
-  await expect(page.getByText("已选 3 项", { exact: true })).toBeVisible();
+  await expect(page.getByText("待加入 3 项", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "添加所选（3）", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "添加所选（3）", exact: true }).click();
   await expect(page.getByRole("status")).toHaveText("已添加 3 项上下文。");
-  await expect(page.getByText("已选 0 项", { exact: true })).toBeVisible();
+  await expect(page.getByText("待加入 0 项", { exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath("S2-context-papers.png"), fullPage: true, animations: "disabled" });
 });
 test("S3 gallery decodes real images and preserves aspect ratios", async ({ page }, info) => {

@@ -2,14 +2,14 @@ import type { AssistantComposerSuggestion } from "./assistant.types";
 import { compileSearchQuery, normalizeSearchValue, searchFormat } from "../search/searchQuery";
 import { assistantSuggestionMetadata, createAssistantSuggestionIndex } from "./assistantSuggestionIndex";
 
-import { contextKind, contextKindLabels, contextDomain } from "./contextAssetMetadata";
+import { contextKind, contextKindLabels, contextDomain, contextUiKind, normalizeUiKind } from "./contextAssetMetadata";
 export { contextKind, contextKindLabels, contextDomain } from "./contextAssetMetadata";
 
 export const canSelectContextAsset = (asset: AssistantComposerSuggestion) => !asset.unavailableReason && Boolean(asset.token || asset.resolveToken);
-export type ContextCatalogQuery = { query?: string; domain?: "research" | "application"; projects?: readonly string[]; kinds?: readonly string[]; groupBy?: "none" | "project" | "kind"; sort?: "title" | "updated" };
+export type ContextCatalogQuery = { query?: string; activeKind?: string; domain?: "research" | "application"; projects?: readonly string[]; kinds?: readonly string[]; groupBy?: "none" | "project" | "kind"; sort?: "title" | "updated" };
 
 const indexes = new WeakMap<readonly AssistantComposerSuggestion[], ReturnType<typeof createAssistantSuggestionIndex>>();
-const collator = new Intl.Collator("zh-CN");
+const collator = new Intl.Collator("zh-CN", { numeric: true });
 
 /** One metadata-only snapshot drives totals, facet counts, groups and cross-page selection. */
 export function queryContextCatalog(catalog: readonly AssistantComposerSuggestion[], options: ContextCatalogQuery) {
@@ -18,7 +18,8 @@ export function queryContextCatalog(catalog: readonly AssistantComposerSuggestio
   const textMatches = index.search("@", options.query ?? "", Infinity, { includePages: true });
   const inDomain = textMatches.filter((asset) => contextDomain(asset) === (options.domain ?? "research"));
   const matchesProject = (asset: AssistantComposerSuggestion) => !options.projects?.length || options.projects.includes(asset.projectId ?? "");
-  const matchesKind = (asset: AssistantComposerSuggestion) => !options.kinds?.length || options.kinds.includes(contextKind(asset));
+  const activeKind = normalizeUiKind(options.activeKind ?? (options.kinds?.length === 1 ? options.kinds[0] : "all"));
+  const matchesKind = (asset: AssistantComposerSuggestion) => activeKind === "all" || contextUiKind(asset) === activeKind;
   const projectCounts = new Map<string, number>(), kindCounts = new Map<string, number>();
   const projectSeen = new Set<string>();
   for (const asset of inDomain) {
@@ -43,7 +44,7 @@ export function queryContextCatalog(catalog: readonly AssistantComposerSuggestio
     }
     return [field, counts];
   })) as Record<"tag" | "format" | "type" | "kind" | "origin", Map<string, number>>;
-  for (const [kind, count] of facetCounts.kind) kindCounts.set(kind, count);
+  for (const [kind, count] of facetCounts.kind) { const uiKind = normalizeUiKind(kind); if (uiKind !== "all") kindCounts.set(uiKind, (kindCounts.get(uiKind) ?? 0) + count); }
   const matchingMemberships = inDomain.filter((asset) => matchesProject(asset) && matchesKind(asset));
   const matches = [...new Map(matchingMemberships.map((asset) => [asset.resourcePath ?? asset.id, asset])).values()].sort((a, b) =>
     (options.sort === "updated" ? (Date.parse(b.updatedAt ?? "") || 0) - (Date.parse(a.updatedAt ?? "") || 0) : 0) || collator.compare(a.label, b.label) || a.id.localeCompare(b.id));

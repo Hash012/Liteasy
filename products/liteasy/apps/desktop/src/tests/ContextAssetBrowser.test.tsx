@@ -28,7 +28,7 @@ describe("ContextAssetBrowser", () => {
     await user.click(screen.getByRole("checkbox", { name: "选择 注意力论文原文" }));
     await user.click(within(filters).getByRole("button", { name: /视觉研究/ }));
     await user.click(screen.getByRole("checkbox", { name: "选择 实验记录" }));
-    expect(screen.getByText("已选 2 项")).toBeInTheDocument();
+    expect(screen.getByText("待加入 2 项")).toBeInTheDocument();
     const addButton = screen.getByRole("button", { name: "添加所选（2）" });
     await user.click(addButton);
     expect(addButton).toBeDisabled();
@@ -108,7 +108,7 @@ describe("ContextAssetBrowser", () => {
     rerender(<ContextAssetBrowser suggestions={[]} onClose={vi.fn()} onAddContextToken={add} />);
     await act(async () => { complete(token("source")); });
     expect(add).not.toHaveBeenCalled();
-    expect(screen.getByText("已选 1 项")).toBeInTheDocument();
+    expect(screen.getByText("待加入 1 项")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("资产或当前会话已变化");
   });
 
@@ -162,7 +162,7 @@ it("opens with a compact list and no empty details pane, and selects all filtere
   expect(screen.queryByRole("complementary", { name: "资产预览" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "列表" })).toHaveAttribute("aria-pressed", "true");
   await userEvent.click(screen.getByRole("checkbox", { name: "全选筛选结果" }));
-  expect(screen.getByText("已选 75 项")).toBeInTheDocument();
+  expect(screen.getByText("待加入 75 项")).toBeInTheDocument();
   expect(read).not.toHaveBeenCalled();
 });
 
@@ -173,7 +173,9 @@ it("keeps unavailable selected items reviewable outside the current query", asyn
   await user.type(screen.getByRole("textbox", { name: "搜索全部上下文资产" }), "没有匹配");
   rerender(<ContextAssetBrowser suggestions={assets.map((asset) => asset.id === assets[1].id ? { ...asset, unavailableReason: "来源已断开" } : asset)} onClose={vi.fn()} onAddContextToken={vi.fn()} />);
   await user.click(screen.getByRole("checkbox", { name: "只看已选" }));
-  expect(screen.getByRole("checkbox", { name: "选择 实验记录" })).toBeChecked();
+  expect(screen.queryByRole("checkbox", { name: "选择 实验记录" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "查看待选" }));
+  expect(within(screen.getByLabelText("全部待选资产")).getByRole("checkbox", { name: "实验记录" })).toBeChecked();
   expect(screen.getAllByText("来源已断开").length).toBeGreaterThan(0);
 });
 
@@ -186,7 +188,7 @@ it("resolves aliases before merging and keeps different fixed versions", async (
   await user.click(screen.getByRole("button", { name: "添加所选（3）" }));
   await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("已添加 2 项上下文"));
   expect(add.mock.calls.map(([value]) => value.contextRefs)).toEqual([[{ objectId: "canonical", revision: "r1" }], [{ objectId: "canonical", revision: "r2" }]]);
-  expect(screen.getByText("已选 0 项")).toBeInTheDocument();
+  expect(screen.getByText("待加入 0 项")).toBeInTheDocument();
 });
 
 it("group select includes matching leaves only, leaving hidden members untouched", async () => {
@@ -196,7 +198,7 @@ it("group select includes matching leaves only, leaving hidden members untouched
   await user.click(screen.getByRole("combobox", { name: "资料分组" }));
   await user.click(screen.getByRole("option", { name: "按项目" }));
   await user.click(screen.getByRole("checkbox", { name: "全选 注意力研究 的筛选结果" }));
-  expect(screen.getByText("已选 1 项")).toBeInTheDocument();
+  expect(screen.getByText("待加入 1 项")).toBeInTheDocument();
   await user.clear(screen.getByRole("textbox", { name: "搜索全部上下文资产" }));
   expect(screen.getByRole("checkbox", { name: "选择 实验记录" })).not.toBeChecked();
 });
@@ -209,7 +211,7 @@ it("extends a Shift selection through the current sorted visible rows", async ()
   await user.click(screen.getByRole("checkbox", { name: "选择 C", exact: true }));
   await user.keyboard("{/Shift}");
   expect(screen.getByRole("checkbox", { name: "选择 B", exact: true })).toBeChecked();
-  expect(screen.getByText("已选 3 项")).toBeInTheDocument();
+  expect(screen.getByText("待加入 3 项")).toBeInTheDocument();
 });
 
 it("restores query, grouping and sort within an account without carrying them to another account", async () => {

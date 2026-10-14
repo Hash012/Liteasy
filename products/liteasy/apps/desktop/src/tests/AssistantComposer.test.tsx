@@ -202,7 +202,7 @@ test("closes the browser and ignores pending additions when the context scope ch
   expect(screen.queryByRole("dialog", { name: "上下文资产浏览器" })).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "添加上下文" }));
   expect(add).not.toHaveBeenCalled();
-  expect(screen.getByText("已选 0 项")).toBeInTheDocument();
+  expect(screen.getByText("待加入 0 项")).toBeInTheDocument();
 });
 
 test("keeps thinking depth collapsed until clicked and supports keyboard adjustment and dismissal", async () => {

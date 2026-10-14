@@ -5,6 +5,7 @@ import { ContextAssetBrowser } from "../../../app/features/assistant/ContextAsse
 import { contextPickerFixture } from "../../contextPickerFixture";
 import type { AssistantContextToken } from "../../../app/features/assistant/assistant.types";
 const fixture = contextPickerFixture(150);
+Object.assign(window, { pickerSource: fixture.source });
 function Fixture() {
   const restore = useRestoreFocusTarget();
   const [open, setOpen] = useState(false), [tokens, setTokens] = useState<AssistantContextToken[]>([]);

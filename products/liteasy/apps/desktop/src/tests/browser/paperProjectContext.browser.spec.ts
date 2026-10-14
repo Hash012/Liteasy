@@ -59,7 +59,7 @@ test("discovers a paper project, creates a note and combines source and derived 
   await page.screenshot({ path: testInfo.outputPath("image-context-preview.png"), fullPage: true, animations: "disabled" });
   await filters.getByRole("button", { name: /笔记\s*\d+/ }).click();
   await browser.getByRole("checkbox", { name: "选择 项目笔记", exact: true }).check();
-  await expect(browser.getByText("已选 2 项", { exact: true })).toBeVisible();
+  await expect(browser.getByText("待加入 2 项", { exact: true })).toBeVisible();
   await filters.getByRole("button", { name: "全部类别", exact: false }).click();
   await page.screenshot({ path: testInfo.outputPath("project-context-browser.png"), fullPage: true, animations: "disabled" });
   if (process.env.LITEASY_PROJECT_CONTEXT_SCREENSHOT) {
@@ -78,7 +78,7 @@ test("discovers a paper project, creates a note and combines source and derived 
   await page.getByRole("button", { name: "预览当前候选", exact: true }).click();
   await expect(preview.locator(".context-asset-preview-text")).toContainText("界面字号：14");
   await expect(preview.locator(".context-asset-preview-text")).toContainText("生效时间：即时");
-  await expect(browser.getByText("已选 0 项", { exact: true })).toBeVisible();
+  await expect(browser.getByText("待加入 0 项", { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("setting-context-preview.png"), fullPage: true, animations: "disabled" });
   await browser.getByRole("button", { name: "返回对话", exact: true }).last().click();
   await expect(draft).toHaveValue("请解释 ");

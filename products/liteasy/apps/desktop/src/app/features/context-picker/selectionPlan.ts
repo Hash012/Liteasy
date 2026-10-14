@@ -10,7 +10,7 @@ export function selectionMembers(draft: SelectionDraft): PlannedMember[] {
   const members = new Map<string, PlannedMember>();
   for (const intent of draft.intents) {
     const excluded = new Set(intent.exclusions);
-    for (const member of intent.members) if (!excluded.has(member.id)) members.set(member.id, member);
+    for (const member of intent.members) if (!excluded.has(member.id)) members.set(JSON.stringify([member.path ?? member.id, member.revision ?? member.watermark, member.representation]), member);
   }
   return [...members.values()];
 }

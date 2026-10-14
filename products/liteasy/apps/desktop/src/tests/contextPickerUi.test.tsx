@@ -7,8 +7,8 @@ import { ContextAssetBrowser } from "../app/features/assistant/ContextAssetBrows
 import { contextPickerFixture } from "./contextPickerFixture";
 import { browserStateKey, readBrowserState, writePickerRecord } from "../app/features/context-picker/pickerState";
 beforeEach(() => localStorage.clear());
-function startImages(f: ReturnType<typeof contextPickerFixture>) {
-  const key = browserStateKey(f.source.scope, "library", "context"), state = readBrowserState(key, f.source.scope);
+function startImages(f: ReturnType<typeof contextPickerFixture>, draft = "draft") {
+  const key = browserStateKey(f.source.scope, "library", "context", draft), state = readBrowserState(key, f.source.scope);
   state.route = f.imageRoute; state.history = [["collections"], f.imageRoute]; state.historyIndex = 1; writePickerRecord(key, state);
 }
 test("NAV-01/ADD-01/02/BULK-01: navigate without adding, cross-page add receives 75 acknowledgments and stays open", async () => {
@@ -26,7 +26,7 @@ test("NAV-01/ADD-01/02/BULK-01: navigate without adding, cross-page add receives
   expect(close).not.toHaveBeenCalled(); expect(read).not.toHaveBeenCalled();
 });
 test("ADD-04/SCOPE-01/QUERY-02: closing retains draft selections outside filters; another draft starts empty", async () => {
-  const f = contextPickerFixture(12); startImages(f); const add = vi.fn();
+  const f = contextPickerFixture(12); startImages(f, "A"); const add = vi.fn();
   const props = { catalogPort: f.catalog, suggestions: f.assets, onClose: vi.fn(), onAddContextToken: add };
   const first = render(<ContextAssetBrowser {...props} targetDraftId="A" />);
   const user = userEvent.setup();
@@ -35,10 +35,12 @@ test("ADD-04/SCOPE-01/QUERY-02: closing retains draft selections outside filters
   await user.click(screen.getAllByRole("button", { name: "返回对话" }).at(-1)!);
   first.unmount(); expect(add).not.toHaveBeenCalled();
   const second = render(<ContextAssetBrowser {...props} targetDraftId="B" />);
-  expect(screen.getByText("已选 0 项")).toBeInTheDocument(); second.unmount();
+  expect(screen.getByText("待加入 0 项")).toBeInTheDocument(); second.unmount();
   render(<ContextAssetBrowser {...props} targetDraftId="A" />);
-  expect(screen.getByText("已选 1 项")).toBeInTheDocument();
+  expect(screen.getByText("待加入 1 项")).toBeInTheDocument();
   await user.click(screen.getByRole("checkbox", { name: "只看已选" }));
+  expect(screen.queryByRole("checkbox", { name: "选择 图 000", exact: true })).not.toBeInTheDocument();
+  await user.clear(screen.getByRole("textbox", { name: "搜索当前范围" }));
   expect(screen.getByRole("checkbox", { name: "选择 图 000", exact: true })).toBeChecked();
 });
 test("BULK-02/03: explicit whole group includes hidden members then actual add excludes one image", async () => {
@@ -47,11 +49,11 @@ test("BULK-02/03: explicit whole group includes hidden members then actual add e
   const user = userEvent.setup();
   await user.type(screen.getByRole("textbox", { name: "搜索当前范围" }), "tag:keep");
   await user.click(screen.getByRole("checkbox", { name: "全选筛选结果", exact: true }));
-  expect(screen.getByText("已选 2 项")).toBeInTheDocument();
+  expect(screen.getByText("待加入 2 项")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "选择本层全部（12 项内容）" }));
   expect(screen.getByRole("status")).toHaveTextContent("隐藏");
   await user.click(screen.getByRole("button", { name: "确认选择全部" }));
-  expect(screen.getByText("已选 12 项")).toBeInTheDocument();
+  expect(screen.getByText("待加入 12 项")).toBeInTheDocument();
   await user.clear(screen.getByRole("textbox", { name: "搜索当前范围" }));
   await user.click(screen.getByRole("checkbox", { name: "选择 图 004", exact: true }));
   await user.click(screen.getByRole("button", { name: "添加所选（11）" }));
@@ -59,17 +61,17 @@ test("BULK-02/03: explicit whole group includes hidden members then actual add e
   expect(add.mock.calls.some(([token]) => token.contextRefs.some((ref: any) => ref.objectId === "image-4"))).toBe(false);
 });
 test("A11Y-01: arrows move focus, Space selects, Enter previews and Escape first closes preview", async () => {
-  const f = contextPickerFixture(3); startImages(f);
+  const f = contextPickerFixture(3); startImages(f, "main");
   render(<ContextAssetBrowser catalogPort={f.catalog} suggestions={f.assets} onClose={vi.fn()} onAddContextToken={vi.fn()} />);
   const first = screen.getByRole("button", { name: "预览 图 000" }); act(() => first.focus());
   const user = userEvent.setup(); await user.keyboard("{ArrowDown}");
   expect(screen.getByRole("button", { name: "预览 图 001" })).toHaveFocus();
-  expect(screen.getByText("已选 0 项")).toBeInTheDocument();
+  expect(screen.getByText("待加入 0 项")).toBeInTheDocument();
   await user.keyboard(" "); expect(screen.getByRole("checkbox", { name: "选择 图 001" })).toBeChecked();
   await user.keyboard("{Enter}"); expect(screen.getByRole("complementary", { name: "资产预览" })).toBeInTheDocument();
   await user.keyboard("{Escape}"); expect(screen.queryByRole("complementary", { name: "资产预览" })).not.toBeInTheDocument();
   const search = screen.getByRole("textbox", { name: "搜索当前范围" }); await user.click(search); await user.type(search, "图"); await user.keyboard("{Control>}a{/Control}");
-  expect(screen.getByText("已选 1 项")).toBeInTheDocument();
+  expect(screen.getByText("待加入 1 项")).toBeInTheDocument();
 });
 
 
@@ -82,8 +84,8 @@ test("REC-02: local recommendations keep their positions when attached; reopenin
   }
   render(<Harness />); const user = userEvent.setup();
   await user.click(screen.getByRole("button", { name: "推荐", exact: true }));
-  const names = () => within(screen.getByRole("region", { name: "可添加资产" })).getAllByRole("button", { name: /^预览 / }).map(button => button.getAttribute("aria-label"));
-  const initial = names(); expect(initial).toHaveLength(6);
+  const names = () => within(screen.getByRole("region", { name: "可添加资产" })).getAllByRole("button", { name: /^进入 / }).map(button => button.getAttribute("aria-label"));
+  const initial = names(); expect(initial).toHaveLength(1);
   await user.click(screen.getByRole("checkbox", { name: `选择 ${initial[0]!.slice(3)}`, exact: true }));
   await user.click(screen.getByRole("button", { name: "添加所选（1）" }));
   await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("已添加 1 项"));

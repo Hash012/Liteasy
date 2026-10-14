@@ -6,8 +6,10 @@ test.beforeEach(async ({ page }) => {
   for (const name of ["A", "论文 P", "提取资产", "图片"]) await page.getByRole("button", { name: `进入 ${name}`, exact: true }).click();
 });
 test("STATE-01: reopen restores route, page, preview, selection, focused row and scroll anchor", async ({ page }, info) => {
-  await page.getByRole("button", { name: /^显示更多/ }).click(); await page.getByRole("button", { name: /^显示更多/ }).click();
-  await expect(page.locator(".context-asset-card")).toHaveCount(30);
+  await page.getByRole("button", { name: /^加载下一批/ }).click(); await page.getByRole("button", { name: /^加载下一批/ }).click();
+  await expect(page.locator(".context-asset-grid")).toHaveAttribute("data-loaded-count", "150");
+  expect(await page.locator(".context-asset-card").count()).toBeLessThan(60);
+  await page.getByRole("region", { name: "可添加资产" }).evaluate(element => { element.scrollTop = 125 * 64; });
   await page.getByRole("button", { name: "预览 图 125", exact: true }).click();
   await page.getByRole("checkbox", { name: "选择 图 125", exact: true }).check();
   await page.getByRole("button", { name: "预览 图 125", exact: true }).focus();
@@ -30,15 +32,15 @@ test("A11Y-01: arrows, Space and Enter remain separate; Ctrl+A in search does no
   await page.keyboard.press("Escape"); await expect(page.getByRole("complementary", { name: "资产预览" })).toHaveCount(0);
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("textbox", { name: "搜索当前范围" }).fill("图"); await page.keyboard.press("Control+a");
-  await expect(page.getByText("已选 1 项", { exact: true })).toBeVisible();
+  await expect(page.getByText("待加入 1 项", { exact: true })).toBeVisible();
 });
 test("BULK-02: filtered versus whole selection and narrower layout remain explicit", async ({ page }, info) => {
   await page.getByRole("textbox", { name: "搜索当前范围" }).fill("tag:keep");
   await page.getByRole("checkbox", { name: "全选筛选结果", exact: true }).check();
-  await expect(page.getByText("已选 15 项", { exact: true })).toBeVisible();
+  await expect(page.getByText("待加入 15 项", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "选择本层全部（150 项内容）" }).click();
   await page.getByRole("button", { name: "确认选择全部" }).click();
-  await expect(page.getByText("已选 150 项", { exact: true })).toBeVisible();
+  await expect(page.getByText("待加入 150 项", { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 900, height: 900 });
   await page.screenshot({ path: info.outputPath("filtered-whole-selection.png"), fullPage: true });
 });

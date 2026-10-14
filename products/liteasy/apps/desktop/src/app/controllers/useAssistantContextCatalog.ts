@@ -197,7 +197,8 @@ export function useAssistantContextCatalog(input: {
       ...objects.filter((object) => object.scopeId === scopeId && !projectObjectIds.has(object.objectId)).map((object) => ({
         id: `saved-${object.objectId}`, trigger: "@" as const, label: object.title,
         resourcePath: liteasyPath(scopeId, { kind: "object", ref: refOf(object), followLatest: true }),
-        category: object.kind === "source.document" ? "阅读文件" : object.kind === "workspace.board" ? "白板" : object.kind === "content.fragment" ? "摘录" : object.kind === "artifact.document" ? "产物" : object.kind === "conversation.message" ? "对话" : "笔记",
+        resourceRevision: object.revision,
+        category: object.kind === "source.document" ? object.assets.some(asset => asset.mediaType.startsWith("image/")) ? "图片" : object.paperAnchors?.length || object.content.payload.pages?.length === 1 ? "原文" : "阅读文件" : object.kind === "workspace.board" ? "白板" : object.kind === "content.fragment" ? "摘录" : object.kind === "artifact.document" ? "产物" : object.kind === "conversation.message" ? "对话" : "笔记",
         readOnly: object.kind !== "content.note" && object.kind !== "workspace.board",
         loadPreview: async () => {
           assertCurrentScope();
@@ -246,8 +247,9 @@ export function useAssistantContextCatalog(input: {
             return { id: `project-${project.projectId}`, kind: "object", label: project.title,
               detail: `${fixed.length} 项资产 · 已固定本次成员与版本`, prompt: "", contextRefs: refs };
           },
-        }, ...assets.map((asset) => ({ ...common, id: `project-asset-${project.projectId}-${asset.assetId}`,
+        }, ...assets.map((asset) => ({ ...common, resourceRevision: asset.ref ? asset.role === "derived" ? objectById.get(asset.ref.objectId)?.revision ?? asset.ref.revision : asset.ref.revision : undefined, id: `project-asset-${project.projectId}-${asset.assetId}`,
           resourcePath: asset.ref ? liteasyPath(scopeId, { kind: "object", ref: asset.ref, followLatest: asset.role === "derived" }) : asset.artifactId ? liteasyPath(scopeId, { kind: "artifact", artifactId: asset.artifactId }) : undefined,
+          sourceMember: asset.ref && asset.role === "source" && asset.page ? { scopeId, resourcePath: liteasyPath(scopeId, { kind: "object", ref: asset.ref }), paperId: project.paperId, page: asset.page } : undefined,
           searchMetadata: { kind: asset.kind, origin: asset.role === "source" ? "import" : "unknown" },
           label: asset.title, category: ({ text: "原文", image: "图片", note: "笔记", board: "白板", artifact: "产物", excerpt: "摘录" })[asset.kind],
           readOnly: asset.role === "source" || (asset.kind !== "note" && asset.kind !== "board"), detail: `${project.title}${asset.page ? ` · 第 ${asset.page} 页` : ""}`,
@@ -301,6 +303,7 @@ export function useAssistantContextCatalog(input: {
       ...annotations.map((note) => {
         const project = projects.find((entry) => entry.project.paperId === note.paper?.id)?.project;
         return { id: `annotation-${note.key}`, trigger: "@" as const, label: note.title, category: "批注",
+          sourceMember: note.paper && note.annotation?.page ? { scopeId, resourcePath: liteasyPath(scopeId, note.target), paperId: note.paper.id, page: note.annotation.page } : undefined,
           projectId: project?.projectId, projectTitle: project?.title, detail: note.source, resourcePath: liteasyPath(scopeId, note.target),
           searchMetadata: { ...noteSearchMetadata(note), kind: "annotation", origin: note.labels?.includes("personal") ? "user" : "unknown" },
           loadPreview: async () => {

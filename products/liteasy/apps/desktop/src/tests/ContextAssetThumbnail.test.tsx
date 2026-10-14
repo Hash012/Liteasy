@@ -26,6 +26,16 @@ it("defers offscreen thumbnails until they enter the viewport", async () => {
   act(() => intersect([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver));
   expect(await screen.findByRole("img")).toBeInTheDocument();
 });
+it("keeps a decoded thumbnail when an equivalent resource gets a new loader", async () => {
+  raster();
+  const read = vi.fn(async () => image);
+  const current = () => ({ ...asset, scopeId: "stable-loader", updatedAt: "v1", loadThumbnail: () => read() });
+  const view = render(<ContextAssetThumbnail asset={current()} />);
+  await screen.findByRole("img");
+  for (let i = 0; i < 5; i++) { view.rerender(<ContextAssetThumbnail asset={current()} />); await act(async () => {}); }
+  expect(read).toHaveBeenCalledOnce();
+  expect(screen.getByRole("img")).toBeVisible();
+});
 it("bounds parallel image reads and discards replies after a catalog changes", async () => {
   raster(); const finish: Array<(value: typeof image) => void> = [];
   const load = vi.fn(() => new Promise<typeof image>((resolve) => finish.push(resolve)));

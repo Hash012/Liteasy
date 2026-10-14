@@ -1,6 +1,11 @@
 .source-pdf-preview { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: var(--fontSizeBase200, 12px); }
-.source-pdf-toolbar { display: flex; align-items: center; justify-content: center; gap: 8px; font-variant-numeric: tabular-nums; }
+.source-pdf-toolbar { display: flex; align-items: center; justify-content: center; gap: 4px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
 .source-pdf-stage { height: min(420px, 42vh); min-height: 120px; overflow: auto; background: var(--colorNeutralBackground3); border: 1px solid var(--colorNeutralStroke2); border-radius: 4px; padding: 8px; }
 .source-pdf-page { position: relative; width: fit-content; margin: 0 auto; background: var(--colorNeutralForegroundStaticInverted); }
 .source-pdf-page canvas { display: block; }
 .source-pdf-preview [role="alert"] { color: var(--colorStatusDangerForeground1); }
+
+.source-pdf-toolbar .fui-Input { width: 64px; }
+.source-pdf-status { min-height: 20px; }
+.source-pdf-stage { scrollbar-gutter: stable; overflow-anchor: none; }
+.source-pdf-region { position: absolute; pointer-events: none; background: color-mix(in srgb, var(--colorPaletteYellowBackground3) 28%, transparent); outline: 2px solid var(--colorPaletteYellowBorderActive); }
