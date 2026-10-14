@@ -73,5 +73,13 @@
     "artifact": "Liteasy_0.1.51_x64-setup.exe",
     "sha256": "a41507d93972224231e3f96f3b87a661f184aabe98e75d57cb869b2ee1f83860",
     "includesResearchSkills": false
+  },
+  "uiContracts": {
+    "status": "passed",
+    "uiTests": 207,
+    "contextTests": 148,
+    "workflowScriptTests": 93,
+    "workflowLint": "passed",
+    "controls": "Shared Fluent disclosure and action button; obsolete native-button exception removed; inventory generated with research owner"
   }
 }

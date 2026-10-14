@@ -242,16 +242,6 @@
       "reviewBy": "QAU-10"
     },
     {
-      "file": "src/app/features/assistant/AssistantComposer.tsx",
-      "rule": "native-interaction",
-      "detail": "<button aria-label={editing ? \"更新并发送\" : \"发送\"} className=\"assistant-send assistant-icon-button\" disabled={contextLoading} onClick={onSend} title={editing ? \"更新并发送\" : \"发送\"} type=\"button\" >",
-      "count": 1,
-      "surface": "features/assistant/AssistantComposer.tsx",
-      "owner": "Assistant UI (M3)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
-      "reviewBy": "QAU-10"
-    },
-    {
       "file": "src/app/features/assistant/AssistantContextPanel.tsx",
       "rule": "native-interaction",
       "detail": "<button aria-expanded={expanded} className=\"assistant-context-toggle\" onClick={() => setExpanded((current) => !current)} type=\"button\" >",

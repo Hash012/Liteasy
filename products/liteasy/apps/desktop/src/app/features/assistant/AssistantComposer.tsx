@@ -415,16 +415,14 @@ export function AssistantComposer({
           </button>
         </Tooltip>
         <Tooltip content={researchSelected ? "生成并保存" : editing ? "更新并发送" : "发送消息"} positioning="above" relationship="description">
-          <button
+          <Button appearance="primary" size="small" icon={<SendRegular />}
             aria-label={researchSelected ? "生成并保存" : editing ? "更新并发送" : "发送"}
             className="assistant-send assistant-icon-button"
             disabled={contextLoading}
             onClick={onSend}
             title={researchSelected ? "生成并保存" : editing ? "更新并发送" : "发送"}
             type="button"
-          >
-            <SendRegular />
-          </button>
+          />
         </Tooltip>
       </div>
       {browserQuery !== null ? <ContextAssetBrowser key={contextScopeId} suggestions={suggestions} contextTokens={contextTokens} initialPreviewId={browserPreviewId}

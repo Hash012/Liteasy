@@ -1,3 +1,4 @@
+import { DisclosureSection } from "../../shared/ui/productPrimitives";
 import "./researchSkills.css";
 import { Button, Dropdown, Option, Popover, PopoverTrigger, PopoverSurface, Tooltip } from "@fluentui/react-components";
 import { DismissRegular } from "@fluentui/react-icons";
@@ -19,12 +20,12 @@ export function ResearchSkillSelectionView({ selection, destinations, sources, o
       onOptionSelect={(_, data) => onChange({ ...selection, destination: destinations.find(destination => destination.canonicalEntryId === data.optionValue) })}>
       {destinations.map(destination => <Option key={destination.canonicalEntryId} value={destination.canonicalEntryId}>{destination.title}</Option>)}
     </Dropdown></label>
-    <details><summary>资料用途与读取范围 · {sources.length} 项</summary>
+    <DisclosureSection title={`资料用途与读取范围 · ${sources.length} 项`}>
       {!sources.length ? <p>请通过 @ 选择需要读取的原文、摘录或笔记。仅选择论文条目时会读取元数据。</p> : null}
       {sources.map((source, index) => <label key={index}>{source.label}<Dropdown aria-label={`资料用途：${source.label}`} value={skill?.adapter?.inputs.roles.find(role => role.id === selection.roles[JSON.stringify(source.refs[0])])?.label ?? skill?.adapter?.inputs.roles[0].label}
         onOptionSelect={(_, data) => onChange({ ...selection, roles: { ...selection.roles, ...Object.fromEntries(source.refs.map(ref => [JSON.stringify(ref), data.optionValue!])) } })}>
         {skill?.adapter?.inputs.roles.map(role => <Option key={role.id} value={role.id}>{role.label}</Option>)}
       </Dropdown><small>{source.detail || "读取所选对象的完整文本；没有自动读取整篇论文。"}</small></label>)}
-    </details>
+    </DisclosureSection>
   </section>;
 }

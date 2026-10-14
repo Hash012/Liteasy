@@ -10,7 +10,7 @@ function batch(file) {
   if (/\/layout\/|\/dock\/|\/workspace\//.test(file)) return "M2";
   if (/\/assistant\/|\/agent-work\/|\/ai-workbench\//.test(file)) return "M3";
   if (/\/library\/|\/reading-library\/|\/notes\/|\/note-files\/|\/resource-|\/import\/|\/recommendations\//.test(file)) return "M4";
-  if (/\/boards\/|\/thin-reading\/|\/paper-reading\/|\/artifacts\/|\/evidence\/|\/research-loop\/|\/document-export\/|\/visual|\/mermaid\/|\/citation-graph\/|\/intuition-graph\/|\/layered-reading\//.test(file)) return "M5";
+  if (/\/boards\/|\/thin-reading\/|\/paper-reading\/|\/artifacts\/|\/evidence\/|\/research-loop\/|\/research-skills\/|\/document-export\/|\/visual|\/mermaid\/|\/citation-graph\/|\/intuition-graph\/|\/layered-reading\//.test(file)) return "M5";
   return "M6";
 }
 const surfaces = files.sort().map(file => {
