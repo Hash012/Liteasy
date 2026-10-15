@@ -46,6 +46,18 @@ test("reads real PDF title-page evidence without extracting the entire document"
   expect(evidence.firstPageText).toContain("Vaswani");
 });
 
+test("bounds recommendation reading to the first four real PDF pages", async () => {
+  const pages = await extractPdfPages(new Uint8Array(readFileSync(resolve(process.cwd(),
+    "src/tests/assets/papers/attention-is-all-you-need-arxiv.pdf"))), { maxPages: 4, ocrEnabled: false });
+  expect(pages.map(page => page.page)).toEqual([1, 2, 3, 4]);
+  expect(pages[0].text).toMatch(/Attention\s+Is\s+All\s+You\s+Need/i);
+  const { parsePdfReadingSections } = await import("../app/features/paper-services/paperReadingSections");
+  const sections = parsePdfReadingSections(pages.map(page => page.text).join("\n"));
+  expect(sections.abstract).toContain("Transformer");
+  expect(sections.introduction).toContain("Recurrent neural networks");
+  expect(sections.introduction).not.toContain("Background");
+});
+
 test.each([
   ["attention-is-all-you-need-arxiv.pdf", "Attention Is All You Need", "Ashish Vaswani", "1706.03762v7"],
   ["bert-pretraining-arxiv.pdf", "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding", "Jacob Devlin", "1810.04805v2"],

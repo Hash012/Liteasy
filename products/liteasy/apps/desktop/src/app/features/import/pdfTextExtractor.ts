@@ -31,6 +31,8 @@ export type PdfOcrLanguage = "chi_sim" | "eng" | "eng+chi_sim";
 
 export type PdfExtractionOptions = {
   signal?: AbortSignal;
+  /** Bound explicit previews without changing full-document indexing. */
+  maxPages?: number;
   createOcrWorker?: (language: string) => Promise<PdfOcrWorker>;
   loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
   ocrEnabled?: boolean;
@@ -219,7 +221,9 @@ export async function extractPdfPages(
     const pages: ExtractedPdfPage[] = [];
     const scannedPageNumbers: number[] = [];
     options.signal?.throwIfAborted();
-    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+    const pageCount = options.maxPages === undefined ? document.numPages
+      : Math.min(document.numPages, Math.max(0, Math.floor(options.maxPages)));
+    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
       const page = await document.getPage(pageNumber);
       options.signal?.throwIfAborted();
       const content = await page.getTextContent();
