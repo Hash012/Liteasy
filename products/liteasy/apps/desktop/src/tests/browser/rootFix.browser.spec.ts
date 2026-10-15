@@ -15,6 +15,9 @@ test("production composition aggregates boards and uses one spatial presentation
   await page.getByRole("button", { name: "全部资产", exact: true }).click();
   await page.getByRole("button", { name: "预览 研究白板 A", exact: true }).click();
   await expect(page.getByRole("dialog").getByLabel("白板空间预览")).toBeVisible();
+  await page.getByRole("button", { name: "打开内容，选择章节或文字", exact: true }).click();
+  await expect(page.getByRole("dialog").getByLabel("白板空间预览").locator("article")).toHaveCount(20);
+  await expect(page.getByLabel("带行号的原文")).toHaveCount(0);
   await page.screenshot({ path: info.outputPath("board-cross-surface.png"), animations: "disabled" });
 });
 test("native annotation original opens the rotated cropped tenth PDF page", async ({ page }, info) => {

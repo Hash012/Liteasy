@@ -75,3 +75,7 @@ Each stage is a separate reversible commit. No migration deletes original object
 ## 仍需专项验证的边界
 
 Windows 物理 DPI/触屏、原用户库、无 OCR 扫描件及密码/超大 PDF、故障注入的完整浏览器链、1000 笔记/100 白板性能与任务压力、真实 AI 按钮至账户预算全链和人工推荐质量尚未完整验收。内部 Notes 当前仍读取现有对象头及缓存正文投影，不声称已完成大规模懒加载优化。Windows installer 必须以最终提交 CI 的 Release 链接、实际安装启动、NSIS 和上传结果为准；Linux 构建不替代该结果。
+
+## 安装前复核补充
+
+提交 `305bddd7` 的完整 CI 已通过：两片完整桌面套件共 4324 个用例条目，零失败/错误（包括原有 skipped）；99 项浏览器检查通过，Windows Release、NSIS、实际安装与 WebView2 启动、cleanliness 和上传通过。随后复核发现白板的“打开内容”动作仍可进入原生 JSON 行选择器，已改为复用同一注册表示；普通文本直接复用已读取的 ContentFragment，避免重复读取。专项 8 个浏览器路径及最终 44 项受影响测试、smoke、生产构建通过。此补充提交重新请求完整安装包 CI，交付以该次产物为准。
