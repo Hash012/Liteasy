@@ -123,7 +123,8 @@ describe("shared reference UI", () => {
     await user.click(await screen.findByRole("button", { name: "浏览文件并选择引用内容" }));
     const browser = await screen.findByRole("dialog", { name: "上下文资产浏览器" });
     expect(within(browser).getByText("插入文件引用")).toBeInTheDocument();
-    await user.click(within(browser).getByRole("button", { name: "预览 CicN.md" }));
+    // Wait for Fluent's focus handoff from the reference popover to the dialog.
+    await user.click(await within(browser).findByRole("button", { name: "预览 CicN.md" }));
     await user.click(await within(browser).findByRole("button", { name: "选择第 3 行" }));
     fireEvent.click(within(browser).getByRole("button", { name: "选择第 6 行" }), { shiftKey: true });
     await user.click(within(browser).getByRole("button", { name: "插入选中片段引用" }));
