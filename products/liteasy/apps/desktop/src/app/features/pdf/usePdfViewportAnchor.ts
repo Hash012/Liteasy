@@ -6,10 +6,22 @@ function instantScroll(root: HTMLElement, left: number, top: number) {
 }
 
 type Anchor = { page: number; x: number; y: number; viewportX: number; viewportY: number };
+type Geometry = readonly number[];
 function viewport(root: HTMLElement) {
   const rect = root.getBoundingClientRect();
   return { left: rect.left + root.clientLeft, top: rect.top + root.clientTop,
     width: root.clientWidth || rect.width, height: root.clientHeight || rect.height };
+}
+
+function geometry(root: HTMLElement, page: number): Geometry | undefined {
+  const bounds = root.querySelector<HTMLElement>(`.pdf-page-shell[data-page="${page}"]`)?.getBoundingClientRect();
+  if (!bounds || bounds.width <= 0 || bounds.height <= 0) return;
+  const view = viewport(root);
+  // Document coordinates stay constant during user scrolling, unlike the page's
+  // viewport coordinates. Include page size because canvas resizing can arrive
+  // after the container's first ResizeObserver notification.
+  return [view.width, view.height, root.scrollWidth, root.scrollHeight, bounds.width, bounds.height,
+    bounds.left - view.left + root.scrollLeft, bounds.top - view.top + root.scrollTop];
 }
 
 /** Preserve one PDF point near the reading line through layout/zoom changes. */
@@ -17,7 +29,8 @@ export function usePdfViewportAnchor(stage: RefObject<HTMLElement>, frame: RefOb
   enabled: boolean; document: unknown; focusedPage: number; zoom: number; width: number; layout: string;
 }) {
   const latest = useRef(options); latest.current = options;
-  const lifetime = useMemo(() => ({ anchor: undefined as Anchor | undefined, captureFrame: 0, restoreFrame: 0,
+  const lifetime = useMemo(() => ({ anchor: undefined as Anchor | undefined, geometry: undefined as Geometry | undefined,
+    captureFrame: 0, restoreFrame: 0,
     navigating: false, target: undefined as Anchor | undefined,
     navigationTimer: undefined as ReturnType<typeof setTimeout> | undefined }), [options.document]);
   const capture = useCallback(() => {
@@ -31,6 +44,7 @@ export function usePdfViewportAnchor(stage: RefObject<HTMLElement>, frame: RefOb
     const y = Math.max(bounds.top, Math.min(bounds.bottom, view.top + Math.min(64, view.height / 3)));
     lifetime.anchor = { page, x: (x - bounds.left) / bounds.width, y: (y - bounds.top) / bounds.height,
       viewportX: (x - view.left) / view.width, viewportY: y - view.top };
+    lifetime.geometry = geometry(root, page);
   }, [stage, lifetime]);
   const restore = useCallback(() => {
     const root = stage.current, anchor = lifetime.anchor;
@@ -41,8 +55,17 @@ export function usePdfViewportAnchor(stage: RefObject<HTMLElement>, frame: RefOb
     const view = viewport(root);
     const dx = bounds.left + bounds.width * anchor.x - view.left - view.width * anchor.viewportX;
     const dy = bounds.top + bounds.height * anchor.y - view.top - anchor.viewportY;
+    lifetime.geometry = geometry(root, anchor.page);
     if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) instantScroll(root, root.scrollLeft + dx, root.scrollTop + dy);
   }, [stage, lifetime, capture]);
+  const captureOrRestore = useCallback(() => {
+    const root = stage.current, anchor = lifetime.anchor, previous = lifetime.geometry;
+    const current = root && anchor ? geometry(root, anchor.page) : undefined;
+    // Scroll/rAF and React's focused-page commit may precede ResizeObserver.
+    // Do not turn an intermediate layout into a new user reading position.
+    if (lifetime.restoreFrame || (previous && current && current.some((value, index) => Math.abs(value - previous[index]) > 0.5))) restore();
+    else capture();
+  }, [stage, lifetime, capture, restore]);
   const settleNavigation = useCallback(() => {
     lifetime.navigating = false;
     if (lifetime.target) { lifetime.anchor = lifetime.target; lifetime.target = undefined; restore(); }
@@ -51,7 +74,7 @@ export function usePdfViewportAnchor(stage: RefObject<HTMLElement>, frame: RefOb
   useLayoutEffect(() => { restore(); }, [restore, options.enabled, options.zoom, options.width, options.layout]);
   // The viewport observer and scroll capture share a frame. React may commit the
   // newly visible page after that capture, so replace the old page's anchor now.
-  useLayoutEffect(() => { capture(); }, [capture, options.focusedPage]);
+  useLayoutEffect(() => { captureOrRestore(); }, [captureOrRestore, options.focusedPage]);
   useEffect(() => {
     const root = stage.current;
     if (!root || !options.enabled) return;
@@ -62,7 +85,7 @@ export function usePdfViewportAnchor(stage: RefObject<HTMLElement>, frame: RefOb
         return;
       }
       if (lifetime.restoreFrame || lifetime.captureFrame) return;
-      lifetime.captureFrame = requestAnimationFrame(() => { lifetime.captureFrame = 0; capture(); });
+      lifetime.captureFrame = requestAnimationFrame(() => { lifetime.captureFrame = 0; captureOrRestore(); });
     };
     const resize = () => {
       cancelAnimationFrame(lifetime.captureFrame); lifetime.captureFrame = 0;
@@ -84,12 +107,13 @@ export function usePdfViewportAnchor(stage: RefObject<HTMLElement>, frame: RefOb
       clearTimeout(lifetime.navigationTimer);
       root.removeEventListener("scroll", scroll); root.removeEventListener("wheel", intent); root.removeEventListener("pointerdown", intent);
     };
-  }, [stage, frame, options.enabled, lifetime, capture, restore, settleNavigation]);
+  }, [stage, frame, options.enabled, lifetime, capture, captureOrRestore, restore, settleNavigation]);
   return { capture() {
     clearTimeout(lifetime.navigationTimer); lifetime.navigating = false; lifetime.target = undefined;
     const root = stage.current; if (root) instantScroll(root, root.scrollLeft, root.scrollTop); capture();
   }, reset(page?: number, topRatio = 0) {
     lifetime.anchor = undefined;
+    lifetime.geometry = undefined;
     lifetime.target = page === undefined ? undefined : { page, x: 0, y: topRatio, viewportX: 0, viewportY: 0 };
     lifetime.navigating = true;
     clearTimeout(lifetime.navigationTimer);

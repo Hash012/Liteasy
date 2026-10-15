@@ -71,3 +71,43 @@ test("a large manual scroll captures the newly committed page before a resize", 
   top += 150; view.resize(); view.flush();
   expect(view.root.scrollTop).toBe(2350);
 });
+
+test("a layout scroll before ResizeObserver preserves the original PDF point", () => {
+  const view = fixture();
+  // Browsers can dispatch the scroll caused by reflow before ResizeObserver.
+  view.dimensions.top = 700; view.dimensions.height = 600;
+  act(() => view.root.dispatchEvent(new Event("scroll"))); view.flush();
+  view.resize(); view.flush();
+  expect(view.root.scrollTop).toBe(834);
+});
+
+test("a focused-page update during a pending layout restore cannot replace its anchor", () => {
+  const view = fixture(), second = document.createElement("article");
+  second.className = "pdf-page-shell"; second.dataset.page = "2"; view.root.append(second);
+  second.getBoundingClientRect = () => ({ top: 1300 - view.root.scrollTop, bottom: 1900 - view.root.scrollTop,
+    left: 0, right: 400, width: 400, height: 600 } as DOMRect);
+  view.dimensions.top = 700; view.dimensions.height = 600;
+  view.resize();
+  view.hook.rerender({ ...view.options, focusedPage: 2 });
+  view.flush();
+  expect(view.root.scrollTop).toBe(834);
+});
+
+test("a later canvas-size correction preserves the point restored during the first reflow", () => {
+  const view = fixture();
+  // Placeholders shrink first; the rendered canvas releases its old height later.
+  view.dimensions.top = 700; view.resize(); view.flush();
+  expect(view.root.scrollTop).toBe(900);
+  view.dimensions.height = 600;
+  act(() => view.root.dispatchEvent(new Event("scroll"))); view.flush();
+  view.resize(); view.flush();
+  expect(view.root.scrollTop).toBe(834);
+});
+
+test("ordinary scrolling without a wheel event still updates the reading anchor", () => {
+  const view = fixture();
+  view.root.scrollTop = 1300;
+  act(() => view.root.dispatchEvent(new Event("scroll"))); view.flush();
+  view.dimensions.top += 150; view.resize(); view.flush();
+  expect(view.root.scrollTop).toBe(1450);
+});
