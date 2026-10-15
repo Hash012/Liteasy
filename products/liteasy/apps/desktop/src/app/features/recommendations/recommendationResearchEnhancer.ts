@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { AgentAssetService } from "../resource-filesystem/agentAssetService";
 import { resourceContentRevision } from "../resource-filesystem/resourceFileContent";
 import { createModelGatewayFromSettings } from "../models/modelRuntime";
-import { getActiveModelProvider, getModelForSettings } from "../models/modelPolicy";
+import { getActiveModelEndpoint, getActiveModelProvider, getModelForSettings } from "../models/modelPolicy";
 import type { SettingsState } from "../settings/settings.types";
 import type { RecommendationItem } from "./recommendation.types";
 import type { RecommendationContext } from "./recommendationContext";
@@ -148,7 +148,7 @@ export async function curateRecommendationSnapshot(input: Input) {
       provider: getActiveModelProvider(input.settings!), model: getModelForSettings(input.settings!), prompt,
       outputFormat: { name: "recommendation_decision", schema, strict: true }, maxOutputTokens: budget.maxOutputTokens,
       signal: input.task.signal, requireTerminal: true, requireLive: true
-    }), units);
+    }), units, JSON.stringify(["model", getActiveModelProvider(input.settings!), getActiveModelEndpoint(input.settings!), getModelForSettings(input.settings!)]));
     await check();
     const reasons = parseResponse(result.answer, maxReasons), ids = new Set<string>();
     for (const reason of reasons) {
