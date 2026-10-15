@@ -85,7 +85,7 @@ import {
   WhiteboardRegular
 } from "@fluentui/react-icons";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
-import { loadPdfGlyphGeometry, releasePdfGlyphGeometry } from "./pdfGlyphGeometry";
+import { clearPdfPageData, loadPdfPageText, loadPdfPageGlyphs } from "./pdfPageData";
 import { usePdfPixelRatio } from "./usePdfPixelRatio";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
@@ -1121,7 +1121,7 @@ type PdfPageViewProps = {
   onPageTextRendered?: (input: PdfPageText) => void;
   pageNumber: number;
   renderActive: boolean;
-  renderPriority: number;
+  renderPriority?: number;
   defaultPageSize: { width: number; height: number };
   pixelRatio: number;
   readingBackground: string;
@@ -1159,7 +1159,7 @@ export function PdfPageView({
   onTextAnnotationOpacityChange,
   pageNumber,
   renderActive,
-  renderPriority,
+  renderPriority = 0,
   defaultPageSize,
   pixelRatio, readingBackground, preserveImages,
   pdfDocument,
@@ -1328,7 +1328,7 @@ export function PdfPageView({
 
         try {
         textLayer.innerHTML = "";
-        const textContent = await page.getTextContent();
+        const textContent = await loadPdfPageText(pdfDocument, pageNumber, page);
         if (cancelled) return;
         layer = new pdfjsLib.TextLayer({
           container: textLayer,
@@ -1339,14 +1339,14 @@ export function PdfPageView({
         if (!cancelled) {
           const pageElement = pageShellRef.current;
           if (pageElement) {
-            const install = (glyphs: Awaited<ReturnType<typeof loadPdfGlyphGeometry>>) => {
+            const install = (glyphs: Awaited<ReturnType<typeof loadPdfPageGlyphs>>) => {
               if (cancelled) return;
               const model = buildPageCharModelFromTextLayer({ glyphs, pageElement, pageIndex: pageNumber, textLayer });
               setNativeCharModel(model); onPageCharModelRendered?.(pageNumber, model);
             };
             // Native DOM selection is ready before the optional operator-list pass.
             install([]);
-            void loadPdfGlyphGeometry(page).then(glyphs => {
+            void loadPdfPageGlyphs(pdfDocument, pageNumber, page).then(glyphs => {
               if (cancelled || !glyphs.length) return;
               if (selecting.current) pendingRefinement.current = () => install(glyphs);
               else install(glyphs);
@@ -1401,7 +1401,6 @@ export function PdfPageView({
       clearPdfCanvas(ownedCanvas);
       ownedTextLayer?.replaceChildren();
       if (renderedPage) {
-        releasePdfGlyphGeometry(renderedPage);
         renderedPage.cleanup();
       }
       onPageCharModelRendered?.(pageNumber, null);
@@ -2258,6 +2257,7 @@ export function PdfReader({
     }
 
     let cancelled = false;
+    let loadedDocument: PDFDocumentProxy | undefined;
     let loadingTask: ReturnType<typeof pdfjsLib.getDocument> | null = null;
     setStatus("正在用 PDF.js 加载文档。");
 
@@ -2277,6 +2277,7 @@ export function PdfReader({
           return;
         }
 
+        loadedDocument = document;
         const viewport = (await document.getPage(1)).getViewport({ scale: 1 });
         if (cancelled) return;
         setDefaultPageSize({ width: viewport.width, height: viewport.height });
@@ -2295,6 +2296,7 @@ export function PdfReader({
 
     return () => {
       cancelled = true;
+      if (loadedDocument) clearPdfPageData(loadedDocument);
       void loadingTask?.destroy();
     };
   }, [activePaper?.id, activePaper?.sourcePath, activePaper?.contentHash, loadPdfSource, pdfDisplaySource]);

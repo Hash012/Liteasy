@@ -13,10 +13,11 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 function mount() {
   const onText = vi.fn();
-  const page = { getViewport: ({ scale }: { scale: number }) => ({ width: 400 * scale, height: 600 * scale, scale }), render: () => ({ promise: Promise.resolve(), cancel() {} }), getTextContent: async () => ({ items: [{ str: "Native PDF text" }] }), cleanup() {} };
+  const page = { getViewport: ({ scale }: { scale: number }) => ({ width: 400 * scale, height: 600 * scale, scale }), render: () => ({ promise: Promise.resolve(), cancel() {} }), getTextContent: vi.fn(async () => ({ items: [{ str: "Native PDF text" }] })), cleanup() {} };
   const document = { getPage: async () => page } as unknown as PDFDocumentProxy;
-  const view = render(<PdfPageView activePaper={{ id: "p", title: "P" }} annotations={[]} focused layoutVisible pageNumber={1} renderActive defaultPageSize={{ width: 400, height: 600 }} pixelRatio={1} readingBackground="#ffffff" preserveImages pdfDocument={document} stageWidth={400} zoom={100} onPageTextRendered={onText} />);
-  return { ...view, onText };
+  const content = (zoom: number) => <PdfPageView activePaper={{ id: "p", title: "P" }} annotations={[]} focused layoutVisible pageNumber={1} renderActive defaultPageSize={{ width: 400, height: 600 }} pixelRatio={1} readingBackground="#ffffff" preserveImages pdfDocument={document} stageWidth={400} zoom={zoom} onPageTextRendered={onText} />;
+  const view = render(content(100));
+  return { ...view, onText, page, changeZoom: (zoom: number) => view.rerender(content(zoom)) };
 }
 test("native text and its selection model become ready while optional glyph extraction hangs", async () => {
   mocks.glyphs.mockReturnValue(new Promise(() => {})); const { container, onText } = mount();
@@ -37,4 +38,12 @@ test("late glyph refinement waits until the pointer selection finishes", async (
   fireEvent.pointerDown(screen.getByLabelText("PDF.js 页面 1"));
   await act(async () => { finish([{ text: "Native" }]); }); expect(mocks.model).toHaveBeenCalledTimes(before);
   fireEvent.pointerUp(window); await waitFor(() => expect(mocks.model).toHaveBeenCalledTimes(before + 1));
+});
+
+test("zoom repaints reuse decoded text and glyphs", async () => {
+  mocks.glyphs.mockResolvedValue([]); const view = mount();
+  await waitFor(() => expect(view.onText).toHaveBeenCalledTimes(1));
+  view.changeZoom(120); await waitFor(() => expect(view.onText).toHaveBeenCalledTimes(2));
+  view.changeZoom(150); await waitFor(() => expect(view.onText).toHaveBeenCalledTimes(3));
+  expect(view.page.getTextContent).toHaveBeenCalledOnce(); expect(mocks.glyphs).toHaveBeenCalledOnce();
 });
