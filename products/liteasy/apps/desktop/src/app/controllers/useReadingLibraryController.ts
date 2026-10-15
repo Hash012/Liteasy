@@ -121,7 +121,7 @@ export function useReadingLibraryController(input: {
     if (latest.current.papers.some((paper) => paper.id === id)) {
       const old = await loadPaperFileMetadata(id);
       if (!current()) return;
-      await savePaperFileMetadata(id, { ...old, ...patch, category: patch.collection ?? old.category, tags: patch.tags ?? old.tags });
+      await savePaperFileMetadata(id, { ...old, ...patch, category: value.collection ?? old.category, tags: value.tags ?? old.tags });
     }
     if (current()) setMetadata((previous) => ({ ...previous, [id]: value }));
   }

@@ -1,5 +1,6 @@
 export const PAPER_FILE_METADATA_SAVED_EVENT = "liteasy:paper-file-metadata-saved";
 import { resolveLocalAccountKey } from "./localAccountKey";
+import { normalizeResourceTags, parseResourceTags } from "../resource-tags/resourceTagValues";
 import {
   isUserPaperArtifactStoreAvailable,
   loadUserPaperArtifact,
@@ -26,13 +27,7 @@ export function normalizePaperFileMetadata(value: unknown): PaperFileMetadata {
   const category = typeof candidate.category === "string"
     ? candidate.category.trim().slice(0, 80)
     : "";
-  const tags = Array.isArray(candidate.tags)
-    ? Array.from(new Set(candidate.tags.flatMap((tag) => {
-        if (typeof tag !== "string") return [];
-        const normalized = tag.trim().replace(/\s+/g, " ").slice(0, 40);
-        return normalized ? [normalized] : [];
-      }))).slice(0, 20)
-    : [];
+  const tags = normalizeResourceTags(candidate.tags);
   const strings = (value: unknown, limit: number, length: number) => Array.isArray(value)
     ? [...new Set(value.filter((item): item is string => typeof item === "string").map((item) => item.trim().slice(0, length)).filter(Boolean))].slice(0, limit) : undefined;
   const extensions = { ...candidate };
@@ -84,6 +79,7 @@ export async function loadPaperFileMetadata(paperId: string): Promise<PaperFileM
 
 export async function savePaperFileMetadata(paperId: string, value: unknown): Promise<PaperFileMetadata> {
   const normalized = normalizePaperFileMetadata(value);
+  normalized.tags = parseResourceTags(normalized.tags);
   if (typeof window === "undefined" || !paperId.trim()) return normalized;
   const accountKey = resolveLocalAccountKey();
   const browserStorageError = cacheBrowserMetadata(paperId, accountKey, normalized);

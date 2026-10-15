@@ -55,3 +55,14 @@ test("reorders authors with boundary controls and saves the order used in citati
   expect(writeText).toHaveBeenCalledWith("Third, First, Second. A book");
   expect(await screen.findByText("引用已复制")).toBeInTheDocument();
 });
+
+test("overlong tags remain editable and are not silently saved under a different label", async () => {
+  const save = vi.fn(async () => {});
+  render(<LibraryMetadataEditor entry={entry} onSave={save} onClose={vi.fn()} />);
+  const field = screen.getByRole("textbox", { name: "资产标签" });
+  fireEvent.change(field, { target: { value: "a".repeat(61) } });
+  fireEvent.click(screen.getByRole("button", { name: "保存", exact: true }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("每个标签最多 60 个字符");
+  expect(field).toHaveValue("a".repeat(61));
+  expect(save).not.toHaveBeenCalled();
+});

@@ -300,3 +300,13 @@ test("metadata edits preserve additive fields from a newer compatible writer", a
   await f.repository.updateMetadata("file-1", { tags: ["new"] });
   expect((await f.storage.get(key))?.value).toEqual({ tags: ["new"], futureExtension: { preserved: true } });
 });
+
+test("reading tags use the PDF normalization and capacity without silent truncation", async () => {
+  const f = fixture();
+  const tags = [" RAG ", "rag", "ＲＡＧ", "cafe\u0301", "café", "向量   检索", "x".repeat(60), ...Array.from({ length: 25 }, (_, index) => `标签 ${index}`)];
+  const expected = ["RAG", "café", "向量 检索", "x".repeat(60), ...Array.from({ length: 25 }, (_, index) => `标签 ${index}`)];
+  await f.repository.updateMetadata("tags", { tags });
+  expect((await f.repository.metadata()).tags.tags).toEqual(expected);
+  await expect(f.repository.updateMetadata("tags", { tags: ["x".repeat(61)] })).rejects.toThrow("最多 60 个字符");
+  expect((await f.repository.metadata()).tags.tags).toEqual(expected);
+});

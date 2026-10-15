@@ -7,6 +7,7 @@ import type { StagedObjectAsset } from "../objects/objectAssets";
 import type { ParsedReadingDocument } from "./readingDocument.types";
 import { parseBibliographicDraft, bibliographicSnapshotSchema, type BibliographicDraft } from "../library/bibliographicFields";
 import { readingImportBibliography, readingImportSourceSchema, type ReadingImportSource } from "./readingImportIdentity";
+import { normalizeResourceTags, parseResourceTags } from "../resource-tags/resourceTagValues";
 
 export const MAX_LIBRARY_FILE_BYTES = 20 * 1024 * 1024;
 const metadataSchema = z.object({
@@ -14,7 +15,7 @@ const metadataSchema = z.object({
   subjects: z.array(z.string().trim().min(1).max(60)).max(20).optional(),
   authors: z.array(z.string().trim().min(1).max(300)).max(200).optional(),
   year: z.number().int().min(1000).max(9999).optional(),
-  tags: z.array(z.string().trim().min(1).max(60)).max(50).optional(),
+  tags: z.array(z.string()).transform(normalizeResourceTags).optional(),
   folderPath: z.string().max(4096).optional(),
   collection: z.string().trim().max(120).optional(),
   readingStatus: z.enum(["unread", "reading", "finished"]).optional()
@@ -85,7 +86,7 @@ export function createReadingLibraryRepository(storage: ObjectStorage, scopeId: 
           ...next, revision: saved.data.revision + 1, updatedAt: new Date().toISOString(),
         };
       }
-      if (value.tags) value.tags = [...new Set(value.tags)];
+      if (patch.tags !== undefined) value.tags = parseResourceTags(patch.tags);
       await storage.commit([change(key, value, previous)]);
       return value;
     },

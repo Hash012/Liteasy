@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Field, Input, Tooltip } from "@fluentui/react-components";
 import { ArrowDownloadRegular, CopyRegular, DeleteRegular, EditRegular, FolderOpenRegular, OpenRegular } from "@fluentui/react-icons";
 import { bibliographicFields, bibliographicFieldLabel } from "./bibliographicFields";
+import { parseResourceTags, splitResourceTags, MAX_RESOURCE_TAGS } from "../resource-tags/resourceTagValues";
 import { assetTypeLabels } from "./libraryAssetMetadata";
 import { ContentView } from "../markdown/ContentView";
 import { legacyContent } from "../markdown/contentFragment";
@@ -77,7 +78,7 @@ export function ReadingCatalogDetails({ entry, ...actions }: { entry: ReadingCat
     await invoke(async () => {
       await actions.onMetadataChange!(entry.id, {
         collection: collection.trim().slice(0, 80),
-        tags: [...new Set(tags.split(/[,，;；\n]/).map((tag) => tag.trim().slice(0, 40)).filter(Boolean))].slice(0, 20),
+        tags: parseResourceTags(splitResourceTags(tags)),
         readingStatus: status
       });
       setDirty(false);
@@ -117,8 +118,8 @@ export function ReadingCatalogDetails({ entry, ...actions }: { entry: ReadingCat
       <Field label="分类">
         <Input aria-label="文件分类" maxLength={80} value={collection} disabled={busy || !actions.onMetadataChange} onChange={(_, data) => { setCollection(data.value); setDirty(true); }} />
       </Field>
-      <Field label="标签" hint="用逗号分隔，最多 20 个标签。">
-        <Input aria-label="文件标签" maxLength={1600} value={tags} disabled={busy || !actions.onMetadataChange} onChange={(_, data) => { setTags(data.value); setDirty(true); }} />
+      <Field label="标签" hint={`用逗号、分号或换行分隔，最多 ${MAX_RESOURCE_TAGS} 个标签。`}>
+        <Input aria-label="文件标签" value={tags} disabled={busy || !actions.onMetadataChange} onChange={(_, data) => { setTags(data.value); setDirty(true); }} />
       </Field>
       <Field label="阅读状态">
         <OptionPicker aria-label="文件阅读状态" value={String(status ?? "")} disabled={busy || !actions.onMetadataChange} onValueChange={nextValue => { setStatus(nextValue as ReadingCatalogStatus); setDirty(true); }} options={[...(Object.entries(readingCatalogStatusLabels).map(([value, label]) => ({ value: String(value), label: String(label) })))]} />
