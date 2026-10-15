@@ -24,12 +24,19 @@ export function createAgentAssetService(input: { scopeId: string; active(): bool
       throw new AgentAssetError("invalid_path", "资产地址无效或属于其他账号。");
     }
     const matches = [...adapters.values()].filter((adapter) => adapter.accepts(path));
-    if (matches.length !== 1) throw new AgentAssetError("unavailable", "当前资产类型不可用，请重新从文献库选择。");
+    if (!matches.length) throw new AgentAssetError("unsupported_type", "此类资源尚未提供读取入口，请打开原文件。");
+    if (matches.length > 1) throw new AgentAssetError("ambiguous_provider", "此资源有多个处理入口，请通过本地诊断报告此问题。");
     if (url.searchParams.has("scope") && url.searchParams.get("scope") !== (matches[0].scopeId ?? input.scopeId)) throw new AgentAssetError("invalid_path", "资产地址属于其他账号。");
     return matches[0];
   };
   return {
     registerAdapter,
+    /** Local diagnostics contain handler IDs only, never document text, titles or paths. */
+    diagnose(path: string) {
+      check();
+      const matches = [...adapters.values()].filter(adapter => adapter.accepts(path)).map(adapter => adapter.id);
+      return { matches, state: matches.length === 1 ? "resolved" as const : matches.length ? "ambiguous_provider" as const : "unsupported_type" as const };
+    },
     async create(options: AgentAssetCreate) {
       check(options.signal);
       if (!input.create) throw new AgentAssetError("unavailable", "此工作区不支持创建资产。");
