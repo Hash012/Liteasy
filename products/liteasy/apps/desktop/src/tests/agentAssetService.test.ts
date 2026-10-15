@@ -285,7 +285,7 @@ describe("workspace agent assets", () => {
     expect((await service.read(asset.path, { maxCharacters: 3 })).text).toBe("a,b");
     await expect(service.write(asset.path, { text: "x", expectedRevision: "one" })).rejects.toMatchObject({ code: "read_only" });
     unregister();
-    await expect(service.read(asset.path)).rejects.toMatchObject({ code: "unavailable" });
+    await expect(service.read(asset.path)).rejects.toMatchObject({ code: "unsupported_type" });
   });
 });
 

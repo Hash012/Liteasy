@@ -68,3 +68,26 @@ export function sourceContent(input: {
     mapping: "exact-utf16", warnings: overBudget ? ["budget_exceeded"] : incomplete ? ["format_incomplete"] : [],
   });
 }
+
+/** Subselect an existing bound fragment without reassigning its representation or original offsets. */
+export function selectContentRange(content: ContentFragment, start: number, end: number): ContentFragment {
+  const exact = content.exactSelection.ranges;
+  const segments = content.viewContext.segments;
+  if (exact.length !== 1 || !segments?.length || content.mapping !== "exact-utf16") throw new Error("此预览包含多个来源片段，请打开原文件选择。");
+  const absoluteStart = exact[0].start + start, absoluteEnd = exact[0].start + end;
+  const segment = segments.find(segment => absoluteStart >= segment.sourceRange.start && absoluteEnd <= segment.sourceRange.end);
+  if (!segment) throw new Error("选区不在已读取的来源范围内，请重新载入。");
+  const offset = segment.sourceRange.start - segment.outputStart;
+  const selected = sourceContent({ text: content.viewContext.text, path: content.binding.kind === "pinned" ? content.binding.path : "liteasy://legacy/fragment",
+    scopeId: content.binding.kind === "pinned" ? content.binding.scopeId : "legacy", profile: content.profile,
+    start: absoluteStart - offset, end: absoluteEnd - offset });
+  const remap = (range: { start: number; end: number; unit: "utf16" }) => {
+    const source = segments.find(segment => range.start >= segment.outputStart && range.end <= segment.outputEnd);
+    if (!source) throw new Error("选区跨越不连续来源，请打开原文件选择。");
+    const delta = source.sourceRange.start - source.outputStart;
+    return { ...range, start: range.start + delta, end: range.end + delta };
+  };
+  return { ...selected, binding: content.binding, representationId: content.representationId,
+    exactSelection: { ...selected.exactSelection, ranges: selected.exactSelection.ranges.map(remap) },
+    viewContext: { ...selected.viewContext, ranges: selected.viewContext.ranges.map(remap), segments: selected.viewContext.segments?.map(segment => ({ ...segment, sourceRange: remap(segment.sourceRange) })) } };
+}

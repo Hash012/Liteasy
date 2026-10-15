@@ -1,6 +1,6 @@
 import { useUiTranslation } from "../../shared/i18n/useUiTranslation";
 import { DisclosureSection } from "../../shared/ui/productPrimitives";
-import { OptionPicker } from "../../shared/ui/productPrimitives";
+import { OptionPicker, ControlToolbar } from "../../shared/ui/productPrimitives";
 import { ActionButton as Button, IconAction, ContextualActions } from "../../shared/ui/productPrimitives";
 import { DocumentExportDialog } from "../document-export/DocumentExportDialog";
 import { useDocumentExportPort } from "../document-export/documentExportPort";
@@ -45,7 +45,7 @@ import { ReferenceSourceContext } from "../resource-links/ResourceReferencesCont
 import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import { ContentView } from "../markdown/ContentView";
 import { ContentExcerpt } from "../markdown/ContentExcerpt";
-import { ResourceLink } from "../resource-links/ResourceReferenceView";
+import { ResourceLink, ResourceReferenceView } from "../resource-links/ResourceReferenceView";
 import { groupNotes, sortNotes, type NotesSort } from "./notesPresentation";
 import { legacyContent } from "../markdown/contentFragment";
 import { PdfAnnotationMarkdown } from "../pdf/PdfAnnotationMarkdown";
@@ -173,14 +173,14 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
     return (
       <section className="notes-item-detail" aria-label="打开的笔记">
         <header>
-          <strong>{filename(item)}</strong>
-          <span><ResourceLink locator={liteasyPath(model.scopeId ?? "local", item.target)} previewOnClick>{item.source}</ResourceLink></span>
+          {item.titleOrigin !== "derived-body" ? <strong>{filename(item)}</strong> : null}
+          <span><ResourceLink locator={liteasyPath(model.scopeId ?? "local", item.target)} previewOnClick intent={item.annotation ? "origin" : "asset"}>{item.source}</ResourceLink></span>
           {exportPort && item.object?.kind !== "workspace.board" ? <Button size="small" appearance="subtle" disabled={item.unavailable} onClick={() => setExportItem(item)}>导出阅读文档</Button> : null}
         </header>
-        {item.target.kind === "external-file" ? <Button appearance="subtle" icon={<ArrowUpRightRegular />} onClick={() => model.openSource(item)}>在阅读区打开</Button> : item.annotation ? <PdfAnnotationMarkdown value={item.text} images={item.annotation.images} />
+        {item.object?.kind === "workspace.board" ? <ResourceReferenceView locator={liteasyPath(model.scopeId ?? "local", item.target)} /> : item.target.kind === "external-file" ? <Button appearance="subtle" icon={<ArrowUpRightRegular />} onClick={() => model.openSource(item)}>在阅读区打开</Button> : item.annotation ? <PdfAnnotationMarkdown value={item.text} images={item.annotation.images} />
           : <ReferenceSourceContext.Provider value={liteasyPath(model.scopeId ?? "local", item.target)}>{inlineEditing === item.key && preference.mode === "live" && item.editable && item.object?.kind === "content.note" ? <NotesInlineEditor key={item.key} item={item} model={model} path={liteasyPath(model.scopeId ?? "local", item.target)} /> : <ContentView content={legacyContent(item.text)} paperAnchors={item.paperAnchors ?? item.object?.paperAnchors} />}</ReferenceSourceContext.Provider>}
         <PaperAnchorReferences anchors={item.paperAnchors ?? item.object?.paperAnchors ?? []} />
-        {quote && !item.text.includes(quote) && (
+        {quote && (item.annotation?.note?.trim() || !item.text.includes(quote)) && (
           <DisclosureSection  title={<>原文</>}>
 
             <blockquote><ContentView content={legacyContent(quote)} /></blockquote>
@@ -240,7 +240,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
           {folder && !folder.system ? <MenuItem icon={<DeleteRegular />} onClick={() => run(model.removeFolder())}>删除空目录</MenuItem> : null}
         </MenuList></MenuPopover></Menu>
       </header>
-      <div className="notes-filter-toolbar"><Input size="small"
+      <ControlToolbar className="notes-filter-toolbar" label="笔记筛选与排序"><Input size="small"
         className="notes-search"
         aria-label="搜索笔记"
         placeholder="搜索笔记"
@@ -249,7 +249,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
         onChange={(_, data) => model.search(data.value)}
       />
       <OptionPicker aria-label={tChinese("notes.sort.label", "笔记排序")} value={sort} onValueChange={value => setSort(value as NotesSort)} options={[{ value: "updated", label: tChinese("notes.sort.updated", "最近修改") }, { value: "page", label: tChinese("notes.sort.page", "页码") }, { value: "title", label: tChinese("notes.sort.title", "标题") }]} />
-      <NoteLabelFilter compact value={filter} onChange={setFilter} query={model.query} onQueryChange={model.search} /></div>
+      <NoteLabelFilter compact value={filter} onChange={setFilter} query={model.query} onQueryChange={model.search} /></ControlToolbar>
       {model.error && (
         <p role="alert" className="notes-error">
           {model.error}
@@ -396,15 +396,16 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
                 >
                   <span className="notes-item-title">
                     <LibraryItemIcon itemKey={noteIconKey(item)} kind={item.object?.kind === "workspace.board" || /\.canvas$/i.test(item.title) ? "board" : item.target.kind === "pdf-annotation" ? "pdf" : "note"} />
-                    <strong title={item.title}><SearchHighlight text={item.title} query={model.query} /></strong>
+                    <strong title={item.title}>{item.titleOrigin === "derived-body" ? "批注" : <SearchHighlight text={item.title} query={model.query} />}</strong>
                   </span>
 
                   {model.selected?.key === item.key && (item.labels ?? []).length > 0 && <span className="notes-item-labels" aria-label="笔记标签">
                     {(item.labels ?? []).map((label) => <span key={label} className={`notes-label notes-label-${label}`}>{noteLabels[label]}</span>)}
                   </span>}
                 </button>
-                <div className="notes-item-source" title={item.source}>{item.unavailable ? "来源不可用" : <ResourceLink locator={liteasyPath(model.scopeId ?? "local", item.target)} previewOnClick>{item.source || "来源不明"}</ResourceLink>}</div>
+                {item.boardMembers ? <span className="notes-item-source">{item.boardMembers.length} 个元素{item.memberHits?.length ? ` · 命中 ${item.memberHits.length} 个元素` : ""}</span> : <div className="notes-item-source" title={item.source}>{item.unavailable ? "来源不可用" : <ResourceLink locator={liteasyPath(model.scopeId ?? "local", item.target)} previewOnClick intent={item.annotation ? "origin" : "asset"}>{item.source || "来源不明"}</ResourceLink>}</div>}
                 {model.selected?.key !== item.key && item.text.trim() ? <div className="notes-item-excerpt"><ContentExcerpt content={legacyContent(item.text)} paperAnchors={item.paperAnchors ?? item.object?.paperAnchors} /></div> : null}
+                {item.memberHits?.length ? <DisclosureSection title="查看命中元素">{item.memberHits.map(hit => <Button key={hit.placementId} size="small" appearance="subtle" onClick={() => model.openBoardMember?.(item, hit.placementId)}>{hit.title}</Button>)}</DisclosureSection> : null}
                 <ContextualActions selected={model.selected?.key === item.key} menuOpen={itemMenu === item.key}><Menu onOpenChange={(_, data) => setItemMenu(data.open ? item.key : undefined)}>
                   <MenuTrigger disableButtonEnhancement>
                     <Button

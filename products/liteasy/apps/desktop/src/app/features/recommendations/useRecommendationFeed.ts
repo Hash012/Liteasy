@@ -1,6 +1,8 @@
+import { getActiveModelProvider, getModelForSettings } from "../models/modelPolicy";
+import { curateRecommendationSnapshot } from "./recommendationResearchEnhancer";
+import { feedbackForPaper, feedbackFacet, type FeedbackRequest } from "./recommendationFeedbackProjection";
 import { buildSelectionCacheKey, buildWorkspaceCacheKey } from "./useRecommendations";
 import { adoptRecommendationBrief } from "./recommendationBrief";
-import { enhanceRecommendationReasons } from "./recommendationResearchEnhancer";
 import type { SettingsState } from "../settings/settings.types";
 import { createRecommendationEvidenceStore } from "./recommendationEvidence";
 import { projectEvidence } from "../../../../../../packages/recommendation-core/v2.mjs";
@@ -33,7 +35,7 @@ export function useRecommendationFeed(input: FeedInput) {
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const latest = useRef(input); latest.current = input;
-  const contextVersion = feedHash([input.context.views.map(view => [view.id, view.revision]), input.profile]);
+  const contextVersion = feedHash([input.context.views.map(view => [view.id, view.revision]), input.profile, input.modelSettings ? [getActiveModelProvider(input.modelSettings), getModelForSettings(input.modelSettings), input.modelSettings["models.connection_mode"]] : null]);
   const latestContextVersion = useRef(contextVersion); latestContextVersion.current = contextVersion;
   const previousContext = useRef<{ identity: string; version: string }>();
   const localAccount = resolveLocalAccountKey();
@@ -48,7 +50,7 @@ export function useRecommendationFeed(input: FeedInput) {
   const [running, setRunning] = useState(false);
   const evidenceEpoch = useRef<{ identity: string; epoch: number }>();
   const read = async () => { try { let value = await coordinator.read(); if (!latest.current.pending && value.current && value.current.sourceRevision !== latestContextVersion.current) value = await coordinator.invalidateEvidence(); if (mounted.current && identityRef.current === identity) setState({ identity, value }); } catch (error) { if (mounted.current && identityRef.current === identity) setState({ identity, error: String(error) }); } };
-  const run = async (task: RecommendationTask) => {
+  const prepareContext = async (task: RecommendationTask) => {
     // Snapshot the authorized input once. No closure reads after a request starts.
     const version = latestContextVersion.current;
     const current = latest.current, context = structuredClone(current.context), preferences = structuredClone(current.preferences);
@@ -72,6 +74,10 @@ export function useRecommendationFeed(input: FeedInput) {
     for (const facet of evidence.facets.filter(facet => ["confirmed", "pinned"].includes(facet.status))) {
       context.views.push({ id: facet.id, title: facet.label, text: facet.problem, revision: facet.version, private: true, kind: "profile", provenance: "profile", importance: 1 });
     }
+    return { version, current, context, preferences, evidenceStore, evidence, projected };
+  };
+  const run = async (task: RecommendationTask) => {
+    const { version, current, context, preferences, evidenceStore, evidence, projected } = await prepareContext(task);
     const documents = context.documents.filter(doc => preferences.sendPrivateText || !context.views.find(view => view.id === doc.id)?.private);
     const profile = preferences.sendPrivateText && preferences.useProfile ? current.profile : undefined;
     let items: RecommendationItem[];
@@ -96,13 +102,36 @@ export function useRecommendationFeed(input: FeedInput) {
         active: () => !task.signal.aborted && identityRef.current === identity, task })).items;
     }
     if (version !== latestContextVersion.current || (await evidenceStore.read()).revision !== evidence.revision) throw new DOMException("Task evidence changed", "AbortError");
-    const feedback = (await coordinator.read()).feedback ?? [];
-    items = items.map(item => feedback.some(row => row.id === (item.canonicalId ?? item.id) && (!row.facetId || row.facetId === item.relatedDocumentTitle) && ["too_basic", "too_advanced"].includes(row.action))
-      ? { ...item, scoreComponents: { ...item.scoreComponents, baseRelevance: item.relevanceScore, diversityPenalty: item.scoreComponents?.diversityPenalty ?? 0, preference: item.scoreComponents?.preference ?? 0, sourceRelevance: item.relevanceScore,
-        finalScore: Math.max(0, (item.scoreComponents?.finalScore ?? item.relevanceScore) - .12) } } : item);
-    const enhanced = await enhanceRecommendationReasons({ assets: current.assets, items, context, preferences, settings: current.modelSettings, task });
-    if (version !== latestContextVersion.current || (await evidenceStore.read()).revision !== evidence.revision) throw new DOMException("Task evidence changed", "AbortError");
-    return enhanced;
+    const projection = (await coordinator.read()).feedbackProjection ?? [];
+    items = items.map(item => {
+      const related = item.contextEvidence?.find(row => context.views.some(view => view.id === row.viewId));
+      const facetId = item.facetId ?? related?.viewId ?? `workspace:${feedHash(current.workspace)}`;
+      const candidate = { ...item, facetId };
+      return { ...candidate, preferencePenalty: feedbackForPaper(projection, candidate).some(row => row.dimension === "difficulty") ? .12 : 0 };
+    });
+    return rankRecommendations(items, { style: current.style });
+  };
+  const curate = async (only?: RecommendationItem) => {
+    if (running || latest.current.pending) return;
+    setRunning(true);
+    try {
+      const before = await coordinator.read(), snapshot = before.current;
+      if (!snapshot?.items.length) throw new Error("请先检查新论文，获取真实候选。");
+      await coordinator.refresh(only ? "explain" : "ai_curate", async task => {
+        const { version, current, context, preferences, evidenceStore, evidence } = await prepareContext(task);
+        const modelSnapshot = JSON.stringify(current.modelSettings);
+        const active = async () => await task.active() && identityRef.current === identity && version === latestContextVersion.current
+          && JSON.stringify(latest.current.modelSettings) === modelSnapshot && latest.current.preferences.consentEpoch === preferences.consentEpoch
+          && (await coordinator.read()).feedbackRevision === before.feedbackRevision && (await evidenceStore.read()).revision === evidence.revision;
+        const selected = only ? snapshot.items.filter(row => row.id === only.id) : rankRecommendations(snapshot.items.filter(row => !isRecommendationHidden(row, before)).map(item => ({ ...item, preferencePenalty: feedbackForPaper(before.feedbackProjection ?? [], item).some(row => row.dimension === "difficulty") ? .12 : 0 })), { style: current.style });
+        const result = await curateRecommendationSnapshot({ assets: current.assets, items: selected, context, preferences, settings: current.modelSettings, task: { ...task, active }, mode: only ? "explain" : "curate", feedbackRevision: before.feedbackRevision, snapshotId: snapshot.id });
+        if (!await active()) throw new Error("研究依据已变化，请重新精选。");
+        if (!result.items.length) throw new Error("本次没有足够相关的候选，保留原推荐。");
+        return only ? snapshot.items.map(item => result.items.find(row => row.id === item.id) ?? item) : result.items;
+      });
+      await read();
+    } catch (error) { if (mounted.current && identityRef.current === identity) setState(state => ({ ...state, identity, error: error instanceof Error ? error.message : "AI 精选暂不可用。" })); }
+    finally { if (mounted.current && identityRef.current === identity) setRunning(false); }
   };
   const refresh = async (reason: "initial" | "manual_check" | "scheduled" | "explicit_seed") => {
     if (!latest.current.enabled || latest.current.pending) return;
@@ -116,7 +145,7 @@ export function useRecommendationFeed(input: FeedInput) {
           try { const cached = await input.legacyCache.get({ sessionId: input.accountSession.sessionId, selectionKey: buildSelectionCacheKey(input.context.documents, undefined, input.style), workspaceKey: buildWorkspaceCacheKey(input.workspace), sortMode: "relevance", personalizationVersion: 0 }); if (cached.cacheHit) legacy = cached.recommendations; } catch { /* Discovery can still proceed. */ }
         }
         const publicLegacy = legacy.filter(item => item && typeof item.id === "string" && typeof item.title === "string" && Number.isFinite(item.relevanceScore) && !item.resourcePath && /^(crossref|openalex|semantic-scholar)$/i.test(item.source))
-          .map(item => ({ ...item, reason: "来自旧版题录缓存，尚未结合当前研究问题更新。", researchReason: undefined, contextEvidence: undefined, keywordScores: undefined, relatedDocumentTitle: "", relatedDocumentTitles: undefined }));
+          .map(item => ({ ...item, reason: "", reasonState: "legacy" as const, researchReason: undefined, contextEvidence: undefined, keywordScores: undefined, relatedDocumentTitle: "", relatedDocumentTitles: undefined }));
         await coordinator.seedLegacy(publicLegacy);
       }
       await coordinator.refresh(reason, run); await read();
@@ -152,16 +181,22 @@ export function useRecommendationFeed(input: FeedInput) {
   }, [identity, contextVersion, input.pending]);
   useEffect(() => () => { if (identityRef.current !== identity) coordinator.cancel(); }, [identity]);
   const value = state.identity === identity && input.enabled ? state.value : undefined;
-  const items = useMemo(() => rankRecommendations(value?.current?.items.filter(item => !isRecommendationHidden(item, value)).map(item => ({ ...item, feedSnapshotId: value.current!.id, ...(value.saved.includes(item.canonicalId ?? item.id) ? { saved: true } : {}) })) ?? [], { style: input.style, sortMode: input.sort ?? "relevance" }), [value?.current?.id, value?.hidden.join("|"), value?.saved.join("|"), JSON.stringify(value?.feedback), identity, input.style, input.sort]);
+  const items = useMemo(() => (value?.current?.selection === "ai" ? (rows: RecommendationItem[]) => rows : rankRecommendations)(value?.current?.items.filter(item => !isRecommendationHidden(item, value)).map(item => ({ ...item, feedSnapshotId: value.current!.id, feedbackState: feedbackForPaper(value.feedbackProjection ?? [], item), ...(value.saved.includes(item.canonicalId ?? item.id) ? { saved: true } : {}) })) ?? [], { style: input.style, sortMode: input.sort ?? "relevance" }), [value?.current?.id, value?.hidden.join("|"), value?.saved.join("|"), JSON.stringify(value?.feedback), identity, input.style, input.sort]);
   return { recommendationItems: items, recommendationStatus: (!input.enabled ? "disabled" : running && !items.length ? "loading" : value?.current ? "ready" : state.error ? "error" : "idle") as RecommendationStatus,
-    recommendationPending: running, recommendationMessage: value?.message ?? state.error ?? (value?.current && navigator.onLine === false ? "当前离线，显示本机缓存。" : value?.current ? value.current.generatedAt ? `上次更新：${new Date(value.current.generatedAt).toLocaleString()}` : "旧版题录缓存 · 待更新" : "根据资料库和研究兴趣提供推荐；也可明确按选集探索。"),
-    recordSignal: async (item: RecommendationItem, action: RecommendationFeedbackMeaning) => { await coordinator.recordFeedback(item.canonicalId ?? item.id, action, item.feedSnapshotId, item.relatedDocumentTitle); await read(); },
-    adoptBrief: async (item: RecommendationItem) => { if (!latest.current.assets) throw new Error("当前工作区不能保存笔记。"); return adoptRecommendationBrief(item, latest.current.assets); },
+    recommendationPending: running, recommendationMessage: state.error ?? value?.message ?? (value?.current && navigator.onLine === false ? "当前离线，显示本机缓存。" : value?.current ? value.current.generatedAt ? `上次更新：${new Date(value.current.generatedAt).toLocaleString()}` : "旧版题录缓存 · 待更新" : "根据资料库和研究兴趣提供推荐；也可明确按选集探索。"),
+    recordSignal: async (item: RecommendationItem, action: RecommendationFeedbackMeaning, command?: FeedbackRequest) => { const receipt = await coordinator.recordFeedback(item.canonicalId ?? item.id, action, item.feedSnapshotId, feedbackFacet(item), command); await read(); return receipt; },
+    adoptBrief: async (item: RecommendationItem) => { if (!latest.current.assets) throw new Error("当前工作区不能保存笔记。"); return adoptRecommendationBrief(item, latest.current.assets, async source => {
+      const controller = new AbortController();
+      const frozen = await prepareContext({ signal: controller.signal, active: async () => true, request: async () => { throw new Error("采用笔记不会调用模型。"); }, upstreamUnknown() {} });
+      return frozen.context.views.some(view => view.id === source.evidenceId && view.revision === source.revision && view.text.startsWith(source.text));
+    }); },
     pendingSnapshot: Boolean(value?.pending), acceptPending: async () => { await coordinator.acceptPending(); await read(); },
+    curateRecommendations: curate, restoreRecommendations: async () => { await coordinator.restorePrevious(); await read(); }, hasPreviousRecommendations: Boolean(value?.previous),
+    applyLocalPreferences: async () => { await coordinator.applyPreferences(); await read(); },
     refreshRecommendations: () => refresh("manual_check"),
     clearRecommendationCache: async () => { await coordinator.clear(); await read(); },
     recordRecommendationFeedback: async (candidate: RecommendationItem, action: "saved" | "dismissed") => {
-      if (action === "dismissed") await coordinator.recordFeedback(candidate.canonicalId ?? candidate.id, "not_relevant", candidate.feedSnapshotId, candidate.relatedDocumentTitle);
+      if (action === "dismissed") await coordinator.recordFeedback(candidate.canonicalId ?? candidate.id, "not_relevant", candidate.feedSnapshotId, feedbackFacet(candidate));
       else await coordinator.feedback(candidate.canonicalId ?? candidate.id, action);
       await read();
       if (!input.direct && input.accountSession) {

@@ -54,6 +54,12 @@ function createBrowserPdfSource(file: File, fallbackPath: string) {
 }
 
 type UseWorkspaceActionsInput = {
+  processingPolicy?: () => "on-open" | "on-import" | "manual";
+  processingReady?: () => Promise<void>;
+  processingRecipe?: () => string;
+  processingStorage?: import("../objects/objectStorage").ObjectStorage;
+  processingScope?: string;
+  processingActive?: () => boolean;
   extractPaperChunks?: (paper: Paper) => Promise<RetrievalChunk[]>;
   extractPaperIndex?: (paper: Paper) => Promise<{
     chunks: RetrievalChunk[];
@@ -97,6 +103,7 @@ export function buildImportJobsByDocumentId(workspaceStore: WorkspaceStore, impo
 }
 
 export function useWorkspaceActions({
+  processingPolicy = () => "on-open", processingReady, processingRecipe = () => "local-pdfjs/v1", processingStorage, processingScope = "local", processingActive = () => true,
   extractPaperChunks,
   extractPaperIndex,
   extractPaperResources,
@@ -115,14 +122,14 @@ export function useWorkspaceActions({
 }: UseWorkspaceActionsInput) {
   const resolvePaperIndex = extractPaperIndex ?? (extractPaperChunks
     ? async (paper: Paper) => ({ chunks: await extractPaperChunks(paper), pages: undefined })
-    : async (paper: Paper) => extractPdfIndexForPaper(paper, { loadPdfSource, ocrLanguage }));
+    : async (paper: Paper, signal?: AbortSignal) => extractPdfIndexForPaper(paper, { loadPdfSource, ocrLanguage, signal }));
   const resolvePaperResources = extractPaperResources
     ? async (paper: Paper) => ({
         ...(await extractPaperResources(paper)),
         pages: undefined
       })
-    : async (paper: Paper) => ({
-        ...(await resolvePaperIndex(paper)),
+    : async (paper: Paper, signal?: AbortSignal) => ({
+        ...(await resolvePaperIndex(paper, signal)),
         figures: [] as MineruFigure[]
       });
 
@@ -138,6 +145,7 @@ export function useWorkspaceActions({
       artifactKind: "fulltext",
       paperId: paper.id,
       snapshot: buildPaperFulltextSnapshot({
+        sourceHash: paper.contentHash, recipe: processingRecipe(),
         extractedAt: new Date().toISOString(),
         pageTextExtractions: Object.fromEntries(pages
           .filter((page) => page.textExtraction)
@@ -345,7 +353,8 @@ export function useWorkspaceActions({
           const previous = previousPapersById.get(paper.id);
           return Boolean(paper.sourcePath) && (!previous || previous.sourcePath !== paper.sourcePath);
         });
-        queueImportForPapers(papersToExtract, () => {
+        for (const paper of papersToExtract) void Promise.resolve(onPaperIdentityReady?.({ paper, firstPageText: "" })).catch(() => {});
+        queueImportForPapers(papersToExtract.filter(paper => (paper.processingPolicy ?? processingPolicy()) === "on-import"), () => {
           onAnalysisHint(`已完成 ${papersToExtract.length} 篇 PDF 的全文抽取与搜索索引。`);
         });
         return;
@@ -379,7 +388,8 @@ export function useWorkspaceActions({
     if (addedPapers.length > 0) {
       syncWorkspace();
       onAnalysisHint(`已将 ${addedPapers.length} 个 PDF 加入文献库。`);
-      queueImportForPapers(addedPapers, () => {
+      for (const paper of addedPapers) void Promise.resolve(onPaperIdentityReady?.({ paper, firstPageText: "" })).catch(() => {});
+      queueImportForPapers(addedPapers.filter(paper => (paper.processingPolicy ?? processingPolicy()) === "on-import"), () => {
         onAnalysisHint(`已完成 ${addedPapers.length} 篇 PDF 的全文抽取与搜索索引。`);
       });
       return;
@@ -447,7 +457,17 @@ export function useWorkspaceActions({
       return "idle";
     }
 
-    const needed = papers.filter((paper) => importStore.getLatestJobByDocumentId(paper.id)?.status !== "parsed");
+    const recipe = processingRecipe();
+    const source = { ...workspaceStore.getState().workspaceSource };
+    const taskKey = (paper: Paper) => JSON.stringify([processingScope, source, paper.contentHash ?? [paper.id, paper.sourcePath], "structured-fulltext", recipe, ocrLanguage]);
+    const matches = (paper: Paper, job?: ImportJob) => job?.sourcePath === (paper.sourcePath ?? "") && (!job.taskKey || job.taskKey === taskKey(paper));
+    const valid = (paper: Paper) => {
+      const current = workspaceStore.getState();
+      const live = current.papers.find(item => item.id === paper.id);
+      return processingActive() && processingRecipe() === recipe && current.workspaceSource.rootPath === source.rootPath && current.workspaceSource.type === source.type &&
+        Boolean(live && live.sourcePath === paper.sourcePath && live.contentHash === paper.contentHash);
+    };
+    const needed = papers.filter(paper => { const job = importStore.getLatestJobByDocumentId(paper.id); return job?.status !== "parsed" || !matches(paper, job); });
     if (needed.length === 0) return "already_imported";
     let started = false;
     let scheduling = true;
@@ -470,28 +490,26 @@ export function useWorkspaceActions({
     unsubscribe = importStore.subscribe(check);
     needed.forEach((paper) => {
       const existing = importStore.getLatestJobByDocumentId(paper.id);
-      if (existing?.status === "queued" || existing?.status === "parsing") return;
+      if (matches(paper, existing) && (existing?.status === "queued" || existing?.status === "parsing")) return;
       started = true;
       const sourcePath = paper.sourcePath ?? "";
-      const jobId = importStore.startImport({ documentId: paper.id, sourcePath });
+      const jobId = importStore.startImport({ documentId: paper.id, sourcePath, taskKey: taskKey(paper) });
       syncImportJobs();
       if (!sourcePath) {
         importStore.markFailed(jobId, "文献没有可读取的 PDF 正文。");
         syncImportJobs();
         return;
       }
-      void importDocument?.(sourcePath).catch(() => {});
-      window.setTimeout(() => {
-        importStore.markParsing(jobId);
-        syncImportJobs();
-        void resolvePaperResources(paper)
-          .then(async ({ chunks, figures, pages }) => {
-            if (chunks.length === 0) {
-              throw new Error("PDF did not contain extractable text");
-            }
-            if (pages?.length) {
-              await persistExtractedPaperArtifacts(paper, pages);
-            }
+      void importStore.schedule({ key: taskKey(paper), storage: processingStorage, active: () => valid(paper) }, async (signal, checkCurrent) => {
+        checkCurrent();
+        importStore.markParsing(jobId); syncImportJobs();
+        void importDocument?.(sourcePath).catch(() => {});
+        const result = await resolvePaperResources(paper, signal); checkCurrent();
+        if (!result.chunks.length) throw new Error("未提取到正文；扫描文档可先使用区域批注，再手动准备 OCR。");
+        if (result.pages?.length) { checkCurrent(); await persistExtractedPaperArtifacts(paper, result.pages); checkCurrent(); }
+        return { chunks: result.chunks, figures: result.figures };
+      })          .then(async ({ chunks, figures }) => {
+            if (!valid(paper)) throw new DOMException("解析结果已过期", "AbortError");
             const firstPage = Math.min(...chunks.map((chunk) => chunk.page));
             const firstPageText = chunks
               .filter((chunk) => chunk.page === firstPage)
@@ -523,12 +541,11 @@ export function useWorkspaceActions({
             });
           })
           .catch((error) => {
-            const reason = error instanceof Error ? error.message : String(error);
+            const reason = error instanceof DOMException && error.name === "AbortError" ? "已取消解析，可稍后重试。" : error instanceof Error ? error.message : String(error);
             importStore.markFailed(jobId, reason);
-            onAnalysisHint(`《${paper.title}》解析失败：${reason}`);
+            if (valid(paper)) onAnalysisHint(`《${paper.title}》解析失败：${reason}`);
           })
           .finally(syncImportJobs);
-      }, 0);
     });
     scheduling = false;
     check();
@@ -609,6 +626,14 @@ export function useWorkspaceActions({
   }
 
   return {
+    async prepareOpenedPaper(paper: Paper) {
+      try {
+        if (processingReady) await processingReady();
+        if (!processingActive()) return;
+        const current = workspaceStore.getState().papers.find(item => item.id === paper.id);
+        if (current && (current.processingPolicy ?? processingPolicy()) === "on-open") queueImportForPapers([current]);
+      } catch { onAnalysisHint("未能读取文献的解析设置，请稍后重试。PDF 仍可阅读。"); }
+    },
     addDroppedPdfFiles,
     addExternalPdfToLibrary,
     ensurePapersImported,
@@ -618,6 +643,15 @@ export function useWorkspaceActions({
     importSelectedSet,
     moveFolder,
     movePaper,
+    cancelPaperProcessing(paper: Paper) { const job = importStore.getLatestJobByDocumentId(paper.id); if (job?.taskKey) { importStore.cancel(job.taskKey); importStore.markFailed(job.id, "已取消解析，可稍后重试。"); syncImportJobs(); } },
+    async setPaperProcessingPolicy(paper: Paper, policy: Paper["processingPolicy"]) {
+      try {
+        if (processingStorage) { const key = `imports/policy/${encodeURIComponent(paper.id)}`, row = await processingStorage.get(key); if (!processingActive()) return;
+          await processingStorage.commit([{ key, expected: row?.version ?? null, row: { key, version: crypto.randomUUID(), value: { policy } } }]); }
+        if (!processingActive()) return;
+        workspaceStore.updatePapers([{ ...paper, processingPolicy: policy }]); syncWorkspace();
+      } catch { onAnalysisHint("解析时机未保存，请稍后重试。"); }
+    },
     queueImportForPapers,
     syncImportJobs,
     syncWorkspace,

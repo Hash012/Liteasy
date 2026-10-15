@@ -19,6 +19,7 @@ export type AgentAsset = {
 export type AgentAssetSearch = { query: string; limit?: number; signal?: AbortSignal };
 export type AgentAssetReadOptions = { preparation?: "cached" | "allow"; offset?: number; maxCharacters?: number; signal?: AbortSignal };
 export type AgentAssetRead = {
+  userContext?: { text: string; representationId: string };
   source?: import("../resource-links/paperReferenceSource").PaperReferenceSource;
   asset: AgentAsset;
   content?: import("../markdown/contentFragment").ContentFragment;
@@ -66,6 +67,7 @@ export type AgentAssetAdapter = {
   search(input: AgentAssetSearch): Promise<AgentAsset[]>;
   stat(path: string, options?: { signal?: AbortSignal }): Promise<AgentAsset>;
   read(path: string, options: AgentAssetReadOptions): Promise<AgentAssetRead>;
+  present?(path: string, options: import("./resourcePresentation").PresentationOptions): Promise<import("./resourcePresentation").ResourcePresentation>;
   resolveRelativeImages?(path: string, relativePath: string, options?: { signal?: AbortSignal }): Promise<ModelImageInput[]>;
   resolveImages?(path: string, options?: { signal?: AbortSignal }): Promise<ModelImageInput[]>;
   write?(path: string, input: AgentAssetWriteOptions): Promise<AgentAssetWriteReceipt>;
@@ -73,7 +75,7 @@ export type AgentAssetAdapter = {
 };
 
 export class AgentAssetError extends Error {
-  constructor(readonly code: "invalid_path" | "unavailable" | "scope_changed" | "read_only" | "revision_conflict" | "invalid_request", message: string) {
+  constructor(readonly code: "unsupported_type" | "ambiguous_provider" | "not_found" | "permission_denied" | "revision_unavailable" | "not_prepared" | "transient_failure" | "invalid_path" | "unavailable" | "scope_changed" | "read_only" | "revision_conflict" | "invalid_request", message: string) {
     super(message);
     this.name = "AgentAssetError";
   }

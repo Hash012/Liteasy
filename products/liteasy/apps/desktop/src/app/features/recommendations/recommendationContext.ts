@@ -12,7 +12,7 @@ import { recommendationDocument } from "./recommendationSeed";
 import type { RecommendationPreferences } from "./recommendationPreferences";
 
 export type RecommendationAssetSelection = { path: string; title?: string; abstract?: string; revision?: string };
-export type RecommendationContextView = View & { revision: string; provenance: "metadata" | "asset" | "user-note" | "highlight" | "profile"; private: boolean };
+export type RecommendationContextView = View & { representation?: "user-context"; revision: string; provenance: "metadata" | "asset" | "user-note" | "highlight" | "profile"; private: boolean };
 export type RecommendationContext = { localCandidates?: RecommendationItem[]; views: RecommendationContextView[]; documents: RecommendationRequestDocument[]; warnings: string[] };
 function prose(text: string, kind: string) {
   if (!/board|canvas/.test(kind)) return text;
@@ -26,15 +26,16 @@ export async function buildRecommendationContext(input: { scope: string; papers:
   const views: RecommendationContextView[] = [], warnings: string[] = [], documents = input.papers.map(recommendationDocument);
   const add = (view: RecommendationContextView) => { if (view.text.trim() && !views.some((old) => old.id === view.id)) views.push({ ...view, text: view.text.slice(0, 8000) }); };
   for (const doc of documents) add({ id: `paper:${doc.id}`, kind: "document", title: doc.title,
-    path: liteasyPath(input.scope, { kind: "paper", paperId: doc.id }), revision: JSON.stringify(doc),
+    revision: JSON.stringify(doc),
     text: [doc.title, doc.abstract, ...(doc.subjects ?? []), ...(doc.keywords ?? []), doc.venue].filter(Boolean).join("\n"), provenance: "metadata", private: false });
   for (const selection of (input.selected ?? []).slice(0, 8)) {
     input.signal.throwIfAborted();
     if (!input.assets) continue;
     try {
       const asset = await input.assets.stat(selection.path, { signal: input.signal });
-      const summary = selection.abstract || asset.summary || "";
-      const content = summary.length > 200 ? summary : prose((await input.assets.read(selection.path, { maxCharacters: 8000, signal: input.signal })).text, asset.kind);
+      const read = await input.assets.read(selection.path, { maxCharacters: 8000, signal: input.signal, preparation: "cached" });
+      if (!asset.revision || asset.revision !== read.asset.revision) throw new Error("资料读取期间已更新");
+      const content = prose(read.text, asset.kind);
       input.signal.throwIfAborted();
       if (!content.trim()) { warnings.push(`《${asset.title}》暂无可分析文本，可补充简介。`); continue; }
       add({ id: asset.path, path: asset.path, kind: "document", title: asset.title, revision: asset.revision || selection.revision || content,
@@ -50,10 +51,14 @@ export async function buildRecommendationContext(input: { scope: string; papers:
       if (annotation.aiGuide && !annotation.quickAsk?.question?.trim()) continue;
       const userText = [!annotation.aiGuide ? annotation.note?.trim() : "", !annotation.aiGuide && (annotation.kind === "text" || annotation.kind === "note") ? annotation.text?.trim() : "", annotation.quickAsk?.question?.trim()].filter(Boolean).join("\n");
       const path = liteasyPath(input.scope, { kind: "pdf-annotation", paperId: note.paper!.id, annotationId: annotation.id });
-      // Quote and user question remain distinguishable. Model answers are not user preferences.
-      add({ id: `annotation:${note.paper!.id}:${annotation.id}`, kind: "annotation", title: note.title,
-        path, anchorRef: path, revision: annotation.updatedAt, text: userText ? `${userText}\n引用：${annotation.excerpt.slice(0, 2000)}` : annotation.excerpt.slice(0, 1000),
-        provenance: userText ? "user-note" : "highlight", importance: userText ? 1 : .25, private: true });
+      if (!input.assets) continue;
+      try {
+        const read = await input.assets.read(path, { maxCharacters: 2000, signal: input.signal, preparation: "cached" });
+        if (!read.asset.revision) continue;
+        add({ id: `annotation:${note.paper!.id}:${annotation.id}`, kind: "annotation", title: note.title,
+          path, anchorRef: path, revision: read.asset.revision, text: read.userContext?.text ?? "", representation: "user-context",
+          provenance: userText ? "user-note" : "highlight", importance: userText ? 1 : .25, private: true });
+      } catch { input.signal.throwIfAborted(); warnings.push("部分批注依据暂不可用，已保留其原文。"); }
     }
     if (input.projects && input.assets) {
       const selectedIds = new Set(input.papers.map((paper) => paper.id));

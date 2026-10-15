@@ -10,7 +10,7 @@ import { readerContextDragMime, readDraggedReaderContext } from "../app/features
 
 const pageTexts = { 1: "Paper title\nAbstract\nOur method learns compact representations.\n1 Introduction\nFull page evidence." };
 vi.mock("../app/features/pdf/usePdfFulltextStore", () => ({
-  usePdfFulltextStore: () => ({ pageTexts, scannedPages: new Set(), documentHasNoTextLayer: false, onPageTextRendered: () => {} })
+  usePdfFulltextStore: () => ({ representationForPage: () => undefined, pageTexts, scannedPages: new Set(), documentHasNoTextLayer: false, onPageTextRendered: () => {} })
 }));
 const paper = { id: "quick-ask-test", title: "Quick ask paper", sourcePath: "/papers/question.pdf" };
 

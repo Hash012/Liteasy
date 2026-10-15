@@ -1,3 +1,4 @@
+import { canonicalResourceJson, resourceContentRevision } from "../resource-filesystem/resourceFileContent";
 /**
  * The extracted page text of a paper, kept in the library rather than the cache.
  *
@@ -14,6 +15,9 @@ export type PaperFulltextPage = {
 };
 
 export type PaperFulltextSnapshot = {
+  representationRevision?: string;
+  sourceHash?: string;
+  recipe?: string;
   /** Parser provenance affects citation/position confidence and must survive cache clearing. */
   parser: "local_pdfjs";
   extractedAt: string;
@@ -48,6 +52,9 @@ export function normalizePaperFulltext(value: unknown): PaperFulltextSnapshot | 
     textExtraction: page.textExtraction ?? "embedded" as const
   }));
   return {
+    ...(typeof candidate.representationRevision === "string" ? { representationRevision: candidate.representationRevision } : {}),
+    ...(typeof candidate.sourceHash === "string" ? { sourceHash: candidate.sourceHash } : {}),
+    ...(typeof candidate.recipe === "string" ? { recipe: candidate.recipe } : {}),
     parser: "local_pdfjs",
     extractedAt: typeof candidate.extractedAt === "string" ? candidate.extractedAt : "",
     pages: sortPages(pages),
@@ -132,6 +139,8 @@ export function samePaperPageTexts(left: PaperPageTextRecord, right: PaperPageTe
 }
 
 export function buildPaperFulltextSnapshot(input: {
+  sourceHash?: string;
+  recipe?: string;
   extractedAt: string;
   pageTextExtractions?: Readonly<Record<number, "embedded" | "mineru" | "ocr">>;
   pageTexts: PaperPageTextRecord;
@@ -139,10 +148,17 @@ export function buildPaperFulltextSnapshot(input: {
   return {
     parser: "local_pdfjs",
     extractedAt: input.extractedAt,
+    ...(input.sourceHash ? { sourceHash: input.sourceHash } : {}),
+    ...(input.recipe ? { recipe: input.recipe } : {}),
     pages: paperPageTextRecordToPages(input.pageTexts).map((page) => ({
       ...page,
       textExtraction: input.pageTextExtractions?.[page.page] ?? "embedded"
     })),
     version: 2
   };
+}
+
+/** Must match the native archive identity; timestamps never create a new representation. */
+export async function paperFulltextRevision(snapshot: PaperFulltextSnapshot): Promise<string> {
+  return (await resourceContentRevision(canonicalResourceJson({ pages: snapshot.pages, sourceHash: snapshot.sourceHash ?? null, parser: snapshot.parser ?? null, recipe: snapshot.recipe ?? null }))).replace(/^sha256:/, "");
 }

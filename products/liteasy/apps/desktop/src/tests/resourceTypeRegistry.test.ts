@@ -42,8 +42,8 @@ test("research.memo joins real discovery, read, context, native, evidence, CAS a
 test("registration rejects missing context obligations, handlers, fixtures and untrusted profiles", () => {
   const registry = createResourceTypeRegistry(() => true);
   const base: any = { typeId: "research.invalid", schemaVersion: 1, owner: "test", nativeCodec: "md/v1", profile: "liteasy-research-markdown/v1", viewId: "content", fixtureIds: ["f"],
-    navigation: { supported: false, reason: "test" }, source: { accepts() {}, read() {}, search() {}, stat() {} }, context: { supported: false, reason: "read only" }, write: { supported: false, reason: "read only" }, file: { supported: false, reason: "not materialized" } };
-  for (const change of [{ context: undefined }, { context: { supported: true } }, { profile: "execute-html" }, { fixtureIds: [] }, { file: { supported: true, implementation: {} } }]) {
+    presentation: { supported: false, reason: "test" }, navigation: { supported: false, reason: "test" }, source: { accepts() {}, read() {}, search() {}, stat() {} }, context: { supported: false, reason: "read only" }, write: { supported: false, reason: "read only" }, file: { supported: false, reason: "not materialized" } };
+  for (const change of [{ presentation: undefined }, { presentation: { supported: true } }, { context: undefined }, { context: { supported: true } }, { profile: "execute-html" }, { fixtureIds: [] }, { file: { supported: true, implementation: {} } }]) {
     expect(() => registry.register({ ...base, ...change })).toThrow();
   }
   registry.register(base);

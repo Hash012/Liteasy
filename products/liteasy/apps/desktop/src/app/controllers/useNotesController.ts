@@ -463,12 +463,19 @@ export function useNotesController(input: {
         all.push(...page.objects);
         cursor = page.cursor;
       } while (cursor);
-      const boardMembers = new Map<string, string>();
+      const boardMembers = new Map<string, NonNullable<NotesItem["boardMemberships"]>>();
+      const boardPlacements = new Map<string, Awaited<ReturnType<typeof repository.listPlacements>>>();
       for (const board of all.filter(
         (object) => object.kind === "workspace.board",
-      ))
-        for (const placement of await repository.listPlacements(board.objectId))
-          boardMembers.set(placement.ref.objectId, board.title);
+      )) {
+        const placements = await repository.listPlacements(board.objectId);
+        boardPlacements.set(board.objectId, placements);
+        for (const placement of placements) {
+          const members = boardMembers.get(placement.ref.objectId) ?? [];
+          members.push({ boardRef: refOf(board), boardTitle: board.title, placementId: placement.placementId, placementRevision: placement.revision, memberRef: placement.ref });
+          boardMembers.set(placement.ref.objectId, members);
+        }
+      }
       const objectMap = new Map(all.map((object) => [object.objectId, object]));
       const [nextFolders, nextReferences, paperProjects, importedObjects, nextLabels] = await Promise.all([
         notes.listFolders(), notes.listReferences(), projects.listProjects(), notes.importedObjectIds(), notes.listLabels(),
@@ -506,18 +513,19 @@ export function useNotesController(input: {
         .map((object) => {
           const source = sourceOf(object);
           const folder =
-            object.kind === "workspace.board" ||
-            boardMembers.has(object.objectId)
-              ? "default/board"
-              : source.artifact ? "default/artifact" : source.paper
-                ? "default/paper"
-                : "default/note";
+            object.kind === "workspace.board" ? "default/board"
+              : source.artifact ? "default/artifact" : source.paper ? "default/paper"
+                : boardMembers.has(object.objectId) ? "default/board" : "default/note";
           const item = fromObject(object, folder);
           if (source.artifact) item.source = `产物笔记 · ${source.artifact}`;
           else if (source.paper) item.source = `论文笔记 · ${source.paper.title}`;
           if (source.paper) item.paperIdentity = source.paper;
-          if (boardMembers.has(object.objectId))
-            item.source = `研究白板 · ${boardMembers.get(object.objectId)}`;
+          const memberships = boardMembers.get(object.objectId);
+          if (memberships) {
+            item.boardMemberships = memberships;
+            item.source = `研究白板 · ${[...new Map(memberships.map(member => [member.boardRef.objectId, member.boardTitle])).values()].join("、")}`;
+            if (item.defaultFolderId === "default/board") item.automaticallyListed = false;
+          }
           if (importedObjects.has(object.objectId)) {
             item.defaultFolderId = NOTES_EXTERN;
             item.automaticallyListed = !nextReferences.some((entry) => entry.target.kind === "object" && entry.target.ref.objectId === object.objectId);
@@ -525,6 +533,18 @@ export function useNotesController(input: {
           }
           return item;
         });
+      // Board roots own the automatic projection. Pinned placement identities remain available for search and explicit folders.
+      for (const item of byDefault.filter(item => item.object?.kind === "workspace.board")) {
+        const board = item.object!;
+        const members: NonNullable<NotesItem["boardMembers"]> = [];
+        for (const placement of boardPlacements.get(board.objectId) ?? []) {
+          const latest = objectMap.get(placement.ref.objectId);
+          const member = latest?.revision === placement.ref.revision ? latest : await repository.get(placement.ref).catch(() => undefined);
+          members.push({ placementId: placement.placementId, placementRevision: placement.revision, memberRef: placement.ref, title: member?.title ?? "卡片不可用", text: member ? objectText(member) : "" });
+        }
+        if ((await repository.resolveLatest(board.objectId)).revision !== board.revision) throw new Error("白板正在更新，请刷新笔记列表。");
+        item.boardMembers = members;
+      }
       const publish = async () => {
         const indexed = new Map(
           [
@@ -782,9 +802,8 @@ export function useNotesController(input: {
   const searchQuery = compileSearchQuery(query);
   const items = [...visibleItems.values()]
     .map((item) => ({ ...item, labels: resolvedNoteLabels(item, labelOverrides.get(noteLabelKey(item.target))) }))
-    .filter((item) =>
-      searchQuery.matches(`${item.title}\n${item.text}\n${item.source}`, noteSearchMetadata(item)),
-    )
+    .map(item => ({ ...item, memberHits: query.trim() ? item.boardMembers?.filter(member => searchQuery.matches(`${member.title}\n${member.text}`, noteSearchMetadata(item))).map(member => ({ placementId: member.placementId, title: member.title })) : undefined }))
+    .filter(item => searchQuery.matches(`${item.title}\n${item.text}\n${item.source}`, noteSearchMetadata(item)) || Boolean(item.memberHits?.length))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const model: NotesViewModel = {
     scopeId: input.scopeId,
@@ -912,6 +931,10 @@ export function useNotesController(input: {
         await notes.removeReference(item.entryId);
         setSelectedKey("");
       }),
+    openBoardMember(item, placementId) {
+      if (item.object?.kind !== "workspace.board" || !item.boardMembers?.some(member => member.placementId === placementId)) return;
+      latest.current.openObject({ ...refOf(item.object), selectorId: `placement:${placementId}` });
+    },
     openSource(item) {
       const operation = ++externalOpenRequest.current;
       if (item.target.kind === "external-file") {

@@ -6250,3 +6250,5 @@ button.pdf-overlay-mark:focus-visible {
 .assistant-input-editor.has-text-selection .assistant-input-highlight { visibility: hidden; }
 .assistant-input-editor.has-text-selection .assistant-input { color: var(--colorNeutralForeground1); }
 .assistant-input-editor .assistant-input::selection { color: var(--colorNeutralForegroundStaticInverted); background: var(--colorBrandBackgroundStatic); text-shadow: none; }
+
+.pdf-page-stage-message { position: absolute; inset: 8px 8px auto; z-index: var(--layer-toolbar); padding: 4px 8px; background: var(--colorNeutralBackground2); color: var(--colorNeutralForeground2); border-radius: 4px; font-size: var(--fontSizeBase200); }

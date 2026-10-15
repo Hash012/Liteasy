@@ -1,3 +1,4 @@
+import { usePdfProcessingController } from "../controllers/usePdfProcessingController";
 import { usePickerReaderActivity } from "../controllers/useContextPickerCatalog";
 import { useResearchSkillsController } from "../controllers/useResearchSkillsController";
 import { ResearchSkillsContext } from "../features/research-skills/researchSkillsPort";
@@ -105,8 +106,6 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useWorkspaceActions } from "../features/workspace/useWorkspaceActions";
 import { useRegisteredWorkspaceActions } from "../features/workspace/useRegisteredWorkspaceActions";
 import type { ImportJob, MineruFigure } from "../features/import/import.types";
-import { extractPdfResourcesWithMineruFallback } from "../features/import/mineruPdfClient";
-import { extractImportedChunksForPaper } from "../features/import/importedPaperExtraction";
 import { loadPdfBytesForImport } from "../features/import/pdfSourceClient";
 import { PaperResourceTab } from "../features/import/PaperResourceTab";
 import { PaperReadingWorkspace } from "../features/paper-reading/PaperReadingWorkspace";
@@ -494,29 +493,9 @@ export function AppShell({
       revealDockRegion(regionId);
     }
   }
+  const pdfProcessing = usePdfProcessingController(settingsStoreRef.current, workspaceStoreRef.current, setWorkspaceState);
   const workspaceActions = useWorkspaceActions({
-    extractPaperResources: (paper) => {
-      const savedMaterial = savedMineruResourcesRef.current[paper.id];
-      if (savedMaterial) {
-        return Promise.resolve({
-          chunks: savedMaterial.textChunks,
-          figures: savedMaterial.figures
-        });
-      }
-      if (settingsState["papers.mineru_mode"] !== "local") return paperServices.extract(paper);
-      return extractPdfResourcesWithMineruFallback({
-        preferLocal: settingsState["models.connection_mode"] === "direct" || !loadStoredAccountSession()?.sessionId,
-        endpoint: settingsState["models.cloud_proxy_endpoint"].startsWith("http")
-          ? settingsState["models.cloud_proxy_endpoint"]
-          : resolveLocalDevCloudEndpoint(undefined, localDevCloudEnv),
-        extractFallback: () => extractImportedChunksForPaper(paper, {
-          loadPdfSource: loadPaperPdfBytes,
-          ocrLanguage: settingsState["import.ocr_language"]
-        }),
-        loadPdfSource: loadPaperPdfBytes,
-        paper
-      });
-    },
+    ...pdfProcessing,
     importStore: importStoreRef.current,
     loadPdfSource: loadPaperPdfBytes,
     moveLocalLibraryResource,
@@ -1710,6 +1689,7 @@ export function AppShell({
     }
 
     webdavSync.openPaper(paper.sourcePath, () => {
+      workspaceActions.prepareOpenedPaper(paper);
       void profileActions.recordPersonalizationSignal({
         kind: "paper_opened",
         title: paper.title
@@ -1993,6 +1973,9 @@ export function AppShell({
     onAddExternalPdf: externalPapers.promoteExternalPaperToLibrary,
     onClearProfile: profileActions.openClearProfileConfirm,
     onClearRecommendations: () => { recommendationLibrary.clear(); knowledgeSync.actions.clearRecommendationCache(); },
+    onCurateRecommendations: knowledgeSync.actions.curateRecommendations,
+    onRestoreRecommendations: knowledgeSync.actions.restoreRecommendations,
+    onApplyRecommendationPreferences: knowledgeSync.actions.applyRecommendationPreferences,
     onRecommendationFeedback: knowledgeSync.actions.recordRecommendationSignal,
     onAdoptRecommendationBrief: knowledgeSync.actions.adoptRecommendationBrief,
     onRefreshRecommendations: knowledgeSync.actions.refreshRecommendations,
@@ -2053,6 +2036,9 @@ export function AppShell({
       void pdfAnnotationPublication.actions.resolvePaperIdentity(paper, createPdfLiteratureHints(paper, {}));
     },
     onCreatePaperChild: paperAttachments.create,
+    onCancelPaperProcessing: workspaceActions.cancelPaperProcessing,
+    onSetPaperProcessingPolicy: workspaceActions.setPaperProcessingPolicy,
+    onPreparePaper: (paper) => { workspaceActions.queueImportForPapers([paper]); },
     onOpenPaperChild: (item, paper) => {
       setLibraryExpanded(false);
       if (item.objectId) { void paperAttachments.open(item, paper).catch((failure) => setAnalysisHint(String(failure))); return; }

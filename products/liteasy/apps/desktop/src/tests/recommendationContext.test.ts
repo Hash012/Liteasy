@@ -22,10 +22,11 @@ test("reads only selected Markdown/ebook/Canvas content, preserving revisions an
 test("user questions outrank a bare highlight; deleted annotations and disabled profile disappear", async () => {
   const annotation = { id: "a1", excerpt: "transaction ordering", updatedAt: "r1", note: "How is serializable snapshot isolation guaranteed?", quickAsk: { answer: "MODEL ANSWER MUST NOT BE A PREFERENCE" } };
   notes.mockResolvedValue([{ title: "Question", paper: { id: "paper-1" }, annotation }, { title: "Question duplicate", paper: { id: "paper-1" }, annotation }]);
-  const input = { ...options(), profile: { topics: ["database"], methods: [], datasets: [], languages: ["polite"] } };
+  const assets = { read: vi.fn(async () => ({ asset: { revision: "content-r1" }, text: "MODEL ANSWER MUST NOT BE A PREFERENCE", userContext: { text: `${annotation.note}\n引用：${annotation.excerpt}`, representationId: "annotation-user-context/v1" } })) } as unknown as AgentAssetService;
+  const input = { ...options(), assets, profile: { topics: ["database"], methods: [], datasets: [], languages: ["polite"] } };
   const context = await buildRecommendationContext(input);
   expect(context.views.filter((view) => view.kind === "annotation")).toHaveLength(1);
-  expect(context.views[0]).toMatchObject({ provenance: "user-note", private: true, importance: 1 });
+  expect(context.views[0]).toMatchObject({ provenance: "user-note", private: true, importance: 1, revision: "content-r1", representation: "user-context" });
   expect(context.views[0].text).not.toContain("MODEL ANSWER"); expect(context.views.some((view) => view.text === "polite")).toBe(false);
   notes.mockResolvedValue([]);
   const removed = await buildRecommendationContext({ ...input, preferences: { ...input.preferences, useProfile: false } });

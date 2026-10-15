@@ -71,6 +71,9 @@ type PdfAnnotationBase = {
   /** Set only by an actual user change to the annotation body. */
   userEditedAt?: string;
   normalizedStart?: number;
+  /** Immutable extracted-text revision; absent on legacy/native-only anchors. */
+  textRepresentationRevision?: string;
+  sourceHash?: string;
   opacity?: number;
   manualSize?: boolean;
   page: number;
@@ -271,6 +274,8 @@ function hasAnnotationFields(value: unknown) {
       typeof candidate.quickAsk.pageText === "string" && typeof candidate.quickAsk.abstractText === "string" &&
       (candidate.quickAsk.introductionText === undefined || typeof candidate.quickAsk.introductionText === "string") &&
       (candidate.quickAsk.receipt === undefined || isQuickAskGenerationReceipt(candidate.quickAsk.receipt)))) &&
+    (candidate.textRepresentationRevision === undefined || typeof candidate.textRepresentationRevision === "string" && /^[a-f0-9]{64}$/.test(candidate.textRepresentationRevision)) &&
+    (candidate.sourceHash === undefined || typeof candidate.sourceHash === "string") &&
     (candidate.normalizedStart === undefined ||
       (isFiniteNumber(candidate.normalizedStart) && candidate.normalizedStart >= 0)) &&
     (candidate.kind !== "ink" || isPdfInkStroke(candidate.ink)) &&
@@ -339,6 +344,15 @@ export function normalizePdfAnnotations(value: unknown, fallbackPaperIdentity?: 
   if (!Array.isArray(value)) return [];
   const now = new Date().toISOString();
   return value.flatMap((annotation) => {
+    // A damaged optional extraction receipt must never discard the user's annotation.
+    if (annotation && typeof annotation === "object" && !Array.isArray(annotation) && "textRepresentationRevision" in annotation) {
+      const { textRepresentationRevision, ...body } = annotation;
+      const revision = typeof textRepresentationRevision === "string" ? textRepresentationRevision.replace(/^sha256:/, "") : "";
+      annotation = /^[a-f0-9]{64}$/.test(revision) ? { ...body, textRepresentationRevision: revision } : body;
+    }
+    if (annotation && typeof annotation === "object" && !Array.isArray(annotation) && "sourceHash" in annotation && typeof annotation.sourceHash !== "string") {
+      const { sourceHash: _sourceHash, ...body } = annotation; annotation = body;
+    }
     // Damage to optional generated content must never discard the user's entry.
     if (annotation && typeof annotation === "object" && !Array.isArray(annotation) &&
       "aiGuide" in annotation && !isGuideAnnotation(annotation.aiGuide)) {

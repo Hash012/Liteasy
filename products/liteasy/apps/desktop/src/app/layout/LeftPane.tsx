@@ -1,3 +1,4 @@
+import type { RecommendationFeedbackHandler } from "../features/recommendations/recommendationFeedbackProjection";
 import type { RecommendationFeedbackMeaning } from "../features/recommendations/recommendationCoordinator";
 import type { LibraryInventory } from "../features/library/libraryInventory";
 import type { SpaceOperationsView } from "../features/spaces/SpaceOperationsPanel";
@@ -91,7 +92,10 @@ export type LeftPaneProps = {
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onClearProfile: () => void;
   onClearRecommendations: () => void;
-  onRecommendationFeedback?: (item: RecommendationItem, action: RecommendationFeedbackMeaning) => Promise<unknown>;
+  onCurateRecommendations?: (item?: RecommendationItem) => Promise<void>;
+  onRestoreRecommendations?: () => Promise<void>;
+  onApplyRecommendationPreferences?: () => Promise<void>;
+  onRecommendationFeedback?: RecommendationFeedbackHandler;
   onAdoptRecommendationBrief?: (item: RecommendationItem) => Promise<unknown>;
   onRefreshRecommendations?: () => void;
   onExploreSelectedRecommendations?: () => void;
@@ -123,6 +127,9 @@ export type LeftPaneProps = {
   libraryExpanded?: boolean;
   onCloseLibraryExpanded?: () => void;
   onCreatePaperChild?: (paper: Paper, kind: "note" | "board", title: string) => Promise<void>;
+  onCancelPaperProcessing?: (paper: Paper) => void;
+  onSetPaperProcessingPolicy?: (paper: Paper, policy: Paper["processingPolicy"]) => void;
+  onPreparePaper?: (paper: Paper) => void;
   onOpenPaperChild?: (item: LibraryPaperChildItem, paper: Paper) => void;
   onRenamePaperChild?: (item: LibraryPaperChildItem, paper: Paper, requestedName: string) => Promise<string>;
   onRefreshLocalLibrary?: () => Promise<void>;
@@ -241,6 +248,7 @@ export function LeftPane({
   onAddDroppedPdfFiles,
   onClearProfile,
   onClearRecommendations,
+  onCurateRecommendations, onRestoreRecommendations, onApplyRecommendationPreferences,
   onRecommendationFeedback,
   onAdoptRecommendationBrief,
   onRefreshRecommendations,
@@ -267,6 +275,7 @@ export function LeftPane({
   onRetrievePaperMetadata,
   libraryExpanded,
   onCloseLibraryExpanded,
+  onPreparePaper, onCancelPaperProcessing, onSetPaperProcessingPolicy,
   onOpenPaperChild,
   onCreatePaperChild,
   onRenamePaperChild,
@@ -444,6 +453,7 @@ export function LeftPane({
             onAddExternalPdf={onAddExternalPdf}
             onAddDroppedPdfFiles={onAddDroppedPdfFiles}
             onClearRecommendations={onClearRecommendations}
+            onCurateRecommendations={onCurateRecommendations} onRestoreRecommendations={onRestoreRecommendations} onApplyRecommendationPreferences={onApplyRecommendationPreferences}
             onRecommendationFeedback={onRecommendationFeedback}
             onAdoptRecommendationBrief={onAdoptRecommendationBrief}
             onRefreshRecommendations={onRefreshRecommendations}
@@ -464,6 +474,8 @@ export function LeftPane({
             onOpenPaper={onOpenPaper}
             onResolvePaperIdentity={onResolvePaperIdentity}
             onRetrievePaperMetadata={onRetrievePaperMetadata}
+            onCancelPaperProcessing={onCancelPaperProcessing} onSetPaperProcessingPolicy={onSetPaperProcessingPolicy}
+            onPreparePaper={onPreparePaper}
             onOpenPaperChild={onOpenPaperChild}
             onCreatePaperChild={onCreatePaperChild}
             onRefreshLocalLibrary={onRefreshLocalLibrary}

@@ -1,3 +1,4 @@
+import { contentPresentation } from "./resourcePresentation";
 import type { ExportDocument, ExportOptions, DocumentFormat } from "../document-export/documentExport.types";
 import type { AgentAsset, AgentAssetAdapter, AgentAssetRead } from "./agentAsset.types";
 import { AgentAssetError } from "./agentAsset.types";
@@ -15,6 +16,7 @@ export type ResourceTypeDefinition = {
   viewId: "content" | "native";
   fixtureIds: readonly string[];
   source: Omit<AgentAssetAdapter, "context" | "write">;
+  presentation: ResourceCapability<NonNullable<AgentAssetAdapter["present"]>>;
   context: ResourceCapability<NonNullable<AgentAssetAdapter["context"]>>;
   write: ResourceCapability<NonNullable<AgentAssetAdapter["write"]>>;
   file: ResourceCapability<ResourceProvider>;
@@ -37,6 +39,7 @@ export function createResourceTypeRegistry(active: () => boolean) {
     if (definition.schemaVersion !== 1 || !definition.owner || !definition.nativeCodec || !definition.fixtureIds?.length) throw new Error("资产类型缺少 codec、所有者或契约 fixture");
     if (!["liteasy-research-markdown/v1", "literal/v1"].includes(definition.profile) || !["content", "native"].includes(definition.viewId)) throw new Error("未注册的内容 profile/view");
     for (const method of ["accepts", "stat", "search", "read"] as const) if (typeof definition.source?.[method] !== "function") throw new Error(`缺少 source.${method}`);
+    assertCapability(definition.presentation, "presentation");
     assertCapability(definition.context, "context"); assertCapability(definition.write, "write"); assertCapability(definition.file, "file", false); assertCapability(definition.navigation, "navigation");
     if (definition.export) {
       assertCapability(definition.export, "export", false);
@@ -56,6 +59,7 @@ export function createResourceTypeRegistry(active: () => boolean) {
       async search(options) { check(); const result = await definition.source.search(options); check(); return result.map(capabilities); },
       async stat(path, options) { check(); const result = await definition.source.stat(path, options); check(); return capabilities(result); },
       async read(path, options): Promise<AgentAssetRead> { check(); const result = await definition.source.read(path, options); check(); return { ...result, asset: capabilities(result.asset) }; },
+      present: definition.presentation.supported ? definition.presentation.implementation : async path => ({ kind: "unavailable", asset: await definition.source.stat(path), code: "not_supported", message: definition.presentation.supported ? "" : definition.presentation.reason, retryable: false }),
       context: definition.context.supported ? definition.context.implementation : undefined,
       write: definition.write.supported ? definition.write.implementation : undefined,
     };
@@ -72,13 +76,16 @@ export function createResourceTypeRegistry(active: () => boolean) {
     },
     async navigate(path: string) {
       check();
-      const definition = [...definitions.values()].find(item => item.source.accepts(path));
+      const matches = [...definitions.values()].filter(item => item.source.accepts(path));
+      if (matches.length > 1) throw new AgentAssetError("ambiguous_provider", "此资源有多个定位入口，请报告此问题。");
+      const definition = matches[0];
       if (!definition?.navigation.supported) throw new AgentAssetError("unavailable", definition?.navigation.supported === false ? definition.navigation.reason : "此类型尚不支持定位");
       const target = await definition.navigation.implementation(path); check(); return target;
     },
     adapters: () => [...definitions.values()].map(adapter),
     matrix: () => [...definitions.values()].map(definition => ({ typeId: definition.typeId, owner: definition.owner, nativeCodec: definition.nativeCodec,
       export: definition.export?.supported ? definition.export.implementation.formats : definition.export?.reason ?? "尚未注册静态导出适配器",
+      presentation: definition.presentation.supported ? "supported" : definition.presentation.reason,
       profile: definition.profile, viewId: definition.viewId, navigation: definition.navigation.supported ? "supported" : definition.navigation.reason, fixtures: definition.fixtureIds,
       context: definition.context.supported ? "supported" : definition.context.reason,
       write: definition.write.supported ? "supported" : definition.write.reason,
@@ -97,6 +104,7 @@ export function createResourceTypeRegistry(active: () => boolean) {
 export function legacyAssetDefinition(source: AgentAssetAdapter): ResourceTypeDefinition {
   return { typeId: source.id, schemaVersion: 1, owner: "workspaceAgentAssetService", nativeCodec: "domain-owned/v1",
     profile: "liteasy-research-markdown/v1", viewId: "content", fixtureIds: [`agentAssetService:${source.id}`], source,
+    presentation: { supported: true, implementation: source.present ?? contentPresentation(source) },
     context: source.context ? { supported: true, implementation: source.context } : { supported: false, reason: "此环境未提供固定上下文入口" },
     write: source.write ? { supported: true, implementation: source.write } : { supported: false, reason: "只读资产；请创建派生笔记" },
     navigation: { supported: false, reason: "通过既有领域导航器定位" },

@@ -122,7 +122,6 @@ import type { PdfPageText } from "./citationAttribution";
 import { resolvePdfSelectionMenuPosition } from "./pdfSelectionPosition";
 import {
   buildPageCharModelFromTextLayer,
-  buildPageCharModelFromGlyphs,
   buildPdfSelectionRange,
   buildPdfSelectionText,
   clientPointToPdfPoint,
@@ -1137,7 +1136,7 @@ type PdfPageViewProps = {
   zoom: number;
 };
 
-function PdfPageView({
+export function PdfPageView({
   activeSearchMatch,
   inkMode = null, inkColor = "#1b66b3", inkWidth = .3, onInkCreate, onInkDeleteStroke, onAnnotationDrag,
   activeTextAnnotationId,
@@ -1171,6 +1170,15 @@ function PdfPageView({
   zoom
 }: PdfPageViewProps) {
   const [nativeCharModel, setNativeCharModel] = useState<PageCharModel>();
+  const [pageStageMessage, setPageStageMessage] = useState("");
+  const selecting = useRef(false);
+  const pendingRefinement = useRef<(() => void) | undefined>();
+  useEffect(() => {
+    let frame = 0;
+    const finish = () => { selecting.current = false; cancelAnimationFrame(frame); frame = requestAnimationFrame(() => { if (selecting.current) return; const refine = pendingRefinement.current; pendingRefinement.current = undefined; refine?.(); }); };
+    window.addEventListener("pointerup", finish); window.addEventListener("pointercancel", finish);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("pointerup", finish); window.removeEventListener("pointercancel", finish); pendingRefinement.current = undefined; };
+  }, []);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pageShellRef = useRef<HTMLElement | null>(null);
   const textLayerRef = useRef<HTMLDivElement | null>(null);
@@ -1271,6 +1279,7 @@ function PdfPageView({
         return;
       }
 
+      setPageStageMessage("");
       try {
         const page: PDFPageProxy = await pdfDocument.getPage(pageNumber);
         if (cancelled) {
@@ -1302,18 +1311,20 @@ function PdfPageView({
             recordImages: preserveImages && readingBackground !== "#ffffff",
             transform: [output.ratio, 0, 0, output.ratio, 0, 0] });
           await renderTask.promise;
-          if (!cancelled) await applyPdfReadingColors(context, readingBackground, preserveImages ? page.imageCoordinates : null, () => cancelled);
+          if (!cancelled) {
+            try { await applyPdfReadingColors(context, readingBackground, preserveImages ? page.imageCoordinates : null, () => cancelled); }
+            catch { if (!cancelled) setPageStageMessage("阅读配色暂不可用，已保留原始页面。"); }
+          }
         }
 
         if (cancelled) {
           return;
         }
 
+        try {
         textLayer.innerHTML = "";
         const textContent = await page.getTextContent();
-        const glyphs = await loadPdfGlyphGeometry(page);
         if (cancelled) return;
-        setNativeCharModel(buildPageCharModelFromGlyphs(glyphs, pageNumber));
         layer = new pdfjsLib.TextLayer({
           container: textLayer,
           textContentSource: textContent,
@@ -1323,12 +1334,18 @@ function PdfPageView({
         if (!cancelled) {
           const pageElement = pageShellRef.current;
           if (pageElement) {
-            onPageCharModelRendered?.(pageNumber, buildPageCharModelFromTextLayer({
-              glyphs,
-              pageElement,
-              pageIndex: pageNumber,
-              textLayer
-            }));
+            const install = (glyphs: Awaited<ReturnType<typeof loadPdfGlyphGeometry>>) => {
+              if (cancelled) return;
+              const model = buildPageCharModelFromTextLayer({ glyphs, pageElement, pageIndex: pageNumber, textLayer });
+              setNativeCharModel(model); onPageCharModelRendered?.(pageNumber, model);
+            };
+            // Native DOM selection is ready before the optional operator-list pass.
+            install([]);
+            void loadPdfGlyphGeometry(page).then(glyphs => {
+              if (cancelled || !glyphs.length) return;
+              if (selecting.current) pendingRefinement.current = () => install(glyphs);
+              else install(glyphs);
+            }).catch(() => { /* The DOM model remains usable. */ });
           }
           onPageTextRendered?.({
             page: pageNumber,
@@ -1337,6 +1354,13 @@ function PdfPageView({
           // Re-evaluate overlays with the latest search/evidence props, even if they changed
           // while this render was awaiting PDF.js. They need no new canvas or character model.
           setTextLayerRevision((revision) => revision + 1);
+        }
+        } catch {
+          if (!cancelled) {
+            textLayer.replaceChildren(); setNativeCharModel(undefined);
+            onPageCharModelRendered?.(pageNumber, null);
+            setPageStageMessage("本页文字层暂不可用，仍可阅读并使用区域批注。");
+          }
         }
       } catch (error) {
         // A cancelled zoom/DPI render must not clear the newer render's shared canvas.
@@ -1347,6 +1371,7 @@ function PdfPageView({
         if (!cancelled) {
           console.error(`PDF 第 ${pageNumber} 页渲染失败`, error);
         }
+        setPageStageMessage("本页暂时无法绘制，请重新打开文献后重试。");
         clearPdfCanvas(canvasRef.current);
         textLayerRef.current?.replaceChildren();
         setTargetHighlightRects([]);
@@ -1361,6 +1386,7 @@ function PdfPageView({
 
     return () => {
       cancelled = true;
+      pendingRefinement.current = undefined;
       renderTask?.cancel();
       layer?.cancel();
       clearPdfCanvas(ownedCanvas);
@@ -1428,9 +1454,11 @@ function PdfPageView({
         }`}
         data-page={pageNumber}
         ref={pageShellRef}
+        onPointerDownCapture={() => { selecting.current = true; }}
         style={{ minHeight: pageSize.height, width: pageSize.width }}
       >
         <canvas aria-label={`PDF.js 页面画布 ${pageNumber}`} className="pdf-page-canvas" ref={canvasRef} />
+        {pageStageMessage ? <span className="pdf-page-stage-message" role="status">{pageStageMessage}</span> : null}
       {/* Degrading in the open, as the plan requires. A page with no text layer can carry no
           character-level marks at all, and saying nothing leaves the reader believing the layer
           found nothing worth marking rather than that it could not look. */}
@@ -1751,7 +1779,7 @@ export function PdfReader({
   const [annotationLoadError, setAnnotationLoadError] = useState("");
   const [annotationSaveError, setAnnotationSaveError] = useState("");
   const [annotationLoadAttempt, setAnnotationLoadAttempt] = useState(0);
-  const fulltext = usePdfFulltextStore(activePaper?.id);
+  const fulltext = usePdfFulltextStore(activePaper?.id, activePaper?.contentHash);
   const annotationReview = usePdfAnnotationReview({
     scopeKey: annotationStorageKey,
     getAnnotation: (id) => annotationsRef.current.find((annotation) => annotation.id === id),
@@ -2887,6 +2915,7 @@ export function PdfReader({
       id: `${kind}-${Date.now()}-${annotations.length}`,
       kind,
       normalizedStart: activeSelection.normalizedStart,
+      textRepresentationRevision: fulltext.representationForPage(activeSelection.page), sourceHash: activePaper.contentHash,
       page: activeSelection.page,
       paperIdentity: resolvePaperIdentity(activePaper),
       publication: { desiredVisibility: "private", state: "not_published" },
@@ -3194,6 +3223,7 @@ export function PdfReader({
       throw new Error("这段文字无法唯一对应到 PDF。请在 PDF 中划线，或改为页批注；不会猜测高亮位置。");
     const annotation: PdfAnnotationV2 = { id: `reading-${crypto.randomUUID()}`, kind: input.kind ?? (rects.length ? "highlight" : "note"),
       color: rects.length ? input.color ?? "yellow" : undefined, createdAt: now, updatedAt: now, revision: 1,
+      textRepresentationRevision: fulltext.representationForPage(input.page), sourceHash: activePaper?.contentHash,
       page: input.page, excerpt: input.excerpt, note: input.note.trim(), text: "阅读批注", rects,
       ...(input.lookupKind ? { lookupKind: input.lookupKind } : {}),
       paperIdentity: resolvePaperIdentity(activePaper!), publication: { desiredVisibility: "private", state: "not_published" } };
@@ -4232,7 +4262,7 @@ export function PdfReader({
                 onKeyDown={(event) => {
                   if (event.key === "Escape") cancelAnnotationEditing();
                 }}
-                style={{ left: annotationPopup.left, top: annotationPopup.top }}
+                style={{ left: `clamp(min(172px, 50%), ${annotationPopup.left}px, calc(100% - min(172px, 50%)))`, top: annotationPopup.top }}
               >
                 <header>
                   <strong>{popupAnnotation.aiGuide ? guideCategories[popupAnnotation.aiGuide.category] : popupAnnotation.quickAsk ? "速问" : getAnnotationLabel(popupAnnotation.kind)} · 第 {popupAnnotation.page} 页</strong>

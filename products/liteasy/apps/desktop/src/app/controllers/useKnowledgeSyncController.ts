@@ -116,6 +116,9 @@ export function useKnowledgeSyncController({
 
   return {
     actions: {
+      curateRecommendations: recommendations.curateRecommendations,
+      restoreRecommendations: recommendations.restoreRecommendations,
+      applyRecommendationPreferences: recommendations.applyLocalPreferences,
       recordRecommendationSignal: recommendations.recordSignal,
       adoptRecommendationBrief: recommendations.adoptBrief,
       clearRecommendationCache: recommendations.clearRecommendationCache,

@@ -119,3 +119,18 @@ test("an unrendered document is unknown, not text-free", () => {
   // for as long as it took the first page to appear.
   expect(findPagesWithoutTextLayer({})).toEqual({ documentHasNoTextLayer: false, pages: [] });
 });
+
+test("archive revisions use native-compatible bare hashes and ignore collection timestamps", async () => {
+  const { webcrypto, createHash } = await import("node:crypto");
+  const { paperFulltextRevision } = await import("../app/features/pdf/paperFulltextStore");
+  const { canonicalResourceJson } = await import("../app/features/resource-filesystem/resourceFileContent");
+  const original = globalThis.crypto;
+  Object.defineProperty(globalThis, "crypto", { value: webcrypto, configurable: true });
+  try {
+    const snapshot = buildPaperFulltextSnapshot({ extractedAt: "2026-10-15", pageTexts: { 1: "old OCR offsets" }, pageTextExtractions: { 1: "ocr" } });
+    const revision = await paperFulltextRevision(snapshot);
+    expect(revision).toMatch(/^[a-f0-9]{64}$/);
+    expect(revision).toBe(createHash("sha256").update(canonicalResourceJson({ pages: snapshot.pages, parser: snapshot.parser, sourceHash: null, recipe: null })).digest("hex"));
+    expect(await paperFulltextRevision({ ...snapshot, extractedAt: "later" })).toBe(revision);
+  } finally { Object.defineProperty(globalThis, "crypto", { value: original, configurable: true }); }
+});

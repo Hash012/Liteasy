@@ -1,3 +1,4 @@
+import { deriveContentTitle } from "../markdown/contentTitle";
 import { formatPaperAnchorText, paperAnchorFromEvidence } from "../paper-anchors/paperAnchorEntity";
 import type { AgentArtifactResult } from "../artifacts/artifact.types";
 import {
@@ -25,7 +26,8 @@ export function artifactAnnotationNotes(
         return {
           key: notesTargetKey(target),
           target,
-          title: formatPaperAnchorText(annotation.body.split("\n")[0].slice(0, 100), paperAnchors),
+          ...deriveContentTitle(annotation.body),
+          title: deriveContentTitle(formatPaperAnchorText(annotation.body, paperAnchors)).title,
           text: annotation.body,
           source: `${artifact.title}${node ? ` · ${node.title}` : ""}`,
           defaultFolderId: "default/artifact",

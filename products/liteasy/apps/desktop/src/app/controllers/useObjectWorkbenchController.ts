@@ -49,6 +49,7 @@ import {
 } from "../features/objects/objectRepository";
 import {
   ObjectStoreError,
+  parseObjectLink,
   objectText,
   isPaperMetadataReference,
   refOf,
@@ -122,6 +123,7 @@ export function useObjectWorkbenchController(input: {
     setVisible(false);
   }
   const [objects, setObjects] = useState<ObjectEnvelope[]>([]);
+  const [focusPlacement, setFocusPlacement] = useState<{ boardId: string; placementId: string; requestId: string }>();
   const [board, setBoard] = useState<ObjectEnvelope>();
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [tray, setTray] = useState<Array<{ ref: ContextRef; pinned: boolean }>>(
@@ -259,7 +261,15 @@ export function useObjectWorkbenchController(input: {
     const result = await createObjectResolver(repository).open(link);
     if (active() && generation === closeGeneration.current) {
       if ("object" in result && result.object.kind === "workspace.board") {
-        await selectBoard(await repository.resolveLatest(result.object.objectId));
+        const latestBoard = await repository.resolveLatest(result.object.objectId);
+        const selector = parseObjectLink(link)?.selectorId;
+        if (selector?.startsWith("placement:")) {
+          if (latestBoard.revision !== result.object.revision) throw new Error("白板已更新，请刷新列表后重新定位元素。");
+          const placementId = selector.slice("placement:".length);
+          if (!(await repository.listPlacements(latestBoard.objectId)).some(item => item.placementId === placementId)) throw new Error("这张卡片已从白板移除。");
+          setFocusPlacement({ boardId: latestBoard.objectId, placementId, requestId: crypto.randomUUID() });
+        }
+        await selectBoard(latestBoard);
       } else {
         setOpened(result);
         setVisible(true);
@@ -596,8 +606,7 @@ export function useObjectWorkbenchController(input: {
     searchLiteasyPaths: async (query) => (await agentAssets.search({ query })).map((asset) => ({
       title: asset.title, kind: asset.kind, path: asset.path,
     })),
-    resolveLiteasyPath: (path) => /^liteasy:\/\/(?:resources|paper-annotations|artifact-annotations)\//.test(path)
-      ? resolveLegacyContext(path) : agentAssets.context(path),
+    resolveLiteasyPath: (path) => agentAssets.context(path),
     describeResource: (target, reveal) => describeResourceLocation({ target, reveal, repository, active,
       files: createNoteFileService(repository.scopeId, () => latest.current.scopeId),
       getPapers: () => latest.current.getPapers(), artifactScopeId: latest.current.artifactScopeId ?? "device" }),
@@ -1338,6 +1347,7 @@ export function useObjectWorkbenchController(input: {
       }
     },
     selectBoard,
+    focusPlacement,
     connect: (from: Placement, fromSide: BoardSide, to: Placement, toSide: BoardSide) =>
       perform(async () => {
         const current = await currentBoardFor(from);

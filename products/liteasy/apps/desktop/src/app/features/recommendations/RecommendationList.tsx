@@ -1,3 +1,5 @@
+import type { FeedbackReceipt, FeedbackRequest } from "./recommendationFeedbackProjection";
+import type { RecommendationFeedbackHandler } from "./recommendationFeedbackProjection";
 import type { RecommendationFeedbackMeaning } from "./recommendationCoordinator";
 import { useRecommendationExposure } from "./useRecommendationExposure";
 import { useRecommendationPreferences } from "./recommendationPreferences";
@@ -11,7 +13,7 @@ import { ResourceTagChips } from "../resource-tags/ResourceTagChips";
 import { recommendationKeywords } from "./recommendationKeywords";
 import { useRecommendationFullText } from "./useRecommendationFullText";
 import type { PaperServiceConfig } from "../paper-services/paperServiceTransport";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Checkbox, Input, Tooltip, Popover, PopoverTrigger, PopoverSurface } from "@fluentui/react-components";
 import { BookmarkRegular, DeleteRegular, DocumentRegular, SearchRegular, FilterRegular, OpenRegular } from "@fluentui/react-icons";
 import type { RecommendationItem } from "./recommendation.types";
@@ -20,9 +22,13 @@ import "./recommendationList.css";
 
 export { recommendationDateLabel } from "./recommendationPresentation";
 
-export function RecommendationList({ items, service, selectedId, pendingIds, canSave, onInspect, onOpen, onSave, onDismiss, onAdoptBrief, onFeedback }: {
+export function RecommendationList({ items, service, selectedId, pendingIds, canSave, onInspect, onOpen, onSave, onDismiss, onAdoptBrief, onFeedback, onCurate, onRestore, onApplyPreferences, busy }: {
   items: RecommendationItem[];
-  onFeedback?: (item: RecommendationItem, action: RecommendationFeedbackMeaning) => Promise<unknown>;
+  onCurate?: (item?: RecommendationItem) => Promise<void>;
+  onRestore?: () => Promise<void>;
+  onApplyPreferences?: () => Promise<void>;
+  busy?: boolean;
+  onFeedback?: RecommendationFeedbackHandler;
   onAdoptBrief?: (item: RecommendationItem) => Promise<unknown>;
   service?: PaperServiceConfig;
   selectedId?: string;
@@ -33,11 +39,32 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
   onSave: (item: RecommendationItem) => void;
   onDismiss: (item: RecommendationItem) => void;
 }) {
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const root = useRef<HTMLDivElement>(null);
   const exposure = useRecommendationExposure(root, items);
   const preferences = useRecommendationPreferences();
   const tags = useMemo(() => new Map(items.map((item) => [item.id, recommendationKeywords(item, items)])), [items]);
-  const [lastFeedback, setLastFeedback] = useState<RecommendationItem>();
+  const [lastFeedback, setLastFeedback] = useState<{ item: RecommendationItem; receipt: FeedbackReceipt }>();
+  const [feedbackRows, setFeedbackRows] = useState<Record<string, { state: "pending" | "committed" | "failed"; action: RecommendationFeedbackMeaning; command: FeedbackRequest; receipt?: FeedbackReceipt; message: string }>>({});
+  const pendingFeedback = useRef(new Set<string>());
+  async function submitFeedback(item: RecommendationItem, action: RecommendationFeedbackMeaning, retry?: FeedbackRequest) {
+    if (!onFeedback || pendingFeedback.current.has(item.id)) return;
+    const command = retry ?? { commandId: crypto.randomUUID(), issuedAt: Date.now(), ...(action === "undo" ? { targetEventId: lastFeedback?.receipt.eventId } : {}) };
+    pendingFeedback.current.add(item.id);
+    setFeedbackRows(rows => ({ ...rows, [item.id]: { state: "pending", action, command, message: "正在保存…" } }));
+    try {
+      const receipt = await onFeedback(item, action, command);
+      if (!mounted.current) return;
+      if (!receipt?.eventId) throw new Error("未收到保存回执，请重试。");
+      const labels = { read: "已读", snoozed: "已暂缓 7 天", not_relevant: "已在此课题隐藏", too_basic: "太基础 · 已用于下次精选", too_advanced: "太难 · 已用于下次精选", undo: "已撤销这次反馈" };
+      setFeedbackRows(rows => ({ ...rows, [item.id]: { state: "committed", action, command, receipt, message: labels[action] } }));
+      setLastFeedback(action === "undo" ? undefined : { item, receipt }); setNotice(labels[action]);
+    } catch {
+      if (!mounted.current) return;
+      setFeedbackRows(rows => ({ ...rows, [item.id]: { state: "failed", action, command, message: "反馈未保存，请重试。" } }));
+    } finally { pendingFeedback.current.delete(item.id); }
+  }
   const [notice, setNotice] = useState("");
   const [explore, setExplore] = useState(false);
   const [page, setPage] = useState(0);
@@ -55,10 +82,20 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
   const fullText = useRecommendationFullText(items, access && checkFullText, service);
   const filtered = useMemo(() => filterRecommendations(savedOnly ? fullText.items.filter((item) => item.saved) : fullText.items, query, access, year, sort), [fullText.items, query, access, year, sort, savedOnly]);
   const slate = useMemo(() => sort === "recommended" ? composeSlate(filtered, { count: preferences.feed.displayCount, preserveOrder: true, excluded: seen, exposure: exposure.exposure.current, topicExposure: exposure.topicExposure.current }) : filtered.filter(item => (item.scoreComponents?.finalScore ?? item.relevanceScore) >= .15 && !seen.includes(canonicalCandidate(item))).slice(0, preferences.feed.displayCount), [filtered, seen, preferences.feed.displayCount, sort]);
-  const visible = explore ? filtered.slice(page * 12, (page + 1) * 12) : slate;
+  const anchor = useRef<{ key: string; rows: RecommendationItem[] }>();
+  const snapshot = useRef(items[0]?.feedSnapshotId);
+  if (items[0]?.feedSnapshotId) snapshot.current = items[0].feedSnapshotId;
+  const anchorKey = JSON.stringify([snapshot.current, explore, page, seen, query, year, savedOnly, access, checkFullText, sort, preferences.feed.displayCount]);
+  const nextVisible = explore ? filtered.slice(page * 12, (page + 1) * 12) : slate;
+  const retainSlots = Object.values(feedbackRows).some(row => row.state === "pending" || row.state === "committed" && ["read", "snoozed", "not_relevant"].includes(row.action));
+  if (!anchor.current || anchor.current.key !== anchorKey || !retainSlots) anchor.current = { key: anchorKey, rows: nextVisible };
+  const visible = anchor.current.rows.flatMap(old => { const current = filtered.find(row => row.id === old.id); return current ? [current] : feedbackRows[old.id] ? [old] : []; });
   return <div ref={root} className="recommendation-browser">
-    {notice ? <p role="status">{notice}{lastFeedback && onFeedback ? <Button size="small" appearance="subtle" onClick={() => { void onFeedback(lastFeedback, "undo").then(() => { setLastFeedback(undefined); setNotice("已撤销反馈。"); }); }}>撤销反馈</Button> : null}</p> : null}
+    {notice ? <p role="status">{notice}{lastFeedback && onFeedback ? <Button size="small" appearance="subtle" onClick={() => { void submitFeedback(lastFeedback.item, "undo"); }}>撤销反馈</Button> : null}</p> : null}
     <div className="recommendation-feed-actions">
+      {onCurate ? <Button size="small" disabled={busy || !items.length} onClick={() => void onCurate()}>AI 精选</Button> : null}
+      {items.some(item => item.researchReason?.recipe === "explicit-curation-v3") && onRestore ? <Button size="small" appearance="subtle" onClick={() => void onRestore()}>返回原组</Button> : null}
+      {onApplyPreferences ? <Button size="small" appearance="subtle" onClick={() => void onApplyPreferences()}>应用反馈</Button> : null}
       <Button appearance="subtle" size="small" onClick={() => { setExplore(!explore); setPage(0); }}>{explore ? "返回精选" : `查看更多候选 · ${items.length}`}</Button>
       {!explore ? <Button appearance="subtle" size="small" disabled={!filtered.length} onClick={() => { const next = [...seen, ...slate.map(canonicalCandidate)]; setSeen(composeSlate(filtered, { excluded: next }).length ? next : []); }}>换一组</Button> : <>
         <Button appearance="subtle" size="small" disabled={page === 0} onClick={() => setPage(value => value - 1)}>上一页</Button>
@@ -84,7 +121,9 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
     {!visible.length && !fullText.pending ? <div className="recommendation-no-results"><p>{access ? "暂未发现符合筛选条件的全文链接；未收录链接不代表论文没有 PDF，可打开详情继续查找。" : "没有符合条件的论文。"}</p>
       <Button appearance="subtle" onClick={clearFilters}>清除筛选</Button></div> : null}
     <ul className="recommendation-compact-list" aria-label="推荐论文">
-      {visible.map((item) => { const displayTitle = displayBibliographicTitle(item.title) || "未提供题名"; return <li key={item.id} data-candidate-id={item.id} className={`recommendation-compact-item${selectedId === item.id ? " selected" : ""}`}>
+      {visible.map((item) => { const row = feedbackRows[item.id];
+        if (row?.state === "committed" && ["read", "snoozed", "not_relevant"].includes(row.action)) return <li key={item.id} className="recommendation-compact-item" aria-label="已处理的推荐"><p role="status">{row.message}</p><Button size="small" appearance="subtle" onClick={() => void submitFeedback(item, "undo", { commandId: crypto.randomUUID(), issuedAt: Date.now(), targetEventId: row.receipt!.eventId })}>撤销此操作</Button></li>;
+        const displayTitle = displayBibliographicTitle(item.title) || "未提供题名"; return <li key={item.id} data-candidate-id={item.id} className={`recommendation-compact-item${selectedId === item.id ? " selected" : ""}`}>
         <Button appearance="transparent" type="button" className="recommendation-compact-row" aria-label={`查看推荐 ${displayTitle}`}
           aria-pressed={selectedId === item.id} aria-busy={pendingIds.includes(item.id)}
           title={`${displayTitle}\n单击查看元信息，双击打开论文详情`}
@@ -110,15 +149,17 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
             </span>
           </span>
         </Button>
-        <SourceDisclosure summary="推荐详情"><p>{displayTitle}</p><p>{item.reason?.trim() || "未提供个别推荐理由"}</p><ResourceTagChips tags={tags.get(item.id) ?? []} label={`${displayTitle} 的关键词`} onSelect={tag => setQuery(tag.label)} />
-          {onFeedback ? <div className="recommendation-feed-actions">{([["read", "已读"], ["snoozed", "稍后看"], ["too_basic", "太基础"], ["too_advanced", "太难"]] as const).map(([action, label]) => <Button key={action} size="small" appearance="subtle" onClick={() => { void onFeedback(item, action).then(() => { setLastFeedback(item); setNotice(`已记录：${label}`); }, error => setNotice(String(error))); }}>{label}</Button>)}</div> : null}
+        <p className="recommendation-reason">{item.reason?.trim() || "暂无个别推荐理由"}</p><SourceDisclosure summary="推荐详情">{item.researchReason?.evaluatedCount ? <p>本次评估 {item.researchReason.evaluatedCount} / {item.researchReason.poolCount} 篇候选。</p> : null}<p>{item.researchReason ? "根据已授权的固定版本资料；研究关系仍需阅读核实。" : "仅根据题录与现有匹配信息"}</p><ResourceTagChips tags={tags.get(item.id) ?? []} label={`${displayTitle} 的关键词`} onSelect={tag => setQuery(tag.label)} />
         </SourceDisclosure>
+        {feedbackRows[item.id] ? <p role="status">{feedbackRows[item.id].message}{feedbackRows[item.id].state === "failed" ? <Button size="small" onClick={() => void submitFeedback(item, feedbackRows[item.id].action, feedbackRows[item.id].command)}>重试保存反馈</Button> : null}</p> : null}
+        {onFeedback ? <div className="recommendation-feed-actions">{([["read", "已读"], ["snoozed", "稍后看"], ["too_basic", "太基础"], ["too_advanced", "太难"]] as const).map(([action, label]) => <Button key={action} size="small" appearance="subtle" disabled={feedbackRows[item.id]?.state === "pending"} aria-pressed={item.feedbackState?.some(row => row.action === action) || feedbackRows[item.id]?.state === "committed" && feedbackRows[item.id]?.action === action} onClick={() => void submitFeedback(item, action)}>{label}</Button>)}</div> : null}
 
         <div className="recommendation-compact-actions">
+          {onCurate ? <Button size="small" appearance="subtle" disabled={busy} onClick={() => void onCurate(item)}>解释为什么推荐</Button> : null}
           {item.researchReason && onAdoptBrief ? <Button size="small" appearance="subtle" onClick={() => { void onAdoptBrief(item).then(() => setNotice("研究建议已保存为笔记。"), error => setNotice(String(error))); }}>采用为研究笔记</Button> : null}
           <IconAction density="compact" label={`打开详情 ${displayTitle}`} appearance="subtle" icon={<OpenRegular />} onClick={() => onOpen?.(item)} />
           <Tooltip content="收藏" relationship="label"><Button appearance="subtle" size="small" aria-label={`收藏 ${displayTitle}`} disabled={Boolean(item.resourcePath) || !canSave || pendingIds.includes(item.id)} icon={<BookmarkRegular />} onClick={() => onSave(item)} /></Tooltip>
-          <Tooltip content="不感兴趣" relationship="label"><Button appearance="subtle" size="small" aria-label={`忽略 ${displayTitle}`} icon={<DeleteRegular />} onClick={() => { onDismiss(item); setLastFeedback(item); setNotice("已隐藏此课题下的推荐。"); }} /></Tooltip>
+          <Tooltip content="不感兴趣" relationship="label"><Button appearance="subtle" size="small" aria-label={`忽略 ${displayTitle}`} disabled={feedbackRows[item.id]?.state === "pending"} icon={<DeleteRegular />} onClick={() => { if (onFeedback) void submitFeedback(item, "not_relevant"); else onDismiss(item); }} /></Tooltip>
         </div>
       </li>; })}
     </ul>

@@ -206,7 +206,11 @@ describe("useWorkspaceActions", () => {
       sourcePath: "/tmp/LiteasyLibrary/courses/retrieval.pdf",
       title: "retrieval"
     }]);
-    expect(importStore.getLatestJobByDocumentId("local-1")?.status).toBe("queued");
+    expect(importStore.getLatestJobByDocumentId("local-1")).toBeUndefined();
+    await act(async () => { await result.current.prepareOpenedPaper(workspaceStore.getState().papers[0]); });
+    expect(importStore.getLatestJobByDocumentId("local-1")?.status).toBe("parsing");
+    await act(async () => { await vi.runAllTimersAsync(); });
+    expect(importStore.getLatestJobByDocumentId("local-1")?.status).toBe("parsed");
   });
 
   test("keeps browser-uploaded PDF bytes reachable through a blob URL", async () => {

@@ -33,6 +33,7 @@ export function isUserPaperArtifactStoreAvailable() {
 }
 
 export async function loadUserPaperArtifact<T>(input: {
+  revision?: string;
   artifactKind: UserPaperArtifactKind;
   paperId: string;
 }): Promise<T | undefined> {

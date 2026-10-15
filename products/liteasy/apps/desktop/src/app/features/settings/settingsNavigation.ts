@@ -36,7 +36,7 @@ export const settingsSections = [
     keys: Object.keys(generationPromptTasks).map((task) => generationPromptKey(task as GenerationPromptTask)) },
   { id: "local-mcp", category: "ai", get title() { return message("settings.section.localMcp.title"); }, get description() { return message("settings.section.localMcp.description"); }, keywords: "Windows MCP Codex 本机 连接 读写 笔记 白板 资产 STDIO", keys: [] },
   { id: "papers", category: "papers", get title() { return message("settings.section.papers.title"); }, get description() { return message("settings.section.papers.description"); }, keywords: "OCR 识别 扫描 PDF 元数据 DOI Crossref OpenAlex Semantic Scholar MinerU 提取 快速 严谨",
-    keys: ["thin_reading.mode", "papers.metadata_provider", "papers.metadata_endpoint", "papers.mineru_mode", "papers.mineru_endpoint", "import.ocr_language"] },
+    keys: ["thin_reading.mode", "papers.metadata_provider", "papers.metadata_endpoint", "papers.mineru_mode", "papers.mineru_endpoint", "import.processing_policy", "import.ocr_language"] },
   { id: "recommendations", category: "papers", get title() { return message("settings.section.recommendations.title"); }, get description() { return message("settings.section.recommendations.description"); }, keywords: "联网推荐 风格 前沿 经典 均衡 跨域 探索 离线 本地 自备 API 画像 批注 向量 embedding reranker 重排 隐私 索引",
     keys: ["papers.local_mode", "profile.local_enabled", "network.recommendation.enabled", "network.recommendation.style"] },
   { id: "data", category: "storage", get title() { return message("settings.section.data.title"); }, get description() { return message("settings.section.data.description"); }, keywords: "路径 文件夹 安装目录 LiteasyData 重启 聊天 笔记 生成内容", keys: [] },

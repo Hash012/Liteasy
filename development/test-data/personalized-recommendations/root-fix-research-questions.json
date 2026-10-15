@@ -1,0 +1,1984 @@
+{
+  "version": 1,
+  "review": {
+    "status": "pending-human-review",
+    "labelOrigin": "Codex-authored synthetic hypotheses, not human labels",
+    "paperIdentityVerification": "arXiv landing pages inspected 2026-10-15; no private user data",
+    "preregisteredMetrics": [
+      "top-3 relevance",
+      "redundancy",
+      "locatable evidence",
+      "unsupported assertions",
+      "request cost",
+      "interaction stability"
+    ],
+    "qualityGate": "AI stays opt-in; mechanism tests and these provisional labels cannot establish semantic improvement"
+  },
+  "queries": [
+    {
+      "id": "root-fix-01",
+      "assetKind": "synthetic-user-question",
+      "views": [
+        {
+          "id": "question-1",
+          "kind": "profile",
+          "title": "attention architecture foundations",
+          "text": "attention architecture foundations"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "arxiv:1706.03762",
+          "canonicalId": "arxiv:1706.03762",
+          "title": "Attention Is All You Need",
+          "publishedYear": 2017,
+          "sourceUrl": "https://arxiv.org/abs/1706.03762",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "attention architecture foundations",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.04906",
+          "canonicalId": "arxiv:2004.04906",
+          "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.04906",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "attention architecture foundations",
+          "relevanceScore": 0.89,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2005.11401",
+          "canonicalId": "arxiv:2005.11401",
+          "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2005.11401",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "attention architecture foundations",
+          "relevanceScore": 0.88,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1603.09320",
+          "canonicalId": "arxiv:1603.09320",
+          "title": "Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs",
+          "publishedYear": 2016,
+          "sourceUrl": "https://arxiv.org/abs/1603.09320",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "attention architecture foundations",
+          "relevanceScore": 0.87,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1810.04805",
+          "canonicalId": "arxiv:1810.04805",
+          "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+          "publishedYear": 2018,
+          "sourceUrl": "https://arxiv.org/abs/1810.04805",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "attention architecture foundations",
+          "relevanceScore": 0.86,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.12832",
+          "canonicalId": "arxiv:2004.12832",
+          "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.12832",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "attention architecture foundations",
+          "relevanceScore": 0.85,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        }
+      ],
+      "relevance": {
+        "arxiv:1706.03762": 3,
+        "arxiv:2004.04906": 0,
+        "arxiv:2005.11401": 0,
+        "arxiv:1603.09320": 0,
+        "arxiv:1810.04805": 3,
+        "arxiv:2004.12832": 0
+      },
+      "difficulty": {
+        "arxiv:1706.03762": "unreviewed",
+        "arxiv:2004.04906": "unreviewed",
+        "arxiv:2005.11401": "unreviewed",
+        "arxiv:1603.09320": "unreviewed",
+        "arxiv:1810.04805": "unreviewed",
+        "arxiv:2004.12832": "unreviewed"
+      },
+      "conditions": [
+        "missing-abstract",
+        "legacy-cache",
+        "conflicting-difficulty-feedback"
+      ]
+    },
+    {
+      "id": "root-fix-02",
+      "assetKind": "synthetic-user-question",
+      "views": [
+        {
+          "id": "question-2",
+          "kind": "profile",
+          "title": "bidirectional language pretraining",
+          "text": "bidirectional language pretraining"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "arxiv:1706.03762",
+          "canonicalId": "arxiv:1706.03762",
+          "title": "Attention Is All You Need",
+          "publishedYear": 2017,
+          "sourceUrl": "https://arxiv.org/abs/1706.03762",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "bidirectional language pretraining",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.04906",
+          "canonicalId": "arxiv:2004.04906",
+          "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.04906",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "bidirectional language pretraining",
+          "relevanceScore": 0.89,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2005.11401",
+          "canonicalId": "arxiv:2005.11401",
+          "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2005.11401",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "bidirectional language pretraining",
+          "relevanceScore": 0.88,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1603.09320",
+          "canonicalId": "arxiv:1603.09320",
+          "title": "Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs",
+          "publishedYear": 2016,
+          "sourceUrl": "https://arxiv.org/abs/1603.09320",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "bidirectional language pretraining",
+          "relevanceScore": 0.87,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1810.04805",
+          "canonicalId": "arxiv:1810.04805",
+          "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+          "publishedYear": 2018,
+          "sourceUrl": "https://arxiv.org/abs/1810.04805",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "bidirectional language pretraining",
+          "relevanceScore": 0.86,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.12832",
+          "canonicalId": "arxiv:2004.12832",
+          "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.12832",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "bidirectional language pretraining",
+          "relevanceScore": 0.85,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        }
+      ],
+      "relevance": {
+        "arxiv:1706.03762": 3,
+        "arxiv:2004.04906": 0,
+        "arxiv:2005.11401": 0,
+        "arxiv:1603.09320": 0,
+        "arxiv:1810.04805": 3,
+        "arxiv:2004.12832": 0
+      },
+      "difficulty": {
+        "arxiv:1706.03762": "unreviewed",
+        "arxiv:2004.04906": "unreviewed",
+        "arxiv:2005.11401": "unreviewed",
+        "arxiv:1603.09320": "unreviewed",
+        "arxiv:1810.04805": "unreviewed",
+        "arxiv:2004.12832": "unreviewed"
+      },
+      "conditions": [
+        "missing-abstract",
+        "current-catalogue",
+        "no-feedback"
+      ]
+    },
+    {
+      "id": "root-fix-03",
+      "assetKind": "synthetic-user-question",
+      "views": [
+        {
+          "id": "question-3",
+          "kind": "profile",
+          "title": "dense passage retrieval for open domain questions",
+          "text": "dense passage retrieval for open domain questions"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "arxiv:1706.03762",
+          "canonicalId": "arxiv:1706.03762",
+          "title": "Attention Is All You Need",
+          "publishedYear": 2017,
+          "sourceUrl": "https://arxiv.org/abs/1706.03762",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "dense passage retrieval for open domain questions",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.04906",
+          "canonicalId": "arxiv:2004.04906",
+          "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.04906",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "dense passage retrieval for open domain questions",
+          "relevanceScore": 0.89,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2005.11401",
+          "canonicalId": "arxiv:2005.11401",
+          "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2005.11401",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "dense passage retrieval for open domain questions",
+          "relevanceScore": 0.88,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1603.09320",
+          "canonicalId": "arxiv:1603.09320",
+          "title": "Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs",
+          "publishedYear": 2016,
+          "sourceUrl": "https://arxiv.org/abs/1603.09320",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "dense passage retrieval for open domain questions",
+          "relevanceScore": 0.87,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1810.04805",
+          "canonicalId": "arxiv:1810.04805",
+          "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+          "publishedYear": 2018,
+          "sourceUrl": "https://arxiv.org/abs/1810.04805",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "dense passage retrieval for open domain questions",
+          "relevanceScore": 0.86,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.12832",
+          "canonicalId": "arxiv:2004.12832",
+          "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.12832",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "dense passage retrieval for open domain questions",
+          "relevanceScore": 0.85,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        }
+      ],
+      "relevance": {
+        "arxiv:1706.03762": 0,
+        "arxiv:2004.04906": 3,
+        "arxiv:2005.11401": 0,
+        "arxiv:1603.09320": 0,
+        "arxiv:1810.04805": 0,
+        "arxiv:2004.12832": 3
+      },
+      "difficulty": {
+        "arxiv:1706.03762": "unreviewed",
+        "arxiv:2004.04906": "unreviewed",
+        "arxiv:2005.11401": "unreviewed",
+        "arxiv:1603.09320": "unreviewed",
+        "arxiv:1810.04805": "unreviewed",
+        "arxiv:2004.12832": "unreviewed"
+      },
+      "conditions": [
+        "missing-abstract",
+        "current-catalogue",
+        "no-feedback"
+      ]
+    },
+    {
+      "id": "root-fix-04",
+      "assetKind": "synthetic-user-question",
+      "views": [
+        {
+          "id": "question-4",
+          "kind": "profile",
+          "title": "retrieval augmented generation with external evidence",
+          "text": "retrieval augmented generation with external evidence"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "arxiv:1706.03762",
+          "canonicalId": "arxiv:1706.03762",
+          "title": "Attention Is All You Need",
+          "publishedYear": 2017,
+          "sourceUrl": "https://arxiv.org/abs/1706.03762",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "retrieval augmented generation with external evidence",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.04906",
+          "canonicalId": "arxiv:2004.04906",
+          "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.04906",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "retrieval augmented generation with external evidence",
+          "relevanceScore": 0.89,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2005.11401",
+          "canonicalId": "arxiv:2005.11401",
+          "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2005.11401",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "retrieval augmented generation with external evidence",
+          "relevanceScore": 0.88,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1603.09320",
+          "canonicalId": "arxiv:1603.09320",
+          "title": "Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs",
+          "publishedYear": 2016,
+          "sourceUrl": "https://arxiv.org/abs/1603.09320",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "retrieval augmented generation with external evidence",
+          "relevanceScore": 0.87,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1810.04805",
+          "canonicalId": "arxiv:1810.04805",
+          "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+          "publishedYear": 2018,
+          "sourceUrl": "https://arxiv.org/abs/1810.04805",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "retrieval augmented generation with external evidence",
+          "relevanceScore": 0.86,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.12832",
+          "canonicalId": "arxiv:2004.12832",
+          "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.12832",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "retrieval augmented generation with external evidence",
+          "relevanceScore": 0.85,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        }
+      ],
+      "relevance": {
+        "arxiv:1706.03762": 0,
+        "arxiv:2004.04906": 3,
+        "arxiv:2005.11401": 3,
+        "arxiv:1603.09320": 0,
+        "arxiv:1810.04805": 0,
+        "arxiv:2004.12832": 0
+      },
+      "difficulty": {
+        "arxiv:1706.03762": "unreviewed",
+        "arxiv:2004.04906": "unreviewed",
+        "arxiv:2005.11401": "unreviewed",
+        "arxiv:1603.09320": "unreviewed",
+        "arxiv:1810.04805": "unreviewed",
+        "arxiv:2004.12832": "unreviewed"
+      },
+      "conditions": [
+        "missing-abstract",
+        "legacy-cache",
+        "no-feedback"
+      ]
+    },
+    {
+      "id": "root-fix-05",
+      "assetKind": "synthetic-user-question",
+      "views": [
+        {
+          "id": "question-5",
+          "kind": "profile",
+          "title": "graph nearest neighbor search for a vector index",
+          "text": "graph nearest neighbor search for a vector index"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "arxiv:1706.03762",
+          "canonicalId": "arxiv:1706.03762",
+          "title": "Attention Is All You Need",
+          "publishedYear": 2017,
+          "sourceUrl": "https://arxiv.org/abs/1706.03762",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "graph nearest neighbor search for a vector index",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.04906",
+          "canonicalId": "arxiv:2004.04906",
+          "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.04906",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "graph nearest neighbor search for a vector index",
+          "relevanceScore": 0.89,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2005.11401",
+          "canonicalId": "arxiv:2005.11401",
+          "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2005.11401",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "graph nearest neighbor search for a vector index",
+          "relevanceScore": 0.88,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1603.09320",
+          "canonicalId": "arxiv:1603.09320",
+          "title": "Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs",
+          "publishedYear": 2016,
+          "sourceUrl": "https://arxiv.org/abs/1603.09320",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "graph nearest neighbor search for a vector index",
+          "relevanceScore": 0.87,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1810.04805",
+          "canonicalId": "arxiv:1810.04805",
+          "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+          "publishedYear": 2018,
+          "sourceUrl": "https://arxiv.org/abs/1810.04805",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "graph nearest neighbor search for a vector index",
+          "relevanceScore": 0.86,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.12832",
+          "canonicalId": "arxiv:2004.12832",
+          "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.12832",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "graph nearest neighbor search for a vector index",
+          "relevanceScore": 0.85,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        }
+      ],
+      "relevance": {
+        "arxiv:1706.03762": 0,
+        "arxiv:2004.04906": 0,
+        "arxiv:2005.11401": 0,
+        "arxiv:1603.09320": 3,
+        "arxiv:1810.04805": 0,
+        "arxiv:2004.12832": 0
+      },
+      "difficulty": {
+        "arxiv:1706.03762": "unreviewed",
+        "arxiv:2004.04906": "unreviewed",
+        "arxiv:2005.11401": "unreviewed",
+        "arxiv:1603.09320": "unreviewed",
+        "arxiv:1810.04805": "unreviewed",
+        "arxiv:2004.12832": "unreviewed"
+      },
+      "conditions": [
+        "missing-abstract",
+        "current-catalogue",
+        "conflicting-difficulty-feedback"
+      ]
+    },
+    {
+      "id": "root-fix-06",
+      "assetKind": "synthetic-user-question",
+      "views": [
+        {
+          "id": "question-6",
+          "kind": "profile",
+          "title": "late interaction passage retrieval with BERT",
+          "text": "late interaction passage retrieval with BERT"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "arxiv:1706.03762",
+          "canonicalId": "arxiv:1706.03762",
+          "title": "Attention Is All You Need",
+          "publishedYear": 2017,
+          "sourceUrl": "https://arxiv.org/abs/1706.03762",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "late interaction passage retrieval with BERT",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.04906",
+          "canonicalId": "arxiv:2004.04906",
+          "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.04906",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "late interaction passage retrieval with BERT",
+          "relevanceScore": 0.89,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2005.11401",
+          "canonicalId": "arxiv:2005.11401",
+          "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2005.11401",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "late interaction passage retrieval with BERT",
+          "relevanceScore": 0.88,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1603.09320",
+          "canonicalId": "arxiv:1603.09320",
+          "title": "Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs",
+          "publishedYear": 2016,
+          "sourceUrl": "https://arxiv.org/abs/1603.09320",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "late interaction passage retrieval with BERT",
+          "relevanceScore": 0.87,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1810.04805",
+          "canonicalId": "arxiv:1810.04805",
+          "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+          "publishedYear": 2018,
+          "sourceUrl": "https://arxiv.org/abs/1810.04805",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "late interaction passage retrieval with BERT",
+          "relevanceScore": 0.86,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.12832",
+          "canonicalId": "arxiv:2004.12832",
+          "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.12832",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "late interaction passage retrieval with BERT",
+          "relevanceScore": 0.85,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        }
+      ],
+      "relevance": {
+        "arxiv:1706.03762": 0,
+        "arxiv:2004.04906": 3,
+        "arxiv:2005.11401": 0,
+        "arxiv:1603.09320": 0,
+        "arxiv:1810.04805": 0,
+        "arxiv:2004.12832": 3
+      },
+      "difficulty": {
+        "arxiv:1706.03762": "unreviewed",
+        "arxiv:2004.04906": "unreviewed",
+        "arxiv:2005.11401": "unreviewed",
+        "arxiv:1603.09320": "unreviewed",
+        "arxiv:1810.04805": "unreviewed",
+        "arxiv:2004.12832": "unreviewed"
+      },
+      "conditions": [
+        "missing-abstract",
+        "current-catalogue",
+        "no-feedback"
+      ]
+    },
+    {
+      "id": "root-fix-07",
+      "assetKind": "synthetic-user-question",
+      "views": [
+        {
+          "id": "question-7",
+          "kind": "profile",
+          "title": "compare dual encoder retrieval and late interaction",
+          "text": "compare dual encoder retrieval and late interaction"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "arxiv:1706.03762",
+          "canonicalId": "arxiv:1706.03762",
+          "title": "Attention Is All You Need",
+          "publishedYear": 2017,
+          "sourceUrl": "https://arxiv.org/abs/1706.03762",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "compare dual encoder retrieval and late interaction",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.04906",
+          "canonicalId": "arxiv:2004.04906",
+          "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.04906",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "compare dual encoder retrieval and late interaction",
+          "relevanceScore": 0.89,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2005.11401",
+          "canonicalId": "arxiv:2005.11401",
+          "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2005.11401",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "compare dual encoder retrieval and late interaction",
+          "relevanceScore": 0.88,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1603.09320",
+          "canonicalId": "arxiv:1603.09320",
+          "title": "Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs",
+          "publishedYear": 2016,
+          "sourceUrl": "https://arxiv.org/abs/1603.09320",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "compare dual encoder retrieval and late interaction",
+          "relevanceScore": 0.87,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1810.04805",
+          "canonicalId": "arxiv:1810.04805",
+          "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+          "publishedYear": 2018,
+          "sourceUrl": "https://arxiv.org/abs/1810.04805",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "compare dual encoder retrieval and late interaction",
+          "relevanceScore": 0.86,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.12832",
+          "canonicalId": "arxiv:2004.12832",
+          "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.12832",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "compare dual encoder retrieval and late interaction",
+          "relevanceScore": 0.85,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        }
+      ],
+      "relevance": {
+        "arxiv:1706.03762": 0,
+        "arxiv:2004.04906": 3,
+        "arxiv:2005.11401": 0,
+        "arxiv:1603.09320": 0,
+        "arxiv:1810.04805": 0,
+        "arxiv:2004.12832": 3
+      },
+      "difficulty": {
+        "arxiv:1706.03762": "unreviewed",
+        "arxiv:2004.04906": "unreviewed",
+        "arxiv:2005.11401": "unreviewed",
+        "arxiv:1603.09320": "unreviewed",
+        "arxiv:1810.04805": "unreviewed",
+        "arxiv:2004.12832": "unreviewed"
+      },
+      "conditions": [
+        "missing-abstract",
+        "legacy-cache",
+        "no-feedback"
+      ]
+    },
+    {
+      "id": "root-fix-08",
+      "assetKind": "synthetic-user-question",
+      "views": [
+        {
+          "id": "question-8",
+          "kind": "profile",
+          "title": "which foundations precede knowledge intensive generation",
+          "text": "which foundations precede knowledge intensive generation"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "arxiv:1706.03762",
+          "canonicalId": "arxiv:1706.03762",
+          "title": "Attention Is All You Need",
+          "publishedYear": 2017,
+          "sourceUrl": "https://arxiv.org/abs/1706.03762",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "which foundations precede knowledge intensive generation",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.04906",
+          "canonicalId": "arxiv:2004.04906",
+          "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.04906",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "which foundations precede knowledge intensive generation",
+          "relevanceScore": 0.89,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2005.11401",
+          "canonicalId": "arxiv:2005.11401",
+          "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2005.11401",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "which foundations precede knowledge intensive generation",
+          "relevanceScore": 0.88,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1603.09320",
+          "canonicalId": "arxiv:1603.09320",
+          "title": "Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs",
+          "publishedYear": 2016,
+          "sourceUrl": "https://arxiv.org/abs/1603.09320",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "which foundations precede knowledge intensive generation",
+          "relevanceScore": 0.87,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1810.04805",
+          "canonicalId": "arxiv:1810.04805",
+          "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+          "publishedYear": 2018,
+          "sourceUrl": "https://arxiv.org/abs/1810.04805",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "which foundations precede knowledge intensive generation",
+          "relevanceScore": 0.86,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.12832",
+          "canonicalId": "arxiv:2004.12832",
+          "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.12832",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "which foundations precede knowledge intensive generation",
+          "relevanceScore": 0.85,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        }
+      ],
+      "relevance": {
+        "arxiv:1706.03762": 3,
+        "arxiv:2004.04906": 0,
+        "arxiv:2005.11401": 3,
+        "arxiv:1603.09320": 0,
+        "arxiv:1810.04805": 0,
+        "arxiv:2004.12832": 0
+      },
+      "difficulty": {
+        "arxiv:1706.03762": "unreviewed",
+        "arxiv:2004.04906": "unreviewed",
+        "arxiv:2005.11401": "unreviewed",
+        "arxiv:1603.09320": "unreviewed",
+        "arxiv:1810.04805": "unreviewed",
+        "arxiv:2004.12832": "unreviewed"
+      },
+      "conditions": [
+        "missing-abstract",
+        "current-catalogue",
+        "no-feedback"
+      ]
+    },
+    {
+      "id": "root-fix-09",
+      "assetKind": "synthetic-user-question",
+      "views": [
+        {
+          "id": "question-9",
+          "kind": "profile",
+          "title": "how to index dense passage embeddings",
+          "text": "how to index dense passage embeddings"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "arxiv:1706.03762",
+          "canonicalId": "arxiv:1706.03762",
+          "title": "Attention Is All You Need",
+          "publishedYear": 2017,
+          "sourceUrl": "https://arxiv.org/abs/1706.03762",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "how to index dense passage embeddings",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.04906",
+          "canonicalId": "arxiv:2004.04906",
+          "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.04906",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "how to index dense passage embeddings",
+          "relevanceScore": 0.89,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2005.11401",
+          "canonicalId": "arxiv:2005.11401",
+          "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2005.11401",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "how to index dense passage embeddings",
+          "relevanceScore": 0.88,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1603.09320",
+          "canonicalId": "arxiv:1603.09320",
+          "title": "Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs",
+          "publishedYear": 2016,
+          "sourceUrl": "https://arxiv.org/abs/1603.09320",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "how to index dense passage embeddings",
+          "relevanceScore": 0.87,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1810.04805",
+          "canonicalId": "arxiv:1810.04805",
+          "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+          "publishedYear": 2018,
+          "sourceUrl": "https://arxiv.org/abs/1810.04805",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "how to index dense passage embeddings",
+          "relevanceScore": 0.86,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.12832",
+          "canonicalId": "arxiv:2004.12832",
+          "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.12832",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "how to index dense passage embeddings",
+          "relevanceScore": 0.85,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        }
+      ],
+      "relevance": {
+        "arxiv:1706.03762": 0,
+        "arxiv:2004.04906": 3,
+        "arxiv:2005.11401": 0,
+        "arxiv:1603.09320": 3,
+        "arxiv:1810.04805": 0,
+        "arxiv:2004.12832": 0
+      },
+      "difficulty": {
+        "arxiv:1706.03762": "unreviewed",
+        "arxiv:2004.04906": "unreviewed",
+        "arxiv:2005.11401": "unreviewed",
+        "arxiv:1603.09320": "unreviewed",
+        "arxiv:1810.04805": "unreviewed",
+        "arxiv:2004.12832": "unreviewed"
+      },
+      "conditions": [
+        "missing-abstract",
+        "current-catalogue",
+        "conflicting-difficulty-feedback"
+      ]
+    },
+    {
+      "id": "root-fix-10",
+      "assetKind": "synthetic-user-question",
+      "views": [
+        {
+          "id": "question-10",
+          "kind": "profile",
+          "title": "what to read before BERT contextual passage search",
+          "text": "what to read before BERT contextual passage search"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "arxiv:1706.03762",
+          "canonicalId": "arxiv:1706.03762",
+          "title": "Attention Is All You Need",
+          "publishedYear": 2017,
+          "sourceUrl": "https://arxiv.org/abs/1706.03762",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "what to read before BERT contextual passage search",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.04906",
+          "canonicalId": "arxiv:2004.04906",
+          "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.04906",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "what to read before BERT contextual passage search",
+          "relevanceScore": 0.89,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2005.11401",
+          "canonicalId": "arxiv:2005.11401",
+          "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2005.11401",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "what to read before BERT contextual passage search",
+          "relevanceScore": 0.88,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1603.09320",
+          "canonicalId": "arxiv:1603.09320",
+          "title": "Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs",
+          "publishedYear": 2016,
+          "sourceUrl": "https://arxiv.org/abs/1603.09320",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "what to read before BERT contextual passage search",
+          "relevanceScore": 0.87,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1810.04805",
+          "canonicalId": "arxiv:1810.04805",
+          "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+          "publishedYear": 2018,
+          "sourceUrl": "https://arxiv.org/abs/1810.04805",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "what to read before BERT contextual passage search",
+          "relevanceScore": 0.86,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.12832",
+          "canonicalId": "arxiv:2004.12832",
+          "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.12832",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "what to read before BERT contextual passage search",
+          "relevanceScore": 0.85,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        }
+      ],
+      "relevance": {
+        "arxiv:1706.03762": 0,
+        "arxiv:2004.04906": 0,
+        "arxiv:2005.11401": 0,
+        "arxiv:1603.09320": 0,
+        "arxiv:1810.04805": 3,
+        "arxiv:2004.12832": 3
+      },
+      "difficulty": {
+        "arxiv:1706.03762": "unreviewed",
+        "arxiv:2004.04906": "unreviewed",
+        "arxiv:2005.11401": "unreviewed",
+        "arxiv:1603.09320": "unreviewed",
+        "arxiv:1810.04805": "unreviewed",
+        "arxiv:2004.12832": "unreviewed"
+      },
+      "conditions": [
+        "missing-abstract",
+        "legacy-cache",
+        "no-feedback"
+      ]
+    },
+    {
+      "id": "root-fix-11",
+      "assetKind": "synthetic-user-question",
+      "views": [
+        {
+          "id": "question-11",
+          "kind": "profile",
+          "title": "improve evidence retrieval for knowledge intensive NLP",
+          "text": "improve evidence retrieval for knowledge intensive NLP"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "arxiv:1706.03762",
+          "canonicalId": "arxiv:1706.03762",
+          "title": "Attention Is All You Need",
+          "publishedYear": 2017,
+          "sourceUrl": "https://arxiv.org/abs/1706.03762",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "improve evidence retrieval for knowledge intensive NLP",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.04906",
+          "canonicalId": "arxiv:2004.04906",
+          "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.04906",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "improve evidence retrieval for knowledge intensive NLP",
+          "relevanceScore": 0.89,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2005.11401",
+          "canonicalId": "arxiv:2005.11401",
+          "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2005.11401",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "improve evidence retrieval for knowledge intensive NLP",
+          "relevanceScore": 0.88,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1603.09320",
+          "canonicalId": "arxiv:1603.09320",
+          "title": "Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs",
+          "publishedYear": 2016,
+          "sourceUrl": "https://arxiv.org/abs/1603.09320",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "improve evidence retrieval for knowledge intensive NLP",
+          "relevanceScore": 0.87,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1810.04805",
+          "canonicalId": "arxiv:1810.04805",
+          "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+          "publishedYear": 2018,
+          "sourceUrl": "https://arxiv.org/abs/1810.04805",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "improve evidence retrieval for knowledge intensive NLP",
+          "relevanceScore": 0.86,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.12832",
+          "canonicalId": "arxiv:2004.12832",
+          "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.12832",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "improve evidence retrieval for knowledge intensive NLP",
+          "relevanceScore": 0.85,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        }
+      ],
+      "relevance": {
+        "arxiv:1706.03762": 0,
+        "arxiv:2004.04906": 3,
+        "arxiv:2005.11401": 3,
+        "arxiv:1603.09320": 0,
+        "arxiv:1810.04805": 0,
+        "arxiv:2004.12832": 0
+      },
+      "difficulty": {
+        "arxiv:1706.03762": "unreviewed",
+        "arxiv:2004.04906": "unreviewed",
+        "arxiv:2005.11401": "unreviewed",
+        "arxiv:1603.09320": "unreviewed",
+        "arxiv:1810.04805": "unreviewed",
+        "arxiv:2004.12832": "unreviewed"
+      },
+      "conditions": [
+        "missing-abstract",
+        "current-catalogue",
+        "no-feedback"
+      ]
+    },
+    {
+      "id": "root-fix-12",
+      "assetKind": "synthetic-user-question",
+      "views": [
+        {
+          "id": "question-12",
+          "kind": "profile",
+          "title": "compare approximate vector search and neural retrieval",
+          "text": "compare approximate vector search and neural retrieval"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "arxiv:1706.03762",
+          "canonicalId": "arxiv:1706.03762",
+          "title": "Attention Is All You Need",
+          "publishedYear": 2017,
+          "sourceUrl": "https://arxiv.org/abs/1706.03762",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "compare approximate vector search and neural retrieval",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.04906",
+          "canonicalId": "arxiv:2004.04906",
+          "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.04906",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "compare approximate vector search and neural retrieval",
+          "relevanceScore": 0.89,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2005.11401",
+          "canonicalId": "arxiv:2005.11401",
+          "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2005.11401",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "compare approximate vector search and neural retrieval",
+          "relevanceScore": 0.88,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1603.09320",
+          "canonicalId": "arxiv:1603.09320",
+          "title": "Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs",
+          "publishedYear": 2016,
+          "sourceUrl": "https://arxiv.org/abs/1603.09320",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "compare approximate vector search and neural retrieval",
+          "relevanceScore": 0.87,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1810.04805",
+          "canonicalId": "arxiv:1810.04805",
+          "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+          "publishedYear": 2018,
+          "sourceUrl": "https://arxiv.org/abs/1810.04805",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "compare approximate vector search and neural retrieval",
+          "relevanceScore": 0.86,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.12832",
+          "canonicalId": "arxiv:2004.12832",
+          "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.12832",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "compare approximate vector search and neural retrieval",
+          "relevanceScore": 0.85,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        }
+      ],
+      "relevance": {
+        "arxiv:1706.03762": 0,
+        "arxiv:2004.04906": 3,
+        "arxiv:2005.11401": 0,
+        "arxiv:1603.09320": 3,
+        "arxiv:1810.04805": 0,
+        "arxiv:2004.12832": 0
+      },
+      "difficulty": {
+        "arxiv:1706.03762": "unreviewed",
+        "arxiv:2004.04906": "unreviewed",
+        "arxiv:2005.11401": "unreviewed",
+        "arxiv:1603.09320": "unreviewed",
+        "arxiv:1810.04805": "unreviewed",
+        "arxiv:2004.12832": "unreviewed"
+      },
+      "conditions": [
+        "missing-abstract",
+        "current-catalogue",
+        "no-feedback"
+      ]
+    },
+    {
+      "id": "root-fix-13",
+      "assetKind": "synthetic-user-question",
+      "views": [
+        {
+          "id": "question-13",
+          "kind": "profile",
+          "title": "understand transformer based language understanding",
+          "text": "understand transformer based language understanding"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "arxiv:1706.03762",
+          "canonicalId": "arxiv:1706.03762",
+          "title": "Attention Is All You Need",
+          "publishedYear": 2017,
+          "sourceUrl": "https://arxiv.org/abs/1706.03762",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "understand transformer based language understanding",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.04906",
+          "canonicalId": "arxiv:2004.04906",
+          "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.04906",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "understand transformer based language understanding",
+          "relevanceScore": 0.89,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2005.11401",
+          "canonicalId": "arxiv:2005.11401",
+          "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2005.11401",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "understand transformer based language understanding",
+          "relevanceScore": 0.88,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1603.09320",
+          "canonicalId": "arxiv:1603.09320",
+          "title": "Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs",
+          "publishedYear": 2016,
+          "sourceUrl": "https://arxiv.org/abs/1603.09320",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "understand transformer based language understanding",
+          "relevanceScore": 0.87,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1810.04805",
+          "canonicalId": "arxiv:1810.04805",
+          "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+          "publishedYear": 2018,
+          "sourceUrl": "https://arxiv.org/abs/1810.04805",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "understand transformer based language understanding",
+          "relevanceScore": 0.86,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.12832",
+          "canonicalId": "arxiv:2004.12832",
+          "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.12832",
+          "source": "arxiv",
+          "sourceKind": "cache",
+          "reason": "",
+          "reasonState": "legacy",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "understand transformer based language understanding",
+          "relevanceScore": 0.85,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        }
+      ],
+      "relevance": {
+        "arxiv:1706.03762": 3,
+        "arxiv:2004.04906": 0,
+        "arxiv:2005.11401": 0,
+        "arxiv:1603.09320": 0,
+        "arxiv:1810.04805": 3,
+        "arxiv:2004.12832": 0
+      },
+      "difficulty": {
+        "arxiv:1706.03762": "unreviewed",
+        "arxiv:2004.04906": "unreviewed",
+        "arxiv:2005.11401": "unreviewed",
+        "arxiv:1603.09320": "unreviewed",
+        "arxiv:1810.04805": "unreviewed",
+        "arxiv:2004.12832": "unreviewed"
+      },
+      "conditions": [
+        "missing-abstract",
+        "legacy-cache",
+        "conflicting-difficulty-feedback"
+      ]
+    },
+    {
+      "id": "root-fix-14",
+      "assetKind": "synthetic-user-question",
+      "views": [
+        {
+          "id": "question-14",
+          "kind": "profile",
+          "title": "separate passage retrieval from generation",
+          "text": "separate passage retrieval from generation"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "arxiv:1706.03762",
+          "canonicalId": "arxiv:1706.03762",
+          "title": "Attention Is All You Need",
+          "publishedYear": 2017,
+          "sourceUrl": "https://arxiv.org/abs/1706.03762",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "separate passage retrieval from generation",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.04906",
+          "canonicalId": "arxiv:2004.04906",
+          "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.04906",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "separate passage retrieval from generation",
+          "relevanceScore": 0.89,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2005.11401",
+          "canonicalId": "arxiv:2005.11401",
+          "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2005.11401",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "separate passage retrieval from generation",
+          "relevanceScore": 0.88,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1603.09320",
+          "canonicalId": "arxiv:1603.09320",
+          "title": "Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs",
+          "publishedYear": 2016,
+          "sourceUrl": "https://arxiv.org/abs/1603.09320",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "separate passage retrieval from generation",
+          "relevanceScore": 0.87,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1810.04805",
+          "canonicalId": "arxiv:1810.04805",
+          "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+          "publishedYear": 2018,
+          "sourceUrl": "https://arxiv.org/abs/1810.04805",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "separate passage retrieval from generation",
+          "relevanceScore": 0.86,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.12832",
+          "canonicalId": "arxiv:2004.12832",
+          "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.12832",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "separate passage retrieval from generation",
+          "relevanceScore": 0.85,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        }
+      ],
+      "relevance": {
+        "arxiv:1706.03762": 0,
+        "arxiv:2004.04906": 3,
+        "arxiv:2005.11401": 3,
+        "arxiv:1603.09320": 0,
+        "arxiv:1810.04805": 0,
+        "arxiv:2004.12832": 0
+      },
+      "difficulty": {
+        "arxiv:1706.03762": "unreviewed",
+        "arxiv:2004.04906": "unreviewed",
+        "arxiv:2005.11401": "unreviewed",
+        "arxiv:1603.09320": "unreviewed",
+        "arxiv:1810.04805": "unreviewed",
+        "arxiv:2004.12832": "unreviewed"
+      },
+      "conditions": [
+        "missing-abstract",
+        "current-catalogue",
+        "no-feedback"
+      ]
+    },
+    {
+      "id": "root-fix-15",
+      "assetKind": "synthetic-user-question",
+      "views": [
+        {
+          "id": "question-15",
+          "kind": "profile",
+          "title": "learn contextualized late interaction retrieval",
+          "text": "learn contextualized late interaction retrieval"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "arxiv:1706.03762",
+          "canonicalId": "arxiv:1706.03762",
+          "title": "Attention Is All You Need",
+          "publishedYear": 2017,
+          "sourceUrl": "https://arxiv.org/abs/1706.03762",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "learn contextualized late interaction retrieval",
+          "relevanceScore": 0.9,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.04906",
+          "canonicalId": "arxiv:2004.04906",
+          "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.04906",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "learn contextualized late interaction retrieval",
+          "relevanceScore": 0.89,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2005.11401",
+          "canonicalId": "arxiv:2005.11401",
+          "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2005.11401",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "learn contextualized late interaction retrieval",
+          "relevanceScore": 0.88,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1603.09320",
+          "canonicalId": "arxiv:1603.09320",
+          "title": "Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs",
+          "publishedYear": 2016,
+          "sourceUrl": "https://arxiv.org/abs/1603.09320",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "learn contextualized late interaction retrieval",
+          "relevanceScore": 0.87,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:1810.04805",
+          "canonicalId": "arxiv:1810.04805",
+          "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+          "publishedYear": 2018,
+          "sourceUrl": "https://arxiv.org/abs/1810.04805",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "learn contextualized late interaction retrieval",
+          "relevanceScore": 0.86,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        },
+        {
+          "id": "arxiv:2004.12832",
+          "canonicalId": "arxiv:2004.12832",
+          "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+          "publishedYear": 2020,
+          "sourceUrl": "https://arxiv.org/abs/2004.12832",
+          "source": "arxiv",
+          "sourceKind": "live",
+          "reason": "",
+          "reasonState": "unavailable",
+          "discoveredAt": "2026-10-15",
+          "relatedDocumentTitle": "learn contextualized late interaction retrieval",
+          "relevanceScore": 0.85,
+          "relevanceBand": "high",
+          "metadataBasis": "title-only; abstract intentionally absent"
+        }
+      ],
+      "relevance": {
+        "arxiv:1706.03762": 0,
+        "arxiv:2004.04906": 0,
+        "arxiv:2005.11401": 0,
+        "arxiv:1603.09320": 0,
+        "arxiv:1810.04805": 3,
+        "arxiv:2004.12832": 3
+      },
+      "difficulty": {
+        "arxiv:1706.03762": "unreviewed",
+        "arxiv:2004.04906": "unreviewed",
+        "arxiv:2005.11401": "unreviewed",
+        "arxiv:1603.09320": "unreviewed",
+        "arxiv:1810.04805": "unreviewed",
+        "arxiv:2004.12832": "unreviewed"
+      },
+      "conditions": [
+        "missing-abstract",
+        "current-catalogue",
+        "no-feedback"
+      ]
+    }
+  ]
+}

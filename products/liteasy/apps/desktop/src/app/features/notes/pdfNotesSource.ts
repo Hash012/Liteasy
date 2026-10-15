@@ -1,3 +1,4 @@
+import { deriveContentTitle } from "../markdown/contentTitle";
 import { pdfAnnotationReviewMarkdown } from "../pdf/pdfAnnotationReviewContent";
 import { resolvePaperIdentity } from "../paper-identity/paperIdentity";
 import {
@@ -53,11 +54,7 @@ export async function loadPdfNotes(
         result.push({
           key: notesTargetKey(target),
           target,
-          title:
-            text.split("\n")[0].slice(0, 100) ||
-            annotation.quickAsk?.question ||
-            annotation.excerpt.split("\n")[0].slice(0, 100) ||
-            "论文笔记",
+          ...deriveContentTitle(text || annotation.quickAsk?.question || annotation.excerpt, "论文笔记"),
           text: [
             text || annotation.quickAsk?.answer || annotation.excerpt,
             pdfAnnotationReviewMarkdown(annotation),

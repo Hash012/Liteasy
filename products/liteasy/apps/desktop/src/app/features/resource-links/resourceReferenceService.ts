@@ -1,12 +1,18 @@
+import type { ContentFragment } from "../markdown/contentFragment";
+import type { PresentationOptions } from "../resource-filesystem/resourcePresentation";
+import { contentPresentation } from "../resource-filesystem/resourcePresentation";
 import { createPreviewQueue, createPreviewRequest } from "./previewRequest";
 import type { AgentAssetService } from "../resource-filesystem/agentAssetService";
-import type { AgentAsset } from "../resource-filesystem/agentAsset.types";
+import type { AgentAsset, AgentAssetRead } from "../resource-filesystem/agentAsset.types";
 import { liteasyPath, parseLiteasyPath } from "../resource-filesystem/liteasyPath";
 import { decodeReference, normalizeReferenceText, splitReference } from "./referenceText";
 import type { ReferencePdf, PdfPreviewIntent, PdfSourceMember } from "./referencePdfSource";
 
 export type ReferenceCandidate = { path: string; title: string; detail?: string; kind?: string };
-export type ReferenceDocument = { source?: import("./paperReferenceSource").PaperReferenceSource; asset: AgentAsset; text: string; complete: boolean; limit: number; totalCharacters: number };
+export type ReferenceDocument = { content?: ContentFragment; source?: import("./paperReferenceSource").PaperReferenceSource; asset: AgentAsset; text: string; complete: boolean; limit: number; totalCharacters: number };
+export function referenceDocumentFromRead(result: AgentAssetRead, limit: number): ReferenceDocument {
+  return { content: result.content, asset: result.asset, source: result.source ? { ...result.source, pages: result.source.pages.filter((page) => page.start < result.text.length).map((page) => ({ ...page, end: Math.min(page.end, result.text.length), text: page.text.slice(0, Math.max(0, result.text.length - page.start)) })) } : undefined, text: result.content ? result.text : normalizeReferenceText(result.text), complete: !result.truncated, limit, totalCharacters: result.totalCharacters };
+}
 export function createResourceReferenceService(input: { scope: string; assets: AgentAssetService; catalog(): ReferenceCandidate[]; active(): boolean; loadPdf?(path: string, signal: AbortSignal, intent?: PdfPreviewIntent, member?: PdfSourceMember): Promise<ReferencePdf | undefined>; subscribe?(path: string, changed: () => void): () => void }) {
   function check(signal?: AbortSignal) { signal?.throwIfAborted(); if (!input.active()) throw new Error("账号已切换，请重新选择引用。"); }
   const name = (value: string) => value.trim().replace(/\.(md|markdown|pdf|epub|mobi|canvas)$/i, "").toLocaleLowerCase();
@@ -22,9 +28,17 @@ export function createResourceReferenceService(input: { scope: string; assets: A
     async pdf(path: string, signal?: AbortSignal, intent?: PdfPreviewIntent, member?: PdfSourceMember): Promise<ReferencePdf | undefined> {
       check(signal);
       if (!input.loadPdf) return undefined;
+      const nativeAnnotationPath = /^liteasy:\/\/(paper-annotations|artifact-annotations)\//.test(path) ? splitReference(path).target : undefined;
+      const before = nativeAnnotationPath ? await input.assets.stat(nativeAnnotationPath, { signal }) : undefined;
       const result = await read(signal => input.loadPdf!(path, signal, intent, member), signal);
       check(signal);
+      if (before && (await input.assets.stat(nativeAnnotationPath!, { signal })).revision !== before.revision) throw new Error("来源在读取期间已修改，请重新打开预览。");
       return result;
+    },
+    async present(path: string, options: PresentationOptions = {}) {
+      check(options.signal);
+      const result = await read(signal => input.assets.present ? input.assets.present(path, { ...options, signal }) : contentPresentation(input.assets)(path, { ...options, signal }), options.signal);
+      check(options.signal); return result;
     },
     subscribe(path: string, changed: () => void) { return input.subscribe?.(path, changed) ?? (() => {}); },
     async search(query: string, signal?: AbortSignal): Promise<ReferenceCandidate[]> {
@@ -65,7 +79,7 @@ export function createResourceReferenceService(input: { scope: string; assets: A
       limit = Math.min(80000, Math.max(1, limit));
       const result = await read((signal) => input.assets.read(path, { maxCharacters: limit, signal, preparation }), signal);
       check(signal);
-      return { asset: result.asset, source: result.source ? { ...result.source, pages: result.source.pages.filter((page) => page.start < result.text.length).map((page) => ({ ...page, end: Math.min(page.end, result.text.length), text: page.text.slice(0, Math.max(0, result.text.length - page.start)) })) } : undefined, text: normalizeReferenceText(result.text), complete: !result.truncated, limit, totalCharacters: result.totalCharacters };
+      return referenceDocumentFromRead(result, limit);
     },
     async verify(document: ReferenceDocument, signal?: AbortSignal) {
       const current = await service.document(document.asset.path, document.limit, signal);

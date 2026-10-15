@@ -6,7 +6,7 @@ import { composeSlate } from "../../../packages/recommendation-core/v2.mjs";
 import { rankRecommendations } from "../src/app/features/recommendations/recommendationRanking";
 import type { RecommendationItem } from "../src/app/features/recommendations/recommendation.types";
 const fixturePath = new URL("../../../../../development/test-data/personalized-recommendations/queries.json", import.meta.url);
-const fixture = JSON.parse(readFileSync(fixturePath, "utf8"));
+const fixture = JSON.parse(readFileSync(process.argv[3] || fixturePath, "utf8"));
 const times: number[] = [], startRss = process.memoryUsage().rss;
 const snapshots = fixture.queries.flatMap((query: { id: string; views: Parameters<typeof hybridRank>[1]; candidates: RecommendationItem[] }) => ["2026-09-01T00:00:00Z", "2026-10-14T00:00:00Z"].map(asOf => {
   const now = Date.parse(asOf);

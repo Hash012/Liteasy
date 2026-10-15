@@ -23,6 +23,11 @@ export type NotesReference = {
   createdAt: string;
 };
 export type NotesItem = {
+  titleOrigin?: "user" | "source-metadata" | "derived-body" | "legacy-unknown";
+  repeatedBodyBlock?: { start: number; end: number };
+  boardMemberships?: Array<{ boardRef: ObjectRef; boardTitle: string; placementId: string; placementRevision: string; memberRef: ObjectRef }>;
+  boardMembers?: Array<{ placementId: string; placementRevision: string; memberRef: ObjectRef; title: string; text: string }>;
+  memberHits?: Array<{ placementId: string; title: string }>;
   paperIdentity?: { id: string; title: string };
   page?: number;
   labels?: import("./noteLabels").NoteLabel[];
@@ -69,6 +74,7 @@ export type NotesViewModel = {
   collect(item: NotesItem, folderId: string): Promise<void>;
   removeReference(item: NotesItem): Promise<void>;
   openSource(item: NotesItem): void;
+  openBoardMember?(item: NotesItem, placementId: string): void;
   drag(item: NotesItem, data: DataTransfer): void;
   drop(data: DataTransfer, folderId: string): Promise<void>;
 };
