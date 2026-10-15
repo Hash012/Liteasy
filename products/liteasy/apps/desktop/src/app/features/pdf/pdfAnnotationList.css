@@ -149,3 +149,18 @@
 .pdf-sidebar-controls .notes-label-filters { padding-top: 4px; border-bottom: 1px solid var(--colorNeutralStroke2); }
 .pdf-annotation-list { grid-template-columns: minmax(0, 1fr); }
 .pdf-annotation-item, .pdf-annotation-summary { min-width: 0; max-width: 100%; }
+
+.pdf-annotation-search {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px 0;
+  min-width: 0;
+}
+.pdf-annotation-search > .fui-Input { min-width: 0; flex: 1; }
+.pdf-annotation-search input { min-width: 0; }
+.pdf-annotation-result-count {
+  margin: 3px 6px 5px;
+  color: var(--colorNeutralForeground3);
+  font-size: calc(11px * var(--app-font-ratio, 1));
+}

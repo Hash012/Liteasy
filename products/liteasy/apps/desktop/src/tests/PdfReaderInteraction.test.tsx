@@ -271,11 +271,11 @@ test("filters sidebar annotations by lookup origin and text without hiding their
     expect(screen.queryByRole("button", { name: "编辑批注：synchronize" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "编辑批注：Personal passage" })).toBeInTheDocument();
     expect(document.querySelectorAll("button.pdf-overlay-mark.highlight")).toHaveLength(2);
-    await user.click(screen.getByRole("button", { name: "标签筛选 · 1" }));
     await user.type(await screen.findByRole("textbox", { name: "搜索批注内容" }), "不存在的关键词");
     await user.keyboard("{Escape}");
     await screen.findByRole("button", { name: "清除筛选" });
     expect(screen.getByText("没有符合筛选条件的批注")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "清除批注搜索" }));
     await user.click(screen.getByRole("button", { name: "清除筛选" }));
     expect(screen.getByRole("button", { name: "编辑批注：synchronize" })).toBeInTheDocument();
   } finally { restore(); }

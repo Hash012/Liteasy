@@ -1,7 +1,8 @@
 import type { QuickAskTransferInput, QuickAskTransferResult } from "./quickAskTransfer";
 import { highlightSearchText } from "../search/searchDomHighlight";
-import { compileSearchQuery } from "../search/searchQuery";
+import { SearchHighlight, SearchOptions } from "../search/SearchOptions";
 import { noteLabels } from "../notes/noteLabels";
+import { compilePdfAnnotationQuery, teamPdfAnnotation } from "./pdfAnnotationQuery";
 import { usePaperSearchMetadata } from "../search/usePaperSearchMetadata";
 import { NoteLabelFilter, emptyNoteFilter, matchesNoteFilter } from "../notes/NoteLabelFilter";
 import { annotationNoteLabels } from "../notes/noteLabels";
@@ -58,9 +59,10 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent
 } from "react";
-import { Button, Checkbox, Popover, PopoverTrigger, PopoverSurface, Tooltip } from "@fluentui/react-components";
+import { Button, Checkbox, Input, Popover, PopoverTrigger, PopoverSurface, Tooltip } from "@fluentui/react-components";
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import {
+  SearchRegular,
   ChatHelpRegular,
   SparkleRegular,
   ArrowClockwiseRegular,
@@ -1851,10 +1853,15 @@ export function PdfReader({
     () => sortPdfAnnotationsByReadingOrder(annotations),
     [annotations]
   );
-  const annotationSearch = compileSearchQuery(annotationQuery);
+  const annotationSearch = useMemo(() => compilePdfAnnotationQuery(annotationQuery, searchMetadata), [annotationQuery, searchMetadata]);
   const filteredAnnotations = annotationsInReadingOrder.filter((annotation) =>
     matchesNoteFilter(annotationNoteLabels(annotation), annotationFilter) &&
-    annotationSearch.matches(`${annotation.excerpt} ${annotation.note ?? ""} ${annotation.text} ${annotation.quickAsk?.answer ?? ""} ${annotation.review?.text ?? ""}`, { ...searchMetadata, tags: [...(searchMetadata.tags ?? []), ...annotationNoteLabels(annotation).flatMap((label) => [label, noteLabels[label]])] }));
+    annotationSearch.matches(annotation));
+  const filteredTeamAnnotations = teamAnnotations.filter((team) => {
+    if (!activePaper) return false;
+    const annotation = teamPdfAnnotation(team, resolvePaperIdentity(activePaper));
+    return matchesNoteFilter(annotationNoteLabels(annotation as PdfAnnotationV2), annotationFilter) && annotationSearch.matches(annotation, team.uploadedBy);
+  });
   const popupAnnotation = useMemo(
     () => annotations.find((annotation) => annotation.id === annotationPopup?.annotationId) ?? null,
     [annotationPopup?.annotationId, annotations]
@@ -3812,7 +3819,17 @@ export function PdfReader({
                 </button>
               </div>
 
-              {sidebarMode === "annotations" && <NoteLabelFilter compact value={annotationFilter} onChange={setAnnotationFilter} query={annotationQuery} onQueryChange={setAnnotationQuery} />}
+              {sidebarMode === "annotations" && <>
+                <div className="pdf-annotation-search">
+                  <Input aria-label="搜索批注内容" placeholder="搜索摘录、批注、页码或作者" size="small" contentBefore={<SearchRegular />}
+                    value={annotationQuery} onChange={(_, data) => setAnnotationQuery(data.value)} />
+                  <SearchOptions query={annotationQuery} onChange={setAnnotationQuery} tags={Object.values(noteLabels)} />
+                  {annotationQuery ? <Tooltip content="清除批注搜索" relationship="description"><Button aria-label="清除批注搜索" size="small" appearance="subtle"
+                    icon={<DismissRegular />} onClick={() => setAnnotationQuery("")} /></Tooltip> : null}
+                </div>
+                <NoteLabelFilter compact value={annotationFilter} onChange={setAnnotationFilter} />
+                <p className="pdf-annotation-result-count" role="status" aria-label="批注检索结果">{filteredAnnotations.length + filteredTeamAnnotations.length} / {annotations.length + teamAnnotations.length} 条批注</p>
+              </>}
               </div>
               {sidebarMode === "outline" ? (
                 <PdfOutline document={pdfDocument} onNavigate={({ page, topRatio }) => navigateToPage(page, "auto", topRatio)} />
@@ -3902,10 +3919,10 @@ export function PdfReader({
                                 className="pdf-annotation-kind" role="img">{getAnnotationIcon(annotation)}</span>
                             </Tooltip>
                             <span className="pdf-annotation-summary-content">
-                              <span className="pdf-annotation-excerpt">{getAnnotationSummaryText(annotation)}</span>
+                              <span className="pdf-annotation-excerpt"><SearchHighlight text={getAnnotationSummaryText(annotation)} query={annotationQuery} /></span>
                               {annotation.conflictOf ? <span className="pdf-annotation-type">同步冲突副本</span> : null}
                               {annotation.kind !== "text" && annotation.kind !== "ink" && activeAnnotationId !== annotation.id && (annotation.quickAsk?.question || annotation.note) ?
-                                <span className="pdf-annotation-summary-note"><CommentRegular /><span>{annotation.quickAsk?.question ?? annotation.note}</span></span> : null}
+                                <span className="pdf-annotation-summary-note"><CommentRegular /><span><SearchHighlight text={annotation.quickAsk?.question ?? annotation.note ?? ""} query={annotationQuery} /></span></span> : null}
                             </span>
                             <Tooltip content={`第 ${annotation.page} 页；双击条目定位原文`} relationship="description">
                               <span className="pdf-annotation-page" aria-label={`第 ${annotation.page} 页`}><DocumentRegular />{annotation.page}</span>
@@ -3998,14 +4015,14 @@ export function PdfReader({
                   {loadOrganizationAnnotations ? (
                     <section aria-label="团队批注" className="pdf-team-annotations">
                       <div className="pdf-sidebar-section-title">团队批注</div>
-                      {teamAnnotations.length > 0 ? (
+                      {filteredTeamAnnotations.length > 0 ? (
                         <ul className="pdf-annotation-list">
-                          {teamAnnotations.map((annotation) => (
+                          {filteredTeamAnnotations.map((annotation) => (
                             <li className="pdf-annotation-item note" key={annotation.annotationId}>
                               <span className="pdf-annotation-kind">
                                 {annotation.uploadedBy} · 第 {annotation.body.page} 页
                               </span>
-                              <span className="pdf-annotation-excerpt">{annotation.body.excerpt}</span>
+                              <span className="pdf-annotation-excerpt"><SearchHighlight text={annotation.body.excerpt} query={annotationQuery} /></span>
                               {annotation.body.note ? (
                                 <div className="annotation-note-preview">{annotation.body.note}</div>
                               ) : null}
@@ -4176,7 +4193,7 @@ export function PdfReader({
               <PdfPagesOverview document={pdfDocument} count={pageCount} currentPage={focusedPage}
                 annotations={annotations} onNavigate={navigateToPage} onClose={closeOverview} />
             ) : readerView === "annotations" ? (
-              <PdfAnnotationsOverview searchMetadata={searchMetadata} annotations={filteredAnnotations} teamAnnotations={teamAnnotations}
+              <PdfAnnotationsOverview searchMetadata={searchMetadata} annotations={annotations} teamAnnotations={teamAnnotations}
                 paperIdentity={activePaper ? resolvePaperIdentity(activePaper) : undefined}
                 error={annotationLoadError} onNavigate={locateAnnotation} onClose={closeOverview} />
             ) : <div className="pdf-document-frame" ref={documentFrameRef}>
