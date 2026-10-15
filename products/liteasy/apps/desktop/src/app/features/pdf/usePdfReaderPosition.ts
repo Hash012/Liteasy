@@ -10,8 +10,9 @@ export type PdfReaderPositionInput = {
   contentRevision: string | null;
   pageCount: number;
   page: number;
+  topRatio?: number;
   hasNavigationTarget?: boolean;
-  restorePage: (page: number, stillCurrent: () => boolean) => void;
+  restorePage: (page: number, stillCurrent: () => boolean, topRatio?: number) => void;
 };
 type Session = {
   current: () => boolean;
@@ -19,9 +20,10 @@ type Session = {
   blocked: boolean;
   restoring: boolean;
   lastPage?: number;
+  lastTopRatio?: number;
   restoredPage?: number;
   savedIntent: number;
-  save: (page: number) => Promise<void>;
+  save: (page: number, topRatio?: number) => Promise<void>;
 };
 
 export function usePdfReaderPosition(input: PdfReaderPositionInput) {
@@ -48,10 +50,10 @@ export function usePdfReaderPosition(input: PdfReaderPositionInput) {
       latest.current.sourcePath === sourcePath && latest.current.document === document && latest.current.contentRevision === contentRevision;
     const store = createPdfReaderPositionStore(scopeId, () => latest.current.scopeId);
     const session: Session = { current, ready: false, blocked: false, restoring: false, savedIntent: 0,
-      save: (page) => store.save(paperId, contentRevision, page) };
+      save: (page, topRatio) => store.save(paperId, contentRevision, page, topRatio) };
     sessionRef.current = session;
     const initialPage = input.page;
-    void store.load(paperId, contentRevision).then((saved) => {
+    void store.loadLocation(paperId, contentRevision).then((saved) => {
       if (!current()) return;
       session.ready = true;
       if (opening.intent || latest.current.hasNavigationTarget || latest.current.page !== initialPage) {
@@ -61,13 +63,15 @@ export function usePdfReaderPosition(input: PdfReaderPositionInput) {
       }
       session.lastPage = latest.current.page;
       if (saved !== null || latest.current.page !== 1) {
-        const page = saved === null ? 1 : Math.min(saved, Math.max(1, latest.current.pageCount));
+        const page = saved === null ? 1 : Math.min(saved.page, Math.max(1, latest.current.pageCount));
         session.lastPage = page;
+        session.lastTopRatio = saved?.topRatio;
         session.restoredPage = page;
         session.restoring = true;
         const intent = opening.intent;
         const stillCurrent = () => current() && opening.intent === intent;
-        latest.current.restorePage(page, stillCurrent);
+        if (saved?.topRatio === undefined) latest.current.restorePage(page, stillCurrent);
+        else latest.current.restorePage(page, stillCurrent, saved.topRatio);
         // The reader queues its automatic scroll first. Ignore that scroll's intermediate page.
         frame = requestAnimationFrame(() => {
           if (!current()) return;
@@ -87,17 +91,18 @@ export function usePdfReaderPosition(input: PdfReaderPositionInput) {
     const session = sessionRef.current;
     if (!session?.current() || !session.ready || session.blocked || session.restoring ||
       !Number.isSafeInteger(input.page) || input.page < 1 || input.page > input.pageCount ||
-      (session.lastPage === input.page && session.savedIntent === opening.intent)) return;
-    if (session.restoredPage !== undefined && input.page !== session.restoredPage && opening.intent === 0) return;
+      (session.lastPage === input.page && session.lastTopRatio === input.topRatio && session.savedIntent === opening.intent)) return;
+    if (session.restoredPage !== undefined && opening.intent === 0) return;
     session.restoredPage = undefined;
     session.lastPage = input.page;
+    session.lastTopRatio = input.topRatio;
     session.savedIntent = opening.intent;
-    void session.save(input.page).catch((cause: unknown) => {
+    void session.save(input.page, input.topRatio).catch((cause: unknown) => {
       if (!session.current()) return;
       session.blocked = true;
       setError(`阅读位置尚未保存。${cause instanceof Error ? cause.message : "请检查本地存储。"}`);
     });
-  }, [input.page, input.pageCount, input.document, input.contentRevision, input.scopeId, input.paperId, opening, tick]);
+  }, [input.page, input.topRatio, input.pageCount, input.document, input.contentRevision, input.scopeId, input.paperId, opening, tick]);
 
   return {
     error,

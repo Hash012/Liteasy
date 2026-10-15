@@ -4,7 +4,7 @@ import { pdfVisiblePage } from "./pdfVisiblePage";
 
 export function usePdfPageWindow(stage: RefObject<HTMLElement>, frame: RefObject<HTMLElement>, options: {
   enabled: boolean; document: unknown; focusedPage: number; pageCount: number; layout: string; zoom: number; width: number;
-  onVisiblePage?(page: number): void;
+  onVisiblePage?(page: number, topRatio: number): void;
 }) {
   const [pages, setPages] = useState<ReadonlySet<number>>(() => new Set([1]));
   const latest = useRef(options); latest.current = options;
@@ -34,8 +34,11 @@ export function usePdfPageWindow(stage: RefObject<HTMLElement>, frame: RefObject
       // jsdom supplies no layout, but still exercises annotation UI on page placeholders.
       const next = new Set(visible);
       setPages((previous) => previous.size === next.size && [...previous].every((page, index) => visible[index] === page) ? previous : next);
-      if (scrolled && latest.current.layout === "continuous") {
-        latest.current.onVisiblePage?.(pdfVisiblePage({ top, bottom }, entries, latest.current.focusedPage));
+      if (scrolled) {
+        const page = latest.current.layout === "continuous" ? pdfVisiblePage({ top, bottom }, entries, latest.current.focusedPage) : latest.current.focusedPage;
+        const bounds = entries.find((entry) => entry.page === page);
+        const topRatio = bounds ? Math.round(Math.max(0, Math.min(1, (top - bounds.top) / (bounds.bottom - bounds.top))) * 100_000) / 100_000 : 0;
+        latest.current.onVisiblePage?.(page, topRatio);
       }
       scrolled = false;
     };

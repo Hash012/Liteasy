@@ -25,7 +25,7 @@ test("coalesces scroll events and reuses page offsets until layout changes", () 
   expect(reads[0]).toHaveBeenCalledTimes(1);
   act(() => { root.scrollTop = 169 * 800; for (let index = 0; index < 20; index++) root.dispatchEvent(new Event("scroll")); });
   expect(onVisiblePage).not.toHaveBeenCalled(); flush();
-  expect(onVisiblePage).toHaveBeenCalledExactlyOnceWith(170);
+  expect(onVisiblePage).toHaveBeenCalledExactlyOnceWith(170, 0);
   expect(hook.result.current.has(170)).toBe(true);
   expect(hook.result.current.size).toBeLessThanOrEqual(6);
   expect(reads[0]).toHaveBeenCalledTimes(1);

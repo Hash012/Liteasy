@@ -159,3 +159,29 @@ test("storage read failure leaves the original row untouched and presents recove
   expect(state.storage.commit).not.toHaveBeenCalled();
   expect(state.rows.get(key)).toEqual(saved());
 });
+
+test("stores and restores a normalized offset while older page-only records remain readable", async () => {
+  const store = createPdfReaderPositionStore("local", () => "local", state.storage);
+  state.rows.set(key, saved(4));
+  expect(await store.loadLocation("paper-a", "sha256:aaa")).toEqual({ page: 4, topRatio: undefined });
+  await store.save("paper-a", "sha256:aaa", 4, 0.625);
+  const options = input(); renderHook(() => usePdfReaderPosition(options));
+  await waitFor(() => expect(options.restorePage).toHaveBeenCalledWith(4, expect.any(Function), 0.625));
+  expect((state.rows.get(key)?.value as { topRatio: number }).topRatio).toBe(0.625);
+});
+
+test("scrolling within the current page saves the updated offset", async () => {
+  const options = input({ topRatio: 0 });
+  const hook = renderHook((props) => usePdfReaderPosition(props), { initialProps: options });
+  await act(async () => {});
+  act(() => hook.result.current.markNavigation()); hook.rerender({ ...options, topRatio: 0.4 });
+  await waitFor(() => expect((state.rows.get(key)?.value as { topRatio: number })?.topRatio).toBe(0.4));
+});
+
+test.each([-0.1, 1.1, NaN])("rejects an invalid saved page offset %s without overwriting it", async (topRatio) => {
+  const row = saved(); row.value = { ...(row.value as object), topRatio }; state.rows.set(key, row);
+  const store = createPdfReaderPositionStore("local", () => "local", state.storage);
+  await expect(store.loadLocation("paper-a", "sha256:aaa")).rejects.toThrow(/偏移/);
+  await expect(store.save("paper-a", "sha256:aaa", 2, 0.2)).rejects.toThrow(/偏移/);
+  expect(state.storage.commit).not.toHaveBeenCalled();
+});

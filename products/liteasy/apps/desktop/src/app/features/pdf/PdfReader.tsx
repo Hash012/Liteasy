@@ -1649,6 +1649,7 @@ export function PdfReader({
   const documentInfoSource = useRef<{ paperId?: string; sourcePath?: string; contentHash?: string; document?: PDFDocumentProxy }>({});
   const [pageCount, setPageCount] = useState(1);
   const [focusedPage, setFocusedPage] = useState(1);
+  const [pageOffset, setPageOffset] = useState<{ page: number; topRatio: number }>();
   const loadedPositionDocument = pdfDocument && documentInfoSource.current.document === pdfDocument &&
     documentInfoSource.current.paperId === activePaper?.id && documentInfoSource.current.sourcePath === activePaper?.sourcePath &&
     documentInfoSource.current.contentHash === activePaper?.contentHash ? pdfDocument : null;
@@ -1656,8 +1657,8 @@ export function PdfReader({
     scopeId: objectWorkbench?.scopeId, paperId: activePaper?.id, sourcePath: activePaper?.sourcePath,
     document: loadedPositionDocument,
     contentRevision: loadedPositionDocument ? pdfReaderContentRevision(activePaper?.contentHash, loadedPositionDocument.fingerprints) : null,
-    pageCount, page: focusedPage, hasNavigationTarget: targetEvidence?.paperId === activePaper?.id,
-    restorePage: (page, stillCurrent) => navigateToPage(page, "auto", undefined, stillCurrent)
+    pageCount, page: focusedPage, topRatio: pageOffset?.page === focusedPage ? pageOffset.topRatio : undefined, hasNavigationTarget: targetEvidence?.paperId === activePaper?.id,
+    restorePage: (page, stillCurrent, topRatio) => navigateToPage(page, "auto", topRatio, stillCurrent)
   });
   const [layoutMode, setLayoutMode] = useState<PdfPageLayoutMode>(loadPdfPageLayoutMode);
   const [marginCommentsVisible, setMarginCommentsVisible] = useState(loadPdfMarginCommentsVisible);
@@ -1826,8 +1827,11 @@ export function PdfReader({
   const renderedPages = usePdfPageWindow(stageRef, documentFrameRef, {
     enabled: !readingView && readerView === "document", document: pdfDocument,
     focusedPage, pageCount, layout: layoutMode, zoom, width: stageWidth,
-    onVisiblePage: (page) => {
-      if (!readerPosition.isRestoring() && page !== focusedPage) { readerPosition.markNavigation(); setFocusedPage(page); }
+    onVisiblePage: (page, topRatio) => {
+      if (readerPosition.isRestoring()) return;
+      if (page !== focusedPage || pageOffset?.page !== page || pageOffset.topRatio !== topRatio) {
+        readerPosition.markNavigation(); setFocusedPage(page); setPageOffset({ page, topRatio });
+      }
     }
   });
   const hasVisibleMarginComments = marginCommentsVisible && annotations.some((annotation) =>
@@ -1914,6 +1918,7 @@ export function PdfReader({
     setReaderView("document");
     const nextPage = Math.min(Math.max(1, Math.trunc(page || 1)), Math.max(1, pageCount));
     setFocusedPage(nextPage);
+    setPageOffset({ page: nextPage, topRatio: topRatio ?? 0 });
     announceNavigation(`已转到第 ${nextPage} 页。`);
     window.requestAnimationFrame(() => {
       if (restoringPosition && !restoringPosition()) return;
@@ -2229,6 +2234,7 @@ export function PdfReader({
     setPdfDocument(null);
     setPageCount(1);
     setFocusedPage(1);
+    setPageOffset(undefined);
     setSearchOpen(false);
     setSearchQuery("");
     setActiveSearchIndex(-1);
