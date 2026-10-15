@@ -34,7 +34,7 @@ export function usePdfPageWindow(stage: RefObject<HTMLElement>, frame: RefObject
       // jsdom supplies no layout, but still exercises annotation UI on page placeholders.
       const next = new Set(visible);
       setPages((previous) => previous.size === next.size && [...previous].every((page, index) => visible[index] === page) ? previous : next);
-      if (scrolled) {
+      if (scrolled && bottom > top && entries.length) {
         const page = latest.current.layout === "continuous" ? pdfVisiblePage({ top, bottom }, entries, latest.current.focusedPage) : latest.current.focusedPage;
         const bounds = entries.find((entry) => entry.page === page);
         const topRatio = bounds ? Math.round(Math.max(0, Math.min(1, (top - bounds.top) / (bounds.bottom - bounds.top))) * 100_000) / 100_000 : 0;

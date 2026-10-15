@@ -15,10 +15,10 @@ function book(count: number) {
   pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`).join("")}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${start}\n%%EOF`;
   return Buffer.from(pdf);
 }
-async function open(page: Page, count: number) {
+async function open(page: Page, count: number, hash = "") {
   await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
   await page.route("**/manual-preview/das24a.pdf", (route) => route.fulfill({ body: book(count), contentType: "application/pdf" }));
-  await page.goto("/?pdf-highlight-fixture");
+  await page.goto(`/?pdf-highlight-fixture${hash}`);
   await expect(page.locator('.pdf-page-shell[data-page="1"] .pdf-text-layer')).toContainText("PAGE 1", { timeout: 30_000 });
 }
 async function go(page: Page, number: number) {
@@ -80,4 +80,66 @@ test("a large wheel scroll followed by resize keeps the newly visible page", asy
   await page.setViewportSize({ width: 1200, height: 900 });
   await expect.poll(async () => Math.abs(await offset(page, current, 64) - readingPoint)).toBeLessThan(0.015);
   await expect(input).toHaveValue(String(current));
+});
+
+
+test("closing the reader tab and reopening from the library restores the page and offset", async ({ page }) => {
+  test.setTimeout(90_000);
+  await open(page, 12, "#importable");
+  await go(page, 6);
+  await page.getByLabel("PDF 页面滚动区").hover(); await page.mouse.wheel(0, 1);
+  await page.getByLabel("PDF 页面滚动区").evaluate((stage) => {
+    const bounds = stage.querySelector('.pdf-page-shell[data-page="6"]')!.getBoundingClientRect();
+    stage.scrollTo({ top: stage.scrollTop + bounds.top - stage.getBoundingClientRect().top + bounds.height * 0.4, behavior: "instant" });
+  });
+  await settled(page);
+  const savedOffset = await offset(page, 6);
+  await page.getByRole("button", { name: "关闭 das24a.pdf", exact: true }).click();
+  await expect(page.getByLabel("PDF 页面滚动区")).toHaveCount(0);
+  await page.getByRole("button", { name: "文献库", exact: true }).dblclick();
+  await page.getByRole("button", { name: "das24a.pdf", exact: true }).dblclick();
+  await expect(page.getByLabel("当前页码")).toHaveValue("6", { timeout: 30_000 });
+  await expect.poll(async () => Math.abs(await offset(page, 6) - savedOffset)).toBeLessThan(0.015);
+  await page.reload();
+  await expect(page.getByLabel("当前页码")).toHaveValue("6", { timeout: 30_000 });
+  await expect.poll(async () => Math.abs(await offset(page, 6) - savedOffset)).toBeLessThan(0.015);
+});
+
+
+test("closing an evidence jump consumes its target before ordinary reopening", async ({ page }) => {
+  test.setTimeout(90_000);
+  await open(page, 12, "#importable");
+  const editor = page.getByPlaceholder("输入你的问题或命令");
+  await editor.fill("@das24a"); await editor.press("Tab");
+  await page.locator(".assistant-input-highlight .resource-reference-link").click();
+  const preview = page.getByLabel("引用内容预览", { exact: true });
+  await expect(preview.getByRole("region", { name: "原始 PDF 预览" })).toHaveAttribute("aria-busy", "false");
+  await preview.getByRole("button", { name: "下一页", exact: true }).click();
+  await preview.getByRole("button", { name: "打开原文件", exact: true }).click();
+  await expect(page.getByLabel("当前页码")).toHaveValue("2");
+  await page.keyboard.press("Escape");
+  await expect(page.locator('.pdf-page-shell[data-page="2"] .pdf-text-layer')).toContainText("PAGE 2");
+  await page.getByLabel("PDF 页面滚动区").hover(); await page.mouse.wheel(0, 4000);
+  await expect(page.getByLabel("当前页码")).not.toHaveValue("2");
+  await settled(page);
+  const savedPage = await page.getByLabel("当前页码").inputValue();
+  await page.getByRole("button", { name: "关闭 das24a.pdf", exact: true }).click();
+  await page.getByRole("button", { name: "文献库", exact: true }).dblclick();
+  await page.getByRole("button", { name: "das24a.pdf", exact: true }).dblclick();
+  await expect(page.getByLabel("当前页码")).toHaveValue(savedPage, { timeout: 30_000 });
+});
+
+
+test("wheel-only reading saves before a quick tab close without a page-number action", async ({ page }) => {
+  test.setTimeout(90_000);
+  await open(page, 12, "#importable");
+  await page.getByLabel("PDF 页面滚动区").hover(); await page.mouse.wheel(0, 5500);
+  await expect(page.getByLabel("当前页码")).not.toHaveValue("1");
+  const savedPage = await page.getByLabel("当前页码").inputValue();
+  const savedOffset = await offset(page, Number(savedPage));
+  await page.getByRole("button", { name: "关闭 das24a.pdf", exact: true }).click();
+  await page.getByRole("button", { name: "文献库", exact: true }).dblclick();
+  await page.getByRole("button", { name: "das24a.pdf", exact: true }).dblclick();
+  await expect(page.getByLabel("当前页码")).toHaveValue(savedPage, { timeout: 30_000 });
+  await expect.poll(async () => Math.abs(await offset(page, Number(savedPage)) - savedOffset)).toBeLessThan(0.015);
 });

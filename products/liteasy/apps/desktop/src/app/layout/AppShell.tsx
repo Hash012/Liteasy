@@ -1820,6 +1820,8 @@ export function AppShell({
   }
 
   function closeReaderPaper(paperId: string) {
+    // An evidence jump belongs to this open tab, not its next reading session.
+    setReaderEvidenceTarget((current) => current?.paperId === paperId ? null : current);
     externalPapers.closeOriginalPdfFile(paperId);
     setOpenReaderPaperIds((current) => {
       const closingIndex = current.indexOf(paperId);

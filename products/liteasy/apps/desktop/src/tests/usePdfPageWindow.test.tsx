@@ -32,3 +32,20 @@ test("coalesces scroll events and reuses page offsets until layout changes", () 
   act(() => resize()); flush(); expect(reads[0]).toHaveBeenCalledTimes(2);
   hook.unmount(); vi.unstubAllGlobals();
 });
+
+test("a hidden or not-yet-sized page never checkpoints a synthetic zero offset", () => {
+  vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
+  let frame: FrameRequestCallback | undefined;
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => { frame = callback; return 1; });
+  vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+  const root = document.createElement("div");
+  root.getBoundingClientRect = () => ({ top: 0, bottom: 0, height: 0 } as DOMRect);
+  const onVisiblePage = vi.fn();
+  const stage = { current: root };
+  const hook = renderHook(() => usePdfPageWindow(stage, stage, {
+    enabled: true, document: {}, focusedPage: 6, pageCount: 12, layout: "continuous", zoom: 100, width: 0, onVisiblePage
+  }));
+  act(() => { root.dispatchEvent(new Event("scroll")); frame?.(0); });
+  expect(onVisiblePage).not.toHaveBeenCalled();
+  hook.unmount(); vi.unstubAllGlobals();
+});
