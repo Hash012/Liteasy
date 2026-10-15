@@ -1,6 +1,6 @@
-import { useEffect, useRef, type MutableRefObject } from "react";
+import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
 import { getAccountSessionGeneration } from "../../features/account/accountSessionStorage";
-import { createSessionTitleCoordinator, generateSessionTitle } from "../../features/assistant/assistantSessionTitles";
+import { createSessionTitleCoordinator, generateSessionTitle, renameAssistantSessionWithAI } from "../../features/assistant/assistantSessionTitles";
 import type { AssistantSessionHistoryItem } from "../../features/assistant/assistantSessionHistory";
 import { createModelGatewayFromSettings } from "../../features/models/modelRuntime";
 import { getActiveModelProvider, getModelForSettings } from "../../features/models/modelPolicy";
@@ -15,9 +15,11 @@ export function useAssistantSessionTitles(input: {
   getSettings(): SettingsState;
   modelTransport?: ModelTransport;
   publish(sessions: AssistantSessionHistoryItem[]): void;
+  loadSession?(id: string): Promise<AssistantSessionHistoryItem | undefined>;
 }) {
   const latest = useRef(input);
   latest.current = input;
+  const explicitRequests = useRef(new Map<string, AbortController>());
   const coordinator = useRef<ReturnType<typeof createSessionTitleCoordinator>>();
   const historyBaseline = useRef<{ scope: string; captured: boolean; ids: Set<string> }>({ scope: input.scope, captured: false, ids: new Set() });
   if (historyBaseline.current.scope !== input.scope) historyBaseline.current = { scope: input.scope, captured: false, ids: new Set() };
@@ -43,7 +45,7 @@ export function useAssistantSessionTitles(input: {
       }
     });
     coordinator.current = owner;
-    return () => { owner.dispose(); };
+    return () => { owner.dispose(); for (const request of explicitRequests.current.values()) request.abort(); explicitRequests.current.clear(); };
   }, [input.scope]);
   useEffect(() => {
     if (!input.ready) return;
@@ -57,4 +59,27 @@ export function useAssistantSessionTitles(input: {
     }
     coordinator.current?.reconcile();
   }, [input.ready, input.sessions, input.scope]);
+  return useCallback(async (id: string) => {
+    if (explicitRequests.current.has(id)) return;
+    const controller = new AbortController();
+    explicitRequests.current.set(id, controller);
+    try {
+      await renameAssistantSessionWithAI(id, {
+        getSessions: () => latest.current.registry.current,
+        getScope: () => latest.current.scope,
+        getGeneration: getAccountSessionGeneration,
+        loadSession: target => latest.current.loadSession?.(target) ?? Promise.resolve(undefined),
+        generate: (turn, signal) => {
+          const settings = latest.current.getSettings();
+          return generateSessionTitle(turn, createModelGatewayFromSettings(settings, { cloudTransport: latest.current.modelTransport }),
+            { model: getModelForSettings(settings), provider: getActiveModelProvider(settings) }, signal);
+        },
+        update: (target, change) => {
+          const current = latest.current;
+          const next = current.registry.current.map(session => session.id === target ? change(session) : session);
+          current.registry.current = next; current.publish([...next]);
+        }
+      }, controller.signal);
+    } finally { if (explicitRequests.current.get(id) === controller) explicitRequests.current.delete(id); }
+  }, []);
 }

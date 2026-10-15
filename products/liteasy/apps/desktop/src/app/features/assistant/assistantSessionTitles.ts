@@ -117,3 +117,34 @@ export function createSessionTitleCoordinator(deps: {
     dispose() { disposed = true; for (const request of running.values()) request.controller.abort(); running.clear(); }
   };
 }
+
+/** Explicit user action may rename older/manual titles; it never overrides newer edits or another account. */
+export async function renameAssistantSessionWithAI(id: string, deps: {
+  getSessions(): AssistantSessionHistoryItem[];
+  getScope(): string;
+  getGeneration(): string | number;
+  loadSession?(id: string): Promise<AssistantSessionHistoryItem | undefined>;
+  generate(turn: TitleTurn, signal: AbortSignal): Promise<string>;
+  update(id: string, change: (session: AssistantSessionHistoryItem) => AssistantSessionHistoryItem): void;
+}, signal: AbortSignal) {
+  const original = deps.getSessions().find(session => session.id === id);
+  if (!original || original.kind === "artifact_generation" || original.lifecycle === "tombstoned" || original.status === "running") throw new Error("当前对话暂不能重命名。");
+  const scope = deps.getScope(), generation = deps.getGeneration(), fingerprint = signature(original);
+  const valid = (current: AssistantSessionHistoryItem | undefined) => !!current && !signal.aborted &&
+    deps.getScope() === scope && deps.getGeneration() === generation && (!current.scopeId || current.scopeId === scope) &&
+    current.lifecycle === original.lifecycle && current.title === original.title && (current.titleVersion ?? 0) === (original.titleVersion ?? 0) &&
+    current.status !== "running" && signature(current) === fingerprint && current.messageCount === original.messageCount;
+  const check = () => { if (!valid(deps.getSessions().find(session => session.id === id))) throw new Error("对话或账号已变化，请重试。"); };
+  check();
+  const session = original.messagesLoaded === false ? await deps.loadSession?.(id) : original;
+  check();
+  if (!session || session.scopeId && session.scopeId !== scope) throw new Error("对话内容尚未读取，请重试。");
+  const messages = session.messages.filter(message => !message.kind || ["user_message", "assistant_message"].includes(message.kind)).slice(-6);
+  const user = messages.filter(message => message.role === "user").map(message => message.content).join("\n").trim() || session.draft?.input.trim();
+  if (!user) throw new Error("请先发送消息，再生成对话标题。");
+  const title = cleanTitle(await deps.generate({ user, assistant: messages.filter(message => message.role === "assistant").map(message => message.content).join("\n") }, signal));
+  check();
+  if (!title) throw new Error("未生成有效标题，请重试。");
+  deps.update(id, current => valid(current) ? { ...current, title, titleSource: "model", titleVersion: (current.titleVersion ?? 0) + 1,
+    updatedAt: new Date().toISOString(), titleNaming: { policy: "first-answer/v1", status: "completed", attempts: 1, messageFingerprint: signature(session) } } : current);
+}

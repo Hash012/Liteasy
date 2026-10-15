@@ -103,6 +103,8 @@ test("A02-03 selecting either run of task A cannot project task B's events", asy
   await screen.findByRole("combobox", { name: "选择运行记录" });
   expect(screen.getByRole("alert")).toHaveTextContent("A 的第 2 次诊断");
   expect(screen.queryByText(/B 的第/)).not.toBeInTheDocument();
+  expect(screen.queryByText("run-A-2")).not.toBeInTheDocument();
+  expect(screen.getByRole("combobox", { name: "选择运行记录" })).toHaveTextContent("第 2 次 · 失败");
   await userEvent.click(screen.getByRole("combobox", { name: "选择运行记录" }));
   await userEvent.click(screen.getByRole("option", { name: "第 1 次 · 失败" }));
   expect(screen.getByRole("alert")).toHaveTextContent("A 的第 1 次诊断");

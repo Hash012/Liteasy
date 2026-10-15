@@ -144,3 +144,14 @@ test("A02-13 separate conversations retain both window drafts and scroll anchors
   expect(restoredA.sessions.find((session) => session.id === "a")).toMatchObject({ draft: { input: "draft A" }, scrollAnchor: { offset: 10 } });
   expect(restoredB.sessions.find((session) => session.id === "b")).toMatchObject({ draft: { input: "draft B" }, scrollAnchor: { offset: 25 } });
 });
+
+test("deleted conversations remain tombstoned and never reopen as the active conversation", async () => {
+  const scope = crypto.randomUUID(), repository = createScopedAssistantHistoryPersistence(scope, () => scope);
+  await repository.load();
+  const snapshot = fixture();
+  snapshot.sessions[0].lifecycle = "tombstoned";
+  await repository.save(snapshot);
+  const restored = await createScopedAssistantHistoryPersistence(scope, () => scope).load();
+  expect(restored?.activeSessionId).toBe("");
+  expect(restored?.sessions[0].lifecycle).toBe("tombstoned");
+});

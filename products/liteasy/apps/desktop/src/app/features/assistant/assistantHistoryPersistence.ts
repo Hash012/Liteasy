@@ -232,7 +232,7 @@ export function createScopedAssistantHistoryPersistence(scopeId: string, current
         after = rows.at(-1)!.key;
       }
       const view = (await loadRow(viewKey))?.value as { activeSessionId?: string } | undefined;
-      const active = view?.activeSessionId && indexes.has(view.activeSessionId) ? view.activeSessionId : indexes.keys().next().value ?? "";
+      const active = view?.activeSessionId && indexes.get(view.activeSessionId)?.lifecycle !== "tombstoned" && indexes.has(view.activeSessionId) ? view.activeSessionId : [...indexes.values()].find(index => index.lifecycle !== "tombstoned")?.id ?? "";
       const sessions: AssistantSessionHistoryItem[] = [];
       for (const index of indexes.values()) {
         sessions.push(index.id === active ? await hydrate(index) : { ...index, messages: [], messagesLoaded: false });

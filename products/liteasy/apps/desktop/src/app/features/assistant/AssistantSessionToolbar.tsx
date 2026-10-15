@@ -2,12 +2,13 @@ import { ActionButton as Button, IconAction } from "../../shared/ui/productPrimi
 import { AssistantMarkdown } from "./AssistantMarkdown";
 import { conversationDigest } from "./assistantSessionHistory";
 import type { AssistantMessage } from "./assistant.types";
-import type { DragEventHandler } from "react";
+import type { DragEventHandler, ReactNode } from "react";
 import { Popover, PopoverSurface, PopoverTrigger, Tooltip, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-components";
 import { ArrowLeftRegular, ArrowRightRegular, OpenRegular, ComposeRegular, DocumentRegular, SettingsRegular, StopRegular, MoreHorizontalRegular } from "@fluentui/react-icons";
 
 type Props = {
   title: string;
+  sessionActions?: ReactNode;
   messages?: AssistantMessage[];
   kind: "conversation" | "artifact_generation";
   historyOpen: boolean;
@@ -49,7 +50,7 @@ export function AssistantSessionToolbar(props: Props) {
         <Button appearance="subtle" className="assistant-toolbar-button danger" aria-label={props.cancelling ? "终止中" : "终止"}
           disabled={props.cancelling} icon={<StopRegular />} onClick={props.onCancel} />
       </Tooltip> : null}
-      {props.onExpand || props.onOpenSettings ? <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="更多会话操作" icon={<MoreHorizontalRegular />} appearance="subtle" /></MenuTrigger><MenuPopover><MenuList>{props.onExpand ? <MenuItem icon={<OpenRegular />} onClick={props.onExpand}>在主区打开对话</MenuItem> : null}{props.onOpenSettings ? <MenuItem icon={<SettingsRegular />} onClick={props.onOpenSettings}>对话设置</MenuItem> : null}</MenuList></MenuPopover></Menu> : null}
+      {props.sessionActions ?? (props.onExpand || props.onOpenSettings ? <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="更多会话操作" icon={<MoreHorizontalRegular />} appearance="subtle" /></MenuTrigger><MenuPopover><MenuList>{props.onExpand ? <MenuItem icon={<OpenRegular />} onClick={props.onExpand}>在主区打开对话</MenuItem> : null}{props.onOpenSettings ? <MenuItem icon={<SettingsRegular />} onClick={props.onOpenSettings}>对话设置</MenuItem> : null}</MenuList></MenuPopover></Menu> : null)}
       <Tooltip content="新建对话" positioning="below" relationship="description">
         <Button appearance="subtle" className="assistant-toolbar-button" aria-label="新建" title="开始一个新的 AI 对话"
           disabled={props.newSessionDisabled} icon={<ComposeRegular />} onClick={props.onNewSession} />

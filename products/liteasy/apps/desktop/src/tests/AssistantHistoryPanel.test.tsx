@@ -1,56 +1,59 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, test, vi } from "vitest";
-import { AssistantHistoryPanel } from "../app/features/assistant/AssistantHistoryPanel";
+import { AssistantHistoryPanel, formatSessionModifiedDate } from "../app/features/assistant/AssistantHistoryPanel";
 import type { AssistantSessionHistoryItem } from "../app/features/assistant/assistantSessionHistory";
 
-describe("AssistantHistoryPanel", () => {
-  test("shows an empty history hint", () => {
-    render(<AssistantHistoryPanel history={[]} onRestoreSession={vi.fn()} />);
+const session: AssistantSessionHistoryItem = { id: "session-1", messages: [{ content: "比较两个实验的误差", id: "message-1", role: "user" }], mode: "qa", title: "实验比较", updatedAt: "2026-10-14T08:35:00.000Z", messageCount: 8 };
 
-    expect(screen.getByLabelText("历史会话面板")).toBeInTheDocument();
-    expect(screen.getByText("暂无历史会话或匹配记录。")).toBeInTheDocument();
-  });
-
-  test("restores a selected archived session", async () => {
-    const user = userEvent.setup();
-    const onRestoreSession = vi.fn();
-    const history: AssistantSessionHistoryItem[] = [
-      {
-        archivedAt: "2026-05-15T00:00:00.000Z",
-        id: "session-1",
-        messages: [{ content: "你好", id: "message-1", role: "user" }],
-        mode: "qa",
-        title: "你好"
-      }
-    ];
-
-    render(<AssistantHistoryPanel history={history} onRestoreSession={onRestoreSession} />);
-
-    expect(screen.getByText("时间未记录")).toBeInTheDocument();
-    expect(screen.getByText("1 条消息 · 问答")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "恢复会话：你好" }));
-
-    expect(onRestoreSession).toHaveBeenCalledWith("session-1");
-  });
+test("shows an empty history hint", () => {
+  render(<AssistantHistoryPanel history={[]} onRestoreSession={vi.fn()} />);
+  expect(screen.getByText("暂无历史会话或匹配记录。")).toBeInTheDocument();
 });
-
-test("shows last activity with time, message count and latest question in the clickable row", async () => {
+test("a compact clickable row exposes only its topic and approximate modification date", async () => {
   const open = vi.fn();
-  render(<AssistantHistoryPanel history={[{ id: "timed", title: "实验比较", mode: "qa", updatedAt: "2026-10-14T08:35:00.000Z", messageCount: 8,
-    messages: [{ id: "question", role: "user", content: "比较两个实验的误差" }] }]} onOpenSession={open} />);
+  render(<AssistantHistoryPanel history={[session]} onOpenSession={open} />);
   const row = screen.getByRole("button", { name: "打开会话：实验比较" });
-  expect(row).toHaveTextContent(/上次活动：2026\/10\/14.*\d{2}:35/);
-  expect(row).toHaveTextContent("8 条消息");
-  expect(row).toHaveTextContent("比较两个实验的误差");
-  expect(row.querySelector("time")).toHaveAttribute("dateTime", "2026-10-14T08:35:00.000Z");
-  await userEvent.click(screen.getByText("比较两个实验的误差"));
-  expect(open).toHaveBeenCalledWith("timed");
+  expect(row.querySelectorAll("span, time")).toHaveLength(2);
+  expect(row.querySelector("time")).toHaveAttribute("dateTime", session.updatedAt);
+  expect(row.querySelector("time")).toHaveAttribute("title", expect.stringContaining("修改于"));
+  expect(row).not.toHaveTextContent("条消息"); expect(row).not.toHaveTextContent("比较两个实验的误差");
+  await userEvent.click(row); expect(open).toHaveBeenCalledWith(session.id);
 });
-
-test("keeps normal conversation rows compact while exposing exceptional status", () => {
-  const base: AssistantSessionHistoryItem = { id: "normal", title: "注意力机制", mode: "qa", status: "idle", messages: [] };
-  render(<AssistantHistoryPanel history={[base, { ...base, id: "failed", title: "失败会话", status: "failed" }]} />);
-  expect(screen.queryByText("普通对话 · 可继续")).not.toBeInTheDocument();
-  expect(screen.getByText("普通对话 · 失败")).toBeInTheDocument();
+test("dates use bounded human units and handle missing or invalid timestamps", () => {
+  const now = Date.parse("2026-10-15T09:00:00Z");
+  expect(formatSessionModifiedDate("2026-10-15T08:00:00Z", now)).toBe("1小时");
+  expect(formatSessionModifiedDate("2026-10-13T09:00:00Z", now)).toBe("2天");
+  expect(formatSessionModifiedDate("2026-10-15T08:59:40Z", now)).toBe("刚刚");
+  expect(formatSessionModifiedDate("bad", now)).toBe("时间未记录");
+});
+test("the row menu binds rename, AI rename and export to the selected conversation", async () => {
+  const onUpdateSession = vi.fn(), onRenameWithAI = vi.fn().mockResolvedValue(undefined), onExportSession = vi.fn();
+  render(<AssistantHistoryPanel history={[session]} onUpdateSession={onUpdateSession} onRenameWithAI={onRenameWithAI} onExportSession={onExportSession} onDeleteSession={vi.fn()} />);
+  await userEvent.click(screen.getByRole("button", { name: "管理 实验比较" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: "重命名对话", exact: true }));
+  const dialog = screen.getByRole("dialog", { name: "重命名对话" });
+  await userEvent.clear(within(dialog).getByRole("textbox", { name: "会话名称" }));
+  await userEvent.type(within(dialog).getByRole("textbox", { name: "会话名称" }), "误差来源");
+  await userEvent.click(within(dialog).getByRole("button", { name: "保存名称" }));
+  expect(onUpdateSession).toHaveBeenCalledWith(session.id, { title: "误差来源", titleSource: "user" });
+  await userEvent.click(screen.getByRole("button", { name: "管理 实验比较" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: "AI 重命名对话" }));
+  expect(onRenameWithAI).toHaveBeenCalledWith(session.id);
+  await userEvent.click(screen.getByRole("button", { name: "管理 实验比较" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: "导出对话" }));
+  expect(onExportSession).toHaveBeenCalledWith(session.id);
+});
+test("deletion requires confirmation and AI failures retain the original title", async () => {
+  const onDeleteSession = vi.fn(), onRenameWithAI = vi.fn().mockRejectedValue(new Error("internal-model-id-secret"));
+  render(<AssistantHistoryPanel history={[session]} onOpenSession={vi.fn()} onUpdateSession={vi.fn()} onRenameWithAI={onRenameWithAI} onDeleteSession={onDeleteSession} />);
+  await userEvent.click(screen.getByRole("button", { name: "管理 实验比较" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: "AI 重命名对话" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("原名称已保留");
+  expect(screen.getByText(/internal-model-id-secret/)).not.toBeVisible();
+  expect(screen.getByRole("button", { name: "打开会话：实验比较" })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "管理 实验比较" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: "删除对话" }));
+  expect(onDeleteSession).not.toHaveBeenCalled();
+  await userEvent.click(within(screen.getByRole("dialog", { name: "删除对话确认" })).getByRole("button", { name: "删除对话" }));
+  expect(onDeleteSession).toHaveBeenCalledWith(session.id);
 });

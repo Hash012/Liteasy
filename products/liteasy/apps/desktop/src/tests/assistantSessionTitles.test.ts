@@ -86,3 +86,29 @@ test("restored pending attempts do not reset the finite retry budget", async () 
   f.owner.reconcile(); await settle(); expect(f.generate).toHaveBeenCalledTimes(1);
   expect(f.sessions()[0].titleNaming?.status).toBe("fallback"); f.owner.dispose();
 });
+
+test("explicit AI rename loads an old conversation and applies an actual generated title", async () => {
+  const { renameAssistantSessionWithAI } = await import("../app/features/assistant/assistantSessionTitles");
+  let current: AssistantSessionHistoryItem = { ...turn(), title: "人工旧名", titleSource: "user", titleVersion: 4, messagesLoaded: false, messages: [], messageCount: 2 };
+  const generate = vi.fn().mockResolvedValue("新的模型标题"), loadSession = vi.fn().mockResolvedValue(turn());
+  await renameAssistantSessionWithAI(current.id, { getSessions: () => [current], getScope: () => "local", getGeneration: () => 1,
+    loadSession, generate, update: (_, change) => { current = change(current); } }, new AbortController().signal);
+  expect(loadSession).toHaveBeenCalledWith("one");
+  expect(generate.mock.calls[0][0]).toEqual({ user: "解释论文的注意力机制", assistant: "注意力按相关性组合信息。" });
+  expect(current).toMatchObject({ title: "新的模型标题", titleVersion: 5, titleSource: "model" });
+});
+test.each(["manual", "delete", "scope", "generation", "message"])("explicit AI rename rejects late responses after %s", async change => {
+  const { renameAssistantSessionWithAI } = await import("../app/features/assistant/assistantSessionTitles");
+  let current = turn() as AssistantSessionHistoryItem, scope = "local", generation = 1;
+  let resolve!: (value: string) => void;
+  const pending = renameAssistantSessionWithAI(current.id, { getSessions: () => [current], getScope: () => scope, getGeneration: () => generation,
+    generate: () => new Promise<string>(done => { resolve = done; }), update: (_, update) => { current = update(current); } }, new AbortController().signal);
+  if (change === "manual") current = { ...current, title: "新手工名", titleVersion: 3 };
+  if (change === "delete") current = { ...current, lifecycle: "tombstoned" };
+  if (change === "scope") scope = "other";
+  if (change === "generation") generation++;
+  if (change === "message") current = { ...current, messages: [...current.messages, { id: "more", role: "user", content: "继续" }] };
+  resolve("失效模型标题");
+  await expect(pending).rejects.toThrow("对话或账号已变化");
+  expect(current.title).not.toBe("失效模型标题");
+});
