@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadUserPaperArtifact, saveUserPaperArtifact } from "../library/userPaperArtifactClient";
 import type { PdfPageText } from "./citationAttribution";
 import {
-  buildPaperFulltextSnapshot,
+  buildPaperFulltextSnapshot, paperFulltextRevision,
   findPagesWithoutTextLayer,
   mergePaperPageTexts,
   normalizePaperFulltext,
@@ -15,15 +15,19 @@ import {
 type TextExtraction = "embedded" | "mineru" | "ocr";
 
 /** Owns the durable PDF text-position snapshot; the renderer only reports finished page text. */
-export function usePdfFulltextStore(activePaperId: string | undefined) {
+export function usePdfFulltextStore(activePaperId: string | undefined, sourceHash?: string) {
   const [pageTexts, setPageTexts] = useState<Record<number, string>>({});
   const [pageTextExtractions, setPageTextExtractions] = useState<Record<number, TextExtraction>>({});
   const [hydratedPaperId, setHydratedPaperId] = useState<string | null>(null);
+  const generation = useRef(0);
+  const representation = useRef<string>();
+  const persistenceTail = useRef(Promise.resolve());
   const extractionRef = useRef<Record<number, TextExtraction>>({});
   const persistedTextsRef = useRef<Record<number, string>>({});
   const persistedExtractionsRef = useRef<Record<number, TextExtraction>>({});
 
   useEffect(() => {
+    generation.current++; representation.current = undefined;
     setPageTexts({});
     setPageTextExtractions({});
     setHydratedPaperId(null);
@@ -37,7 +41,8 @@ export function usePdfFulltextStore(activePaperId: string | undefined) {
     void loadUserPaperArtifact<unknown>({ artifactKind: "fulltext", paperId })
       .then((snapshot) => {
         const stored = normalizePaperFulltext(snapshot);
-        if (cancelled || !stored) return;
+        if (cancelled || !stored || stored.sourceHash && stored.sourceHash !== sourceHash) return;
+        representation.current = stored.representationRevision;
         const storedTexts = paperFulltextPagesToRecord(stored.pages);
         const storedExtractions = paperFulltextExtractionsToRecord(stored.pages);
         persistedTextsRef.current = storedTexts;
@@ -55,29 +60,25 @@ export function usePdfFulltextStore(activePaperId: string | undefined) {
     return () => {
       cancelled = true;
     };
-  }, [activePaperId]);
+  }, [activePaperId, sourceHash]);
 
   useEffect(() => {
     if (!activePaperId || hydratedPaperId !== activePaperId) return;
     const merged = mergePaperPageTexts(persistedTextsRef.current, pageTexts);
     if (samePaperPageTexts(merged, persistedTextsRef.current)) return;
-    persistedTextsRef.current = merged;
-    persistedExtractionsRef.current = {
+    const mergedExtractions = {
       ...persistedExtractionsRef.current,
       ...pageTextExtractions
     };
-    void saveUserPaperArtifact({
-      artifactKind: "fulltext",
-      paperId: activePaperId,
-      snapshot: buildPaperFulltextSnapshot({
-        extractedAt: new Date().toISOString(),
-        pageTextExtractions: persistedExtractionsRef.current,
-        pageTexts: merged
-      })
-    }).catch(() => {
-      // The in-memory text remains usable; the next page update retries the durable write.
-    });
-  }, [activePaperId, hydratedPaperId, pageTextExtractions, pageTexts]);
+    const epoch = generation.current;
+    const snapshot = buildPaperFulltextSnapshot({ sourceHash, recipe: "pdfjs-page-text/v1", extractedAt: new Date().toISOString(), pageTextExtractions: mergedExtractions, pageTexts: merged });
+    persistenceTail.current = persistenceTail.current.catch(() => {}).then(async () => {
+      const revision = await paperFulltextRevision(snapshot);
+      if (epoch !== generation.current) return;
+      await saveUserPaperArtifact({ artifactKind: "fulltext", paperId: activePaperId, snapshot });
+      if (epoch === generation.current) { persistedTextsRef.current = merged; persistedExtractionsRef.current = mergedExtractions; representation.current = revision; }
+    }).catch(() => { /* A later page update retries; old immutable snapshots remain readable. */ });
+  }, [activePaperId, hydratedPaperId, pageTextExtractions, pageTexts, sourceHash]);
 
   const onPageTextRendered = useCallback((input: PdfPageText) => {
     if (extractionRef.current[input.page] === "ocr") return;
@@ -100,6 +101,7 @@ export function usePdfFulltextStore(activePaperId: string | undefined) {
   ]), [pageTextExtractions, textLayerGaps.pages]);
 
   return {
+    representationForPage: (page: number) => representation.current && persistedTextsRef.current[page] === pageTexts[page] ? representation.current : undefined,
     documentHasNoTextLayer: textLayerGaps.documentHasNoTextLayer,
     hydratedPaperId,
     onPageTextRendered,

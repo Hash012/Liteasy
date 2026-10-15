@@ -71,6 +71,9 @@ type PdfAnnotationBase = {
   /** Set only by an actual user change to the annotation body. */
   userEditedAt?: string;
   normalizedStart?: number;
+  /** Immutable extracted-text revision; absent on legacy/native-only anchors. */
+  textRepresentationRevision?: string;
+  sourceHash?: string;
   opacity?: number;
   manualSize?: boolean;
   page: number;
@@ -271,6 +274,8 @@ function hasAnnotationFields(value: unknown) {
       typeof candidate.quickAsk.pageText === "string" && typeof candidate.quickAsk.abstractText === "string" &&
       (candidate.quickAsk.introductionText === undefined || typeof candidate.quickAsk.introductionText === "string") &&
       (candidate.quickAsk.receipt === undefined || isQuickAskGenerationReceipt(candidate.quickAsk.receipt)))) &&
+    (candidate.textRepresentationRevision === undefined || typeof candidate.textRepresentationRevision === "string" && /^[a-f0-9]{64}$/.test(candidate.textRepresentationRevision)) &&
+    (candidate.sourceHash === undefined || typeof candidate.sourceHash === "string") &&
     (candidate.normalizedStart === undefined ||
       (isFiniteNumber(candidate.normalizedStart) && candidate.normalizedStart >= 0)) &&
     (candidate.kind !== "ink" || isPdfInkStroke(candidate.ink)) &&

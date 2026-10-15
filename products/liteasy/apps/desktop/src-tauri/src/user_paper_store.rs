@@ -1,4 +1,5 @@
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
@@ -156,13 +157,46 @@ fn decode_user_paper_artifact(serialized: &[u8]) -> Result<Option<Value>, String
     Ok(Some(value))
 }
 
+fn fulltext_revision(value: &Value) -> Result<String, String> {
+    let identity = serde_json::json!({ "pages": value.get("pages"), "sourceHash": value.get("sourceHash"), "parser": value.get("parser"), "recipe": value.get("recipe") });
+    let bytes = serde_json::to_vec(&identity).map_err(|e| e.to_string())?;
+    Ok(format!("{:x}", Sha256::digest(bytes)))
+}
+
+fn archive_fulltext(path: &PathBuf, serialized: &[u8]) -> Result<(), String> {
+    let value: Value = serde_json::from_slice(serialized).map_err(|e| e.to_string())?;
+    let revision = fulltext_revision(&value)?;
+    let parent = path.parent().ok_or("全文历史路径无效")?;
+    let history = parent
+        .join("fulltext-history")
+        .join(format!("{revision}.json"));
+    if !history.exists() {
+        write_json_atomically(&history, serialized)?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn load_user_paper_artifact(
     app: AppHandle,
     paper_id: String,
     artifact_kind: String,
+    revision: Option<String>,
 ) -> Result<Option<Value>, String> {
-    let path = artifact_path(&app, &paper_id, &artifact_kind)?;
+    let mut path = artifact_path(&app, &paper_id, &artifact_kind)?;
+    if let Some(revision) = revision {
+        if artifact_kind != "fulltext"
+            || revision.len() != 64
+            || !revision.bytes().all(|c| c.is_ascii_hexdigit())
+        {
+            return Err("全文历史版本无效。".into());
+        }
+        path = path
+            .parent()
+            .ok_or("全文历史路径无效")?
+            .join("fulltext-history")
+            .join(format!("{}.json", revision.to_ascii_lowercase()));
+    }
     if !path.exists() {
         return Ok(None);
     }
@@ -180,10 +214,15 @@ pub fn save_user_paper_artifact(
     app: AppHandle,
     paper_id: String,
     artifact_kind: String,
-    snapshot: Value,
+    mut snapshot: Value,
 ) -> Result<(), String> {
     let path = artifact_path(&app, &paper_id, &artifact_kind)?;
     crate::local_library::with_local_library_index_transaction(&app, || {
+        if artifact_kind == "fulltext" {
+            let revision = fulltext_revision(&snapshot)?;
+            let fields = snapshot.as_object_mut().ok_or("全文快照格式无效")?;
+            fields.insert("representationRevision".into(), Value::String(revision));
+        }
         let mut serialized = serde_json::to_vec(&snapshot)
             .map_err(|error| format!("无法编码用户阅读产物：{error}"))?;
         if artifact_kind == "annotations" {
@@ -198,6 +237,13 @@ pub fn save_user_paper_artifact(
         if serialized.len() as u64 > MAX_USER_PAPER_ARTIFACT_BYTES {
             return Err("用户阅读产物超过大小限制。".into());
         }
+        if artifact_kind == "fulltext" {
+            if path.exists() {
+                let previous = fs::read(&path).map_err(|e| e.to_string())?;
+                archive_fulltext(&path, &previous)?;
+            }
+            archive_fulltext(&path, &serialized)?;
+        }
         write_json_atomically(&path, &serialized)
     })
 }
@@ -205,12 +251,35 @@ pub fn save_user_paper_artifact(
 #[cfg(test)]
 mod tests {
     use super::{
-        artifact_kind_is_allowed, decode_user_paper_artifact, paper_artifact_directory_name,
-        write_json_atomically,
+        archive_fulltext, artifact_kind_is_allowed, decode_user_paper_artifact, fulltext_revision,
+        paper_artifact_directory_name, write_json_atomically,
     };
     use serde_json::json;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn extraction_history_is_immutable_and_repeated_archiving_is_idempotent() {
+        let directory = temporary_directory("fulltext-history");
+        let path = directory.join("fulltext.v1.json");
+        let old = json!({ "version": 2, "parser": "local_pdfjs", "pages": [{ "page": 1, "text": "old OCR offsets" }] });
+        let new = json!({ "version": 2, "parser": "local_pdfjs", "pages": [{ "page": 1, "text": "changed OCR offsets" }] });
+        let old_bytes = serde_json::to_vec(&old).unwrap();
+        archive_fulltext(&path, &old_bytes).unwrap();
+        archive_fulltext(&path, &serde_json::to_vec(&new).unwrap()).unwrap();
+        archive_fulltext(&path, &old_bytes).unwrap();
+        let old_path = directory
+            .join("fulltext-history")
+            .join(format!("{}.json", fulltext_revision(&old).unwrap()));
+        assert_eq!(fs::read(old_path).unwrap(), old_bytes);
+        assert_eq!(
+            fs::read_dir(directory.join("fulltext-history"))
+                .unwrap()
+                .count(),
+            2
+        );
+        fs::remove_dir_all(directory).unwrap();
+    }
 
     fn temporary_directory(name: &str) -> std::path::PathBuf {
         let nonce = SystemTime::now()

@@ -1,6 +1,7 @@
 import type { LiteratureRecord } from "./literature.types";
 
 export type Paper = {
+  processingPolicy?: "on-open" | "on-import" | "manual";
   contentHash?: string;
   forumTopicId?: string;
   forumWorkId?: string;

@@ -42,7 +42,7 @@ function loadGenerationPrompts() {
 
 const modelSettingsStorageKey = "liteasy.model-connection.v1";
 const recommendationSettingsStorageKey = "liteasy.recommendation-settings.v1";
-const modelSettingKeys = ["assistant.context_window","thin_reading.mode", "papers.metadata_provider", "papers.metadata_endpoint", "papers.mineru_mode", "papers.mineru_endpoint", "models.connection_mode", "models.direct_provider", "models.direct_endpoint", "models.direct_model", "models.direct_protocol", "models.direct_output_format"] as const;
+const modelSettingKeys = ["import.processing_policy","assistant.context_window","thin_reading.mode", "papers.metadata_provider", "papers.metadata_endpoint", "papers.mineru_mode", "papers.mineru_endpoint", "models.connection_mode", "models.direct_provider", "models.direct_endpoint", "models.direct_model", "models.direct_protocol", "models.direct_output_format"] as const;
 
 function loadPersistedModelSettings(): Partial<SettingsState> {
   try {
@@ -167,6 +167,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     "assistant.default_output_mode": "mindmap",
     "assistant.language": "zh-CN",
     "assistant.context_window": "32768",
+    "import.processing_policy": "on-open",
     "import.ocr_language": "eng",
     "thin_reading.intuecho_endpoint": forumEndpoint,
     "models.default_provider": runtimeEnv.VITE_LITEASY_MODEL_PROVIDER === "deepseek"
@@ -226,6 +227,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
         (!Number.isInteger(Number(command.value)) || Number(command.value) < 4096 || Number(command.value) > 262144)) {
         throw new Error("上下文上限应为 4096 至 262144 之间的整数。");
       }
+      if (command.target === "import.processing_policy" && !["on-open", "on-import", "manual"].includes(String(command.value))) throw new Error("请选择有效的后台解析时机。");
       if (command.target === "view.list_density" && !["compact", "comfortable"].includes(String(command.value))) throw new Error("invalid_list_density");
       if (command.target === "view.theme" && !isAppearancePreference(command.value)) {
         throw new Error("invalid_appearance_preference");

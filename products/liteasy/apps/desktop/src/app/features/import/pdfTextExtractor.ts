@@ -30,6 +30,7 @@ export type PdfOcrWorker = {
 export type PdfOcrLanguage = "chi_sim" | "eng" | "eng+chi_sim";
 
 export type PdfExtractionOptions = {
+  signal?: AbortSignal;
   createOcrWorker?: (language: string) => Promise<PdfOcrWorker>;
   loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
   ocrEnabled?: boolean;
@@ -208,13 +209,21 @@ export async function extractPdfPages(
   sourcePath: string | Uint8Array,
   options: PdfExtractionOptions = {}
 ): Promise<ExtractedPdfPage[]> {
-  const document = await pdfjsLib.getDocument(sourcePath).promise;
+  options.signal?.throwIfAborted();
+  const loading = pdfjsLib.getDocument(sourcePath);
+  let worker: PdfOcrWorker | null = null;
+  const abort = () => { void Promise.resolve(loading.destroy()).catch(() => {}); void worker?.terminate().catch(() => {}); };
+  options.signal?.addEventListener("abort", abort, { once: true });
+  const document = await loading.promise.catch(error => { options.signal?.removeEventListener("abort", abort); throw error; });
   try {
     const pages: ExtractedPdfPage[] = [];
     const scannedPageNumbers: number[] = [];
+    options.signal?.throwIfAborted();
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
       const page = await document.getPage(pageNumber);
+      options.signal?.throwIfAborted();
       const content = await page.getTextContent();
+      options.signal?.throwIfAborted();
       const text = normalizePdfPageText(joinPdfTextItems(content.items));
       if (text) {
         pages.push({ page: pageNumber, text, textExtraction: "embedded" });
@@ -223,10 +232,11 @@ export async function extractPdfPages(
       }
     }
     if (scannedPageNumbers.length > 0 && options.ocrEnabled !== false) {
-      let worker: PdfOcrWorker | null = null;
       try {
         worker = await (options.createOcrWorker ?? createPdfOcrWorker)(options.ocrLanguage ?? "eng");
+        options.signal?.throwIfAborted();
         for (const pageNumber of scannedPageNumbers) {
+          options.signal?.throwIfAborted();
           const page = await document.getPage(pageNumber);
           let text = "";
           try {
@@ -235,6 +245,7 @@ export async function extractPdfPages(
             const message = error instanceof Error ? error.message : String(error);
             throw new Error(`第 ${pageNumber} 页没有可选文字，且 OCR 失败：${message}`);
           }
+          options.signal?.throwIfAborted();
           if (!text) {
             throw new Error(`第 ${pageNumber} 页没有可选文字，OCR 未识别出可用文本。`);
           }
@@ -247,6 +258,7 @@ export async function extractPdfPages(
     pages.sort((left, right) => left.page - right.page);
     return pages;
   } finally {
+    options.signal?.removeEventListener("abort", abort);
     await document.destroy();
   }
 }
