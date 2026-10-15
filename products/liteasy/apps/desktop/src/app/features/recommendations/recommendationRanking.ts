@@ -1,6 +1,7 @@
 import type { RecommendationItem, RecommendationRequestDocument, RecommendationStyle } from "./recommendation.types";
 
-export const recommendationRankingVersion = "reading-discovery-v3";
+export const recommendationRankingVersion = "reading-discovery-v4";
+const adjusted = (item: RecommendationItem, score: number) => score - (item.preferencePenalty ?? 0);
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 const normalizedTitle = (value: string) => value.normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const stopWords = new Set(["the", "and", "for", "with", "from", "using", "study", "based", "approach", "analysis", "research"]);
@@ -33,7 +34,7 @@ export function rankRecommendations(items: RecommendationItem[], input: {
   const selectedIds = new Set(input.selectedDocuments?.map((item) => item.id));
   const ids = new Set<string>();
   const candidates = items.filter((item) => Number.isFinite(item.relevanceScore))
-    .sort((a, b) => b.relevanceScore - a.relevanceScore)
+    .sort((a, b) => adjusted(b, b.relevanceScore) - adjusted(a, a.relevanceScore))
     .filter((item) => {
       const key = identity(item);
       if (selectedIds.has(item.id) || selectedDois.has(key) || ids.has(key) || item.qualityGate?.passed === false) return false;
@@ -43,7 +44,7 @@ export function rankRecommendations(items: RecommendationItem[], input: {
     return candidates.sort((a, b) => b.discoveredAt.localeCompare(a.discoveredAt));
   }
   if (candidates.every((item) => item.rankingStyle === style && Number.isFinite(item.scoreComponents?.finalScore))) {
-    return candidates.sort((a, b) => b.scoreComponents!.finalScore - a.scoreComponents!.finalScore || b.relevanceScore - a.relevanceScore);
+    return candidates.sort((a, b) => adjusted(b, b.scoreComponents!.finalScore) - adjusted(a, a.scoreComponents!.finalScore) || adjusted(b, b.relevanceScore) - adjusted(a, a.relevanceScore));
   }
   // Balanced remains compatible with older cached scores. New services provide a
   // finalScore containing their richer retrieval and diversity signals.
@@ -67,7 +68,7 @@ export function rankRecommendations(items: RecommendationItem[], input: {
     const score = style === "frontier" ? relevance * (0.72 + recency * 0.26 + impact * 0.02)
       : style === "classic" ? relevance * (0.68 + impact * 0.2 + foundational * 0.12)
         : relevance;
-    return { item, score, terms: titleTerms(item.title) };
+    return { item, score: adjusted(item, score), terms: titleTerms(item.title) };
   });
   const selected: typeof scored = [];
   while (scored.length && selected.length < 100) {

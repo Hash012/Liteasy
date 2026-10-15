@@ -4,7 +4,11 @@ export type RecommendationDownloadOptions = { targetFolderPath?: string; newFold
 
 export type RecommendationItem = {
   feedSnapshotId?: string;
-  researchReason?: { consentEpoch: number; candidateId: string; evidenceIds: string[]; text: string; role: string; model: string; recipe: string; generatedAt: string; evidence: { evidenceId: string; path?: string; revision: string; text: string }[] };
+  facetId?: string;
+  feedbackState?: import("./recommendationFeedbackProjection").FeedbackProjection[];
+  preferencePenalty?: number;
+  reasonState?: "grounded" | "heuristic" | "legacy" | "unavailable" | "stale" | "generating" | "failed";
+  researchReason?: { candidateHash?: string; contextHash?: string; feedbackRevision?: number; candidateSnapshotId?: string; evaluatedCount?: number; poolCount?: number; basis?: string; limitation?: string; consentEpoch: number; candidateId: string; evidenceIds: string[]; text: string; role: string; model: string; recipe: string; generatedAt: string; evidence: { evidenceId: string; path?: string; revision: string; text: string }[] };
   saved?: boolean;
   resourcePath?: string;
   resourceRevision?: string;

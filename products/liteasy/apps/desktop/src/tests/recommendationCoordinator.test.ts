@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { expect, test, vi } from "vitest";
 import { createObjectStorage } from "../app/features/objects/objectStorage";
 import { RecommendationFeedCoordinator, isRecommendationHidden } from "../app/features/recommendations/recommendationCoordinator";
-const item = { id: "a", title: "Attention mechanisms", relevanceScore: .9, relevanceBand: "high" as const, source: "crossref", reason: "Metadata", discoveredAt: "2026-10-14", relatedDocumentTitle: "Attention" };
+const item = { id: "a", title: "Attention mechanisms", relevanceScore: .9, relevanceBand: "high" as const, source: "crossref", reason: "Metadata", discoveredAt: "2026-10-14", relatedDocumentTitle: "Attention", facetId: "facet-a" };
 function setup() { const scope = crypto.randomUUID(); const storage = createObjectStorage(scope, () => scope); return { storage, scope, key: "feed", provider: "provider", now: () => Date.now() }; }
 test("fresh snapshots skip discovery and models, including independent coordinators", async () => {
   const options = setup(), run = vi.fn(async () => [item]);
@@ -26,11 +26,11 @@ test("saved schedule and unread limits take effect without replacing the feed", 
 test("negative feedback stays within its topic and undo does not request replacements", async () => {
   const coordinator = new RecommendationFeedCoordinator(setup()), run = vi.fn(async () => [item]);
   await coordinator.refresh("initial", run);
-  await coordinator.recordFeedback(item.id, "not_relevant", "snapshot", "Attention");
+  const receipt = await coordinator.recordFeedback(item.id, "not_relevant", "snapshot", "facet-a");
   const state = await coordinator.read();
   expect(isRecommendationHidden(item, state)).toBe(true);
-  expect(isRecommendationHidden({ ...item, relatedDocumentTitle: "Databases" }, state)).toBe(false);
-  await coordinator.recordFeedback(item.id, "undo", "snapshot", "Attention");
+  expect(isRecommendationHidden({ ...item, relatedDocumentTitle: "Attention", facetId: "facet-b" }, state)).toBe(false);
+  await coordinator.recordFeedback(item.id, "undo", "snapshot", "facet-a", { commandId: crypto.randomUUID(), issuedAt: Date.now(), targetEventId: receipt.eventId });
   expect(isRecommendationHidden(item, await coordinator.read())).toBe(false);
   expect(run).toHaveBeenCalledTimes(1);
 });

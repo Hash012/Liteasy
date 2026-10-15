@@ -57,13 +57,14 @@ test("never invents a publication month when only the year is known", () => {
   expect(recommendationDateLabel({ ...item, publishedAt: undefined, publishedYear: undefined })).toBe("日期未知");
 });
 test("offers undo after dismissing a topic recommendation without probing sources", async () => {
-  const dismiss = vi.fn(), feedback = vi.fn().mockResolvedValue(undefined);
+  const dismiss = vi.fn(), feedback = vi.fn().mockResolvedValue({ eventId: "feedback-event", committedRevision: 1 });
   render(<RecommendationList items={[item]} pendingIds={[]} canSave onSave={vi.fn()} onDismiss={dismiss} onFeedback={feedback} />);
   const user = userEvent.setup();
   await user.click(screen.getByRole("button", { name: `忽略 ${item.title}` }));
-  expect(dismiss).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: item.id }));
+  expect(dismiss).not.toHaveBeenCalled();
+  expect(feedback).toHaveBeenCalledWith(expect.objectContaining({ id: item.id }), "not_relevant", expect.objectContaining({ commandId: expect.any(String) }));
   await user.click(screen.getByRole("button", { name: "撤销反馈" }));
-  expect(feedback).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: item.id }), "undo");
+  expect(feedback).toHaveBeenLastCalledWith(expect.objectContaining({ id: item.id }), "undo", expect.objectContaining({ targetEventId: "feedback-event" }));
   expect(probe).not.toHaveBeenCalled();
 });
 
@@ -131,4 +132,17 @@ test("shows a diverse three-card slate and pages the cached pool without remote 
   expect(rows()).toHaveLength(12);
   await user.click(screen.getByRole("button", { name: "下一页" })); expect(rows()).toHaveLength(3);
   expect(probe).not.toHaveBeenCalled();
+});
+
+test("pending and failed feedback never claims saved; retry reuses the same command and exact receipt", async () => {
+  let reject!: (error: Error) => void;
+  const feedback = vi.fn().mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; })).mockResolvedValue({ eventId: "committed", committedRevision: 1 });
+  render(<RecommendationList items={[item]} pendingIds={[]} canSave onSave={vi.fn()} onDismiss={vi.fn()} onFeedback={feedback} />);
+  const user = userEvent.setup(); await user.click(screen.getByRole("button", { name: "太基础", exact: true }));
+  expect(screen.getByText("正在保存…")).toBeVisible(); expect(screen.getByRole("button", { name: "太基础", exact: true })).toBeDisabled();
+  reject(new Error("disk full")); await user.click(await screen.findByRole("button", { name: "重试保存反馈" }));
+  expect(feedback.mock.calls[1][2]).toEqual(feedback.mock.calls[0][2]);
+  expect(screen.getByRole("button", { name: "太基础", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await user.click(screen.getByRole("button", { name: "撤销反馈" }));
+  expect(feedback.mock.calls[2][2]).toMatchObject({ targetEventId: "committed" });
 });
