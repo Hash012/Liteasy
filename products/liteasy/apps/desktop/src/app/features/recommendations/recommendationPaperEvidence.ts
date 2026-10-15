@@ -7,6 +7,7 @@ import { normalizeLiteratureIdentifier } from "../paper-identity/paperIdentity";
 import type { RecommendationTask } from "./recommendationCoordinator";
 
 const crossref: PaperServiceConfig = { provider: "crossref", endpoint: "https://api.crossref.org" };
+const openalex: PaperServiceConfig = { provider: "openalex", endpoint: "https://api.openalex.org" };
 const europePmc = "https://www.ebi.ac.uk/europepmc/webservices/rest";
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const array = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
@@ -55,7 +56,9 @@ export async function enrichRecommendationCandidates(
   const pmcRecords = new Map<string, Record<string, unknown> | undefined>();
   const pdfUrls = new Map<string, string>();
   const unavailableMetadata = new Set<string>();
+  const attemptedMetadata = new Set<string>();
   let requests = 0;
+  let requestLimit = 40;
   let pdfDownloads = 0;
 
   async function assertActive() {
@@ -69,7 +72,7 @@ export async function enrichRecommendationCandidates(
 
   async function request(url: string, sourceConfig = crossref, authenticate = false, pdf = false) {
     await assertActive();
-    if (requests >= 48) throw new Error("本次论文内容读取已达到请求上限。");
+    if (requests >= requestLimit) throw new Error("本阶段论文内容读取已达到请求上限。");
     requests += 1;
     const target = new URL(url);
     const sourceKey = authenticate ? `${sourceConfig.provider}:${sourceConfig.endpoint}` : target.origin;
@@ -115,21 +118,26 @@ export async function enrichRecommendationCandidates(
     return paperPdfIdentity({ id: item.canonicalId || item.id, doi: item.identityResolution?.doi,
       arxivId: item.identityResolution?.arxivId, url: item.sourceUrl });
   }
-  async function metadata(item: RecommendationItem, selected: PaperServiceConfig) {
-    const serviceKey = `${selected.provider}:${selected.endpoint}`;
-    if (unavailableMetadata.has(serviceKey)) return;
+  async function metadata(item: RecommendationItem, selected: PaperServiceConfig, authenticate = true) {
+    const serviceKey = `${selected.provider}:${selected.endpoint}:${authenticate}`;
+    const attemptKey = `${item.id}:${serviceKey}`;
+    if (unavailableMetadata.has(serviceKey) || attemptedMetadata.has(attemptKey)) return;
     const { doi, arxivId } = identity(item);
     if (!doi && (selected.provider !== "semantic-scholar" || !arxivId)) return;
     const suffix = selected.provider === "crossref" ? `/works/${encodeURIComponent(doi)}`
       : selected.provider === "openalex" ? `/works/${encodeURIComponent(`https://doi.org/${doi}`)}`
         : `/paper/${encodeURIComponent(doi ? `DOI:${doi}` : `ARXIV:${arxivId}`)}?fields=title,abstract,externalIds,openAccessPdf`;
     const url = selected.endpoint.replace(/\/+$/, "") + suffix;
+    attemptedMetadata.add(attemptKey);
     let payload: Record<string, unknown>;
-    try { payload = object(await (await request(url, selected, true)).json()); }
+    try { payload = object(await (await request(url, selected, authenticate)).json()); }
     catch (error) {
       if ([401, 403, 429].includes(Number((error as { status?: number })?.status))) unavailableMetadata.add(serviceKey);
       throw error;
     }
+    // A successful authenticated record has the same bibliographic fields; only
+    // retry anonymously when credentials prevented reading it in the first place.
+    if (authenticate) attemptedMetadata.add(`${item.id}:${selected.provider}:${selected.endpoint}:false`);
     const row = selected.provider === "crossref" ? object(payload.message) : payload;
     const external = object(row.externalIds);
     if (doi ? normalizeDoi(row.DOI || row.doi || external.DOI) !== doi
@@ -139,7 +147,11 @@ export async function enrichRecommendationCandidates(
     const locations = [row.best_oa_location, ...array(row.locations)].map(object);
     const pdf = selected.provider === "openalex" ? locations.filter(location => location.is_oa === true).map(location => safeUrl(text(location.pdf_url))).find(Boolean)
       : selected.provider === "semantic-scholar" ? safeUrl(text(object(row.openAccessPdf).url)) : undefined;
-    if (pdf) pdfUrls.set(item.id, pdf);
+    if (pdf) {
+      pdfUrls.set(item.id, pdf);
+      item.openAccessPdfUrl ||= pdf;
+      item.openAccessAvailable = true;
+    }
   }
   async function pmc(item: RecommendationItem) {
     const { doi } = identity(item);
@@ -177,24 +189,38 @@ export async function enrichRecommendationCandidates(
       /* A missing/blocked source does not discard obtained content. */
     }
   }
-  async function parallel(run: (item: RecommendationItem) => Promise<void>) {
+  async function parallel(run: (item: RecommendationItem) => Promise<void>, pool = candidates) {
     let index = 0;
-    await Promise.all(Array.from({ length: Math.min(2, candidates.length) }, async () => {
-      while (index < candidates.length && !workSignal.aborted && requests < 48) await run(candidates[index++]);
+    await Promise.all(Array.from({ length: Math.min(2, pool.length) }, async () => {
+      while (index < pool.length && !workSignal.aborted && requests < requestLimit) await run(pool[index++]);
     }));
   }
   try {
     await assertActive();
-    // Complete the inexpensive abstracts across the pool before spending time on introductions.
+    const crossrefAlreadyRead = (item: RecommendationItem) => item.primaryProvider === "crossref" || item.source.trim().toLowerCase() === "crossref";
+    // Give the whole pool a primary lookup before spending requests on more fallbacks.
+    // Crossref search already includes its deposited abstract, so repeating the same
+    // empty record would spend the budget without learning anything about CS papers.
     await parallel(async item => {
       const sourceUrl = safeUrl(item.sourceUrl) ?? (identity(item).doi ? `https://doi.org/${identity(item).doi}` : undefined);
       if (item.abstract && sourceUrl && !item.contentEvidence?.some(entry => entry.section === "abstract")) await preserve(item, "abstract", item.abstract, sourceUrl, "metadata");
       if (item.abstract) return;
       if (identity(item).arxivId) await attempt(() => arxiv(item, false));
-      if (!item.abstract) await attempt(() => metadata(item, service));
-      if (!item.abstract && service.provider !== "crossref") await attempt(() => metadata(item, crossref));
+      else await attempt(() => service.provider === "crossref" && crossrefAlreadyRead(item)
+        ? metadata(item, openalex, false) : metadata(item, service));
+    });
+    await parallel(async item => {
+      if (!item.abstract && identity(item).arxivId && service.provider !== "crossref") await attempt(() => metadata(item, service));
+      if (!item.abstract && service.provider !== "crossref" && !crossrefAlreadyRead(item)) await attempt(() => metadata(item, crossref, false));
+      if (!item.abstract) await attempt(() => metadata(item, openalex, false));
+    });
+    await parallel(async item => {
       if (!item.abstract) await attempt(() => pmc(item));
     });
+    // Reserve at least eight of the 48 requests for introductions, including two
+    // PDF fallbacks. Prefer papers whose abstracts are already usable by the AI.
+    requestLimit = 46;
+    const introductionOrder = [...candidates].sort((left, right) => Number(Boolean(right.abstract)) - Number(Boolean(left.abstract)));
     await parallel(async item => {
       if (item.introduction) return;
       if (identity(item).arxivId) await attempt(() => arxiv(item, true));
@@ -208,8 +234,9 @@ export async function enrichRecommendationCandidates(
         if (!articleDoi.includes(identity(item).doi)) return;
         await acceptSections(item, parsePaperReadingSections(xml), url, "europe-pmc");
       });
-    });
+    }, introductionOrder);
     // Only a small number of explicit open PDFs are read; never crawl the entire feed.
+    requestLimit = 48;
     await parallel(async item => {
       if (item.introduction || pdfDownloads >= 2) return;
       const known = knownPaperPdfUrl({ id: item.id, arxivId: identity(item).arxivId, url: item.sourceUrl });
@@ -228,7 +255,7 @@ export async function enrichRecommendationCandidates(
         const pages = await extractPdfPages(bytes, { ocrEnabled: false, maxPages: 4, signal: workSignal });
         await acceptSections(item, parsePdfReadingSections(pages.map(page => page.text).join("\n")), response.url || url, "open-access");
       });
-    });
+    }, introductionOrder);
     signal.throwIfAborted();
     revoked.signal.throwIfAborted();
     if (!expiry.signal.aborted) await assertActive();

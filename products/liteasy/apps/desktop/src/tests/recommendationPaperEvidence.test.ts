@@ -55,11 +55,81 @@ test("falls back from a configured authenticated metadata service without forwar
   });
   vi.stubGlobal("fetch", fetch);
   try {
-    const [result] = await enrichRecommendationCandidates(selected, [item()], new AbortController().signal);
+    const [result] = await enrichRecommendationCandidates(selected, [item({ source: "semantic-scholar" })], new AbortController().signal);
     expect(result.abstract).toBe(abstract);
     expect(result.introduction).toBeUndefined();
     expect(result.contentEvidence?.[0].sourceUrl).toContain("api.crossref.org");
   } finally { await deletePaperServiceKey(selected); }
+});
+
+test("reads a missing Crossref abstract from anonymous OpenAlex and preserves its declared open PDF", async () => {
+  const openalex = { provider: "openalex" as const, endpoint: "https://api.openalex.org" };
+  await savePaperServiceKey(config, "crossref-test-only-key");
+  await savePaperServiceKey(openalex, "openalex-test-only-key");
+  const inverted = Object.fromEntries(abstract.split(" ").map((word, index) => [word, [index]]));
+  const fetch = vi.fn(async (input: URL, options: RequestInit) => {
+    expect(String(input)).not.toMatch(/api_key|test-only-key/);
+    expect(options.headers ?? {}).not.toHaveProperty("Crossref-Plus-API-Token");
+    expect(options.headers ?? {}).not.toHaveProperty("Authorization");
+    if (String(input).includes("api.openalex.org")) return Response.json({ doi: "https://doi.org/10.1234/graph", abstract_inverted_index: inverted,
+      best_oa_location: { is_oa: true, pdf_url: "https://repository.test/graph.pdf" } });
+    if (String(input).endsWith("graph.pdf")) return new Response("", { status: 404 });
+    return Response.json({ resultList: { result: [] } });
+  });
+  vi.stubGlobal("fetch", fetch);
+  try {
+    const [result] = await run([item()]);
+    expect(result.abstract).toBe(abstract);
+    expect(result).toMatchObject({ openAccessAvailable: true, openAccessPdfUrl: "https://repository.test/graph.pdf" });
+    expect(result.contentEvidence?.[0]).toMatchObject({ sourceUrl: expect.stringContaining("api.openalex.org/works/"), textHash: await hashText(abstract) });
+    expect(fetch.mock.calls.some(([url]) => String(url).includes("api.crossref.org"))).toBe(false);
+  } finally { await deletePaperServiceKey(config); await deletePaperServiceKey(openalex); }
+});
+
+test("falls back to the same DOI in OpenAlex when a previously unread Crossref record has no abstract", async () => {
+  const fetch = vi.fn(async (input: URL) => {
+    if (String(input).includes("api.crossref.org")) return Response.json({ message: { DOI: "10.1234/graph" } });
+    if (String(input).includes("api.openalex.org")) return Response.json({ doi: "https://doi.org/10.1234/graph", abstract });
+    return Response.json({ resultList: { result: [] } });
+  });
+  vi.stubGlobal("fetch", fetch);
+  const [result] = await run([item({ source: "catalog" })]);
+  expect(result.abstract).toBe(abstract);
+  expect(fetch.mock.calls.slice(0, 2).map(([url]) => new URL(String(url)).hostname)).toEqual(["api.crossref.org", "api.openalex.org"]);
+});
+
+test("rejects an OpenAlex abstract attached to a different canonical DOI", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (input: URL) => String(input).includes("api.openalex.org")
+    ? Response.json({ doi: "https://doi.org/10.1234/different", abstract, best_oa_location: { is_oa: true, pdf_url: "https://repository.test/different.pdf" } })
+    : Response.json({ resultList: { result: [] } })));
+  const [result] = await run([item()]);
+  expect(result.abstract).toBeUndefined();
+  expect(result.openAccessPdfUrl).toBeUndefined();
+  expect(result.contentEvidence).toBeUndefined();
+});
+
+test("reserves introduction requests for readable papers when a large pool has no public abstracts", async () => {
+  let metadataCalls = 0;
+  const fetch = vi.fn(async (input: URL) => {
+    const url = String(input);
+    if (url.includes("api.openalex.org")) {
+      metadataCalls += 1;
+      return Response.json({ doi: decodeURIComponent(new URL(url).pathname.slice("/works/".length)) });
+    }
+    if (url.includes("/search?")) {
+      const query = new URL(url).searchParams.get("query");
+      if (query?.includes("10.1234/graph23")) return Response.json({ resultList: { result: [{ doi: "10.1234/graph23", pmcid: "PMC1234", isOpenAccess: "Y" }] } });
+      return Response.json({ resultList: { result: [] } });
+    }
+    return new Response(`<article><article-meta><article-id pub-id-type="doi">10.1234/graph23</article-id></article-meta><body><sec><title>Introduction</title><p>${introduction}</p></sec></body></article>`);
+  });
+  vi.stubGlobal("fetch", fetch);
+  const results = await run(Array.from({ length: 24 }, (_, index) => item({ id: `doi:10.1234/graph${index}`, ...(index === 23 ? { abstract } : {}) })));
+  expect(metadataCalls).toBe(23);
+  expect(results[23].introduction).toBe(introduction);
+  expect(results[23].abstract).toBe(abstract);
+  expect(fetch.mock.calls.length).toBeLessThanOrEqual(48);
+  expect(fetch.mock.calls.findIndex(([url]) => String(url).includes("PMC1234/fullTextXML"))).toBeGreaterThanOrEqual(40);
 });
 
 test.each(["different-doi", "not-open", "xml-mismatch"])("does not attach unrelated or non-open introduction content: %s", async condition => {
@@ -93,7 +163,7 @@ test("keeps the bounded first 24 candidates and serializes public Crossref reque
     return Response.json({ message: { DOI: doi, abstract } });
   });
   vi.stubGlobal("fetch", fetch);
-  const results = await run(Array.from({ length: 26 }, (_, index) => item({ id: `doi:10.1234/graph${index}` })));
+  const results = await run(Array.from({ length: 26 }, (_, index) => item({ id: `doi:10.1234/graph${index}`, source: "catalog" })));
   expect(maximum).toBe(1);
   expect(results).toHaveLength(26);
   expect(results.slice(0, 24).every(result => result.abstract === abstract)).toBe(true);
