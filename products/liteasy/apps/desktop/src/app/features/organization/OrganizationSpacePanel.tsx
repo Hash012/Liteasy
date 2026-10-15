@@ -1,6 +1,6 @@
 import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { Field, Spinner } from "@fluentui/react-components";
-import { OrganizationOverview } from "./OrganizationOverview";
+import { OrganizationOverview, organizationRoleLabel } from "./OrganizationOverview";
 import type { OrganizationList, OrganizationListStatus, OrganizationSummary, OrganizationSummaryStatus } from "./organization.types";
 
 type OrganizationSpacePanelProps = {
@@ -21,7 +21,9 @@ export function OrganizationSpacePanel(props: OrganizationSpacePanelProps) {
     {list?.organizations.length ? <Field label="当前组织">
       <OptionPicker aria-label="切换组织" value={list.activeOrganizationId || summary?.organizationId || ""}
         disabled={status === "loading"} onValueChange={(value) => props.onSelectOrganization?.(value)}
-        options={list.organizations.map((item) => ({ value: item.organizationId, label: `${item.name}${list.organizations.filter((other) => other.name === item.name).length > 1 ? `（${item.organizationId}）` : ""}` }))} />
+        options={list.organizations.map((item) => ({ value: item.organizationId, label: item.name,
+          description: list.organizations.filter((other) => other.name === item.name).length > 1
+            ? `${organizationRoleLabel(item.myRole)} · ${item.memberCount} 位成员 · ${item.sharedLibraryName}` : undefined }))} />
     </Field> : null}
     {listStatus === "loading" || status === "loading" ? <Spinner label="正在加载组织" size="tiny" /> : null}
     {listStatus === "error" || status === "error" ? <div className="organization-feedback" role="alert">{status === "error" ? message : listMessage}</div> : null}

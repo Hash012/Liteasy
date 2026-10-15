@@ -48,7 +48,8 @@ test("same-name organizations retain distinct choices and owner export is narrow
     listMessage="" listStatus="success" message="" status="success" summary={{ ...summary, accessSnapshot: { allowedActions: ["export_original"], authorizationRevision: 3, policyRevision: 2, policyExceptions: ["owner_export"], denialReasons: { publish_public: "organization_external_sharing_disabled", run_external_model: "organization_external_model_disabled" }, actionConstraints: { inviteRoles: [] } } }} readNotificationIds={[]} onSelectOrganization={onSelectOrganization} />);
   const user = userEvent.setup();
   await user.click(screen.getByRole("combobox", { name: "切换组织" }));
-  const option = screen.getByRole("option", { name: "同名研究组（systems）" });
+  const option = screen.getByRole("option", { name: /同名研究组.*数据库|同名研究组.*8 位成员/ });
+  expect(option).not.toHaveTextContent("systems");
   await user.click(option);
   expect(onSelectOrganization).toHaveBeenCalledWith("systems");
   expect(option).toHaveAttribute("aria-selected", "false"); // Controlled value changes only after the caller updates the organization.
