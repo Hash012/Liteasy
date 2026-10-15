@@ -229,7 +229,7 @@ export function useResearchWorkbenchController(input: { repository: ObjectReposi
     readEvidence: (reference: ObjectRef) => perform(async () => {
       if (!detail) throw new Error("请先选择研究任务。");
       const excerpt = await host.call<{ text: string; nextOffset?: number }>("read_source", { taskId: detail.task.taskId, reference, offset: 0 });
-      setNotice(`${reference.objectId} · ${reference.revision}\n\n${excerpt.text}${excerpt.nextOffset ? "\n\n此处仅为部分原文。" : ""}`);
+      setNotice(`固定来源原文\n\n${excerpt.text}${excerpt.nextOffset ? "\n\n此处仅为部分原文。" : ""}`);
     }),
     createTask, createSyntheticSource, readSource, saveHypothesis, prepareSpec, approveAndRun, recordDecision, approveModel, askResearch, cancelModel,
     saveReport, executeResearchTurn, open: (taskId: string) => perform(() => refresh(taskId)), refresh: () => perform(() => refresh()),

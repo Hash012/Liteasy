@@ -28,6 +28,7 @@ test("binding pickers preserve literal null and other nodes until a chosen sourc
     return <WorkflowBindingEditor workflow={value} selected="target" onChange={(next) => { change(next); setValue(next); }} />;
   }
   render(<Fixture />);
+  expect(screen.getByRole("combobox", { name: "value 来源步骤" })).toHaveTextContent("固定来源");
   const user = userEvent.setup();
   await user.click(screen.getByRole("combobox", { name: "value 值来源" }));
   await user.keyboard("{Escape}");
@@ -68,4 +69,17 @@ test("workflow approval keeps resource writes, external recipient and budget out
   expect(within(scope).getByText("外发对象：用户选定连接 · 最多 3 次调用 · 12000 tokens")).toBeVisible();
   expect(within(scope).getByRole("button", { name: "预算详情" })).toHaveAttribute("aria-expanded", "false");
   expect(model.start).not.toHaveBeenCalled();
+});
+
+
+test("missing workflow step keeps its precise binding but presents an unavailable choice", () => {
+  const base = researchTemplateWorkflow("evidence-audit");
+  const missing = "node-internal-missing-123";
+  const workflow = { ...base, nodes: [{ id: "target", title: "输出", operation: { id: "core.end", version: "1.0.0" }, input: { value: { source: "node", nodeId: missing, path: "" } }, retries: 0, breakpoint: false }], edges: [], layout: {} } as WorkflowDefinition;
+  const change = vi.fn();
+  render(<WorkflowBindingEditor workflow={workflow} selected="target" onChange={change} />);
+  expect(screen.getByRole("combobox", { name: "value 来源步骤" })).toHaveTextContent("所选项已不可用，请重新选择");
+  expect(screen.getByRole("status")).not.toHaveTextContent(missing);
+  expect(change).not.toHaveBeenCalled();
+  expect(workflow.nodes[0].input.value).toMatchObject({ nodeId: missing });
 });

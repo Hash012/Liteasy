@@ -4,6 +4,7 @@ import { Button, Checkbox, Field, Input, Textarea } from "@fluentui/react-compon
 import type { QuickAskPresetRepository, QuickAskPresetSaveReceipt } from "../settings/quickAskPresetSettings";
 import { QUICK_ASK_INSTRUCTION_LIMIT, type QuickAskPreset } from "./quickAskPresets";
 import "./quickAskPresets.css";
+import { quickAskPresetOptions } from "./quickAskPresetPresentation";
 
 function QuickAskPresetManagerBody({ repository, initialInstruction = "", onSaved, onClose }: {
   repository: QuickAskPresetRepository; initialInstruction?: string; onSaved?(receipt: QuickAskPresetSaveReceipt): void; onClose?(): void;
@@ -44,14 +45,14 @@ function QuickAskPresetManagerBody({ repository, initialInstruction = "", onSave
   return <section className="quick-ask-preset-manager" aria-label="管理快捷指令" aria-busy={busy}>
     <div className="quick-ask-preset-manager-actions"><strong>快捷指令 · 当前账号</strong>{onClose && <Button size="small" onClick={onClose}>关闭管理</Button>}</div>
     <Field label="选择要管理的任务"><OptionPicker aria-label="管理快捷指令" disabled={busy || !snapshot} value={draft.preset?.id ?? ""} onValueChange={select}
-      options={[{ value: "", label: "新建快捷指令" }, ...presets.map(item => ({ value: item.id, label: item.name, description: `${item.builtIn ? "内置" : item.id.slice(-6)}${item.pinned ? " · 已置顶" : ""}` }))]} /></Field>
+      options={[{ value: "", label: "新建快捷指令" }, ...quickAskPresetOptions(presets)]} /></Field>
     {draft.preset?.builtIn && <p>内置指令只读，修改后保存为个人副本。</p>}
     <Field label="快捷指令名称"><Input disabled={busy} aria-label="快捷指令名称" value={draft.name} onChange={(_, data) => setDraft(current => ({ ...current, name: data.value }))} /></Field>
     <Field label="完整指令" validationState={draft.instruction.length > QUICK_ASK_INSTRUCTION_LIMIT ? "error" : "none"}
       validationMessage={`${draft.instruction.length} / ${QUICK_ASK_INSTRUCTION_LIMIT} UTF-16 字符`}>
       <Textarea disabled={busy} aria-label="完整快捷指令" resize="vertical" value={draft.instruction} onChange={(_, data) => setDraft(current => ({ ...current, instruction: data.value }))} />
     </Field>
-    {duplicate && <><span role="status">已有同名快捷指令，请修改名称以便区分。</span><Checkbox checked={allowDuplicate} onChange={(_, data) => setAllowDuplicate(data.checked === true)} label="仍保留同名（用独立标识区分）" /></>}
+    {duplicate && <><span role="status">已有同名快捷指令，请修改名称以便区分。</span><Checkbox checked={allowDuplicate} onChange={(_, data) => setAllowDuplicate(data.checked === true)} label="仍保留同名（用指令摘要区分）" /></>}
     <div className="quick-ask-preset-manager-actions">
       <Button appearance="primary" disabled={busy || !snapshot || !draft.name.trim() || !draft.instruction.trim() || draft.instruction.length > QUICK_ASK_INSTRUCTION_LIMIT || (duplicate && !allowDuplicate)}
         onClick={() => void run(() => repository.save({ id: draft.preset?.id, expectedRevision: draft.preset?.revision, name: draft.name, instruction: draft.instruction, allowDuplicateName: allowDuplicate }, draft.baseRevision ?? revision), true)}>{draft.preset?.builtIn ? "保存为个人副本" : "保存快捷指令"}</Button>

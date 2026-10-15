@@ -34,3 +34,12 @@ export function operationInputSchema(id: OperationId): DataSchema {
   };
   return parseDataSchema(simplify(raw));
 }
+
+/** Human labels for the visual editor; protocol keys stay in the executable catalog. */
+export const operationLabels: Record<OperationId, string> = {
+  "core.value": "输入数据", "core.template": "填充文本模板", "core.branch": "条件分支",
+  "core.validate": "检查数据结构", "core.wait": "等待确认", "core.join": "合并结果",
+  "core.end": "完成流程", "core.comparison": "整理比较卡片", "boards.compose": "创建白板",
+  "resources.search": "查找资料", "resources.stat": "读取资料信息", "resources.read": "读取资料正文",
+  "resources.create": "创建资料", "resources.write": "更新资料正文", "model.generate": "生成内容", "ui.open": "打开资料",
+};

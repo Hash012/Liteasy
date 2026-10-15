@@ -9,6 +9,7 @@ import { useDocumentExportPort } from "../document-export/documentExportPort";
 import { defaultExportOptions } from "../document-export/documentExport.types";
 import type { ResearchWorkbenchModel } from "./researchWorkbench.types";
 import "./researchWorkbench.css";
+import { researchRunLabel } from "./researchPresentation";
 
 const states: Record<string, string> = { running: "进行中", waiting_user: "等待确认", waiting_job: "等待实验",
   interrupted: "已中断", exhausted: "预算已用完", completed: "交付已完成", failed: "失败", cancelled: "已取消",
@@ -71,7 +72,7 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
           {latestClaim ? <p>条件化结论：{states[String(latestClaim.body.status)] ?? "待核对"} · 需核对适用条件与独立检查</p> : null}
           <nav className="research-toolbar" aria-label="研究阶段">{["来源与访问范围", "假设分支", "最小实验与独立检查", "决策与条件化结论", "研究助手"].map(name => <Button key={name} appearance={stage === name ? "primary" : "subtle"} aria-pressed={stage === name} onClick={() => setStage(name)}>{name}</Button>)}</nav>
           <fieldset hidden={stage !== "来源与访问范围"}><legend>来源与访问范围</legend>
-            <Field label="固定来源版本"><OptionPicker aria-label="固定来源版本" value={model.source ? JSON.stringify(model.source) : ""} onValueChange={(value) => model.setSource(value ? JSON.parse(value) : undefined)} options={[{ value: "", label: "请选择来源" }, ...model.sources.map(item => ({ value: JSON.stringify(item.ref), label: `${item.title} · ${item.ref.revision.slice(0, 8)}` }))]} /></Field>
+            <Field label="固定来源版本"><OptionPicker aria-label="固定来源版本" value={model.source ? JSON.stringify(model.source) : ""} onValueChange={(value) => model.setSource(value ? JSON.parse(value) : undefined)} options={[{ value: "", label: "请选择来源" }, ...model.sources.map(item => ({ value: JSON.stringify(item.ref), label: `${item.title} · 已固定版本` }))]} /></Field>
             <Button disabled={model.busy} onClick={() => void model.createSyntheticSource()}>创建 DataLoader 合成条件说明</Button>
             <Button disabled={model.busy || !model.source} onClick={() => void model.readSource()}>读取固定来源</Button>
           </fieldset>
@@ -82,18 +83,18 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
             <Field label="可检查的预测"><Input value={model.hypothesis.prediction} onChange={(_, data) => model.setHypothesis({ ...model.hypothesis, prediction: data.value })} /></Field>
             <Field label="证伪条件"><Textarea value={model.hypothesis.falsification} onChange={(_, data) => model.setHypothesis({ ...model.hypothesis, falsification: data.value })} /></Field>
             <Button disabled={model.busy} onClick={() => void model.saveHypothesis()}>保存推测假设</Button>
-            <Field label="本次检查的假设分支"><OptionPicker aria-label="本次检查的假设分支" value={model.hypothesisId || model.detail.records.filter(record => record.kind === "hypothesis").at(-1)?.id || ""} onValueChange={model.setHypothesisId} options={[{ value: "", label: "请选择假设" }, ...model.detail.records.filter(record => record.kind === "hypothesis").map(record => ({ value: record.id, label: `${String(record.body.question)} · ${record.hash.slice(0, 8)}` }))]} /></Field>
+            <Field label="本次检查的假设分支"><OptionPicker aria-label="本次检查的假设分支" value={model.hypothesisId || model.detail.records.filter(record => record.kind === "hypothesis").at(-1)?.id || ""} onValueChange={model.setHypothesisId} options={[{ value: "", label: "请选择假设" }, ...model.detail.records.filter(record => record.kind === "hypothesis").map((record, index) => ({ value: record.id, label: `${String(record.body.question)} · 方案 ${index + 1}` }))]} /></Field>
             {model.detail.records.filter(record => record.kind === "hypothesis").map(record => <p key={record.id}><strong>推测：</strong>{String(record.body.question)}</p>)}
           </fieldset>
           <fieldset hidden={stage !== "最小实验与独立检查"}><legend>最小实验与独立检查</legend>
             <p>合成 CPU trace 回放；统一缓存与 I/O 预算，先检查样本、顺序与跨模态对齐，再比较等待和读取放大。</p>
             <Field label="候选方案"><OptionPicker aria-label="候选方案" value={model.candidate} onValueChange={(value) => model.setCandidate(value as "sequential" | "last_delta")} options={[{ value: "sequential", label: "顺序预取" }, { value: "last_delta", label: "最近差值预测" }]} /></Field>
             <Button disabled={model.busy} onClick={() => void model.prepareSpec()}>准备实验规格</Button>
-            {latestSpec ? <DisclosureSection title={`检查固定规格 · ${latestSpec.hash.slice(0, 12)}`}><pre>{JSON.stringify(latestSpec.body, null, 2)}</pre></DisclosureSection> : null}
+            {latestSpec ? <DisclosureSection title="检查本次实验规格"><p>原始规格与校验信息（技术数据）</p><pre>{JSON.stringify(latestSpec, null, 2)}</pre></DisclosureSection> : null}
             <Checkbox checked={allowExperiment} label="批准本规格的本机小实验：不联网，不执行任意脚本" onChange={(_, data) => setAllowExperiment(Boolean(data.checked))} />
             <Button icon={<PlayRegular />} disabled={model.busy || executing || !allowExperiment || !latestSpec} onClick={() => void model.approveAndRun()}>批准并运行本规格</Button>
             {model.detail.runs.map(run => <article key={run.runId} className="research-run">
-              <div className="research-toolbar"><strong>{run.runId.slice(0, 20)}</strong><span>{states[run.status]}</span>
+              <div className="research-toolbar"><strong>{researchRunLabel(model.detail!, run)}</strong><span>{states[run.status]}</span>
                 </div>
               {run.error ? <p>{run.error}</p> : null}
               {run.rawResult ? <><p>正确性：{run.rawResult.correctnessPassed ? "通过" : "未通过"}；{states[run.rawResult.conditionalStatus] ?? run.rawResult.conditionalStatus}</p>
@@ -105,7 +106,7 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
             </article>)}
           </fieldset>
           <fieldset hidden={stage !== "决策与条件化结论"}><legend>决策与条件化结论</legend>
-            <Field label="本次决策依据的实验"><OptionPicker aria-label="本次决策依据的实验" value={latestRun?.runId ?? ""} onValueChange={model.setRunId} options={[{ value: "", label: "请选择实验" }, ...model.detail.runs.map(run => ({ value: run.runId, label: `${run.runId} · ${states[run.status]}` }))]} /></Field>
+            <Field label="本次决策依据的实验"><OptionPicker aria-label="本次决策依据的实验" value={latestRun?.runId ?? ""} onValueChange={model.setRunId} options={[{ value: "", label: "请选择实验" }, ...model.detail.runs.map(run => ({ value: run.runId, label: `${researchRunLabel(model.detail!, run)} · ${states[run.status]}` }))]} /></Field>
             <Field label="继续、收缩或停止的依据"><Textarea value={rationale} onChange={(_, data) => setRationale(data.value)} /></Field>
             <Button disabled={model.busy || executing || latestRun?.status !== "completed"} onClick={() => void model.recordDecision("narrow", rationale)}>记录收缩结论</Button>
             <Button disabled={model.busy || executing || !latestRun} onClick={() => void model.recordDecision("stop", rationale)}>记录停止决策</Button>
@@ -117,7 +118,7 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
                 <p>条件化主张：{states[String(record.body.status)]}；{reviewed ? "已记录人工确认" : "语义支持待人工复核"}，新颖性尚未判断。</p>
                 <ul>{(record.body.conditions as string[] ?? []).map((condition, index) => <li key={index}>{condition}</li>)}</ul>
                 {(record.body.evidenceSpans as Array<{ reference: { objectId: string; revision: string }; offset: number; endOffset: number }> ?? []).map((span, index) =>
-                  <Button key={index} disabled={model.busy} onClick={() => void model.readEvidence(span.reference)}>查看原始依据 · {span.reference.revision.slice(0, 8)} · {span.offset}–{span.endOffset}</Button>)}
+                  <Button key={index} disabled={model.busy} onClick={() => void model.readEvidence(span.reference)}>查看原始依据 {index + 1} · 字符 {span.offset}–{span.endOffset}</Button>)}
               </article>;
             })}
             <Checkbox label="我已核对原始输出与适用条件，仅确认这些条件下的主张" checked={reviewed} onChange={(_, data) => setReviewed(Boolean(data.checked))} />

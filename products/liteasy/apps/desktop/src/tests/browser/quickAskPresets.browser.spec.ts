@@ -36,7 +36,7 @@ test("custom draft survives switching; real settings save/reload and account iso
   await expect(page.getByText(/已保存 ·/)).toBeVisible();
   await page.reload();
   await page.getByRole("combobox", { name: "更多速问任务" }).click();
-  await expect(page.getByRole("option", { name: "跨论文复用", exact: true })).toBeVisible();
+  await expect(page.getByRole("option", { name: /^跨论文复用/ })).toBeVisible();
   await page.keyboard.press("Escape");
   await page.getByRole("combobox", { name: "管理快捷指令", exact: true }).click();
   await page.getByRole("option", { name: /^跨论文复用/ }).click();
@@ -46,7 +46,7 @@ test("custom draft survives switching; real settings save/reload and account iso
   await expect(page.getByRole("combobox", { name: "更多速问任务" })).toHaveCount(0);
   await page.getByRole("combobox", { name: "测试账号" }).selectOption("browser-preset-a");
   await page.getByRole("combobox", { name: "更多速问任务" }).click();
-  await expect(page.getByRole("option", { name: "跨论文复用", exact: true })).toBeVisible();
+  await expect(page.getByRole("option", { name: /^跨论文复用/ })).toBeVisible();
   await page.keyboard.press("Escape");
   await page.getByText("导入与导出", { exact: true }).click();
   await page.getByLabel("导入快捷指令文件").setInputFiles({ name: "unsupported.json", mimeType: "application/json", buffer: Buffer.from('{"schema":"unknown/v9","instruction":"must retain"}') });
@@ -69,7 +69,7 @@ test("two real browser windows enforce CAS and preserve the losing draft", async
   await expect(second.getByRole("alert")).toContainText("其他窗口修改");
   await expect(second.getByRole("textbox", { name: "完整快捷指令" })).toHaveValue("不能丢失的多窗口输入");
   await second.getByRole("combobox", { name: "更多速问任务" }).click();
-  await expect(second.getByRole("option", { name: "已保存版本", exact: true })).toBeVisible();
+  await expect(second.getByRole("option", { name: /^已保存版本/ })).toBeVisible();
   await second.keyboard.press("Escape");
   await second.screenshot({ path: info.outputPath("multiwindow-cas-draft.png"), fullPage: true, animations: "disabled" });
 });

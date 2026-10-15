@@ -1,3 +1,4 @@
+import { researchRunLabel } from "./researchPresentation";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { z } from "zod";
 import { objectRefSchema } from "../objects/objectAnchor.types";
@@ -78,7 +79,7 @@ export function defaultReplaySpec(capability: { validatorVersion: string; codeSn
 }
 export function researchReportMarkdown(detail: ResearchTaskDetail): string {
   const rows = detail.runs.flatMap(run => run.rawResult?.outputs.map(output =>
-    "| " + [run.runId, output.workload, output.algorithm, output.metrics.simulatedWaitP50Us, output.metrics.simulatedWaitP95Us,
+    "| " + [researchRunLabel(detail, run), output.workload, output.algorithm, output.metrics.simulatedWaitP50Us, output.metrics.simulatedWaitP95Us,
       output.metrics.readAmplification.toFixed(3), output.metrics.cachePeakBytes, output.metrics.replayWallUs,
       output.correctness ? "通过" : "失败"].join(" | ") + " |") ?? []);
   const fence = String.fromCharCode(96).repeat(3);
@@ -89,10 +90,10 @@ export function researchReportMarkdown(detail: ResearchTaskDetail): string {
       "### " + String(record.body.question) + "\n\n状态：推测\n\n机制：" + String(record.body.proposedMechanism)
       + "\n\n变化的假设：" + String(record.body.changedAssumption) + "\n\n预测：" + (record.body.predictions as string[]).join("；")
       + "\n\n证伪条件：" + (record.body.falsificationCriteria as string[]).join("；")),
-    "## 固定来源", ...detail.records.filter(record => record.kind === "spec").map(record => fence + "json\n" + JSON.stringify({ specId: record.id, sourceBindings: record.body.sourceBindings, literaturePacket: record.body.literaturePacket }, null, 2) + "\n" + fence),
+    "## 固定来源技术记录", ...detail.records.filter(record => record.kind === "spec").map(record => fence + "json\n" + JSON.stringify({ specId: record.id, sourceBindings: record.body.sourceBindings, literaturePacket: record.body.literaturePacket }, null, 2) + "\n" + fence),
     "## 实验对照", table,
-    "## 原始运行与限制", ...detail.runs.map(run =>
-      "### " + run.runId + "\n\n状态：" + run.status + "\n\n固定规格：" + run.specId + " / " + run.specHash
+    "## 原始运行技术记录与限制", ...detail.runs.map(run =>
+      "### " + researchRunLabel(detail, run) + "\n\n技术运行标识：" + run.runId + "\n\n状态：" + run.status + "\n\n固定规格：" + run.specId + " / " + run.specHash
       + "\n\n实际结果哈希：" + (run.resultHash ?? "未生成") + "\n\n" + (run.error ?? "") + "\n\n"
       + "宿主运行成本：" + (run.cost ? JSON.stringify(run.cost) : "未测量") + "\n\n"
       + (run.rawResult?.conditions.map(value => "- " + value).join("\n") ?? "")),
@@ -100,6 +101,6 @@ export function researchReportMarkdown(detail: ResearchTaskDetail): string {
     ...detail.records.filter(record => record.kind === "backend_terminal" || record.kind === "harness_receipt").map(record =>
       fence + "json\n" + JSON.stringify(record.body, null, 2) + "\n" + fence),
     "## 决策与主张", ...detail.records.filter(record => ["claim", "decision", "review"].includes(record.kind)).map(record =>
-      "### " + record.kind + " " + record.id + "\n\n" + fence + "json\n" + JSON.stringify(record.body, null, 2) + "\n" + fence),
+      "### " + ({ claim: "主张", decision: "决策", review: "审核" }[record.kind] ?? "记录") + "\n\n技术记录标识：" + record.id + "\n\n" + fence + "json\n" + JSON.stringify(record.body, null, 2) + "\n" + fence),
   ].join("\n\n");
 }

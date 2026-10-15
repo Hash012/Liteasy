@@ -45,6 +45,18 @@ test("claim evidence opens the exact source revision", () => {
   expect(value.readEvidence).toHaveBeenCalledWith(reference);
 });
 
+test("experiment labels describe the stored plan while cancellation and selection retain exact identities", () => {
+  const value = model();
+  value.detail!.records.push({ id: "spec-secret-id", hash: "spec-secret-hash", kind: "spec", body: { candidate: "sequential" } });
+  value.detail!.runs = [{ runId: "run-secret-id", specId: "spec-secret-id", specHash: "spec-secret-hash", status: "failed" } as any];
+  render(<ResearchWorkbench model={value} />);
+  fireEvent.click(screen.getByRole("button", { name: "最小实验与独立检查", exact: true }));
+  expect(screen.getByText("第 1 次实验 · 顺序预取")).toBeVisible();
+  expect(screen.queryByText("run-secret-id")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("checkbox", { name: /批准本规格/ }));
+  expect(screen.getByRole("button", { name: "批准并运行本规格" })).toBeEnabled();
+});
+
 test("stage disclosure keeps field nodes and confirmation values without approving an experiment", () => {
   const value = model(); const view = render(<ResearchWorkbench model={value} />);
   const question = screen.getByLabelText("问题");
