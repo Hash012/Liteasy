@@ -1,6 +1,6 @@
 import { ActionButton as Button, ControlToolbar, FilterPopover, OptionPicker } from "../../shared/ui/productPrimitives";
 import { SearchOptions } from "../search/SearchOptions";
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { readingResourceCapabilities } from "../reading-library/readingResourceCapabilities";
 import { Input, Tooltip } from "@fluentui/react-components";
 import { AddRegular, ArrowLeftRegular, ArrowRightRegular, BookOpenRegular, DismissRegular, DocumentPdfRegular, DocumentTextRegular, SearchRegular } from "@fluentui/react-icons";
@@ -34,6 +34,7 @@ export function ReadingLibraryCatalog({ entries, loading = false, message, onImp
   const deferredFilters = useDeferredValue(filters);
   const searchInput = useRef<HTMLInputElement>(null);
   const rowsElement = useRef<HTMLTableSectionElement>(null);
+  const pendingFocus = useRef<string>();
   const index = useMemo(() => indexReadingCatalog(entries), [entries]);
   const results = useMemo(() => queryReadingCatalog(index, deferredFilters), [index, deferredFilters]);
   const collections = useMemo(() => [...new Set(entries.map((entry) => entry.collection).filter((value): value is string => !!value))].sort((a, b) => a.localeCompare(b, "zh-CN")), [entries]);
@@ -42,9 +43,21 @@ export function ReadingLibraryCatalog({ entries, loading = false, message, onImp
   const visiblePage = Math.min(page, pages - 1);
   const visibleEntries = results.slice(visiblePage * pageSize, (visiblePage + 1) * pageSize);
   const selected = results.find((entry) => entry.id === selectedId);
+  const selectedOffset = visibleEntries.findIndex((entry) => entry.id === selectedId);
   const hasFilters = !!(filters.query || filters.format !== "all" || filters.status !== "all" || filters.collection || filters.year);
 
   useEffect(() => { setPage(0); }, [filters]);
+
+  useLayoutEffect(() => {
+    const target = pendingFocus.current;
+    if (!target) return;
+    pendingFocus.current = undefined;
+    const offset = results.findIndex((entry) => entry.id === target) - visiblePage * pageSize;
+    if (offset < 0 || offset >= pageSize) return;
+    const row = rowsElement.current?.rows.item(offset);
+    row?.focus({ preventScroll: true });
+    row?.scrollIntoView?.({ block: "nearest" });
+  }, [selectedId, visiblePage, results]);
 
   function updateFilter<K extends keyof ReadingCatalogFilters>(key: K, value: ReadingCatalogFilters[K]) {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -59,15 +72,20 @@ export function ReadingLibraryCatalog({ entries, loading = false, message, onImp
   }
 
   function navigateRows(event: KeyboardEvent<HTMLTableRowElement>, offset: number) {
+    if (event.nativeEvent.isComposing || event.altKey || event.target !== event.currentTarget) return;
     if (event.key === "Enter") { event.preventDefault(); void open(visibleEntries[offset]); return; }
     if (event.key === " ") { event.preventDefault(); setSelectedId(visibleEntries[offset].id); return; }
-    const next = event.key === "ArrowDown" ? Math.min(visibleEntries.length - 1, offset + 1)
-      : event.key === "ArrowUp" ? Math.max(0, offset - 1)
-        : event.key === "Home" ? 0 : event.key === "End" ? visibleEntries.length - 1 : -1;
-    if (next < 0) return;
+    const current = visiblePage * pageSize + offset;
+    const requested = event.key === "ArrowDown" ? current + 1
+      : event.key === "ArrowUp" ? current - 1
+        : event.key === "Home" ? 0 : event.key === "End" ? results.length - 1
+          : event.key === "PageDown" ? current + pageSize : event.key === "PageUp" ? current - pageSize : undefined;
+    if (requested === undefined || !results.length) return;
     event.preventDefault();
-    setSelectedId(visibleEntries[next].id);
-    rowsElement.current?.rows.item(next)?.focus();
+    const next = Math.max(0, Math.min(results.length - 1, requested));
+    pendingFocus.current = results[next].id;
+    setPage(Math.floor(next / pageSize));
+    setSelectedId(results[next].id);
   }
 
   return <section className="reading-catalog" aria-label="阅读库">
@@ -98,7 +116,7 @@ export function ReadingLibraryCatalog({ entries, loading = false, message, onImp
             <thead><tr><th scope="col">标题与作者</th><th scope="col">年份</th><th scope="col">格式</th><th scope="col">状态</th></tr></thead>
             <tbody ref={rowsElement}>{visibleEntries.map((entry, offset) => <tr
               key={entry.id} className={entry.id === selected?.id ? "is-selected" : undefined}
-              tabIndex={entry.id === selected?.id || (!visibleEntries.some((item) => item.id === selected?.id) && offset === 0) ? 0 : -1}
+              tabIndex={offset === selectedOffset || (selectedOffset < 0 && offset === 0) ? 0 : -1}
               aria-selected={entry.id === selected?.id} onClick={() => setSelectedId(entry.id)} onFocus={() => setSelectedId(entry.id)}
               onDoubleClick={() => void open(entry)} onKeyDown={(event) => navigateRows(event, offset)}
               data-reading-entry={entry.format !== "other" ? "true" : undefined}

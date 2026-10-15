@@ -29,3 +29,23 @@ for (const size of [14, 24]) test(`catalog toolbar controls share density at ${s
   await picker.click();
   await expect(page.getByRole("option", { name: "标题 A–Z", exact: true })).toBeVisible();
 });
+
+test("keyboard selection remains visible across long catalog pages", async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await page.goto("/src/tests/browser/fixtures/zotero-library.html");
+  const rows = page.getByRole("table", { name: "文献与文件列表" }).locator("tbody tr");
+  await rows.nth(49).focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(rows.first()).toBeFocused();
+  await expect(rows.first()).toContainText("文献 051");
+  await expect(rows.first()).toBeInViewport();
+  await page.keyboard.press("End");
+  await expect(rows.last()).toBeFocused();
+  await expect(rows.last()).toContainText("文献 123");
+  await expect(rows.last()).toBeInViewport();
+  await page.keyboard.press("Home");
+  await expect(rows.first()).toContainText("文献 001");
+  await expect(rows.first()).toBeFocused();
+  await expect(rows.first()).toBeInViewport();
+  await expect(rows).toHaveCount(50);
+});
