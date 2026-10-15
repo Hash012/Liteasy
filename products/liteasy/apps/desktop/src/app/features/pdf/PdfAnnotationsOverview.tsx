@@ -1,4 +1,3 @@
-import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
 import { type SearchMetadata } from "../search/searchQuery";
 import { noteLabels } from "../notes/noteLabels";
@@ -11,14 +10,14 @@ import { PdfAnnotationMarkdown } from "./PdfAnnotationMarkdown";
 import { compilePdfAnnotationQuery, teamPdfAnnotation } from "./pdfAnnotationQuery";
 import { comparePdfAnnotationsByReadingOrder } from "./pdfAnnotationReadingOrder";
 
-const labels = { highlight: "高亮", underline: "划线", note: "便笺", text: "文本框", ink: "手绘" };
+import { PdfAnnotationFilters, emptyPdfAnnotationFacets, matchesPdfAnnotationFacets, pdfAnnotationKindLabels as labels } from "./PdfAnnotationFilters";
 export function PdfAnnotationsOverview({ annotations, teamAnnotations, paperIdentity, searchMetadata, error, onNavigate, onClose }: {
   searchMetadata?: SearchMetadata;
   annotations: PdfAnnotationV2[]; teamAnnotations: TeamAnnotation[]; paperIdentity?: PdfAnnotation["paperIdentity"]; error?: string;
   onNavigate(annotation: PdfAnnotation): void; onClose(): void;
 }) {
   const [query, setQuery] = useState("");
-  const [kind, setKind] = useState("all");
+  const [facets, setFacets] = useState(emptyPdfAnnotationFacets);
   const [limit, setLimit] = useState(80);
   const entries = useMemo(() => {
     const items: { id: string; annotation: PdfAnnotation; author?: string }[] = annotations.map((annotation) => ({ id: annotation.id, annotation }));
@@ -31,16 +30,15 @@ export function PdfAnnotationsOverview({ annotations, teamAnnotations, paperIden
     return items.sort((a, b) => comparePdfAnnotationsByReadingOrder(a.annotation, b.annotation));
   }, [annotations, teamAnnotations, paperIdentity]);
   const compiled = useMemo(() => compilePdfAnnotationQuery(query, searchMetadata), [query, searchMetadata]);
-  const filtered = useMemo(() => entries.filter(({ annotation, author }) => (kind === "all" || annotation.kind === kind)
-    && compiled.matches(annotation, author)), [entries, compiled, kind, searchMetadata]);
+  const filtered = useMemo(() => entries.filter(({ annotation, author }) => matchesPdfAnnotationFacets(annotation, facets)
+    && compiled.matches(annotation, author)), [entries, compiled, facets]);
   return <section className="pdf-overview" aria-label="全部批注">
     <header className="pdf-overview-header">
       <Button appearance="subtle" icon={<ArrowLeftRegular />} onClick={onClose}>返回 PDF</Button>
       <strong>全部批注 · {entries.length}</strong>
       <Input aria-label="搜索全部批注" placeholder="搜索摘录、批注或页码" contentBefore={<SearchRegular />} value={query} onChange={(_, data) => { setQuery(data.value); setLimit(80); }} />
       <SearchOptions query={query} onChange={setQuery} tags={Object.values(noteLabels)} />
-      <OptionPicker aria-label="筛选批注类型" value={kind} onValueChange={(value) => { setKind(value); setLimit(80); }}
-        options={[{ value: "all", label: "全部类型" }, ...Object.entries(labels).map(([value, label]) => ({ value, label }))]} />
+      <PdfAnnotationFilters value={facets} onChange={(value) => { setFacets(value); setLimit(80); }} />
     </header>
     <div className="pdf-annotations-overview-scroll">
       {error ? <p role="alert">{error}</p> : null}

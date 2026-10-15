@@ -164,3 +164,15 @@
   color: var(--colorNeutralForeground3);
   font-size: calc(11px * var(--app-font-ratio, 1));
 }
+
+.pdf-annotation-facets {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.pdf-sidebar-controls > .pdf-annotation-facets { padding: 4px 6px 0; }
+.pdf-annotation-facets .fui-Dropdown { min-width: 0; flex: 1 1 78px; }
+.pdf-annotation-facets .fui-Dropdown__button { min-width: 0; padding-inline: 6px; }
+.pdf-annotation-facets .fui-Dropdown__button > span { overflow: hidden; text-overflow: ellipsis; }

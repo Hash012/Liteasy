@@ -2,6 +2,7 @@ import type { QuickAskTransferInput, QuickAskTransferResult } from "./quickAskTr
 import { highlightSearchText } from "../search/searchDomHighlight";
 import { SearchHighlight, SearchOptions } from "../search/SearchOptions";
 import { noteLabels } from "../notes/noteLabels";
+import { PdfAnnotationFilters, emptyPdfAnnotationFacets, matchesPdfAnnotationFacets } from "./PdfAnnotationFilters";
 import { compilePdfAnnotationQuery, teamPdfAnnotation } from "./pdfAnnotationQuery";
 import { usePaperSearchMetadata } from "../search/usePaperSearchMetadata";
 import { NoteLabelFilter, emptyNoteFilter, matchesNoteFilter } from "../notes/NoteLabelFilter";
@@ -1709,6 +1710,7 @@ export function PdfReader({
   const readingScrollTop = useRef(0);
   const [annotationFilter, setAnnotationFilter] = useState(emptyNoteFilter);
   const [annotationQuery, setAnnotationQuery] = useState("");
+  const [annotationFacets, setAnnotationFacets] = useState(emptyPdfAnnotationFacets);
   const [sidebarMode, setSidebarMode] = useState<PdfSidebarMode>("annotations");
   const [stageWidth, setStageWidth] = useState(960);
   const { status, setStatus, announcement, announceNavigation } = usePdfReaderFeedback();
@@ -1856,11 +1858,12 @@ export function PdfReader({
   const annotationSearch = useMemo(() => compilePdfAnnotationQuery(annotationQuery, searchMetadata), [annotationQuery, searchMetadata]);
   const filteredAnnotations = annotationsInReadingOrder.filter((annotation) =>
     matchesNoteFilter(annotationNoteLabels(annotation), annotationFilter) &&
-    annotationSearch.matches(annotation));
+    matchesPdfAnnotationFacets(annotation, annotationFacets) && annotationSearch.matches(annotation));
   const filteredTeamAnnotations = teamAnnotations.filter((team) => {
     if (!activePaper) return false;
     const annotation = teamPdfAnnotation(team, resolvePaperIdentity(activePaper));
-    return matchesNoteFilter(annotationNoteLabels(annotation as PdfAnnotationV2), annotationFilter) && annotationSearch.matches(annotation, team.uploadedBy);
+    return matchesNoteFilter(annotationNoteLabels(annotation as PdfAnnotationV2), annotationFilter) &&
+      matchesPdfAnnotationFacets(annotation, annotationFacets) && annotationSearch.matches(annotation, team.uploadedBy);
   });
   const popupAnnotation = useMemo(
     () => annotations.find((annotation) => annotation.id === annotationPopup?.annotationId) ?? null,
@@ -2381,7 +2384,7 @@ export function PdfReader({
     setReaderView("document");
     setFocusedPage(targetPage);
     setSidebarMode(targetEvidence.searchAnnotation ? "annotations" : "thumbnails");
-    if (targetEvidence.searchAnnotation) { setAnnotationQuery(""); setAnnotationFilter(emptyNoteFilter); setActiveAnnotationId(targetEvidence.searchAnnotation.id); }
+    if (targetEvidence.searchAnnotation) { setAnnotationQuery(""); setAnnotationFilter(emptyNoteFilter); setAnnotationFacets(emptyPdfAnnotationFacets); setActiveAnnotationId(targetEvidence.searchAnnotation.id); }
     setSidebarCollapsed(false);
     setStatus(`已定位到第 ${targetPage} 页的 Agent 引用证据。`);
 
@@ -3827,6 +3830,7 @@ export function PdfReader({
                   {annotationQuery ? <Tooltip content="清除批注搜索" relationship="description"><Button aria-label="清除批注搜索" size="small" appearance="subtle"
                     icon={<DismissRegular />} onClick={() => setAnnotationQuery("")} /></Tooltip> : null}
                 </div>
+                <PdfAnnotationFilters value={annotationFacets} onChange={setAnnotationFacets} />
                 <NoteLabelFilter compact value={annotationFilter} onChange={setAnnotationFilter} />
                 <p className="pdf-annotation-result-count" role="status" aria-label="批注检索结果">{filteredAnnotations.length + filteredTeamAnnotations.length} / {annotations.length + teamAnnotations.length} 条批注</p>
               </>}
