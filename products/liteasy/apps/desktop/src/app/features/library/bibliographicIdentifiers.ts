@@ -1,6 +1,11 @@
 /** Normalize display overrides without changing registry-confirmed document identity. */
 export function normalizeBibliographicDoi(value: string) {
-  return value.trim().replace(/^doi:\s*/i, "").replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "").trim();
+  const trimmed = value.trim().replace(/^doi:\s*/i, "");
+  const resolver = /^https?:\/\/(?:dx\.)?doi\.org\//i;
+  if (!resolver.test(trimmed)) return trimmed;
+  const doi = trimmed.replace(resolver, "").trim();
+  try { return decodeURIComponent(doi); }
+  catch { return doi; }
 }
 
 export function bibliographicDoiUrl(value: string) {

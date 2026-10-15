@@ -28,7 +28,7 @@ export function BibliographicMetadataEditor({ model }: { model: BibliographicEdi
       <h2>{draft.title}</h2><p className="bibliographic-summary-authors">{draft.authors.join(" · ") || "尚未填写作者"}</p>
       {draft.publication ? <p>{draft.publication}</p> : null}
       <p className="bibliographic-kicker">{entry.fileName || entry.format.toUpperCase()}</p>
-      <div className="bibliographic-summary-actions"><Button icon={<EditRegular />} onClick={model.edit}>编辑元信息</Button><Button icon={<CopyRegular />} onClick={async () => { try { await navigator.clipboard.writeText(readingCatalogCitation({ ...entry, ...draft })); setCopyStatus("引用已复制"); } catch { setCopyStatus("复制失败，请重试"); } }}>复制引用</Button></div>
+      <div className="bibliographic-summary-actions"><Button icon={<EditRegular />} onClick={model.edit}>编辑元信息</Button><Button icon={<CopyRegular />} onClick={async () => { try { await navigator.clipboard.writeText(readingCatalogCitation({ ...entry, ...draft, year: undefined })); setCopyStatus("引用已复制"); } catch { setCopyStatus("复制失败，请重试"); } }}>复制引用</Button></div>
       {copyStatus || model.message ? <p role="status">{copyStatus || model.message}</p> : null}
       <DisclosureSection className="bibliographic-summary-section" title="摘要">{draft.abstract ? <ContentView content={legacyContent(draft.abstract)}  /> : <p>暂无摘要。可以在编辑元信息中补充。</p>}</DisclosureSection>
       <DisclosureSection className="bibliographic-summary-section" title="标识符与出版信息"><dl>{bibliographicFields.filter(({ key }) => !["title", "abstract", "publication", "publishedAt", "extra"].includes(key) && draft[key]).map(({ key }) => <div key={key}><dt>{bibliographicFieldLabel(key, draft.assetType)}</dt><dd>{draft[key]}</dd></div>)}</dl></DisclosureSection>

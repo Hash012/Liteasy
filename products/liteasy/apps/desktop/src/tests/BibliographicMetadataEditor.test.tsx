@@ -66,3 +66,15 @@ test("overlong tags remain editable and are not silently saved under a different
   expect(field).toHaveValue("a".repeat(61));
   expect(save).not.toHaveBeenCalled();
 });
+
+test("copying a saved draft does not restore an intentionally cleared publication year", async () => {
+  const writeText = vi.fn(async () => {});
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  render(<Editor value={{ ...entry, year: 2024 }} />);
+  fireEvent.click(await screen.findByRole("button", { name: "编辑元信息" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "出版日期" }), { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "保存元信息" }));
+  fireEvent.click(await screen.findByRole("button", { name: "复制引用" }));
+  expect(await screen.findByText("引用已复制")).toBeInTheDocument();
+  expect(writeText).toHaveBeenCalledWith("First, Second, Third. A book");
+});
