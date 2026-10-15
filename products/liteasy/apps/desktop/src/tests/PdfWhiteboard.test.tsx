@@ -6,7 +6,7 @@ import {
   PdfWhiteboard,
   pdfWhiteboardDragMime
 } from "../app/features/pdf/pdf-whiteboard/PdfWhiteboard";
-import { createEmptyPdfWhiteboard } from "../app/features/pdf/pdf-whiteboard/pdfWhiteboardModel";
+import { createEmptyPdfWhiteboard, createPdfWhiteboardNode } from "../app/features/pdf/pdf-whiteboard/pdfWhiteboardModel";
 import type { PdfWhiteboardDocument } from "../app/features/pdf/pdf-whiteboard/pdfWhiteboard.types";
 
 function WhiteboardHarness({ onClose = vi.fn() }: { onClose?: () => void }) {
@@ -118,4 +118,16 @@ test("pastes a screenshot as an image node", async () => {
     kind: "image"
   });
   expect(onChange.mock.calls.at(-1)?.[0].nodes[0].content.dataUrl).toMatch(/^data:image\/png;base64,/u);
+});
+
+
+test("literature cards show the document title while retaining the exact relation on edits", async () => {
+  const onChange = vi.fn(), node = createPdfWhiteboardNode({ kind: "literature", title: "Readable research title", literatureId: "internal-literature-opaque" }, { x: 20, y: 20 });
+  const document = { ...createEmptyPdfWhiteboard("paper-1"), nodes: [node] };
+  render(<PdfWhiteboard document={document} onChange={onChange} onClose={vi.fn()} paperTitle="Test Paper" />);
+  expect(await screen.findByText("Readable research title")).toBeInTheDocument();
+  expect(screen.getByText("已关联文献")).toBeInTheDocument();
+  expect(screen.queryByText("internal-literature-opaque")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "文字" }));
+  expect(onChange.mock.calls[0][0].nodes[0]).toEqual(node);
 });

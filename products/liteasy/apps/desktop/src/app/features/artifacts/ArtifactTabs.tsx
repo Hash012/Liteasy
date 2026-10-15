@@ -471,10 +471,15 @@ export function ArtifactTabs({
             <DisclosureSection className="artifact-failure-diagnostic" defaultOpen title={<>查看错误信息与恢复建议</>}>
 
               <dl>
-                <div><dt>错误编号</dt><dd>{activeFailure.code}</dd></div>
                 <div><dt>原因</dt><dd>{activeFailure.message}</dd></div>
                 <div><dt>失败阶段</dt><dd>{taskStageLabels[activeTask.failure.failedStage]}</dd></div>
                 <div><dt>时间</dt><dd>{activeTask.failure.occurredAt}</dd></div>
+
+              </dl>
+              <ul>
+                {activeTask.failure.recovery.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+              <DisclosureSection title="技术详情"><dl><div><dt>错误类型</dt><dd>{activeFailure.code}</dd></div>
                 {activeFailure.traceId ? (
                   <div><dt>追踪编号</dt><dd>{activeFailure.traceId}</dd></div>
                 ) : null}
@@ -492,10 +497,7 @@ export function ArtifactTabs({
                     ) : null}
                   </>
                 ) : null}
-              </dl>
-              <ul>
-                {activeTask.failure.recovery.map((item) => <li key={item}>{item}</li>)}
-              </ul>
+              </dl></DisclosureSection>
             </DisclosureSection>
           ) : null}
         </section>
@@ -581,7 +583,7 @@ export function ArtifactTabs({
           ) : null}
           {activeTab.regeneratedFromArtifactId ? (
             <div className="artifact-result-meta">
-              从产物 {activeTab.regeneratedFromArtifactId} 补充资料后重新生成
+              已为原产物补充资料并重新生成
             </div>
           ) : null}
           {activeVerification ? (

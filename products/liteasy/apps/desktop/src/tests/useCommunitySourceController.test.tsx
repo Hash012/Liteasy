@@ -192,3 +192,15 @@ test("reopening after a failed save preserves retry identity without deleting an
   expect(f.create.mock.calls[0][1]).toBe(f.create.mock.calls[1][1]);
   expect(reflectionDrafts(JSON.stringify(["a", f.scope]), source)).toContainEqual(original);
 });
+
+
+test("community failures keep source identifiers out of the normal dialog while retaining redacted details", async () => {
+  const f = fixture();
+  f.readCommunitySource.mockRejectedValueOnce(new Error("source_forbidden synthetic-private-source token=secret-value"));
+  await f.open();
+  expect(screen.getByRole("alert")).toHaveTextContent("来源当前不可访问");
+  expect(screen.getByText(/source_forbidden synthetic-private-source/)).not.toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "技术详情" }));
+  expect(screen.getByText(/source_forbidden synthetic-private-source/)).toBeVisible();
+  expect(document.body).not.toHaveTextContent("secret-value");
+});

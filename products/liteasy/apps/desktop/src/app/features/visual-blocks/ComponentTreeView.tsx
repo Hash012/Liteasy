@@ -31,7 +31,7 @@ export function ComponentTreeView({ tree, data, openPath }: { tree: ComponentTre
   }
   if (tree.component === "ResourceCard") {
     const path = text("path");
-    if (preview && path) return <div className="visual-resource-card"><strong>{text("title") || "引用资源"}</strong><p>预览未授权读取此资源；请在工作区核查来源。</p><code>{path}</code></div>;
+    if (preview && path) return <div className="visual-resource-card"><strong>{text("title") || "引用资源"}</strong><p>预览未授权读取此资源；请在工作区核查来源。</p>{!path.startsWith("liteasy://") ? <code>{path}</code> : null}</div>;
     return path ? <div className="visual-resource-card"><Button appearance="subtle" disabled={!openPath || !path.startsWith("liteasy://")} onClick={() => void openPath?.(path)}>{text("title") || "打开引用资源"}</Button><RichTextBlock text={path.startsWith("liteasy://") ? `[查看内容](${path})` : path} onOpenPath={openPath} /></div> : null;
   }
   if (tree.component === "Table") {

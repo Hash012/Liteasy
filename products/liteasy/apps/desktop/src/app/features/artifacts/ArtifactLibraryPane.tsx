@@ -1,3 +1,4 @@
+import { OperationFailureNotice } from "../local-diagnostics/OperationFailureNotice";
 import { projectArtifactExportRecords } from "./artifactExportProjection";
 import { artifactMetadataIssueCount } from "./artifactMetadataProjection";
 import { ActionButton as Button, ContextualActions, DisclosureSection, FilterPopover, OptionPicker } from "../../shared/ui/productPrimitives";
@@ -521,8 +522,8 @@ function ExportRecordList({
   }
   if (status === "error" && !records.length) {
     return (
-      <div className="artifact-library-error" role="alert">
-        <span>{error ?? "加载导出记录失败。"}</span>
+      <div className="artifact-library-error">
+        <OperationFailureNotice error={error ?? "加载导出记录失败。"} fallback="导出记录暂时无法读取，请重试。" />
         <Button appearance="subtle" icon={<ArrowClockwiseRegular />} onClick={() => onRetry()} size="small">
           重试
         </Button>
@@ -538,7 +539,7 @@ function ExportRecordList({
   }
   return (
     <>
-      {error ? <div className="artifact-library-inline-error" role="alert">{error}</div> : null}
+      <OperationFailureNotice error={error} fallback="导出记录暂时无法更新，请重试。" />
       <ul aria-label="已导出产物" className="artifact-library-list">
         {records.map((record) => {
           const unsupported = record.status === "unsupported";

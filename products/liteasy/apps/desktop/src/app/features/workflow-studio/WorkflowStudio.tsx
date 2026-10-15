@@ -1,3 +1,4 @@
+import { OperationFailureNotice } from "../local-diagnostics/OperationFailureNotice";
 import { ActionButton as Button, DisclosureSection, InfoPopover, OptionPicker, IconAction } from "../../shared/ui/productPrimitives";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Badge, Field, FluentProvider, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tab, TabList, Textarea, webDarkTheme, webLightTheme } from "@fluentui/react-components";
@@ -30,6 +31,7 @@ export function WorkflowStudio() {
   const [drafts, setDrafts] = useState<ExtensionDraft[]>([]), [draft, setDraft] = useState<ExtensionDraft>();
   const [edit, setEdit] = useState<StudioEditState>({ files: {}, past: [], future: [] });
   const [tab, setTab] = useState("composition"), [path, setPath] = useState("liteasy.extension.json");
+  const [notice, setNotice] = useState("");
   const [error, setError] = useState(""), [busy, setBusy] = useState(false), [preview, setPreview] = useState<ValidatedExtension>(), [report, setReport] = useState<TrialReport>();
   const [selectedNode, setSelectedNode] = useState(""), [operator, setOperator] = useState<OperationId>("core.value");
   const [previewMode, setPreviewMode] = useState("inherit"), [narrow, setNarrow] = useState(false), [panel, setPanel] = useState("canvas");
@@ -52,7 +54,7 @@ export function WorkflowStudio() {
     return () => window.removeEventListener("beforeunload", protect);
   }, [dirty]);
   if (!host || !model) return <p>正在加载制作工作台…</p>;
-  async function run(action: () => Promise<unknown>) { setBusy(true); setError(""); try { await action(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); } }
+  async function run(action: () => Promise<unknown>) { setBusy(true); setError(""); setNotice(""); try { await action(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); } }
   function choose(value: ExtensionDraft) {
     setDraft(value); setEdit({ files: value.files, past: [], future: [] }); lastValid.current = {};
     const next = Object.keys(value.files).find((file) => file.startsWith("templates/")) ?? "liteasy.extension.json";
@@ -107,7 +109,7 @@ export function WorkflowStudio() {
       <Menu><MenuTrigger disableButtonEnhancement><IconAction label="更多制作操作" icon={<MoreHorizontalRegular />} /></MenuTrigger><MenuPopover><MenuList>
         <MenuItem icon={<ArrowImportRegular />} disabled={dirty || busy} onClick={() => importFile.current?.click()}>导入项目</MenuItem><MenuItem icon={<HistoryRegular />} onClick={() => host.openRuns()}>运行记录</MenuItem>
         <MenuItem icon={<AddRegular />} disabled={busy || dirty} onClick={() => void run(async () => { const files = { ...(await paperLensPackage()).files }; const manifest = JSON.parse(files["liteasy.extension.json"]); const original = manifest.id; manifest.id = `plugin.personal-${crypto.randomUUID().slice(0, 8)}`; manifest.name = "我的论文比较台"; manifest.version = "1.0.0"; for (const file of Object.keys(files)) files[file] = files[file].split(original).join(manifest.id); files["liteasy.extension.json"] = JSON.stringify(manifest, null, 2); choose(await model.drafts.create(manifest.name, files)); })}>从论文比较模板开始</MenuItem>
-        {draft ? <><MenuItem icon={<ArrowUploadRegular />} disabled={dirty || busy || !report?.passed} onClick={() => void run(async () => { const pkg = await model.drafts.publish(draft.id, host.packages.store); setError(`已发布 ${pkg.manifest.version}；请在扩展中检查新增入口并启用。`); })}>发布本地版本</MenuItem><MenuItem icon={<ArrowExportRegular />} disabled={dirty || busy} onClick={() => void run(async () => downloadExtensionJson(`${draft.title}.liteasy-extension.json`, await buildExtensionPackage(draft.files)))}>导出包</MenuItem></> : null}
+        {draft ? <><MenuItem icon={<ArrowUploadRegular />} disabled={dirty || busy || !report?.passed} onClick={() => void run(async () => { const pkg = await model.drafts.publish(draft.id, host.packages.store); setNotice(`已发布 ${pkg.manifest.version}；请在扩展中检查新增入口并启用。`); })}>发布本地版本</MenuItem><MenuItem icon={<ArrowExportRegular />} disabled={dirty || busy} onClick={() => void run(async () => downloadExtensionJson(`${draft.title}.liteasy-extension.json`, await buildExtensionPackage(draft.files)))}>导出包</MenuItem></> : null}
       </MenuList></MenuPopover></Menu>
     </div></header>
     <input ref={importFile} hidden type="file" accept=".json" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void run(async () => { if (file.size > 24 * 1024 * 1024) throw new Error("包文件过大。"); const pkg = await validateExtensionPackage(JSON.parse(await file.text())); choose(await model.drafts.create(pkg.manifest.name, pkg.bundle.files)); }); }} />
@@ -118,8 +120,8 @@ export function WorkflowStudio() {
       <div className="studio-taskbar"><TabList selectedValue={tab} onTabSelect={(_, data) => switchTab(String(data.value))}><Tab value="composition">组合</Tab><Tab value="type">类型</Tab><Tab value="workflow">流程</Tab><Tab value="settings">设置</Tab><Tab value="source">源码</Tab><Tab value="api">API 目录</Tab></TabList><Button disabled={!edit.past.length || busy} onClick={() => { setEdit((current) => travelStudioHistory(current, "undo")); setPreview(undefined); setReport(undefined); }}>撤销</Button><Button disabled={!edit.future.length || busy} onClick={() => { setEdit((current) => travelStudioHistory(current, "redo")); setPreview(undefined); setReport(undefined); }}>重做</Button></div>
       {tab === "api" ? <div><p>共享基础能力：{blockRegistryCapabilities.join(" · ")}</p>{operationIds.map((id) => <DisclosureSection key={id} title={`${id} · ${operationCatalog[id].effect}`}><p>版本 {operationCatalog[id].version} · 重试 {operationCatalog[id].retry} · {operationCatalog[id].capability ?? "无额外权限"}</p></DisclosureSection>)}</div> : <>
         {paths.length > 1 || tab === "source" ? <OptionPicker aria-label="项目文件" value={path} onValueChange={(value) => { setPath(value); setSelectedNode(""); }} options={paths.map((file) => ({ value: file, label: file }))} /> : null}
-        {sourceError ? <div role="alert"><p>{sourceError}</p><p>源码输入已保留；画布显示最后一个有效版本。请修复源码后继续可视化编辑。</p></div> : null}
-        {blockError ? <p role="alert">{blockError}</p> : null}
+        <OperationFailureNotice error={sourceError} fallback="源码格式未通过校验；输入已保留，画布显示最后一个有效版本。请检查源码后重试。" />
+        <OperationFailureNotice error={blockError} fallback="组件类型文件未通过校验，请检查源码后重试。" />
         {(workflow || composition) && (tab === "workflow" || tab === "composition") ? <>
           <div className="studio-panel-switch"><Button aria-pressed={panel === "canvas"} onClick={() => setPanel("canvas")}>画布</Button><Button aria-pressed={panel === "properties"} onClick={() => setPanel("properties")}>属性</Button></div>
           <div className="studio-editor" data-panel={panel}>
@@ -131,14 +133,14 @@ export function WorkflowStudio() {
             </fieldset>
           </div>
         </> : null}
-        {tab === "type" && document ? (() => { try { const registry = createBlockRegistry(blocks), item = document as unknown as DerivedBlockDefinition, type = registry.resolve(item.id, item.version); return <section className="studio-type-preview"><p>继承 {type.family}</p>{previewThemeControl}<fieldset disabled={busy || !!sourceError}><SchemaFields key={`${path}:${type.version}`} schema={type.dataSchema} value={type.defaults} onChange={(defaults) => updateJson({ ...document, defaults })} /></fieldset><PreviewTheme mode={previewMode}><VisualPreviewContext.Provider value={true}>{type.templates.map((tree, index) => <ComponentTreeView key={index} tree={tree} data={type.defaults} />)}</VisualPreviewContext.Provider></PreviewTheme></section>; } catch (e) { return <p role="status">无法预览此类型：{String(e)}。请检查源码。</p>; } })() : null}
+        {tab === "type" && document ? (() => { try { const registry = createBlockRegistry(blocks), item = document as unknown as DerivedBlockDefinition, type = registry.resolve(item.id, item.version); return <section className="studio-type-preview"><p>继承 {type.family}</p>{previewThemeControl}<fieldset disabled={busy || !!sourceError}><SchemaFields key={`${path}:${type.version}`} schema={type.dataSchema} value={type.defaults} onChange={(defaults) => updateJson({ ...document, defaults })} /></fieldset><PreviewTheme mode={previewMode}><VisualPreviewContext.Provider value={true}>{type.templates.map((tree, index) => <ComponentTreeView key={index} tree={tree} data={type.defaults} />)}</VisualPreviewContext.Provider></PreviewTheme></section>; } catch (e) { return <OperationFailureNotice error={e} fallback="无法预览此类型，请检查源码或恢复先前版本。" />; } })() : null}
         {tab === "settings" && document?.type === "object" ? (() => { try { const schema = parseDataSchema(document); return <fieldset disabled={busy || !!sourceError}><SchemaFields schema={schema} value={schemaDefaults(schema) as JsonObject} onChange={(value) => updateJson({ ...schema, properties: Object.fromEntries(Object.entries(schema.properties ?? {}).map(([key, field]) => [key, { ...field, default: value[key] }])) })} /></fieldset>; } catch { return null; } })() : null}
         {tab === "source" ? <Field label="文件源码"><Textarea disabled={busy} className="studio-source" aria-label="扩展源文件" resize="vertical" value={text} onChange={(_, data) => updateText(data.value)} /></Field> : null}
         {!path && tab !== "api" ? <p>此项目尚无对应文件；可在源码中查看现有项目文件。</p> : null}
       </>}
       {preview ? <section className="studio-preview"><div className="extension-toolbar"><h2>实际组件预览</h2>{previewThemeControl}<Button onClick={() => setNarrow(!narrow)}>{narrow ? "正常宽度" : "窄栏"}</Button><Button onClick={() => setPreview(undefined)}>关闭预览</Button></div><PreviewTheme mode={previewMode}><div style={{ maxWidth: narrow ? 320 : undefined }}><p>{preview.manifest.name} · {preview.manifest.version}</p>{preview.templates.map((template) => <section key={template.id}><h3>{template.title}</h3>{template.cards.map((card) => <article key={card.id} className="extension-library-card"><h4>{card.title}</h4><StudioCardPreview card={card} blocks={preview.blocks} /></article>)}</section>)}</div></PreviewTheme></section> : null}
-      {report ? <section><h2>样例报告 · {report.passed ? "通过" : "未通过"}</h2>{report.cases.map((item, i) => <p key={i}>{item.name} · {item.passed ? "通过" : item.error}</p>)}</section> : null}
+      {report ? <section><h2>样例报告 · {report.passed ? "通过" : "未通过"}</h2>{report.cases.map((item, i) => <div key={i}><p>{item.name} · {item.passed ? "通过" : "未通过"}</p>{!item.passed ? <OperationFailureNotice error={item.error || "样例未通过。"} fallback="此样例未通过，请检查输入和流程后重新试跑。" /> : null}</div>)}</section> : null}
       <DisclosureSection title="AI 制作助手"><Textarea aria-label="描述扩展需求" value={request} onChange={(_, data) => setRequest(data.value)} placeholder="描述输入、输出、保存位置，以及希望如何组织内容" /><Button disabled={busy || dirty || !request.trim()} onClick={() => void run(async () => { abort.current?.abort(); abort.current = new AbortController(); setProposal({ revision: draft.revision, changes: await model.propose(draft, request, abort.current.signal) }); })}>生成草稿变更</Button>{busy ? <Button onClick={() => abort.current?.abort()}>停止生成</Button> : null}{proposal ? <><h3>待应用变更</h3>{proposal.changes.map((change) => <DisclosureSection key={change.path} title={`${change.path} · ${change.text === null ? "删除" : draft.files[change.path] ? "修改" : "新增"}`}><div className="studio-diff"><pre>{draft.files[change.path] ?? ""}</pre><pre>{change.text ?? ""}</pre></div></DisclosureSection>)}<Button disabled={busy || dirty} onClick={() => void run(async () => { choose(await model.drafts.patch(draft.id, proposal.revision, proposal.changes, "ai")); setProposal(undefined); })}>应用到草稿</Button></> : null}</DisclosureSection>
-    </> : null}{error ? <p role="status">{error}</p> : null}
+    </> : null}{notice ? <p role="status">{notice}</p> : null}<OperationFailureNotice error={error} fallback="制作操作未完成，请重试或恢复先前草稿。" />
   </section>;
 }

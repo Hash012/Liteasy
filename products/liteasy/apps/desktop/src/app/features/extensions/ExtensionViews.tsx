@@ -1,3 +1,5 @@
+import { OperationFailureNotice, operationFailureSummary } from "../local-diagnostics/OperationFailureNotice";
+import { redactDiagnostic } from "../context/objectContext";
 import { ActionButton as Button, DisclosureSection, OptionPicker } from "../../shared/ui/productPrimitives";
 import { useEffect, useRef, useState } from "react";
 import { WorkbenchPageHeader, WorkbenchEmptyState } from "../workbench/WorkbenchPage";
@@ -25,6 +27,7 @@ export function ExtensionLibrary() {
   const [versions, setVersions] = useState<Record<string, string[]>>({});
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
+  const [actionError, setActionError] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -45,7 +48,7 @@ export function ExtensionLibrary() {
   useEffect(() => { setItems([]); setVersions({}); }, [host?.packages.store]);
   useEffect(() => { void load(); return () => { generation.current++; }; }, [host?.packages.store, host?.packages.snapshot]);
   if (!host) return <p role="status">正在加载扩展…</p>;
-  async function run(action: () => Promise<unknown>) { setBusy(true); setMessage(""); try { await action(); await load(); } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); } finally { setBusy(false); } }
+  async function run(action: () => Promise<unknown>) { setBusy(true); setMessage(""); setActionError(""); try { await action(); await load(); } catch (error) { setActionError(error instanceof Error ? error.message : String(error)); } finally { setBusy(false); } }
   const filtered = items.filter((item) => [item.pkg?.manifest.name, item.state.id, ...item.pkg?.manifest.contributes.views.map((view) => view.title) ?? [], ...item.pkg?.manifest.contributes.commands.map((command) => command.title) ?? []].join(" ").toLowerCase().includes(query.toLowerCase()));
   return <section className="extension-page" aria-label="扩展" aria-busy={loading}>
     <WorkbenchPageHeader title="扩展" description="把常用的阅读与研究步骤保存下来，下次继续使用。" actions={<><Button appearance="subtle" icon={<AddRegular />} onClick={host.openStudio}>制作扩展</Button><Button appearance="subtle" onClick={host.openRuns}>运行记录</Button></>} />
@@ -57,22 +60,23 @@ export function ExtensionLibrary() {
       await host.packages.store.install(pkg.bundle, previous?.revision ?? null, []);
       setMessage("已导入。检查能力说明后启用。");
     }); }} />
-    {message || host.error ? <p role="status">{message || host.error}</p> : null}
+    {message ? <p role="status">{message}</p> : null}
+    <OperationFailureNotice error={actionError || host.error} fallback="扩展操作未完成，请重试或恢复到先前版本。" />
     <div className="extension-library-grid">{filtered.map(({ state, pkg, error }) => <article className="extension-library-card" key={state.id}>
       <h2>{pkg?.manifest.name ?? "不可用扩展"}</h2><p>{state.enabled ? "已启用" : "已停用"}</p>
       {pkg?.manifest.permissions.length ? <DisclosureSection key={`${state.id}:${state.enabled}`} defaultOpen={!state.enabled} title="请求的能力"><ul>{pkg.manifest.permissions.map((permission, i) => <li key={i}>{permission.capability} · {permission.scopeRef}</li>)}</ul><p>实际执行时还需绑定本轮资料、保存位置和模型连接。</p></DisclosureSection> : <p>声明式组件与本地组合。</p>}
-      {error ? <p role="alert">{error}</p> : null}
+      <OperationFailureNotice error={error} fallback="扩展内容暂时无法使用，可重新打开或切换版本。" />
       <div className="extension-toolbar"><Button disabled={busy || !!error} onClick={() => void run(() => host.packages.store.enable(state.id, !state.enabled, state.revision))}>{state.enabled ? "停用" : "启用"}</Button>
         {state.enabled && pkg?.manifest.contributes.views[0] ? <Button onClick={() => void run(() => host.openView(state.id, pkg.manifest.contributes.views[0].id))}>{pkg.manifest.contributes.views[0].title}</Button> : null}
       </div>
       <DisclosureSection title="管理与版本"><p>版本 {state.version}</p><Button disabled={!pkg} icon={<ArrowDownloadRegular />} onClick={() => pkg && downloadExtensionJson(`${state.id}-${state.version}.liteasy-extension.json`, pkg.bundle)}>导出</Button><Button disabled={busy} onClick={() => { if (window.confirm("卸载此扩展？已创建的笔记、白板和版本记录仍保留。")) void run(() => host.packages.store.uninstall(state.id, state.revision)); }}>卸载</Button>
         {host.studio ? <Button disabled={busy || !!error} onClick={() => void run(async () => { const draft = await host.studio!.drafts.fork(host.packages.store, state.id, state.version); setMessage(`已创建“${draft.title}”，可在制作工作台选择并修改；当前版本仍可使用。`); host.openStudio(); })}>创建修复草稿</Button> : null}
         <p>修复草稿会使用新版本号；旧版保留，可随时切回。切换版本后请核对并启用。</p>
-        {(versions[state.id]?.length ?? 0) > 1 ? <OptionPicker aria-label={`切换 ${pkg?.manifest.name ?? state.id} 的版本`} value={state.version} disabled={busy} onValueChange={(value) => void run(() => host.packages.store.rollback(state.id, value, state.revision))} options={versions[state.id].map(version => ({ value: version, label: version }))} /> : null}
+        {(versions[state.id]?.length ?? 0) > 1 ? <OptionPicker aria-label={`切换 ${pkg?.manifest.name ?? "不可用扩展"} 的版本`} value={state.version} disabled={busy} onValueChange={(value) => void run(() => host.packages.store.rollback(state.id, value, state.revision))} options={versions[state.id].map(version => ({ value: version, label: version }))} /> : null}
       </DisclosureSection>
       {state.enabled && pkg && (pkg.manifest.contributes.views.length > 1 || pkg.manifest.contributes.commands.length) ? <Menu><MenuTrigger disableButtonEnhancement><Button size="small">更多扩展入口</Button></MenuTrigger><MenuPopover><MenuList>{pkg.manifest.contributes.views.slice(1).map(view => <MenuItem key={view.id} onClick={() => void run(() => host.openView(state.id, view.id))}>{view.title}</MenuItem>)}{pkg.manifest.contributes.commands.map(command => <MenuItem key={command.id} onClick={() => void run(() => host.invoke(state.id, command.id))}>{command.title}</MenuItem>)}</MenuList></MenuPopover></Menu> : null}
     </article>)}</div>
-    {loading ? <Spinner label="正在加载扩展" /> : loadError ? <WorkbenchEmptyState error icon={<PuzzlePieceRegular />} title="扩展列表未能载入" description={loadError} actions={<Button onClick={() => void load()}>重试</Button>} /> : !items.length ? <WorkbenchEmptyState icon={<PuzzlePieceRegular />} title="还没有添加扩展" description="导入自己的扩展，或添加内置的论文比较板，了解如何组织资料与研究成果。" actions={<Button appearance="primary" icon={<ArrowUploadRegular />} onClick={() => file.current?.click()}>导入扩展</Button>} /> : !filtered.length ? <WorkbenchEmptyState icon={<PuzzlePieceRegular />} title="没有匹配的扩展" description="" actions={<Button onClick={() => setQuery("")}>清除筛选</Button>} /> : null}
+    {loading ? <Spinner label="正在加载扩展" /> : loadError ? <WorkbenchEmptyState error icon={<PuzzlePieceRegular />} title="扩展列表未能载入" description={operationFailureSummary(loadError, "请重试读取扩展列表。")} actions={<><Button onClick={() => void load()}>重试</Button><DisclosureSection title="技术详情"><pre>{redactDiagnostic(loadError)}</pre></DisclosureSection></>} /> : !items.length ? <WorkbenchEmptyState icon={<PuzzlePieceRegular />} title="还没有添加扩展" description="导入自己的扩展，或添加内置的论文比较板，了解如何组织资料与研究成果。" actions={<Button appearance="primary" icon={<ArrowUploadRegular />} onClick={() => file.current?.click()}>导入扩展</Button>} /> : !filtered.length ? <WorkbenchEmptyState icon={<PuzzlePieceRegular />} title="没有匹配的扩展" description="" actions={<Button onClick={() => setQuery("")}>清除筛选</Button>} /> : null}
     <DisclosureSection title="恢复与数据"><p>停用或卸载保留已创建的笔记、白板、配置和版本记录。</p><Button disabled={busy} onClick={() => void run(() => host.packages.store.disableAll())}>停用所有第三方扩展</Button></DisclosureSection>
   </section>;
 }
@@ -94,7 +98,7 @@ export function ExtensionViewHost({ dockId }: { dockId: string }) {
   useEffect(() => { if (scroll.current) scroll.current.scrollTop = Number(instance?.hostState?.scrollTop) || 0; }, [instance?.dockId]);
   if (!host || !instance || !pkg || !definition) return <section className="extension-page"><h1>{instance?.title ?? "扩展页面"}</h1><p>此页面所属扩展尚未启用或已卸载，原记录仍保留。</p>{instance ? <Button onClick={() => downloadExtensionJson("page-state.json", instance)}>导出页面记录</Button> : null}</section>;
   let tree;
-  try { tree = validateComponentTree(JSON.parse(pkg.bundle.files[definition.entry.path])); } catch (e) { return <p role="alert">{String(e)}</p>; }
+  try { tree = validateComponentTree(JSON.parse(pkg.bundle.files[definition.entry.path])); } catch (e) { return <OperationFailureNotice error={e} fallback="扩展页面内容无法读取，可重新导入或切换版本。" />; }
   const saveState = async () => {
     try {
       const current = await host.workspace.getView(dockId);
@@ -107,7 +111,7 @@ export function ExtensionViewHost({ dockId }: { dockId: string }) {
   };
   return <section className="extension-page" ref={scroll} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) void saveState(); }}>
     <header><div><h1>{definition.title}</h1><small>来自 {pkg.manifest.name}</small></div><Button onClick={() => void navigator.clipboard.writeText(`liteasy://extensions/${instance.extensionId}/views/${instance.viewId}?instance=${instance.instanceId}`).catch((e) => setError(String(e)))}>复制页面链接</Button></header>
-    {error ? <p role="alert">{error}</p> : null}
+    <OperationFailureNotice error={error} fallback="扩展内容暂时无法使用，可重新打开或切换版本。" />
     <VisualBlockBase identity={dockId} fallback="页面内容暂不可用，可从扩展重新打开。"><ComponentTreeView tree={tree} data={{ ...instance.args, settings, state: instance.state }} openPath={host.openLink} /></VisualBlockBase>
     <Menu><MenuTrigger disableButtonEnhancement><Button>扩展命令</Button></MenuTrigger><MenuPopover><MenuList>{pkg.manifest.contributes.commands.map((command) => <MenuItem key={command.id} onClick={() => void host.invoke(pkg.manifest.id, command.id).catch((e) => setError(String(e)))}>{command.title}</MenuItem>)}</MenuList></MenuPopover></Menu>
   </section>;

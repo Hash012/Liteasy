@@ -572,7 +572,7 @@ export function createExtensionRuntime(bridge: ExtensionHostBridge): ExtensionRu
         return manifest.contributes.contextMenus.map((item) => ({
           ...structuredClone(item),
           extensionId: manifest.id,
-          title: titles.get(item.commandId) ?? item.commandId
+          title: titles.get(item.commandId) ?? "扩展操作"
         }));
       });
     },

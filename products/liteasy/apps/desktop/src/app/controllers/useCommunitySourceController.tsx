@@ -1,3 +1,4 @@
+import { OperationFailureNotice } from "../features/local-diagnostics/OperationFailureNotice";
 import { OptionPicker } from "../shared/ui/productPrimitives";
 import type { ObjectRepository } from "../features/objects/objectRepository";
 import { refOf, type ObjectRef } from "../features/objects/object.types";
@@ -156,7 +157,7 @@ export function useCommunitySourceController(input: {
   return { open, dialog: <Dialog open={Boolean(visible)} onOpenChange={(_, data) => { if (!data.open) close(); }}><DialogSurface><DialogBody>
     <DialogTitle>社区来源 · 修订 {visible?.reference.revision}</DialogTitle><DialogContent>
       {visible?.busy ? <Spinner size="tiny" label="正在核对来源" /> : null}
-      {visible?.error ? <p role="alert">{visible.error}</p> : null}
+      <OperationFailureNotice error={visible?.error} fallback="来源或笔记暂时无法读取，请检查访问权限后重试。" />
       {visible?.source ? <><p>{visible.source.historical ? `正在阅读引用时的历史修订 ${visible.source.revision}；当前为修订 ${visible.source.currentRevision}。` : `引用修订与当前修订一致：${visible.source.revision}。`}</p>
         {visible.source.locator?.page ? <p>定位：第 {visible.source.locator.page} 页{visible.source.locator.anchorHash ? " · 已保留段落定位" : ""}</p> : null}
         <pre style={{ whiteSpace: "pre-wrap", maxHeight: "35vh", overflow: "auto" }}>{visible.source.body ?? visible.source.literature?.title ?? "此来源仅有题录信息。"}</pre>

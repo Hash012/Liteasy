@@ -127,7 +127,7 @@ function PdfWhiteboardNodeView({ data, selected }: NodeProps<WhiteboardFlowNode>
       ) : item.kind === "literature" ? (
         <div className="pdf-whiteboard-literature-card">
           <strong>{item.content.title}</strong>
-          <small>{item.content.literatureId ?? "本地文献链接"}</small>
+          <small>{item.content.literatureId ? "已关联文献" : "本地文献链接"}</small>
         </div>
       ) : (
         <div className="pdf-whiteboard-extension-card">

@@ -338,3 +338,16 @@ test("group collapse survives twenty saved/exported view transitions", async () 
   await user.click(screen.getByRole("button", { name: /Attention Is All You Need/ }));
   expect(screen.getByRole("button", { name: "打开产物：薄读" })).toBeInTheDocument();
 });
+
+
+test("export history errors offer retry and keep raw record identifiers in explicit details", async () => {
+  const base = props();
+  render(<ArtifactLibraryPane {...base} exportStatus="error" exportError="export-record-opaque: missing storage entry" />);
+  await userEvent.click(screen.getByRole("tab", { name: "已导出" }));
+  expect(screen.getByRole("alert")).toHaveTextContent("导出记录暂时无法读取，请重试。");
+  expect(screen.getByText("export-record-opaque: missing storage entry")).not.toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "技术详情" }));
+  expect(screen.getByText("export-record-opaque: missing storage entry")).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "重试" }));
+  expect(base.onRefreshExports).toHaveBeenCalledTimes(2);
+});

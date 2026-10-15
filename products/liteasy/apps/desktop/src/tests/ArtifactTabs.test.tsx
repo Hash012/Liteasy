@@ -325,6 +325,7 @@ describe("ArtifactTabs", () => {
           {
             failure: {
               endpoint: "http://127.0.0.1:8787",
+              traceId: "internal-trace-opaque",
               failedStage: "generating_answer",
               message: "OpenAI Responses API 流式请求失败（404）",
               model: "gpt-5.5",
@@ -344,7 +345,11 @@ describe("ArtifactTabs", () => {
     );
 
     expect(screen.getByText("查看错误信息与恢复建议")).toBeInTheDocument();
+    expect(screen.getByText("model_route_unavailable")).not.toBeVisible();
+    expect(screen.getByText("internal-trace-opaque")).not.toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "技术详情" }));
     expect(screen.getByText("model_route_unavailable")).toBeInTheDocument();
+    expect(screen.getByText("internal-trace-opaque")).toBeInTheDocument();
     expect(screen.getAllByText("模型服务暂不支持该请求，请稍后重试。")).toHaveLength(2);
     expect(screen.queryByText("OpenAI Responses API 流式请求失败（404）")).not.toBeInTheDocument();
     expect(screen.queryByText("http://127.0.0.1:8787")).not.toBeInTheDocument();
@@ -383,6 +388,8 @@ describe("ArtifactTabs", () => {
       />
     );
 
+    expect(screen.getByText("OpenAI Responses API 流式请求失败（404）")).not.toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "技术详情" }));
     expect(screen.getByText("OpenAI Responses API 流式请求失败（404）")).toBeInTheDocument();
     expect(screen.getByText("http://127.0.0.1:8787")).toBeInTheDocument();
     expect(screen.getByText("openai")).toBeInTheDocument();
@@ -1243,4 +1250,12 @@ describe("ArtifactTabs", () => {
     expect(confirm).toHaveBeenCalledTimes(2);
     confirm.mockRestore();
   });
+});
+
+
+test("regenerated artifacts describe the relationship without exposing the parent artifact key", () => {
+  render(<ArtifactTabs analysisHint="" canStartAnalysis onStartAnalysis={vi.fn()} selectedCount={1} selectionLocked
+    tabs={[{ artifactId: "new-artifact-key", regeneratedFromArtifactId: "opaque-parent-artifact-key", title: "研究结果", type: "tree", answer: "有效结果" }]} tasks={[]} />);
+  expect(screen.getByText("已为原产物补充资料并重新生成")).toBeInTheDocument();
+  expect(screen.queryByText(/opaque-parent-artifact-key/)).not.toBeInTheDocument();
 });

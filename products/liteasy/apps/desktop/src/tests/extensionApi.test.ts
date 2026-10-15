@@ -101,6 +101,14 @@ describe("Extension API", () => {
     );
   });
 
+  test("rejects undeclared menu commands before raw identifiers can become labels", () => {
+    const manifest = createManifest();
+    manifest.contributes.contextMenus[0].commandId = "plugin.selection-ask.command.missing";
+    const runtime = createExtensionRuntime({ invokeHandler: async () => ({ status: "ok" }) });
+    expect(() => runtime.registerExtension(manifest)).toThrow();
+    expect(runtime.getContextMenuItems()).toEqual([]);
+  });
+
   test("registers declarative commands, context menus, panels, and artifact renderers", () => {
     const runtime = createExtensionRuntime({
       invokeHandler: async () => ({ status: "ok" })
