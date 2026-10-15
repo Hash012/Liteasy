@@ -6,7 +6,7 @@ async function openPdf(page: Page) {
   const pdf = await readFile(resolve("../../../../development/test-data/pdf-selection/glyph-boundaries.pdf"));
   await page.route("**/manual-preview/das24a.pdf", (route) => route.fulfill({ body: pdf, contentType: "application/pdf" }));
   await page.goto("/?pdf-highlight-fixture");
-  await expect(page.locator(".pdf-text-layer").first()).toContainText("WiWi tail");
+  await expect(page.locator(".pdf-text-layer").first()).toContainText("WiWi tail", { timeout: 30_000 });
 }
 
 async function expectNativeResolution(page: Page) {

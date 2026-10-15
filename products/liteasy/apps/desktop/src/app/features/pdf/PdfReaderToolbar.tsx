@@ -133,19 +133,20 @@ export function PdfReaderToolbar({
     setPageDraft(String(currentPage));
   }, [currentPage]);
 
-  function commitPage() {
+  function commitPage(force = false) {
     const page = Number(pageDraft);
     if (!Number.isFinite(page)) {
       setPageDraft(String(currentPage));
       return;
     }
-    onChangePage(page);
+    // Leaving an unchanged page field for zoom must not jump back to the page top.
+    if (force || page !== currentPage) onChangePage(page);
   }
 
   function handlePageKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
     if (event.key === "Enter") {
-      commitPage();
+      commitPage(true);
       event.currentTarget.select();
     }
   }
@@ -190,7 +191,7 @@ export function PdfReaderToolbar({
             className="pdf-page-number-input"
             max={pageCount}
             min={1}
-            onBlur={commitPage}
+            onBlur={() => commitPage()}
             onChange={(_, data) => setPageDraft(data.value)}
             onKeyDown={handlePageKeyDown}
             size="small"

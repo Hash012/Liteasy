@@ -43,6 +43,16 @@ test("IME Enter does not commit page navigation", () => {
   expect(input.onChangePage).toHaveBeenCalledWith(5);
 });
 
+test("leaving the unchanged page field for zoom preserves the current reading offset", () => {
+  const input = props({ currentPage: 6 }); render(<PdfReaderToolbar {...input} />);
+  const page = screen.getByRole("spinbutton", { name: "当前页码" });
+  fireEvent.blur(page); fireEvent.click(screen.getByRole("button", { name: "按比例放大 PDF" }));
+  expect(input.onChangePage).not.toHaveBeenCalled(); expect(input.onZoomIn).toHaveBeenCalledOnce();
+  fireEvent.keyDown(page, { key: "Enter" }); expect(input.onChangePage).toHaveBeenCalledWith(6);
+  fireEvent.change(page, { target: { value: "7" } }); fireEvent.blur(page);
+  expect(input.onChangePage).toHaveBeenLastCalledWith(7);
+});
+
 test("closing find restores focus to its triggering button", () => {
   function Harness() {
     const [open, setOpen] = useState(false);

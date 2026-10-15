@@ -22,6 +22,7 @@ import { resolveReadingQuoteRects } from "./readingAnnotationGeometry";
 import type { ReadingMarkStyle } from "./pdfReadingAnnotations";
 import { pdfCanvasSize } from "./pdfRenderBudget";
 import { usePdfPageWindow } from "./usePdfPageWindow";
+import { usePdfViewportAnchor } from "./usePdfViewportAnchor";
 import { schedulePdfPageRender } from "./pdfPageRenderQueue";
 import { pdfReaderContentRevision } from "./pdfReaderPosition";
 import { usePdfReaderFeedback } from "./usePdfReaderFeedback";
@@ -1860,6 +1861,10 @@ export function PdfReader({
       }
     }
   });
+  const viewportAnchor = usePdfViewportAnchor(stageRef, documentFrameRef, {
+    enabled: !readingView && readerView === "document", document: pdfDocument,
+    focusedPage, layout: layoutMode, zoom, width: stageWidth
+  });
   const hasVisibleMarginComments = marginCommentsVisible && annotations.some((annotation) =>
     (annotation.kind === "highlight" || annotation.kind === "underline") &&
     Boolean(annotation.note?.trim()) &&
@@ -1957,6 +1962,7 @@ export function PdfReader({
     if (!restoringPosition) readerPosition.markNavigation();
     setReaderView("document");
     const nextPage = Math.min(Math.max(1, Math.trunc(page || 1)), Math.max(1, pageCount));
+    viewportAnchor.reset(nextPage, topRatio ?? 0);
     setFocusedPage(nextPage);
     setPageOffset({ page: nextPage, topRatio: topRatio ?? 0 });
     announceNavigation(`已转到第 ${nextPage} 页。`);
@@ -2000,11 +2006,8 @@ export function PdfReader({
   }
 
   function changeLayoutMode(mode: PdfPageLayoutMode) {
+    viewportAnchor.capture();
     setLayoutMode(mode);
-    window.requestAnimationFrame(() => {
-      const stageElement = stageRef.current;
-      if (stageElement) stageElement.scrollTop = 0;
-    });
   }
 
   function handleStageKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
@@ -2412,6 +2415,7 @@ export function PdfReader({
       Math.max(1, pageCount)
     );
     setReaderView("document");
+    viewportAnchor.reset(targetPage);
     setFocusedPage(targetPage);
     setSidebarMode(targetEvidence.searchAnnotation ? "annotations" : "thumbnails");
     if (targetEvidence.searchAnnotation) { setAnnotationQuery(""); setAnnotationFilter(emptyNoteFilter); setAnnotationFacets(emptyPdfAnnotationFacets); setActiveAnnotationId(targetEvidence.searchAnnotation.id); }
@@ -4233,8 +4237,8 @@ export function PdfReader({
                 setSelectionPreview(null);
               }}
               onToggleWhiteboard={() => { if (legacyBoardPreview && whiteboardOpen) { setWhiteboardOpen(false); setLegacyBoardPreview(false); return; } if (objectWorkbench?.isOpen) { objectWorkbench.close?.(); return; } if (objectWorkbench && activePaper && whiteboardStorageKey) { void objectWorkbench.openLegacyBoard(activePaper,resolvedWhiteboardDocument(),whiteboardStorageKey).catch((e) => { setLegacyBoardPreview(true); setWhiteboardOpen(true); setStatus(`白板迁移失败，正在只读显示原快照：${e.message}`); }); } else setWhiteboardOpen((current) => !current); }}
-              onZoomIn={() => onZoomChange?.(Math.min(180, zoom + 5))}
-              onZoomOut={() => onZoomChange?.(Math.max(70, zoom - 5))}
+              onZoomIn={() => { viewportAnchor.capture(); onZoomChange?.(Math.min(180, zoom + 5)); }}
+              onZoomOut={() => { viewportAnchor.capture(); onZoomChange?.(Math.max(70, zoom - 5)); }}
               pageCount={pageCount}
               searchOpen={searchOpen}
               searchTags={searchMetadata.tags}
@@ -4277,6 +4281,7 @@ export function PdfReader({
             onPointerUp={readerView === "document" ? handleSelectionPointerUp : undefined}
             onKeyDown={readerView === "document" ? handleStageKeyDown : (event) => { if (event.key === "Escape") closeOverview(); }}
             ref={stageRef}
+            style={{ overflowAnchor: "none" }}
             tabIndex={0}
           >
             {readerView === "document" && documentHasNoTextLayer ? (
