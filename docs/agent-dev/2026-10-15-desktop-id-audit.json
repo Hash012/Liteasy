@@ -659,11 +659,19 @@
     "focused_browser": "图形、证据、预设等定向浏览器通过；PDF关闭/重开6场景及颜色4场景、白板3场景、对话真实模型请求/真实栏宽调整/导出/删除另分别验证。",
     "build": "npm run build passed; 231 production assets verified",
     "contracts": "隔离的干净提交执行ci:contracts通过，生成schema与锁文件无漂移。",
-    "browser": "完整157场景扫描：156通过，1处旧历史卡片断言失败；修正为标题/日期/菜单新行为后，对应2场景复验通过。其余源码未再改变。",
-    "ci_workflow": "浏览器分两组并行，无用例删除；actionlint及既有CI脚本测试通过，--list验证两组无交集且并集完整覆盖157个场景。"
+    "browser": "完整157场景扫描：156通过，1处旧历史卡片断言失败；修正为标题/日期/菜单新行为后，对应2场景复验通过。首次CI另外发现PDF异高页面布局竞态，已修复并通过6项真实阅读进度场景。",
+    "ci_workflow": "浏览器分两组并行，无用例删除；actionlint及既有CI脚本测试通过，--list验证两组无交集且并集完整覆盖157个场景。",
+    "ci_followup": {
+      "first_run": "https://github.com/Hash012/Liteasy/actions/runs/38717013852",
+      "conversation": "Fluent Dialog关闭时异步恢复可访问树，测试先确认模态隔离，再等待行真正可访问后点击；15项单测和完整管理浏览器场景通过。",
+      "pdf": "异高页面尺寸更新后，scroll事件可能早于ResizeObserver，旧布局缓存把第7页误算为8；用scrollHeight同步失效缓存。确定性反例验证修复前失败、修复后通过；18项相关单测、6项浏览器场景及build通过。",
+      "mobile": "渲染完成状态绑定具体文档/页码/缩放/视口请求，避免新页面借用旧ready；24项单测、7项浏览器场景、build通过。",
+      "final_run": "最终HEAD在Windows Installer CI中再次全量验证；结果与安装启动证据记录于交付目录。"
+    }
   },
   "remaining_validation": [
-    "真实用户旧数据库未接入，不能证明旧哈希标题源自系统；不自动迁移。"
+    "真实用户旧数据库未接入，不能证明旧哈希标题源自系统；不自动迁移。",
+    "未执行 NVDA/JAWS 实机读屏；已检查 DOM 可访问名称、键盘行为及真实浏览器可访问交互。Windows 安装器自动验收覆盖安装、应用启动和卸载，不替代所有业务场景的人工验收。"
   ],
   "additional_changes": [
     {
