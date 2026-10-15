@@ -29,12 +29,13 @@ export function formatSessionModifiedDate(timestamp: string | undefined, now = D
 }
 
 export function AssistantSessionSummary({ session }: { session: AssistantSessionHistoryItem }) {
+  const taskStatus = session.kind === "artifact_generation" ? ({ idle: "待运行", running: "运行中", completed: "已完成", failed: "失败", cancelled: "已停止", interrupted: "已中断", unknown: "待核对" } as const)[session.status ?? "idle"] : undefined;
   const timestamp = session.updatedAt ?? session.createdAt;
   const date = timestamp ? new Date(timestamp) : undefined;
   const validDate = date && Number.isFinite(date.getTime()) ? date : undefined;
   return <>
     <span className="assistant-session-row-title">{session.title || "新对话"}</span>
-    <time className="assistant-session-row-date" dateTime={validDate ? timestamp : undefined} title={validDate ? `修改于 ${validDate.toLocaleString("zh-CN")}` : "时间未记录"}>{formatSessionModifiedDate(timestamp)}</time>
+    <time className="assistant-session-row-date" dateTime={validDate ? timestamp : undefined} title={validDate ? `修改于 ${validDate.toLocaleString("zh-CN")}` : "时间未记录"}>{taskStatus ? `${taskStatus} · ` : ""}{formatSessionModifiedDate(timestamp)}</time>
   </>;
 }
 

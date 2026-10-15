@@ -115,3 +115,15 @@ test("opening a lazily loaded renamed history item preserves its newer title", a
   await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("刚修改的标题"));
   expect(persistence.loadSession).toHaveBeenCalledWith(old.id);
 });
+
+
+test("home recent conversations exclude generated tasks, which remain available in the task list", async () => {
+  const saved = fixture();
+  saved.sessions.push({ ...saved.sessions[0], id: "saved-task", kind: "artifact_generation", title: "生成：科研文档", status: "completed" });
+  render(<AssistantSessionController {...props} historyPersistence={createAssistantHistoryPersistence({ load: async () => saved, save: async () => {} })} />);
+  await screen.findByText("区分采样偏差与测量误差。");
+  await userEvent.click(screen.getByRole("button", { name: "首页", exact: true }));
+  expect(within(screen.getByLabelText("助手首页")).queryByRole("button", { name: /生成：科研文档/ })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "任务", exact: true }));
+  expect(screen.getByRole("button", { name: "打开会话：生成：科研文档" })).toHaveTextContent("已完成");
+});

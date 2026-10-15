@@ -10,6 +10,12 @@ import { liteasyPath } from "../../features/resource-filesystem/liteasyPath";
 import type { AgentAssetService } from "../../features/resource-filesystem/agentAssetService";
 import type { AgentCommandExecutionInput, AgentKnowledgeExecutionResult } from "./agentApplicationService";
 
+const researchToolLabels: Record<string, string> = {
+  research_read_source: "读取已授权的来源资料",
+  research_draft_hypothesis: "保存待验证的研究假设",
+  research_prepare_spec: "准备待确认的实验方案",
+  research_get_run: "读取实验运行结果"
+};
 const { research_read_source: readSchema, research_draft_hypothesis: draftSchema, research_prepare_spec: prepareSchema, research_get_run: runSchema } = researchSchemas;
 const tools: CodexTool[] = researchCapabilities().map(capability => ({ type: "function", name: capability.actionId, description: capability.label, inputSchema: capability.inputSchema }));
 export type ResearchBackendGrant = { grantId: string; accountId: string; model: string; sources: Array<{ objectId: string; revision: string }> };
@@ -45,7 +51,7 @@ export async function runCodexResearch(input: AgentCommandExecutionInput, option
   const client = createCodexAppServerBackend({ transport: { send, subscribe(handler) { handlers.add(handler); return () => handlers.delete(handler); } }, tools, callTool:
     async (name, args) => {
       check();
-      input.reportManagerActivity({ activityId: input.runId + ":tool:" + name, kind: "tool_call", label: "研究工具", status: "running", detail: name });
+      input.reportManagerActivity({ activityId: input.runId + ":tool:" + name, kind: "tool_call", label: "研究工具", status: "running", detail: researchToolLabels[name] ?? "执行已授权的研究操作" });
       let result: unknown;
       if (name === "research_read_source") {
         const request = readSchema.parse(args);
