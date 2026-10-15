@@ -66,6 +66,7 @@ export type AgentAssetAdapter = {
   search(input: AgentAssetSearch): Promise<AgentAsset[]>;
   stat(path: string, options?: { signal?: AbortSignal }): Promise<AgentAsset>;
   read(path: string, options: AgentAssetReadOptions): Promise<AgentAssetRead>;
+  present?(path: string, options: import("./resourcePresentation").PresentationOptions): Promise<import("./resourcePresentation").ResourcePresentation>;
   resolveRelativeImages?(path: string, relativePath: string, options?: { signal?: AbortSignal }): Promise<ModelImageInput[]>;
   resolveImages?(path: string, options?: { signal?: AbortSignal }): Promise<ModelImageInput[]>;
   write?(path: string, input: AgentAssetWriteOptions): Promise<AgentAssetWriteReceipt>;

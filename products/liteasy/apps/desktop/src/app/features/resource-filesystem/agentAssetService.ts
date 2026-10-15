@@ -1,3 +1,4 @@
+import { contentPresentation } from "./resourcePresentation";
 import { sourceContent, safeUtf16Range } from "../markdown/contentStructure";
 import { MAX_NOTE_FILE_BYTES } from "../note-files/noteFileService";
 import { validateModelImages } from "../models/modelImages";
@@ -75,6 +76,18 @@ export function createAgentAssetService(input: { scopeId: string; active(): bool
       const result = await resolve(path).read(path, { ...options, maxCharacters, offset });
       check(options.signal);
       if (result.text.length > maxCharacters) throw new AgentAssetError("invalid_request", "资产适配器返回内容超过读取上限。");
+      return result;
+    },
+    async present(path: string, options: import("./resourcePresentation").PresentationOptions = {}) {
+      check(options.signal);
+      const adapter = resolve(path), asset = await adapter.stat(path, options);
+      check(options.signal);
+      if (!asset.capabilities.includes("read")) throw new AgentAssetError("permission_denied", "当前账号没有读取此资源的权限。");
+      const result = await (adapter.present ?? contentPresentation(adapter))(path, { ...options, maxCharacters: Math.min(80000, Math.max(1, options.maxCharacters ?? 12000)) });
+      check(options.signal);
+      const current = await adapter.stat(path, options);
+      check(options.signal);
+      if (current.revision !== asset.revision || result.asset.revision !== asset.revision) throw new AgentAssetError("revision_conflict", "资源已更新，请重新载入预览。");
       return result;
     },
     async write(path: string, options: AgentAssetWriteOptions) {
