@@ -1,3 +1,5 @@
+import { recommendationReasonText } from "./recommendationReasonPresentation";
+import { SourceDisclosure } from "../../shared/ui/productPrimitives";
 import { displayBibliographicTitle } from "../metadata/displayBibliographicTitle";
 import { ResourceTagChips } from "../resource-tags/ResourceTagChips";
 import { recommendationKeywords } from "./recommendationKeywords";
@@ -39,13 +41,14 @@ export function RecommendationDetails({ item, onDownload, locations, page = fals
         if (url) void navigator.clipboard.writeText(url).then(() => setLinkError("链接已复制。"), () => setLinkError(`请复制此地址：${url}`));
       }}>复制链接</Button></p> : null}
       <div role="status" className="recommendation-muted">{loading ? "正在补全论文网站的题录信息…" : message}</div>
-      <dl className="recommendation-facts">
+      <p className="recommendation-detail-summary">{[recommendationDateLabel(item), item.venue].filter(Boolean).join(" · ")}</p>
+      <SourceDisclosure summary="题录信息"><dl className="recommendation-facts">
         <dt>发表时间</dt><dd>{recommendationDateLabel(item)}</dd>
         {item.venue ? <><dt>刊物 / 会议</dt><dd>{item.venue}</dd></> : null}
         {Number.isSafeInteger(item.citationCount) && item.citationCount! >= 0 ? <><dt>引用</dt><dd>{item.citationCount}</dd></> : null}
         <dt>信息来源</dt><dd>{item.source}</dd>
         {identifiers?.map((identifier) => <Fragment key={identifier.kind}><dt>{identifier.kind === "doi" ? "DOI" : "arXiv"}</dt><dd>{identifier.value}</dd></Fragment>)}
-      </dl>
+      </dl></SourceDisclosure>
       {topics.length ? <ResourceTagChips label="论文主题" tags={topics} limit={8} /> : null}
       <section className="recommendation-abstract" aria-label="论文摘要">
         {page ? <h2>摘要</h2> : null}
@@ -53,7 +56,7 @@ export function RecommendationDetails({ item, onDownload, locations, page = fals
       </section>
       {page && (item.reason || item.relatedDocumentTitle) ? <aside className="recommendation-rationale">
         <h2>为什么推荐这篇论文</h2>
-        {item.reason ? <ContentView content={legacyContent(item.reason)} onOpenLiteasyPath={openPath} /> : null}
+        <ContentView content={legacyContent(recommendationReasonText(item))} onOpenLiteasyPath={openPath} />
         {item.relatedDocumentTitle ? <p className="recommendation-muted">关联文献：{(item.relatedDocumentTitles?.length ? item.relatedDocumentTitles : [item.relatedDocumentTitle]).join("；")}</p> : null}
       </aside> : null}
       {onDownload && !item.resourcePath ? <RecommendationDownload key={item.id} item={item} locations={locations} onDownload={onDownload} /> : null}

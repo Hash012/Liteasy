@@ -26,6 +26,8 @@ function Fixture() {
   const [selected, select] = useState<RecommendationItem>();
   const [opened, setOpened] = useState<RecommendationItem>();
   const [message, setMessage] = useState("");
+  const [action, setAction] = useState("");
+  const width = Number(new URLSearchParams(location.search).get("width")) || 340;
   const dock = useDockLayout();
   const navigation = useWorkbenchNavigationController({ dock, collapsed: { left: false, right: false, bottom: true },
     setCollapsed: () => undefined, boardVisible: false, closeBoard: () => undefined, activate: dock.activateItem, activeDynamicItems: {} });
@@ -37,15 +39,19 @@ function Fixture() {
   };
   return <FluentProvider theme={dark ? webDarkTheme : webLightTheme}>
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "var(--colorNeutralBackground1)", color: "var(--colorNeutralForeground1)" }}>
-      <main className="recommendation-fixture-columns" style={{ display: "grid", gridTemplateColumns: "minmax(0, 340px) minmax(0, 1fr)", flex: 1, gap: 5, padding: 5, minHeight: 0 }}>
+      <main className="recommendation-fixture-columns" style={{ display: "grid", gridTemplateColumns: `minmax(0, ${width}px) minmax(0, 1fr)`, flex: 1, gap: 5, padding: 5, minHeight: 0 }}>
         <aside style={{ overflow: "auto", padding: 12, minWidth: 0, border: "1px solid var(--colorNeutralStroke2)", borderRadius: 8 }}>
-          <h3>关联推荐</h3><RecommendationStyleControl compact value="balanced" onChange={() => undefined} />
-          <RecommendationList items={items} selectedId={selected?.id} onInspect={select} pendingIds={[]} canSave
+          <h3>关联推荐</h3>
+          <RecommendationList items={items} onCurate={async item => { setAction(item ? `explain:${item.id}` : "curate"); }} onRefresh={() => setAction("refresh")}
+            onApplyPreferences={async () => { setAction("apply-feedback"); }}
+            onFeedback={async (item, meaning) => { setAction(`feedback:${item.id}:${meaning}`); return { eventId: `receipt:${item.id}`, committedRevision: 1 }; }}
+            filterOptions={<RecommendationStyleControl compact value="balanced" onChange={() => undefined} />} selectedId={selected?.id} onInspect={select} pendingIds={[]} canSave
             onSave={() => undefined} onDismiss={() => undefined} onOpen={(item) => { setOpened(item); navigation.open("recommendation-reader"); }} />
         </aside>
         <DockRegion regionId="main" layout={dock.layout.regions.main} onActivateItem={dock.activateItem.bind(null, "main")}
           onCloseItem={dock.closeItem} onMoveItem={dock.moveItem} renderItem={() => opened ? <RecommendationDetails page key={opened.id} item={opened} locations={locations} onDownload={download} /> : null} />
       </main>
+      <output aria-label="最近推荐操作" hidden>{action}</output>
       <output aria-label="已下载文件" hidden>{message}</output>
       <FileStatusBar status={selected ? { name: selected.title, recommendation: selected, type: "推荐文献" } : undefined} recommendationLocations={locations} onDownloadRecommendation={download} />
     </div>

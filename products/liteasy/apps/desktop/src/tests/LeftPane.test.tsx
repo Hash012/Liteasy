@@ -1,7 +1,8 @@
+import { mockFocusLayout } from "./fixtures/mockFocusLayout";
 import { selectPickerValue } from "./helpers/selectPickerValue";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { OrganizationSummary } from "../app/features/organization/organization.types";
 import { createSeededSettingsStore } from "../app/features/settings/settingsStateHelpers";
 import type { CloudLibraryTree } from "../app/features/library/cloudLibraryStorageClient";
@@ -160,6 +161,10 @@ beforeEach(() => {
   cloudTrees.organization.refresh.mockClear();
 });
 
+let restoreFocusLayout: () => void;
+beforeEach(() => { restoreFocusLayout = mockFocusLayout(); });
+afterEach(() => restoreFocusLayout());
+
 describe("LeftPane", () => {
   test("keeps cached recommendations visible while refreshing and forwards manual refresh", async () => {
     const user = userEvent.setup();
@@ -167,6 +172,7 @@ describe("LeftPane", () => {
     const props = createProps({
       leftRailView: "library",
       recommendationPending: true,
+      recommendationMessage: "正在阅读候选摘要：2 / 5",
       onRefreshRecommendations,
       recommendationItems: [{
         id: "cached-paper", title: "Cached attention paper", discoveredAt: "2026-09-21T00:00:00Z",
@@ -177,27 +183,22 @@ describe("LeftPane", () => {
     const { rerender } = render(<LeftPane {...props} />);
     const panel = within(screen.getByRole("region", { name: "关联推荐" }));
     expect(panel.getByRole("button", { name: "查看推荐 Cached attention paper" })).toBeInTheDocument();
-    expect(panel.getByRole("status")).toHaveTextContent("正在更新推荐，仍可浏览已有结果…");
-    await user.click(panel.getByRole("button", { name: "关联推荐更多操作" }));
-    expect(screen.getByRole("menuitem", { name: "检查新论文" })).toHaveAttribute("aria-disabled", "true");
-    await user.keyboard("{Escape}");
+    expect(panel.getByRole("status")).toHaveTextContent("正在阅读候选摘要：2 / 5");
+    expect(panel.getByRole("button", { name: "检查新论文" })).toBeDisabled();
 
-    rerender(<LeftPane {...props} recommendationPending={false} />);
+    rerender(<LeftPane {...props} recommendationPending={false} recommendationMessage="" />);
     expect(panel.queryByRole("status")).not.toBeInTheDocument();
-    await user.click(panel.getByRole("button", { name: "关联推荐更多操作" }));
-    await user.click(screen.getByRole("menuitem", { name: "检查新论文" }));
+    await user.click(panel.getByRole("button", { name: "检查新论文" }));
     expect(onRefreshRecommendations).toHaveBeenCalledOnce();
 
     rerender(<LeftPane {...props} accountSession={null} recommendationPending={false} />);
-    await user.click(panel.getByRole("button", { name: "关联推荐更多操作" }));
-    expect(screen.getByRole("menuitem", { name: "检查新论文" })).toHaveAttribute("aria-disabled", "true");
-    await user.keyboard("{Escape}");
+    expect(panel.queryByRole("button", { name: "检查新论文" })).not.toBeInTheDocument();
     expect(panel.queryByText("Cached attention paper")).not.toBeInTheDocument();
   });
 
   test("announces first recommendation loading without an empty-result message", async () => {
     await act(async () => {
-      render(<LeftPane {...createProps({ leftRailView: "library", recommendationPending: true })} />);
+      render(<LeftPane {...createProps({ leftRailView: "library", recommendationPending: true, recommendationMessage: "" })} />);
     });
     const panel = within(screen.getByRole("region", { name: "关联推荐" }));
     expect(panel.getByRole("status")).toHaveTextContent("正在获取推荐…");
@@ -255,7 +256,9 @@ describe("LeftPane", () => {
       recommendationItems: [recommendation]
     })} />);
     const panel = within(screen.getByRole("region", { name: "关联推荐" }));
-    await selectPickerValue(panel.getByRole("combobox", { name: "推荐风格" }), "classic");
+    await user.click(panel.getByRole("button", { name: "推荐筛选" }));
+    await selectPickerValue(screen.getByRole("combobox", { name: "推荐风格" }), "classic");
+    await user.keyboard("{Escape}");
     expect(onRecommendationStyleChange).toHaveBeenCalledWith("classic");
     const row = panel.getByRole("button", { name: `查看推荐 ${recommendation.title}` });
     expect(within(row).getByText("2017")).toBeInTheDocument();
@@ -640,9 +643,10 @@ describe("LeftPane", () => {
       recommendationItems: [recommendation]
     })} />);
 
-    await user.click(screen.getByRole("button", { name: "收藏 Recommended paper" }));
+    await user.click(screen.getByRole("button", { name: "推荐操作 Recommended paper" }));
+    await user.click(screen.getByRole("menuitem", { name: "收藏论文" }));
     expect(onResourceTransfer).not.toHaveBeenCalled();
-    const preview = screen.getByRole("dialog", { name: "确认资料转移" });
+    const preview = await screen.findByRole("dialog", { name: "确认资料转移" });
     expect(preview).toHaveTextContent("Recommended paper");
     await user.click(within(preview).getByRole("button", { name: "确认复制" }));
 
@@ -742,7 +746,8 @@ describe("LeftPane", () => {
       recommendationStatus: "ready"
     })} />);
 
-    await user.click(screen.getByRole("button", { name: "忽略 Candidate Paper" }));
+    await user.click(screen.getByRole("button", { name: "推荐操作 Candidate Paper" }));
+    await user.click(screen.getByRole("menuitem", { name: "不感兴趣" }));
     expect(onDismissRecommendation).toHaveBeenCalledWith(expect.objectContaining({ ...recommendation, fullText: { status: "unknown" } }));
   });
 

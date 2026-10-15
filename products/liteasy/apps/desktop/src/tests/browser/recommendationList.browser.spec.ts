@@ -35,6 +35,7 @@ for (const theme of ["light", "dark"]) test(`recommendations support browsing, s
   await page.getByRole("button", { name: "推荐筛选" }).click();
   await page.getByRole("checkbox", { name: "可下载 PDF" }).check();
   await expect(page.getByText(/暂未发现符合筛选条件的全文链接/)).toBeVisible();
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "清除筛选" }).click();
   await expect(list.getByRole("button", { name: /^查看推荐/ })).toHaveCount(3);
   await page.setViewportSize({ width: 400, height: 760 });
@@ -59,4 +60,47 @@ test("full-text filtering stays local until explicit OpenAlex link verification"
   await expect(row).toBeVisible();
   await expect(row).toContainText("PDF 已验证");
   await expect(page.getByText("3 / 3 篇")).toBeVisible();
+});
+
+
+for (const theme of ["light", "dark"]) test(`recommendation actions and evidence never overlap at 300–600px in ${theme}`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1300, height: 1100 });
+  for (const width of [300, 400, 600]) {
+    await page.goto(`/src/tests/browser/fixtures/recommendation-list.html?${theme}&width=${width}`);
+    const list = page.getByRole("list", { name: "推荐论文" });
+    const card = list.locator(".recommendation-compact-item").first();
+    const title = card.getByRole("button", { name: /^查看推荐/ });
+    const menu = card.getByRole("button", { name: /^推荐操作 / });
+    const reason = card.locator(".recommendation-reason");
+    const disclosure = card.getByRole("button", { name: "推荐详情", exact: true });
+    await expect(title).toBeVisible();
+    await expect(title).toContainText("Researcher A");
+    await expect(reason).toContainText("可补充方法设计与实证比较");
+    expect(await card.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const cardBox = (await card.boundingBox())!;
+    const boxes = [];
+    for (const control of [title, menu, reason, disclosure]) {
+      await expect(control).toBeVisible();
+      const box = (await control.boundingBox())!; boxes.push(box);
+      expect(box.x).toBeGreaterThanOrEqual(cardBox.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(cardBox.x + cardBox.width + 1);
+      expect(box.y).toBeGreaterThanOrEqual(cardBox.y);
+      expect(box.y + box.height).toBeLessThanOrEqual(cardBox.y + cardBox.height + 1);
+    }
+    for (let a = 0; a < boxes.length; a++) for (let b = a + 1; b < boxes.length; b++) {
+      const left = boxes[a], right = boxes[b];
+      const overlapX = Math.min(left.x + left.width, right.x + right.width) - Math.max(left.x, right.x);
+      const overlapY = Math.min(left.y + left.height, right.y + right.height) - Math.max(left.y, right.y);
+      expect(overlapX > 1 && overlapY > 1).toBe(false);
+    }
+    await menu.click();
+    await expect(page.getByRole("menuitem", { name: "解释为什么推荐" })).toBeVisible();
+    await page.getByRole("menuitemcheckbox", { name: "太基础", exact: true }).click();
+    await expect(page.locator(".recommendation-notice")).toContainText("已用于下次精选");
+    await expect(page.getByLabel("最近推荐操作", { exact: true })).toHaveText("feedback:paper-0:too_basic");
+    await page.getByRole("button", { name: "更多推荐操作" }).click();
+    await page.getByRole("menuitem", { name: "应用反馈" }).click();
+    await expect(page.getByLabel("最近推荐操作", { exact: true })).toHaveText("apply-feedback");
+    await page.locator("aside").screenshot({ path: testInfo.outputPath(`recommendation-column-${width}-${theme}.png`), animations: "disabled" });
+  }
 });

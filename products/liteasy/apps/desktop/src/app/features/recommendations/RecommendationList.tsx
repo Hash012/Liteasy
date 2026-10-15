@@ -1,3 +1,4 @@
+import { recommendationReasonText } from "./recommendationReasonPresentation";
 import type { FeedbackReceipt, FeedbackRequest } from "./recommendationFeedbackProjection";
 import type { RecommendationFeedbackHandler } from "./recommendationFeedbackProjection";
 import type { RecommendationFeedbackMeaning } from "./recommendationCoordinator";
@@ -13,16 +14,20 @@ import { ResourceTagChips } from "../resource-tags/ResourceTagChips";
 import { recommendationKeywords } from "./recommendationKeywords";
 import { useRecommendationFullText } from "./useRecommendationFullText";
 import type { PaperServiceConfig } from "../paper-services/paperServiceTransport";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Checkbox, Input, Tooltip, Popover, PopoverTrigger, PopoverSurface } from "@fluentui/react-components";
-import { BookmarkRegular, DeleteRegular, DocumentRegular, SearchRegular, FilterRegular, OpenRegular } from "@fluentui/react-icons";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Button, Checkbox, Input, Popover, PopoverTrigger, PopoverSurface, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem, MenuItemCheckbox, MenuDivider } from "@fluentui/react-components";
+import { BookmarkRegular, DeleteRegular, DocumentRegular, SearchRegular, FilterRegular, OpenRegular, MoreHorizontalRegular, ArrowClockwiseRegular } from "@fluentui/react-icons";
 import type { RecommendationItem } from "./recommendation.types";
 import { filterRecommendations, recommendationDateLabel, type RecommendationSort } from "./recommendationPresentation";
 import "./recommendationList.css";
 
 export { recommendationDateLabel } from "./recommendationPresentation";
 
-export function RecommendationList({ items, service, selectedId, pendingIds, canSave, onInspect, onOpen, onSave, onDismiss, onAdoptBrief, onFeedback, onCurate, onRestore, onApplyPreferences, busy }: {
+export function RecommendationList({ items, service, selectedId, pendingIds, canSave, onInspect, onOpen, onSave, onDismiss, onAdoptBrief, onFeedback, onCurate, onRestore, onApplyPreferences, busy, onRefresh, menuActions, filterOptions, emptyMessage }: {
+  onRefresh?: () => void;
+  menuActions?: ReactNode;
+  filterOptions?: ReactNode;
+  emptyMessage?: string;
   items: RecommendationItem[];
   onCurate?: (item?: RecommendationItem) => Promise<void>;
   onRestore?: () => Promise<void>;
@@ -91,20 +96,22 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
   if (!anchor.current || anchor.current.key !== anchorKey || !retainSlots) anchor.current = { key: anchorKey, rows: nextVisible };
   const visible = anchor.current.rows.flatMap(old => { const current = filtered.find(row => row.id === old.id); return current ? [current] : feedbackRows[old.id] ? [old] : []; });
   return <div ref={root} className="recommendation-browser">
-    {notice ? <p role="status">{notice}{lastFeedback && onFeedback ? <Button size="small" appearance="subtle" onClick={() => { void submitFeedback(lastFeedback.item, "undo"); }}>撤销反馈</Button> : null}</p> : null}
-    <div className="recommendation-feed-actions">
-      {onCurate ? <Button size="small" disabled={busy || !items.length} onClick={() => void onCurate()}>AI 精选</Button> : null}
-      {items.some(item => item.researchReason?.recipe === "explicit-curation-v3") && onRestore ? <Button size="small" appearance="subtle" onClick={() => void onRestore()}>返回原组</Button> : null}
-      {onApplyPreferences ? <Button size="small" appearance="subtle" onClick={() => void onApplyPreferences()}>应用反馈</Button> : null}
-      <Button appearance="subtle" size="small" onClick={() => { setExplore(!explore); setPage(0); }}>{explore ? "返回精选" : `查看更多候选 · ${items.length}`}</Button>
-      {!explore ? <Button appearance="subtle" size="small" disabled={!filtered.length} onClick={() => { const next = [...seen, ...slate.map(canonicalCandidate)]; setSeen(composeSlate(filtered, { excluded: next }).length ? next : []); }}>换一组</Button> : <>
-        <Button appearance="subtle" size="small" disabled={page === 0} onClick={() => setPage(value => value - 1)}>上一页</Button>
-        <Button appearance="subtle" size="small" disabled={(page + 1) * 12 >= filtered.length} onClick={() => setPage(value => value + 1)}>下一页</Button>
-      </>}
+    {notice ? <p role="status" className="recommendation-notice">{notice}{lastFeedback && onFeedback ? <Button size="small" appearance="subtle" onClick={() => { void submitFeedback(lastFeedback.item, "undo"); }}>撤销反馈</Button> : null}</p> : null}
+    <div className="recommendation-toolbar" role="group" aria-label="推荐操作">
+      {onCurate ? <Button size="small" disabled={busy} onClick={() => void onCurate()}>AI 精选</Button> : null}
+      {onRefresh ? <IconAction density="compact" label="检查新论文" disabled={busy} appearance="subtle" icon={<ArrowClockwiseRegular />} onClick={onRefresh} /> : null}
+      <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="更多推荐操作" appearance="subtle" icon={<MoreHorizontalRegular />} /></MenuTrigger><MenuPopover className="recommendation-menu"><MenuList>
+        {!explore ? <MenuItem disabled={!filtered.length} onClick={() => { const next = [...seen, ...slate.map(canonicalCandidate)]; setSeen(composeSlate(filtered, { excluded: next }).length ? next : []); }}>换一组</MenuItem> : null}
+        <MenuItem onClick={() => { setExplore(!explore); setPage(0); }}>{explore ? "返回精选" : `查看更多候选 · ${items.length}`}</MenuItem>
+        {items.some(item => item.researchReason?.recipe === "explicit-curation-v3") && onRestore ? <MenuItem onClick={() => void onRestore()}>返回原组</MenuItem> : null}
+        {onApplyPreferences ? <MenuItem onClick={() => void onApplyPreferences()}>应用反馈</MenuItem> : null}
+        {menuActions ? <><MenuDivider />{menuActions}</> : null}
+      </MenuList></MenuPopover></Menu>
     </div>
     <div className="recommendation-filters">
       <Input aria-label="搜索推荐论文" placeholder="搜索标题、作者、主题" contentBefore={<SearchRegular />} value={query} onChange={(_, data) => { setQuery(data.value); setPage(0); }} />
       <Popover open={filtersOpen} onOpenChange={(_, data) => setFiltersOpen(data.open)} positioning="below-end"><PopoverTrigger disableButtonEnhancement><Button size="small" icon={<FilterRegular />} aria-label="推荐筛选" aria-pressed={filterCount > 0}>筛选{filterCount ? ` · ${filterCount}` : ""}</Button></PopoverTrigger><PopoverSurface className="recommendation-filter-panel" aria-label="推荐筛选条件">
+        {filterOptions}
         <SearchOptions query={query} onChange={setQuery} tags={[...tags.values()].flatMap(items => items.map(tag => tag.label))} />
         <div className="recommendation-filter-row">
           <OptionPicker aria-label="推荐排序" value={String(sort ?? "")} onValueChange={nextValue => setSort(nextValue as RecommendationSort)} options={[{ value: String("recommended"), label: String("\u63A8\u8350\u987A\u5E8F") }, { value: String("newest"), label: String("\u6700\u65B0\u53D1\u8868") }, { value: String("citations"), label: String("\u5F15\u7528\u6700\u591A") }]} />
@@ -115,16 +122,17 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
       </PopoverSurface></Popover>
     </div>
     <div className="recommendation-filter-summary"><span className="recommendation-result-count" aria-live="polite">{visible.length} / {items.length} 篇{filterCount ? ` · 已筛选 ${filterCount} 项` : ""}</span>{filterCount && visible.length > 0 ? <Button appearance="subtle" size="small" onClick={clearFilters}>清除筛选</Button> : null}</div>
+    {explore ? <div className="recommendation-pagination" aria-label="候选分页"><Button appearance="subtle" size="small" disabled={page === 0} onClick={() => setPage(value => value - 1)}>上一页</Button><span>第 {page + 1} 页</span><Button appearance="subtle" size="small" disabled={(page + 1) * 12 >= filtered.length} onClick={() => setPage(value => value + 1)}>下一页</Button></div> : null}
     {fullText.pending > 0 ? <p role="status" className="recommendation-interaction-hint">正在查找开放全文 · 剩余 {fullText.pending} 篇</p> : null}
     {fullText.failed > 0 ? <p role="status" className="recommendation-interaction-hint">{fullText.failed} 篇的全文来源暂不可用。<Button size="small" appearance="subtle" onClick={fullText.retry}>重试全文查询</Button></p> : null}
     {access && fullText.unknown > 0 && !fullText.pending ? <p className="recommendation-interaction-hint">仍有 {fullText.unknown} 篇待检查。<Button appearance="subtle" size="small" onClick={() => { setCheckFullText(true); if (checkFullText) fullText.checkMore(); }}>{checkFullText ? "继续检查全文" : "检查全文链接"}</Button></p> : null}
-    {!visible.length && !fullText.pending ? <div className="recommendation-no-results"><p>{access ? "暂未发现符合筛选条件的全文链接；未收录链接不代表论文没有 PDF，可打开详情继续查找。" : "没有符合条件的论文。"}</p>
-      <Button appearance="subtle" onClick={clearFilters}>清除筛选</Button></div> : null}
+    {!visible.length && !fullText.pending && !busy ? <div className="recommendation-no-results"><p>{access ? "暂未发现符合筛选条件的全文链接；未收录链接不代表论文没有 PDF，可打开详情继续查找。" : !items.length ? emptyMessage || "暂无关联推荐" : "没有符合条件的论文。"}</p>
+      {filterCount ? <Button appearance="subtle" onClick={clearFilters}>清除筛选</Button> : null}</div> : null}
     <ul className="recommendation-compact-list" aria-label="推荐论文">
       {visible.map((item) => { const row = feedbackRows[item.id];
         if (row?.state === "committed" && ["read", "snoozed", "not_relevant"].includes(row.action)) return <li key={item.id} className="recommendation-compact-item" aria-label="已处理的推荐"><p role="status">{row.message}</p><Button size="small" appearance="subtle" onClick={() => void submitFeedback(item, "undo", { commandId: crypto.randomUUID(), issuedAt: Date.now(), targetEventId: row.receipt!.eventId })}>撤销此操作</Button></li>;
         const displayTitle = displayBibliographicTitle(item.title) || "未提供题名"; return <li key={item.id} data-candidate-id={item.id} className={`recommendation-compact-item${selectedId === item.id ? " selected" : ""}`}>
-        <Button appearance="transparent" type="button" className="recommendation-compact-row" aria-label={`查看推荐 ${displayTitle}`}
+        <div className="recommendation-item-heading"><Button appearance="transparent" type="button" className="recommendation-compact-row" aria-label={`查看推荐 ${displayTitle}`}
           aria-pressed={selectedId === item.id} aria-busy={pendingIds.includes(item.id)}
           title={`${displayTitle}\n单击查看元信息，双击打开论文详情`}
           draggable onDragStart={(event) => {
@@ -143,24 +151,34 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
             <span className="recommendation-title-line"><span className="recommendation-compact-title"><SearchHighlight text={displayTitle} query={query} /></span></span>
 
             <span className="recommendation-row-meta">
+              {item.authors?.length ? <span className="recommendation-row-authors" title={item.authors.join("、")}>{item.authors.length > 2 ? `${item.authors[0]} 等 ${item.authors.length} 位作者` : item.authors.join("、")}</span> : null}
               <time>{recommendationDateLabel(item)}</time>
               {item.venue ? <span className="recommendation-venue">{item.venue}</span> : null}
               {item.fullText?.status === "available" ? <span className="recommendation-access-label">PDF 已验证</span> : null}
             </span>
           </span>
         </Button>
-        <p className="recommendation-reason">{item.reason?.trim() || "暂无个别推荐理由"}</p><SourceDisclosure summary="推荐详情">{item.researchReason?.evaluatedCount ? <p>本次评估 {item.researchReason.evaluatedCount} / {item.researchReason.poolCount} 篇候选。</p> : null}<p>{item.researchReason ? "根据已授权的固定版本资料；研究关系仍需阅读核实。" : "仅根据题录与现有匹配信息"}</p><ResourceTagChips tags={tags.get(item.id) ?? []} label={`${displayTitle} 的关键词`} onSelect={tag => setQuery(tag.label)} />
+        <Menu checkedValues={{ feedback: (["read", "snoozed", "too_basic", "too_advanced"] as const).filter(action => item.feedbackState?.some(value => value.action === action) || row?.state === "committed" && row.action === action) }}><MenuTrigger disableButtonEnhancement>
+          <IconAction density="compact" label={`推荐操作 ${displayTitle}`} appearance="subtle" icon={<MoreHorizontalRegular />} />
+        </MenuTrigger><MenuPopover className="recommendation-menu"><MenuList>
+          {onOpen ? <MenuItem icon={<OpenRegular />} onClick={() => onOpen(item)}>打开论文详情</MenuItem> : null}
+          <MenuItem icon={<BookmarkRegular />} disabled={Boolean(item.resourcePath) || !canSave || pendingIds.includes(item.id)} onClick={() => onSave(item)}>{item.saved || item.resourcePath ? "已收藏" : "收藏论文"}</MenuItem>
+          {onCurate ? <MenuItem disabled={busy} onClick={() => void onCurate(item)}>解释为什么推荐</MenuItem> : null}
+          {item.researchReason && onAdoptBrief ? <MenuItem onClick={() => { void onAdoptBrief(item).then(() => setNotice("研究建议已保存为笔记。"), () => setNotice("研究建议暂未保存，请重试。")); }}>采用为研究笔记</MenuItem> : null}
+          <MenuDivider />
+          {onFeedback ? ([["read", "已读"], ["snoozed", "稍后看"], ["too_basic", "太基础"], ["too_advanced", "太难"]] as const).map(([action, label]) => <MenuItemCheckbox key={action} persistOnClick={false} name="feedback" value={action} disabled={row?.state === "pending"} onClick={() => void submitFeedback(item, action)}>{label}</MenuItemCheckbox>) : null}
+          <MenuItem icon={<DeleteRegular />} disabled={row?.state === "pending"} onClick={() => { if (onFeedback) void submitFeedback(item, "not_relevant"); else onDismiss(item); }}>不感兴趣</MenuItem>
+        </MenuList></MenuPopover></Menu></div>
+        <p className="recommendation-reason">{recommendationReasonText(item)}</p>
+        <SourceDisclosure summary="推荐详情">
+          {item.researchReason?.evaluatedCount ? <p>本次评估 {item.researchReason.evaluatedCount} / {item.researchReason.poolCount} 篇候选。</p> : null}
+          {item.reasonState === "grounded" && item.researchReason ? <>
+            <p>依据：{item.researchReason.basis === "abstract" ? "论文摘要" : "题录信息"}与已授权资料；研究关系仍需阅读核实。</p>
+            {item.researchReason.limitation ? <p>局限：{item.researchReason.limitation}</p> : null}
+          </> : <p>当前匹配依据来自题录与已提供的信息。</p>}
+          <ResourceTagChips tags={tags.get(item.id) ?? []} label={`${displayTitle} 的关键词`} onSelect={tag => setQuery(tag.label)} />
         </SourceDisclosure>
-        {feedbackRows[item.id] ? <p role="status">{feedbackRows[item.id].message}{feedbackRows[item.id].state === "failed" ? <Button size="small" onClick={() => void submitFeedback(item, feedbackRows[item.id].action, feedbackRows[item.id].command)}>重试保存反馈</Button> : null}</p> : null}
-        {onFeedback ? <div className="recommendation-feed-actions">{([["read", "已读"], ["snoozed", "稍后看"], ["too_basic", "太基础"], ["too_advanced", "太难"]] as const).map(([action, label]) => <Button key={action} size="small" appearance="subtle" disabled={feedbackRows[item.id]?.state === "pending"} aria-pressed={item.feedbackState?.some(row => row.action === action) || feedbackRows[item.id]?.state === "committed" && feedbackRows[item.id]?.action === action} onClick={() => void submitFeedback(item, action)}>{label}</Button>)}</div> : null}
-
-        <div className="recommendation-compact-actions">
-          {onCurate ? <Button size="small" appearance="subtle" disabled={busy} onClick={() => void onCurate(item)}>解释为什么推荐</Button> : null}
-          {item.researchReason && onAdoptBrief ? <Button size="small" appearance="subtle" onClick={() => { void onAdoptBrief(item).then(() => setNotice("研究建议已保存为笔记。"), error => setNotice(String(error))); }}>采用为研究笔记</Button> : null}
-          <IconAction density="compact" label={`打开详情 ${displayTitle}`} appearance="subtle" icon={<OpenRegular />} onClick={() => onOpen?.(item)} />
-          <Tooltip content="收藏" relationship="label"><Button appearance="subtle" size="small" aria-label={`收藏 ${displayTitle}`} disabled={Boolean(item.resourcePath) || !canSave || pendingIds.includes(item.id)} icon={<BookmarkRegular />} onClick={() => onSave(item)} /></Tooltip>
-          <Tooltip content="不感兴趣" relationship="label"><Button appearance="subtle" size="small" aria-label={`忽略 ${displayTitle}`} disabled={feedbackRows[item.id]?.state === "pending"} icon={<DeleteRegular />} onClick={() => { if (onFeedback) void submitFeedback(item, "not_relevant"); else onDismiss(item); }} /></Tooltip>
-        </div>
+        {row && row.state !== "committed" ? <p role="status" className="recommendation-row-status">{row.message}{row.state === "failed" ? <Button size="small" onClick={() => void submitFeedback(item, row.action, row.command)}>重试保存反馈</Button> : null}</p> : null}
       </li>; })}
     </ul>
   </div>;

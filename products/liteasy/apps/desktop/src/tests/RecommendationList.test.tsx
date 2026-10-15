@@ -33,7 +33,7 @@ test("keeps rows compact, shows selected metadata below, and double-click opens 
   const rows = screen.getByRole("list", { name: "推荐论文" });
   expect(rows).toHaveTextContent("2024-07");
   expect(rows).toHaveTextContent(item.reason);
-  expect(rows).not.toHaveTextContent("Researcher A");
+  expect(rows).toHaveTextContent("Researcher A");
   const row = screen.getByRole("button", { name: `查看推荐 ${item.title}` });
   await user.click(row);
   expect(download).not.toHaveBeenCalled();
@@ -60,7 +60,8 @@ test("offers undo after dismissing a topic recommendation without probing source
   const dismiss = vi.fn(), feedback = vi.fn().mockResolvedValue({ eventId: "feedback-event", committedRevision: 1 });
   render(<RecommendationList items={[item]} pendingIds={[]} canSave onSave={vi.fn()} onDismiss={dismiss} onFeedback={feedback} />);
   const user = userEvent.setup();
-  await user.click(screen.getByRole("button", { name: `忽略 ${item.title}` }));
+  await user.click(screen.getByRole("button", { name: `推荐操作 ${item.title}` }));
+  await user.click(screen.getByRole("menuitem", { name: "不感兴趣" }));
   expect(dismiss).not.toHaveBeenCalled();
   expect(feedback).toHaveBeenCalledWith(expect.objectContaining({ id: item.id }), "not_relevant", expect.objectContaining({ commandId: expect.any(String) }));
   await user.click(screen.getByRole("button", { name: "撤销反馈" }));
@@ -126,9 +127,11 @@ test("shows a diverse three-card slate and pages the cached pool without remote 
   const rows = () => within(screen.getByRole("list", { name: "推荐论文" })).getAllByRole("button", { name: /^查看推荐/ });
   expect(rows()).toHaveLength(3);
   const before = rows().map(row => row.textContent);
-  await user.click(screen.getByRole("button", { name: "换一组" }));
+  await user.click(screen.getByRole("button", { name: "更多推荐操作" }));
+  await user.click(screen.getByRole("menuitem", { name: "换一组" }));
   expect(rows()).toHaveLength(3); expect(rows().map(row => row.textContent)).not.toEqual(before);
-  await user.click(screen.getByRole("button", { name: "查看更多候选 · 15" }));
+  await user.click(screen.getByRole("button", { name: "更多推荐操作" }));
+  await user.click(screen.getByRole("menuitem", { name: "查看更多候选 · 15" }));
   expect(rows()).toHaveLength(12);
   await user.click(screen.getByRole("button", { name: "下一页" })); expect(rows()).toHaveLength(3);
   expect(probe).not.toHaveBeenCalled();
@@ -138,11 +141,54 @@ test("pending and failed feedback never claims saved; retry reuses the same comm
   let reject!: (error: Error) => void;
   const feedback = vi.fn().mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; })).mockResolvedValue({ eventId: "committed", committedRevision: 1 });
   render(<RecommendationList items={[item]} pendingIds={[]} canSave onSave={vi.fn()} onDismiss={vi.fn()} onFeedback={feedback} />);
-  const user = userEvent.setup(); await user.click(screen.getByRole("button", { name: "太基础", exact: true }));
-  expect(screen.getByText("正在保存…")).toBeVisible(); expect(screen.getByRole("button", { name: "太基础", exact: true })).toBeDisabled();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: `推荐操作 ${item.title}` }));
+  await user.click(screen.getByRole("menuitemcheckbox", { name: "太基础", exact: true }));
+  expect(screen.getByText("正在保存…")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: `推荐操作 ${item.title}` }));
+  expect(screen.getByRole("menuitemcheckbox", { name: "太基础", exact: true })).toHaveAttribute("aria-disabled", "true");
+  await user.keyboard("{Escape}");
   reject(new Error("disk full")); await user.click(await screen.findByRole("button", { name: "重试保存反馈" }));
   expect(feedback.mock.calls[1][2]).toEqual(feedback.mock.calls[0][2]);
-  expect(screen.getByRole("button", { name: "太基础", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await user.click(screen.getByRole("button", { name: `推荐操作 ${item.title}` }));
+  expect(screen.getByRole("menuitemcheckbox", { name: "太基础", exact: true })).toHaveAttribute("aria-checked", "true");
+  await user.keyboard("{Escape}");
   await user.click(screen.getByRole("button", { name: "撤销反馈" }));
   expect(feedback.mock.calls[2][2]).toMatchObject({ targetEventId: "committed" });
+});
+
+
+test("an empty pool keeps AI discovery available and secondary feed actions inside one menu", async () => {
+  const curate = vi.fn().mockResolvedValue(undefined), apply = vi.fn().mockResolvedValue(undefined);
+  render(<RecommendationList items={[]} pendingIds={[]} canSave onSave={vi.fn()} onDismiss={vi.fn()} onCurate={curate} onApplyPreferences={apply} />);
+  const user = userEvent.setup();
+  expect(screen.getByRole("button", { name: "AI 精选" })).toBeEnabled();
+  expect(screen.queryByRole("menuitem", { name: "应用反馈" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "AI 精选" }));
+  expect(curate).toHaveBeenCalledWith();
+  await user.click(screen.getByRole("button", { name: "更多推荐操作" }));
+  await user.click(screen.getByRole("menuitem", { name: "应用反馈" }));
+  expect(apply).toHaveBeenCalledOnce();
+});
+
+test.each(["legacy", "stale", "failed", "generating", "unavailable"] as const)("%s reasons never display superseded model claims", async reasonState => {
+  render(<RecommendationList items={[{ ...item, reasonState, reason: "不应显示的旧推荐结论" }]} pendingIds={[]} canSave onSave={vi.fn()} onDismiss={vi.fn()} />);
+  expect(screen.queryByText("不应显示的旧推荐结论")).not.toBeInTheDocument();
+  expect(screen.queryByText(/已阅读全文/)).not.toBeInTheDocument();
+});
+
+test("shows the supplied research rationale and discloses its actual evidence limits separately", async () => {
+  const explain = vi.fn().mockResolvedValue(undefined);
+  const curated: RecommendationItem = { ...item, reasonState: "grounded", reason: "完整解释与元信息", researchReason: {
+    consentEpoch: 1, candidateId: item.id, evidenceIds: ["source-1"], text: "摘要比较了与当前课题相同的误差来源。", role: "comparison", model: "configured-model", recipe: "explicit-curation-v3", generatedAt: "2026-10-15", evidence: [], basis: "abstract", limitation: "尚未验证实验数据。"
+  } };
+  render(<RecommendationList items={[curated]} pendingIds={[]} canSave onSave={vi.fn()} onDismiss={vi.fn()} onCurate={explain} />);
+  expect(screen.getByText(curated.researchReason!.text)).toBeVisible();
+  expect(screen.getByText(/尚未验证实验数据/)).not.toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "推荐详情", exact: true }));
+  expect(screen.getByText(/依据：论文摘要/)).toBeVisible();
+  expect(screen.getByText(/尚未验证实验数据/)).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: `推荐操作 ${item.title}` }));
+  await userEvent.click(screen.getByRole("menuitem", { name: "解释为什么推荐" }));
+  expect(explain).toHaveBeenCalledWith(expect.objectContaining({ id: item.id, researchReason: curated.researchReason }));
 });

@@ -172,6 +172,7 @@ type LibraryPaneProps = {
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onAddExternalPdf?: (item: ExternalPdfDragPayload) => void | Promise<void>;
   onClearRecommendations: () => void;
+  onConfigureRecommendations?: () => void;
   onCurateRecommendations?: (item?: RecommendationItem) => Promise<void>;
   onRestoreRecommendations?: () => Promise<void>;
   onApplyRecommendationPreferences?: () => Promise<void>;
@@ -492,7 +493,7 @@ function LibraryPaneContent({
   loadLegacyLibraryRoots,
   onAddDroppedPdfFiles,
   onClearRecommendations,
-  onCurateRecommendations, onRestoreRecommendations, onApplyRecommendationPreferences,
+  onConfigureRecommendations, onCurateRecommendations, onRestoreRecommendations, onApplyRecommendationPreferences,
   onRecommendationFeedback,
   onAdoptRecommendationBrief,
   onRefreshRecommendations,
@@ -1772,10 +1773,6 @@ function LibraryPaneContent({
 
       <section aria-label="关联推荐" className="library-section">
         <SectionHeader
-          actions={<>
-            {iconAction("检查新论文", <ArrowClockwiseRegular />, () => onRefreshRecommendations?.(), !(accountSessionAvailable || localRecommendations) || recommendationPending || !onRefreshRecommendations)}
-            {iconAction("清除推荐缓存", <DeleteDismissRegular />, () => { if (window.confirm("清除当前推荐缓存？已收藏的文献不受影响。")) onClearRecommendations(); }, !(accountSessionAvailable || localRecommendations))}
-          </>}
           count={recommendationItems.length}
           expanded={!collapsedSections.includes("recommendation")}
           icon={<LightbulbRegular />}
@@ -1784,35 +1781,31 @@ function LibraryPaneContent({
         />
         {!collapsedSections.includes("recommendation") ? (
           <div className="library-section-content">
-            <div className="recommendation-feed-actions">
-              {onExploreSelectedRecommendations ? <Button size="small" appearance="subtle" onClick={onExploreSelectedRecommendations}>按此选集探索</Button> : null}
-              {recommendationExploringSelection ? <Button size="small" appearance="subtle" onClick={onShowOrdinaryRecommendations}>返回日常推荐</Button> : null}
-              {recommendationPendingSnapshot ? <Button size="small" onClick={onAcceptPendingRecommendations}>有新推荐 · 查看</Button> : null}
-            </div>
-            {(accountSessionAvailable || localRecommendations) ? (
-              <RecommendationStyleControl compact
-                onChange={onRecommendationStyleChange}
-                value={recommendationStyle}
-              />
-            ) : null}
-            {recommendationItems.length > 0 && !recommendationPending && recommendationMessage ? <p className="recommendation-interaction-hint">{recommendationMessage}</p> : null}
+            {recommendationPendingSnapshot ? <Button size="small" onClick={onAcceptPendingRecommendations}>有新推荐 · 查看</Button> : null}
             {(accountSessionAvailable || localRecommendations) && recommendationPending ? (
               <div className="library-recommendation-message loading" role="status">
-                {recommendationItems.length > 0 ? "正在更新推荐，仍可浏览已有结果…" : "正在获取推荐…"}
+                {recommendationMessage || (recommendationItems.length > 0 ? "正在更新推荐，仍可浏览已有结果…" : "正在获取推荐…")}
               </div>
             ) : null}
             {!(accountSessionAvailable || localRecommendations) ? (
               <button className="library-inline-button" onClick={onLoginRequired} type="button">登录</button>
-            ) : recommendationItems.length === 0 ? (
-              !recommendationPending ? <div className="library-empty-collection">{recommendationMessage || "暂无关联推荐"}</div> : null
             ) : (
               <RecommendationList onCurate={onCurateRecommendations} onRestore={onRestoreRecommendations} onApplyPreferences={onApplyRecommendationPreferences} busy={recommendationPending} onFeedback={onRecommendationFeedback} onAdoptBrief={onAdoptRecommendationBrief} service={recommendationService} items={recommendationItems} selectedId={selectedRecommendationId}
+                onRefresh={onRefreshRecommendations}
+                emptyMessage={recommendationMessage || "暂无关联推荐"}
+                filterOptions={<RecommendationStyleControl compact onChange={onRecommendationStyleChange} value={recommendationStyle} />}
+                menuActions={<>
+                  {onConfigureRecommendations ? <MenuItem onClick={onConfigureRecommendations}>推荐与文献服务设置</MenuItem> : null}
+                  {onExploreSelectedRecommendations ? <MenuItem onClick={onExploreSelectedRecommendations}>按此选集探索</MenuItem> : null}
+                  {recommendationExploringSelection ? <MenuItem onClick={onShowOrdinaryRecommendations}>返回日常推荐</MenuItem> : null}
+                  <MenuItem icon={<DeleteDismissRegular />} onClick={() => { if (window.confirm("清除当前推荐缓存？已收藏的文献不受影响。")) onClearRecommendations(); }}>清除推荐缓存</MenuItem>
+                </>}
                 pendingIds={pendingNodeIds} canSave={localRecommendations || Boolean(collection.tree)}
                 onInspect={onInspectRecommendation}
                 onOpen={onOpenRecommendation}
                 onSave={(item) => void saveRecommendation(item)} onDismiss={onDismissRecommendation} />
             )}
-            {localRecommendations && recommendationItems.length > 0 && !recommendationPending && recommendationMessage ? <p role="status" className="library-recommendation-message">{recommendationMessage}</p> : null}
+            {recommendationItems.length > 0 && !recommendationPending && recommendationMessage && recommendationStatus !== "error" ? <p role="status" className="recommendation-interaction-hint">{recommendationMessage}</p> : null}
             {recommendationStatus === "error" ? <ErrorState message={recommendationMessage} /> : null}
           </div>
         ) : null}
