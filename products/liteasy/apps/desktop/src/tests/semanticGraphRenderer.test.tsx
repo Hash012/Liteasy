@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 import type { EvidenceBindingV1, SemanticGraphSpecV1 } from "../app/features/visualization/visualizationArtifact.types";
 import { SemanticGraphRenderer, renderSemanticGraph } from "../app/features/visualization/renderers/semanticGraphRenderer";
@@ -23,6 +23,16 @@ const evidenceBindings: EvidenceBindingV1[] = [{
 }];
 
 describe("renderSemanticGraph", () => {
+  test("a partial projection uses the same names in SVG, buttons and reading order without losing objects", () => {
+    const rendered = renderSemanticGraph(validFlowchartFixture, { evidenceBindings, semanticObjects: [{
+      objectId: "start", label: "输入资料", kind: "step", objectPath: ["start"], evidenceClaimIds: ["claim-1"], selectable: true
+    }] });
+    render(<SemanticGraphRenderer rendered={rendered} />);
+    expect(screen.getByRole("img", { name: /输入资料, 输出/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: "输入资料" })).toHaveAttribute("data-object-id", "start");
+    expect(screen.getByRole("button", { name: "输出" })).toHaveAttribute("data-object-id", "end");
+    expect(within(screen.getByRole("list", { name: "语义图阅读顺序" })).getAllByRole("listitem").map(item => item.textContent)).toEqual(["输入资料", "输出"]);
+  });
   test("renders selectable objects with accessible reading order", () => {
     const artifact = renderSemanticGraph(validFlowchartFixture, { evidenceBindings, semanticObjects: [] });
 

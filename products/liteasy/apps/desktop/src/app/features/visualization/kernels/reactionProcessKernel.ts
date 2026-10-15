@@ -109,7 +109,7 @@ export function validateReactionProcess(spec: ReactionProcessSpecV1): ReactionPr
   return {
     accessibility: {
       dataTable: [
-        ...equations.map((equation) => ({ label: equation.id, value: equation.text })),
+        ...equations.map((equation, index) => ({ label: `反应步骤 ${index + 1}`, value: equation.text })),
         ...spec.conditions.map((condition) => ({ label: condition.label, value: condition.value ?? "present" }))
       ],
       objectReadingOrder: selectableObjectIds,
@@ -130,7 +130,7 @@ export function validateReactionProcess(spec: ReactionProcessSpecV1): ReactionPr
       return {
         evidenceClaimIds: species?.evidenceClaimIds ?? step?.evidenceClaimIds ?? [],
         kind: species ? "chemical_species" : "reaction_step",
-        label: species?.formula ?? id,
+        label: species?.formula ?? equations.find((equation) => equation.id === id)?.text ?? "反应步骤",
         objectId: id,
         objectPath: [id],
         selectable: true

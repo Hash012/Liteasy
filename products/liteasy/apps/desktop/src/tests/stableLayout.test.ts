@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { layoutStableGraph } from "../app/features/visualization/rendering/stableLayout";
 
+test("missing labels do not turn layout identity into a displayed name", () => {
+  const result = layoutStableGraph({ nodes: [{ id: "internal-node-67a91" }, { id: "b", label: "a".repeat(64) }], edges: [] });
+  expect(result.nodes.find(node => node.id === "internal-node-67a91")?.label).toBe("未命名节点 2");
+  expect(result.nodes.find(node => node.id === "b")?.label).toBe("a".repeat(64));
+});
+
 describe("layoutStableGraph", () => {
   test("returns byte-identical output for equal input", () => {
     const graph = {

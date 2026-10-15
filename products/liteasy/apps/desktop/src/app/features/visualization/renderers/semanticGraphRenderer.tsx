@@ -35,18 +35,24 @@ function assertEvidenceBindings(result: ReturnType<typeof validateSemanticGraph>
 export function renderSemanticGraph(spec: SemanticGraphSpecV1, context: SemanticGraphRenderContext): SemanticGraphRenderResult {
   const result = validateSemanticGraph(spec);
   assertEvidenceBindings(result, context.evidenceBindings);
+  // A partial presentation projection must not discard the kernel's other objects.
+  const semanticObjects = result.semanticObjects.map((object) => {
+    const projection = context.semanticObjects.find((item) => item.objectId === object.objectId);
+    return { ...object, label: projection?.label.trim() || object.label };
+  });
+  const labels = new Map(semanticObjects.map((object) => [object.objectId, object.label]));
   const scene = createSafeSvgScene({
-    description: result.semanticObjects.map((object) => object.label).join(", "),
+    description: semanticObjects.map((object) => object.label).join(", "),
     edges: result.layout.edges,
     height: result.layout.height,
-    nodes: result.layout.nodes,
+    nodes: result.layout.nodes.map((node) => ({ ...node, label: labels.get(node.id) ?? "对象名称不可用" })),
     width: result.layout.width
   });
   return {
     accessibility: result.accessibility,
     interaction: result.interaction,
     selectableObjectIds: result.interaction.selectableObjectIds,
-    semanticObjects: context.semanticObjects.length > 0 ? context.semanticObjects : result.semanticObjects,
+    semanticObjects,
     svg: scene.svg
   };
 }
@@ -77,7 +83,7 @@ export function SemanticGraphRenderer({ rendered }: { rendered: SemanticGraphRen
       <ol aria-label="语义图阅读顺序">
         {rendered.accessibility.objectReadingOrder.map((objectId) => {
           const object = rendered.semanticObjects.find((item) => item.objectId === objectId);
-          return <li key={objectId}>{object?.label ?? objectId}</li>;
+          return <li key={objectId}>{object?.label || "对象名称不可用"}</li>;
         })}
       </ol>
       <p>{rendered.accessibility.summary}</p>

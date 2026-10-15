@@ -128,7 +128,7 @@ export function simulatePhysicsProcess(spec: PhysicsProcessSpecV1, seed = spec.s
     semanticObjects: selectableObjectIds.map((id) => ({
       evidenceClaimIds: spec.evidenceBindings,
       kind: id === "trajectory" ? "trajectory" : "event",
-      label: id,
+      label: id === "trajectory" ? "运动轨迹" : spec.events.find((event) => event.id === id)?.label || "事件名称不可用",
       objectId: id,
       objectPath: [id],
       selectable: true

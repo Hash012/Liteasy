@@ -26,8 +26,8 @@ async function expectPhysicsProcessRendered(page: import("@playwright/test").Pag
   await expect(stage.getByRole("button", { name: "暂停" })).toBeVisible();
   await stage.getByRole("button", { name: "暂停" }).click();
   const beforeSelection = await processStage.screenshot();
-  await stage.getByRole("button", { name: "trajectory" }).click();
-  await expect(stage.getByRole("button", { name: "trajectory" })).toHaveAttribute("aria-pressed", "true");
+  await stage.getByRole("button", { name: "运动轨迹" }).click();
+  await expect(stage.getByRole("button", { name: "运动轨迹" })).toHaveAttribute("aria-pressed", "true");
   const afterSelection = await processStage.screenshot();
   expect(afterSelection.equals(beforeSelection)).toBe(false);
   expect(await svg.evaluate((element) => element.outerHTML.includes("<script"))).toBe(false);

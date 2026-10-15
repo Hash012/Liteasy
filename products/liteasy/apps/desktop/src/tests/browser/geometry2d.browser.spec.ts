@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 async function expectGeometry2DRendered(page: import("@playwright/test").Page) {
   const stage = page.getByTestId("geometry-2d-browser-fixture");
   await expect(stage).toBeVisible();
-  const svg = stage.getByRole("img", { name: "circle, line, tangent-point" });
+  const svg = stage.getByRole("img", { name: "circle, line, 切点 1" });
   await expect(svg).toBeVisible();
   await expect(svg.locator("#object-circle")).toBeVisible();
   await expect(svg.locator("#object-line")).toBeVisible();

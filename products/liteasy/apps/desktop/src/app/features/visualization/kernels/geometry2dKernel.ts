@@ -62,7 +62,7 @@ export function solveGeometry2D(spec: Geometry2DSpecV1): Geometry2DSolveResultV1
     accessibility: {
       dataTable: [
         ...spec.objects.map((object) => ({ label: object.id, value: object.kind })),
-        ...derivedPoints.map((point) => ({ label: point.id, value: `(${point.x}, ${point.y})` }))
+        ...derivedPoints.map((point, index) => ({ label: `切点 ${index + 1}`, value: `(${point.x}, ${point.y})` }))
       ],
       objectReadingOrder: selectableObjectIds,
       summary: `2D geometry with ${spec.objects.length} object${spec.objects.length === 1 ? "" : "s"}`
@@ -81,7 +81,7 @@ export function solveGeometry2D(spec: Geometry2DSpecV1): Geometry2DSolveResultV1
       return {
         evidenceClaimIds: object?.evidenceClaimIds ?? derivedEvidenceById.get(id) ?? [],
         kind: object?.kind ?? "derived_point",
-        label: id,
+        label: object ? id : `切点 ${derivedPoints.findIndex((point) => point.id === id) + 1}`,
         objectId: id,
         objectPath: [id],
         selectable: true

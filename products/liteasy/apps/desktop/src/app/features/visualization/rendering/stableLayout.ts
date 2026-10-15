@@ -93,6 +93,7 @@ export function layoutStableGraph(input: StableLayoutInput, seed = "liteasy-stat
   const height = input.height ?? defaultHeight;
   const { layers, diagnostics } = buildLayers(input, seed);
   const nodesById = new Map(input.nodes.map((node) => [node.id, node]));
+  const labelOrdinals = new Map([...nodesById.keys()].sort().map((id, index) => [id, index + 1]));
   const maxRows = Math.max(1, ...layers.map((layer) => layer.length));
   const columnSpacing = layers.length > 1 ? (width - marginX * 2 - nodeWidth) / (layers.length - 1) : 0;
   const rowSpacing = maxRows > 1 ? (height - marginY * 2 - nodeHeight) / (maxRows - 1) : 0;
@@ -101,7 +102,7 @@ export function layoutStableGraph(input: StableLayoutInput, seed = "liteasy-stat
     const source = nodesById.get(id)!;
     return {
       id,
-      label: source.label ?? id,
+      label: source.label?.trim() || `未命名节点 ${labelOrdinals.get(id)}`,
       x: Math.max(marginX, marginX + columnSpacing * layerIndex),
       y: Math.max(marginY, marginY + rowSpacing * rowIndex),
       width: source.width ?? nodeWidth,

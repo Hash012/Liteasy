@@ -23,8 +23,8 @@ async function expectReactionProcessRendered(page: import("@playwright/test").Pa
   await expect(stage.getByRole("button", { name: "暂停" })).toBeVisible();
   await stage.getByRole("button", { name: "暂停" }).click();
   const beforeSelection = await processStage.screenshot();
-  await stage.getByRole("button", { name: "co2" }).click();
-  await expect(stage.getByRole("button", { name: "co2" })).toHaveAttribute("aria-pressed", "true");
+  await stage.getByRole("button", { name: "CO2", exact: true }).click();
+  await expect(stage.getByRole("button", { name: "CO2", exact: true })).toHaveAttribute("aria-pressed", "true");
   const afterSelection = await processStage.screenshot();
   expect(afterSelection.equals(beforeSelection)).toBe(false);
   expect(await svg.evaluate((element) => element.outerHTML.includes("<script"))).toBe(false);

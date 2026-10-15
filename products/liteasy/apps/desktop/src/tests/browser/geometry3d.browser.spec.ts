@@ -22,7 +22,7 @@ async function expectGeometry3DRendered(page: import("@playwright/test").Page) {
     const diagnostic = await runtime.getAttribute("data-diagnostic");
     return state === "webgl" ? state : `${state}:${diagnostic}`;
   }).toBe("webgl");
-  const svg = stage.getByRole("img", { name: "cube, mid-section", includeHidden: true });
+  const svg = stage.getByRole("img", { name: "cube, 截面 1", includeHidden: true });
   await expect(svg.locator("#object-cube")).toHaveCount(1);
   await expect(svg.locator("#object-mid-section")).toHaveCount(1);
   const canvas = stage.getByTestId("geometry-3d-canvas");
@@ -48,7 +48,7 @@ async function expectGeometry3DRendered(page: import("@playwright/test").Page) {
   await expect.poll(async () => {
     const states = await Promise.all([
       stage.getByRole("button", { name: "cube" }).getAttribute("aria-pressed"),
-      stage.getByRole("button", { name: "mid-section" }).getAttribute("aria-pressed")
+      stage.getByRole("button", { name: "截面 1" }).getAttribute("aria-pressed")
     ]);
     return states.filter((state) => state === "true").length;
   }).toBe(1);

@@ -70,7 +70,7 @@ export function solveGeometry3D(spec: Geometry3DSpecV1): Geometry3DSolveResultV1
     accessibility: {
       dataTable: [
         ...spec.objects.map((object) => ({ label: object.id, value: `${object.vertices.length} vertices` })),
-        ...sections.map((section) => ({ label: section.id, value: `${section.vertices.length} section vertices` }))
+        ...sections.map((section, index) => ({ label: `截面 ${index + 1}`, value: `${section.vertices.length} section vertices` }))
       ],
       objectReadingOrder: selectableObjectIds,
       summary: `3D geometry with ${spec.objects.length} object${spec.objects.length === 1 ? "" : "s"} and ${sections.length} section${sections.length === 1 ? "" : "s"}`
@@ -91,7 +91,7 @@ export function solveGeometry3D(spec: Geometry3DSpecV1): Geometry3DSolveResultV1
       return {
         evidenceClaimIds: object?.evidenceClaimIds ?? section?.evidenceClaimIds ?? [],
         kind: object?.kind ?? "section",
-        label: id,
+        label: object ? id : `截面 ${sections.findIndex((item) => item.id === id) + 1}`,
         objectId: id,
         objectPath: [id],
         selectable: true

@@ -39,7 +39,7 @@ export function renderGeometry2D(
   const derived = solved.derivedPoints.map((point) => {
     const scaled = scale(point.x, point.y);
     const selected = selectedObjectId === point.id;
-    return `<g id="object-${escapeText(point.id)}" tabindex="0"><circle cx="${num(scaled.x)}" cy="${num(scaled.y)}" r="${selected ? 7 : 5}" fill="#DC2626"${selected ? ' stroke="#7F1D1D" stroke-width="3"' : ""}/><text x="${num(scaled.x + 8)}" y="${num(scaled.y + 18)}" fill="#111827" stroke="#FFFFFF" stroke-width="3" paint-order="stroke">${escapeText(point.id)}</text></g>`;
+    return `<g id="object-${escapeText(point.id)}" tabindex="0"><circle cx="${num(scaled.x)}" cy="${num(scaled.y)}" r="${selected ? 7 : 5}" fill="#DC2626"${selected ? ' stroke="#7F1D1D" stroke-width="3"' : ""}/><text x="${num(scaled.x + 8)}" y="${num(scaled.y + 18)}" fill="#111827" stroke="#FFFFFF" stroke-width="3" paint-order="stroke">${escapeText(solved.semanticObjects.find((object) => object.objectId === point.id)?.label || "派生对象")}</text></g>`;
   });
   const selectableObjectIds = solved.interaction.selectableObjectIds;
   return {
@@ -47,7 +47,7 @@ export function renderGeometry2D(
     selectableObjectIds,
     spec,
     svg: [
-      `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="max-width:100%;height:auto;display:block" role="img" aria-label="${escapeText(selectableObjectIds.join(", "))}" xmlns="http://www.w3.org/2000/svg">`,
+      `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="max-width:100%;height:auto;display:block" role="img" aria-label="${escapeText(solved.semanticObjects.map((object) => object.label).join(", "))}" xmlns="http://www.w3.org/2000/svg">`,
       `<defs><clipPath id="geometry-2d-clip"><rect x="${margin}" y="${margin}" width="${width - margin * 2}" height="${height - margin * 2}"/></clipPath></defs>`,
       `<rect x="0" y="0" width="${width}" height="${height}" fill="#FFFFFF"/>`,
       `<g clip-path="url(#geometry-2d-clip)">`,
@@ -111,7 +111,7 @@ export function Geometry2DRenderer({ rendered }: { rendered: Geometry2DRenderRes
             onClick={() => setSelectedObjectId((current) => current === id ? null : id)}
             size="small"
           >
-            {id}
+            {activeRender.semanticObjects.find((object) => object.objectId === id)?.label || "对象名称不可用"}
           </Button>
         ))}
       </div>

@@ -46,7 +46,7 @@ export function renderGeometry3D(spec: Geometry3DSpecV1, selectedObjectId: strin
       })
       .join(" ");
     const selected = selectedObjectId === section.id;
-    return `<g id="object-${escapeText(section.id)}" tabindex="0"><path d="${path} Z" fill="#FECACA" fill-opacity="${selected ? 0.7 : 0.42}" stroke="${selected ? "#7F1D1D" : "#DC2626"}" stroke-width="${selected ? 4 : 2}"/><text x="${margin}" y="${height - 14}" fill="#111827">${escapeText(section.id)}</text></g>`;
+    return `<g id="object-${escapeText(section.id)}" tabindex="0"><path d="${path} Z" fill="#FECACA" fill-opacity="${selected ? 0.7 : 0.42}" stroke="${selected ? "#7F1D1D" : "#DC2626"}" stroke-width="${selected ? 4 : 2}"/><text x="${margin}" y="${height - 14}" fill="#111827">${escapeText(solved.semanticObjects.find((object) => object.objectId === section.id)?.label || "派生对象")}</text></g>`;
   });
   const objectGroups = spec.objects.map((object) => {
     const selected = selectedObjectId === object.id;
@@ -68,7 +68,7 @@ export function renderGeometry3D(spec: Geometry3DSpecV1, selectedObjectId: strin
     selectableObjectIds,
     spec,
     svg: [
-      `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="max-width:100%;height:auto;display:block" role="img" aria-label="${escapeText(selectableObjectIds.join(", "))}" xmlns="http://www.w3.org/2000/svg">`,
+      `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="max-width:100%;height:auto;display:block" role="img" aria-label="${escapeText(solved.semanticObjects.map((object) => object.label).join(", "))}" xmlns="http://www.w3.org/2000/svg">`,
       `<rect x="0" y="0" width="${width}" height="${height}" fill="#F8FAFC"/>`,
       `<path d="M ${margin} ${height - margin} L ${width - margin} ${height - margin} L ${width - margin - 48} ${height - margin - 48}" fill="none" stroke="#CBD5E1" stroke-width="1"/>`,
       ...objectGroups,
@@ -170,7 +170,7 @@ export function Geometry3DRenderer({ rendered }: { rendered: Geometry3DRenderRes
             onClick={() => setSelectedObjectId((current) => current === id ? null : id)}
             size="small"
           >
-            {id}
+            {fallback.semanticObjects.find((object) => object.objectId === id)?.label || "对象名称不可用"}
           </Button>
         ))}
       </div>
