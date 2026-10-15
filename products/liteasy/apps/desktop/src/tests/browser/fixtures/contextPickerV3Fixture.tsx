@@ -1,3 +1,4 @@
+import { createWorkspaceAgentAssetService } from "../../../app/features/resource-filesystem/workspaceAgentAssetService";
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { FluentProvider, webLightTheme, webDarkTheme, Button } from "@fluentui/react-components";
@@ -42,7 +43,7 @@ const bytes = testPdf();
 const byteCache = createPreviewResourceCache<Uint8Array>(3, 64 * 1024 * 1024, bytes => bytes.byteLength);
 const service = createResourceReferenceService({ scope: f.scope, active: () => true,
   catalog: () => f.suggestions.map(asset => ({ path: asset.resourcePath!, title: asset.label, kind: "source.document" })),
-  assets: { stat: async (path: string) => { const asset = f.suggestions.find(asset => asset.resourcePath === path)!; return { path, title: asset.label, kind: "source.document", revision: "r1", capabilities: [] }; } } as unknown as AgentAssetService,
+  assets: createWorkspaceAgentAssetService({ repository: f.repository, active: () => true, getPapers: () => [f.paper] }),
   async loadPdf(path, signal, intent) {
     const resolved = await resolveReferencePdf({ path, repository: f.repository, papers: [f.paper], signal, intent });
     if (!resolved) return;

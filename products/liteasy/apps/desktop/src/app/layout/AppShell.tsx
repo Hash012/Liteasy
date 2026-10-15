@@ -493,7 +493,7 @@ export function AppShell({
       revealDockRegion(regionId);
     }
   }
-  const pdfProcessing = usePdfProcessingController(settingsStoreRef.current);
+  const pdfProcessing = usePdfProcessingController(settingsStoreRef.current, workspaceStoreRef.current, setWorkspaceState);
   const workspaceActions = useWorkspaceActions({
     ...pdfProcessing,
     importStore: importStoreRef.current,

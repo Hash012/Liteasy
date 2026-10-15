@@ -55,6 +55,7 @@ function createBrowserPdfSource(file: File, fallbackPath: string) {
 
 type UseWorkspaceActionsInput = {
   processingPolicy?: () => "on-open" | "on-import" | "manual";
+  processingReady?: () => Promise<void>;
   processingRecipe?: () => string;
   processingStorage?: import("../objects/objectStorage").ObjectStorage;
   processingScope?: string;
@@ -102,7 +103,7 @@ export function buildImportJobsByDocumentId(workspaceStore: WorkspaceStore, impo
 }
 
 export function useWorkspaceActions({
-  processingPolicy = () => "on-open", processingRecipe = () => "local-pdfjs/v1", processingStorage, processingScope = "local", processingActive = () => true,
+  processingPolicy = () => "on-open", processingReady, processingRecipe = () => "local-pdfjs/v1", processingStorage, processingScope = "local", processingActive = () => true,
   extractPaperChunks,
   extractPaperIndex,
   extractPaperResources,
@@ -625,8 +626,13 @@ export function useWorkspaceActions({
   }
 
   return {
-    prepareOpenedPaper(paper: Paper) {
-      if ((paper.processingPolicy ?? processingPolicy()) === "on-open") queueImportForPapers([paper]);
+    async prepareOpenedPaper(paper: Paper) {
+      try {
+        if (processingReady) await processingReady();
+        if (!processingActive()) return;
+        const current = workspaceStore.getState().papers.find(item => item.id === paper.id);
+        if (current && (current.processingPolicy ?? processingPolicy()) === "on-open") queueImportForPapers([current]);
+      } catch { onAnalysisHint("未能读取文献的解析设置，请稍后重试。PDF 仍可阅读。"); }
     },
     addDroppedPdfFiles,
     addExternalPdfToLibrary,
@@ -638,7 +644,14 @@ export function useWorkspaceActions({
     moveFolder,
     movePaper,
     cancelPaperProcessing(paper: Paper) { const job = importStore.getLatestJobByDocumentId(paper.id); if (job?.taskKey) { importStore.cancel(job.taskKey); importStore.markFailed(job.id, "已取消解析，可稍后重试。"); syncImportJobs(); } },
-    setPaperProcessingPolicy(paper: Paper, policy: Paper["processingPolicy"]) { workspaceStore.updatePapers([{ ...paper, processingPolicy: policy }]); syncWorkspace(); },
+    async setPaperProcessingPolicy(paper: Paper, policy: Paper["processingPolicy"]) {
+      try {
+        if (processingStorage) { const key = `imports/policy/${encodeURIComponent(paper.id)}`, row = await processingStorage.get(key); if (!processingActive()) return;
+          await processingStorage.commit([{ key, expected: row?.version ?? null, row: { key, version: crypto.randomUUID(), value: { policy } } }]); }
+        if (!processingActive()) return;
+        workspaceStore.updatePapers([{ ...paper, processingPolicy: policy }]); syncWorkspace();
+      } catch { onAnalysisHint("解析时机未保存，请稍后重试。"); }
+    },
     queueImportForPapers,
     syncImportJobs,
     syncWorkspace,

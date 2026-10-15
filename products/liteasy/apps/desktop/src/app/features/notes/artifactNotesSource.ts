@@ -27,6 +27,7 @@ export function artifactAnnotationNotes(
           key: notesTargetKey(target),
           target,
           ...deriveContentTitle(annotation.body),
+          title: deriveContentTitle(formatPaperAnchorText(annotation.body, paperAnchors)).title,
           text: annotation.body,
           source: `${artifact.title}${node ? ` · ${node.title}` : ""}`,
           defaultFolderId: "default/artifact",

@@ -374,6 +374,8 @@ test("distinguishes paper derivatives and offers custom icons for ordinary files
   ] }, fileLibrary: fileAccess({ entries: [{ id: "book", title: "My Book", format: "mobi" }] }) });
   expect(screen.queryByRole("button", { name: "打开论文文件：论文文本" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: `展开 ${paper.title} 的3 项关联内容` }));
+  expect(screen.queryByRole("button", { name: "打开论文文件：论文文本" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "提取结果", exact: true }));
   for (const [label, icon] of [["论文文本", "text"], ["论文插图", "images"], ["论文图文", "multimodal"]]) {
     expect(screen.getByRole("button", { name: `打开论文文件：${label}` }).querySelector("[data-icon]")).toHaveAttribute("data-icon", icon);
   }

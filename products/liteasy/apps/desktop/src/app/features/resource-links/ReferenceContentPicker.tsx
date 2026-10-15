@@ -5,10 +5,13 @@ import { Button, Checkbox } from "@fluentui/react-components";
 import { OpenRegular } from "@fluentui/react-icons";
 import { ResourceReferencesContext } from "./ResourceReferencesContext";
 import { headingReference, referenceCharacters, referenceFragment, referenceHeadings, referenceLines, type ReferenceRange } from "./referenceText";
-import type { ReferenceDocument } from "./resourceReferenceService";
+import { referenceDocumentFromRead, type ReferenceDocument } from "./resourceReferenceService";
 import "./resourceReferences.css";
 import { subtractContextRanges } from "../context-picker/selectionPlan";
 import { referenceSourceStructure, structureSelection } from "../context-picker/sourceStructure";
+import { BoardScenePreview } from "../boards/BoardScenePreview";
+import type { BoardViewSnapshot } from "../resource-filesystem/resourcePresentation";
+import { AgentAssetError } from "../resource-filesystem/agentAsset.types";
 export type ReferencePickerState = { fragment?: string; page: number; limit: number; revision?: string };
 
 export function ReferenceContentPicker({ path, fragment = "", onChoose, actionLabel = "插入引用", disabled = false, initialState, onStateChange, onChooseRanges }: {
@@ -20,6 +23,8 @@ export function ReferenceContentPicker({ path, fragment = "", onChoose, actionLa
   const references = useContext(ResourceReferencesContext);
   const [limit, setLimit] = useState(initialState?.limit ?? 12000), [attempt, setAttempt] = useState(0);
   const [document, setDocument] = useState<ReferenceDocument>(), [error, setError] = useState("");
+  const [board, setBoard] = useState<BoardViewSnapshot>();
+  const [retryable, setRetryable] = useState(true);
   const [selection, setSelection] = useState<ReferenceRange>(), [busy, setBusy] = useState(false), [page, setPage] = useState(initialState?.page ?? 0);
   const notifyState = useRef(onStateChange); notifyState.current = onStateChange;
   const [wholeText, setWholeText] = useState(false);
@@ -34,16 +39,25 @@ export function ReferenceContentPicker({ path, fragment = "", onChoose, actionLa
     if (!references) return;
     const preparation = prepare.current ? "allow" : "cached"; prepare.current = false;
     const abort = new AbortController(); cancellation.current = abort;
-    setDocument(undefined); setSelection(undefined); setWholeText(false); setExcluded([]); setError("");
+    setDocument(undefined); setBoard(undefined); setRetryable(true); setSelection(undefined); setWholeText(false); setExcluded([]); setError("");
     let readPath = path;
     if (attempt === 0 && initialState?.revision && path.startsWith("liteasy://objects/")) { const pinned = new URL(path); pinned.searchParams.set("revision", initialState.revision); readPath = pinned.href; }
-    void references.service.document(readPath, limit, abort.signal, preparation).then((value) => {
+    void (async () => {
+      const presentation = await references.service.present(readPath, { signal: abort.signal, preparation, maxCharacters: limit });
       if (abort.signal.aborted) return;
+      if (presentation.kind === "board") { setBoard(presentation.scene); return; }
+      if (presentation.kind === "unavailable") { setRetryable(presentation.retryable); throw new Error(presentation.message); }
+      if (presentation.kind === "image") throw new AgentAssetError("unsupported_type", "图片不提供文本行，请添加整张图片或打开原文件。");
+      if (presentation.kind === "content") return referenceDocumentFromRead(presentation.read, limit);
+      return references.service.document(readPath, limit, abort.signal, preparation);
+    })().then((value) => {
+      if (abort.signal.aborted) return;
+      if (!value) return;
       setDocument(value);
       if (attempt === 0 && initialState?.revision && initialState.revision !== value.asset.revision) setError("来源版本已变化，请重新载入并选择片段。");
       else if (attempt === 0 && initialState?.fragment) try { setSelection(referenceFragment(value.text, initialState.fragment, value.complete)); } catch { setError("原选区暂不可用，请重新选择。"); }
 
-    }).catch((e) => { if (!abort.signal.aborted) setError(e instanceof Error ? e.message : String(e)); });
+    }).catch((e) => { if (!abort.signal.aborted) { setError(e instanceof Error ? e.message : String(e)); if (e instanceof AgentAssetError && ["unsupported_type", "ambiguous_provider", "not_found", "permission_denied", "revision_unavailable", "scope_changed"].includes(e.code)) setRetryable(false); } });
     return () => abort.abort();
   }, [references?.service, path, limit, attempt]);
   useEffect(() => {
@@ -99,8 +113,9 @@ export function ReferenceContentPicker({ path, fragment = "", onChoose, actionLa
   }
   return <section className="reference-content-picker" aria-label="选择引用内容">
     <header><strong>打开内容</strong><Button size="small" icon={<OpenRegular />} onClick={() => { void Promise.resolve(references?.open(path)).catch((e) => setError(String(e))); }}>打开原文件</Button></header>
-    {!document && !error ? <p role="status">正在读取内容…<Button size="small" onClick={() => { cancellation.current?.abort(); setError(tChinese("preview.cancelled", "已取消读取。")); }}>{tChinese("preview.cancelRead", "取消读取")}</Button></p> : null}
-    {error ? <p role="alert">{error} <Button size="small" onClick={() => setAttempt((value) => value + 1)}>重新载入</Button>{/正文尚未就绪/.test(error) ? <Button size="small" onClick={() => { prepare.current = true; setAttempt((value) => value + 1); }}>{tChinese("preview.prepareText", "解析正文")}</Button> : null}</p> : null}
+    {!document && !board && !error ? <p role="status">正在读取内容…<Button size="small" onClick={() => { cancellation.current?.abort(); setError(tChinese("preview.cancelled", "已取消读取。")); }}>{tChinese("preview.cancelRead", "取消读取")}</Button></p> : null}
+    {board ? <><BoardScenePreview scene={board} /><p>可添加整块白板；如需部分卡片，请打开原白板选择后加入上下文。</p></> : null}
+    {error ? <p role="alert">{error} {retryable ? <Button size="small" onClick={() => setAttempt((value) => value + 1)}>重新载入</Button> : null}{/正文尚未就绪/.test(error) ? <Button size="small" onClick={() => { prepare.current = true; setAttempt((value) => value + 1); }}>{tChinese("preview.prepareText", "解析正文")}</Button> : null}</p> : null}
     {document ? <>
       <p className="reference-hint">{document.asset.kind === "paper" || document.asset.kind === "source.document" ? "以下为已提取文本的行号。" : "源文本行号，不随显示换行改变。"}</p>
       <InfoPopover label={tChinese("reference.selection.help", "选择引用帮助")}><p>{tChinese("reference.selection.guidance", "点击标题选章节；点击行号、Shift+点击或直接选中文字。")}</p></InfoPopover>

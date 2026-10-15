@@ -7,7 +7,7 @@ export type PresentationOptions = AgentAssetReadOptions & { intent?: Presentatio
 export type BoardViewSnapshot = {
   boardRef: ObjectRef;
   sceneRevision: string;
-  members: Array<{ placement: Placement; object?: ObjectEnvelope; content: ContentFragment; title: string; path: string }>;
+  members: Array<{ placement: Placement; object?: ObjectEnvelope; content: ContentFragment; title: string; path: string; group?: boolean }>;
   edges: BoardConnection[];
 };
 export type ResourcePresentation =

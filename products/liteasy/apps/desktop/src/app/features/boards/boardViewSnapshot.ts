@@ -1,3 +1,4 @@
+import { boardContextSnapshotSchema } from "../context/objectContext";
 import type { ObjectRepository } from "../objects/objectRepository";
 import { objectText, refOf, type ObjectEnvelope } from "../objects/object.types";
 import { sourceContent } from "../markdown/contentStructure";
@@ -26,4 +27,16 @@ export async function readBoardViewSnapshot(repository: ObjectRepository, board:
   }
   await check();
   return { boardRef: refOf(board), sceneRevision: board.revision, members, edges };
+}
+
+export async function readFixedBoardScene(repository: ObjectRepository, board: ObjectEnvelope, selector: string, signal?: AbortSignal): Promise<BoardViewSnapshot> {
+  const fixed = boardContextSnapshotSchema.parse(await repository.getSnapshot(selector.slice("board-context:".length)));
+  if (fixed.scopeId !== repository.scopeId || fixed.boardRef.objectId !== board.objectId || fixed.boardRef.revision !== board.revision) throw new AgentAssetError("permission_denied", "白板选区不属于当前版本。");
+  if (!fixed.placements || !fixed.edges) throw new AgentAssetError("revision_unavailable", "这个旧选区只保留了文字记录，无法还原空间预览。原记录仍可加入上下文。");
+  const members: BoardViewSnapshot["members"] = [];
+  for (const placement of fixed.placements) {
+    signal?.throwIfAborted(); const object = await repository.get(placement.ref), path = liteasyPath(repository.scopeId, { kind: "object", ref: placement.ref });
+    members.push({ placement, object, path, title: object.title, content: sourceContent({ text: objectText(object), path, revision: object.revision, scopeId: repository.scopeId }) });
+  }
+  signal?.throwIfAborted(); return { boardRef: fixed.boardRef, sceneRevision: fixed.boardRef.revision, members, edges: fixed.edges };
 }

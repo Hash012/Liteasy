@@ -3,11 +3,11 @@ import { researchContentPlugins } from "./contentProfile";
 import { useResourceReveal, observeRenderedResource, rehypeResourcePositions } from "../resource-links/resourceReveal";
 import {
   Children, Component, createContext, createElement, isValidElement, lazy, memo, Suspense, useContext, useMemo,
-  useState, useRef, useEffect, type ReactNode
+  useState, useRef, useEffect, type ComponentPropsWithoutRef, type ReactNode
 } from "react";
 import { Button, Tooltip } from "@fluentui/react-components";
 import { CheckmarkRegular, CopyRegular } from "@fluentui/react-icons";
-import ReactMarkdown, { type Components, type Options, type UrlTransform } from "react-markdown";
+import ReactMarkdown, { type Components, type ExtraProps, type Options, type UrlTransform } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import { remarkPaperAnchorReferences, type PaperAnchorEntity } from "../paper-anchors/paperAnchorEntity";
 import { remarkLiteasyLinks, safeLiteasyMarkdownUrl } from "./liteasyMarkdownLinks";
@@ -188,6 +188,50 @@ const inlineComponents: Components = {
   a: ({ children }) => <span>{children}</span>
 };
 
+type ResourceRendering = {
+  components: Components;
+  source?: string;
+  renderResourceImage?: MarkdownContentProps["renderResourceImage"];
+  mediaPolicy: MarkdownContentProps["mediaPolicy"];
+};
+const ResourceRenderingContext = createContext<ResourceRendering | null>(null);
+
+function resourceLocator(href: string, source?: string) {
+  return fromReferenceHref(href) ?? (href.startsWith("liteasy://") || source && !/^[a-z][a-z0-9+.-]*:|^[\/\\]/i.test(href) ? href : undefined);
+}
+
+// Keep component types stable when resource services or renderer options change.
+// Replacing a paragraph component detaches its text nodes and destroys native selection.
+function ResourceMarkdownLink(props: ComponentPropsWithoutRef<"a"> & ExtraProps) {
+  const rendering = useContext(ResourceRenderingContext)!;
+  const target = props.href ? resourceLocator(props.href, rendering.source) : undefined;
+  return target !== undefined
+    ? <ResourceLink locator={target} source={rendering.source}>{props.children}</ResourceLink>
+    : createElement(rendering.components.a!, props);
+}
+
+function ResourceMarkdownImage(props: ComponentPropsWithoutRef<"img"> & ExtraProps) {
+  const rendering = useContext(ResourceRenderingContext)!;
+  const fallback = () => createElement(rendering.components.img!, props);
+  if (rendering.mediaPolicy === "blocked") return fallback();
+  const target = props.src ? resourceLocator(props.src, rendering.source) : undefined;
+  if (target === undefined) return fallback();
+  if (props.src?.startsWith("liteasy-reference:") || !/\.(png|jpe?g|gif|webp|svg)(?:[?#]|$)/i.test(props.src ?? "")) {
+    return <ResourceEmbed locator={target} source={rendering.source} />;
+  }
+  return !rendering.renderResourceImage
+    ? <AssetImage source={target} basePath={rendering.source} alt={props.alt ?? "图片"} />
+    : fallback();
+}
+
+function ResourceMarkdownParagraph(props: ComponentPropsWithoutRef<"p"> & ExtraProps) {
+  const rendering = useContext(ResourceRenderingContext)!;
+  const embedded = props.node?.children.some((child) => child.type === "element" && child.tagName === "img" && resourceLocator(String(child.properties.src ?? ""), rendering.source) !== undefined);
+  return embedded ? <div>{props.children}</div> : rendering.components.p
+    ? createElement(rendering.components.p, props)
+    : <p data-source-line={props.node?.position?.start.line}>{props.children}</p>;
+}
+
 /** Shared rich-text foundation. Adapters add source links, attachment lookup and domain AST marks. */
 export const MarkdownContent = memo(function MarkdownContent({
   className = "", components, renderResourceImage, allowRelativeImages = false, emptyLabel, html = "sanitized", mediaPolicy = "default", inline = false, normalizeMath = true,
@@ -201,32 +245,18 @@ export const MarkdownContent = memo(function MarkdownContent({
   useResourceReveal((target) => observeRenderedResource(revealRoot.current, target));
   const [navigationError, setNavigationError] = useState<string>();
   const markdown = useMemo(() => normalizeMath ? normalizeMarkdownMathDelimiters(value) : value, [normalizeMath, value]);
-  const mergedComponents = useMemo<Components>(() => {
+  const { components: mergedComponents, resource: resourceRendering } = useMemo<{ components: Components; resource?: ResourceRendering }>(() => {
     const merged: Components = { ...markdownComponents, ...(inline ? inlineComponents : {}), ...components, ...(renderResourceImage ? { img: (props: { src?: string; alt?: string }) => props.src ? renderResourceImage(props.src, props.alt ?? "图片") : <img src={props.src} alt={props.alt ?? ""} loading="lazy" decoding="async" /> } : {}) };
     if (mediaPolicy === "blocked") { merged.img = () => <span>图片未加载（证据预览）</span>; }
     if (references && !inline) {
-      const previousLink = merged.a!, previousImage = merged.img!, previousParagraph = merged.p;
-      const locator = (href: string) => fromReferenceHref(href) ?? (href.startsWith("liteasy://") || referenceSource && !/^[a-z][a-z0-9+.-]*:|^[\/\\]/i.test(href) ? href : undefined);
-      merged.a = (props) => {
-        const target = props.href ? locator(props.href) : undefined;
-        return target !== undefined ? <ResourceLink locator={target} source={referenceSource}>{props.children}</ResourceLink> : createElement(previousLink, props);
+      return {
+        components: { ...merged, a: ResourceMarkdownLink, img: ResourceMarkdownImage, p: ResourceMarkdownParagraph },
+        resource: { components: merged, source: referenceSource, renderResourceImage, mediaPolicy }
       };
-      merged.img = (props) => {
-        if (mediaPolicy === "blocked") return createElement(previousImage, props);
-        const target = props.src ? locator(props.src) : undefined;
-        if (target === undefined) return createElement(previousImage, props);
-        if (props.src?.startsWith("liteasy-reference:") || !/\.(png|jpe?g|gif|webp|svg)(?:[?#]|$)/i.test(props.src ?? "")) return <ResourceEmbed locator={target} source={referenceSource} />;
-        return !renderResourceImage ? <AssetImage source={target} basePath={referenceSource} alt={props.alt ?? "图片"} /> : createElement(previousImage, props);
-      };
-      merged.p = (props) => {
-        const embedded = props.node?.children.some((child) => child.type === "element" && child.tagName === "img" && locator(String(child.properties.src ?? "")) !== undefined);
-        return embedded ? <div>{props.children}</div> : previousParagraph ? createElement(previousParagraph, props) : <p data-source-line={props.node?.position?.start.line}>{props.children}</p>;
-      };
-      return merged;
     }
-    if (!onOpenLiteasyPath) return merged;
+    if (!onOpenLiteasyPath) return { components: merged };
     const DefaultLink = merged.a!;
-    return { ...merged, a: (props) => {
+    return { components: { ...merged, a: (props) => {
       if (!props.href || !safeLiteasyMarkdownUrl(props.href)) return typeof DefaultLink === "string" ? createElement(DefaultLink, props) : <DefaultLink {...props} />;
       return <a href={props.href} onClick={(event) => {
         event.preventDefault();
@@ -235,7 +265,7 @@ export const MarkdownContent = memo(function MarkdownContent({
           setNavigationError(error instanceof Error ? error.message : "暂时无法打开此资产。");
         });
       }}>{props.children}</a>;
-    } };
+    } } };
   }, [components, inline, onOpenLiteasyPath, renderResourceImage, references, referenceSource, mediaPolicy]);
   const remark = useMemo(() => [...baseRemarkPlugins, ...remarkPlugins, ...(references ? [remarkResourceReferences] : []), remarkLiteasyLinks(liteasyLinkTitles), remarkPaperAnchorReferences(paperAnchors)], [liteasyLinkTitles, paperAnchors, remarkPlugins, Boolean(references)]);
   const rehype = useMemo<NonNullable<Options["rehypePlugins"]>>(() => [...(html === "sanitized" ? researchContentPlugins : []), ...rehypePluginsBeforeMath, ...mathPlugin, [rehypeResourcePositions, { disabled: markdown !== value }]], [html, rehypePluginsBeforeMath, markdown, value]);
@@ -250,9 +280,11 @@ export const MarkdownContent = memo(function MarkdownContent({
       {streaming && <span className="markdown-content__draft-label">生成中，内容尚未完整</span>}
       <StreamingContext.Provider value={streaming}>
         <InlineContext.Provider value={inline}>
-          <ReactMarkdown components={mergedComponents} rehypePlugins={rehype} remarkPlugins={remark} skipHtml={html === "skip"} urlTransform={resolveUrl}>
-            {markdown}
-          </ReactMarkdown>
+          <ResourceRenderingContext.Provider value={resourceRendering ?? null}>
+            <ReactMarkdown components={mergedComponents} rehypePlugins={rehype} remarkPlugins={remark} skipHtml={html === "skip"} urlTransform={resolveUrl}>
+              {markdown}
+            </ReactMarkdown>
+          </ResourceRenderingContext.Provider>
         </InlineContext.Provider>
       </StreamingContext.Provider>
       {navigationError ? <span role="status">{navigationError}</span> : null}

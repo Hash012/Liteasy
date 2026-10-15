@@ -1,3 +1,4 @@
+import { getActiveModelProvider, getModelForSettings } from "../models/modelPolicy";
 import { curateRecommendationSnapshot } from "./recommendationResearchEnhancer";
 import { feedbackForPaper, feedbackFacet, type FeedbackRequest } from "./recommendationFeedbackProjection";
 import { buildSelectionCacheKey, buildWorkspaceCacheKey } from "./useRecommendations";
@@ -34,7 +35,7 @@ export function useRecommendationFeed(input: FeedInput) {
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const latest = useRef(input); latest.current = input;
-  const contextVersion = feedHash([input.context.views.map(view => [view.id, view.revision]), input.profile]);
+  const contextVersion = feedHash([input.context.views.map(view => [view.id, view.revision]), input.profile, input.modelSettings ? [getActiveModelProvider(input.modelSettings), getModelForSettings(input.modelSettings), input.modelSettings["models.connection_mode"]] : null]);
   const latestContextVersion = useRef(contextVersion); latestContextVersion.current = contextVersion;
   const previousContext = useRef<{ identity: string; version: string }>();
   const localAccount = resolveLocalAccountKey();
@@ -180,9 +181,9 @@ export function useRecommendationFeed(input: FeedInput) {
   }, [identity, contextVersion, input.pending]);
   useEffect(() => () => { if (identityRef.current !== identity) coordinator.cancel(); }, [identity]);
   const value = state.identity === identity && input.enabled ? state.value : undefined;
-  const items = useMemo(() => rankRecommendations(value?.current?.items.filter(item => !isRecommendationHidden(item, value)).map(item => ({ ...item, feedSnapshotId: value.current!.id, feedbackState: feedbackForPaper(value.feedbackProjection ?? [], item), ...(value.saved.includes(item.canonicalId ?? item.id) ? { saved: true } : {}) })) ?? [], { style: input.style, sortMode: input.sort ?? "relevance" }), [value?.current?.id, value?.hidden.join("|"), value?.saved.join("|"), JSON.stringify(value?.feedback), identity, input.style, input.sort]);
+  const items = useMemo(() => (value?.current?.selection === "ai" ? (rows: RecommendationItem[]) => rows : rankRecommendations)(value?.current?.items.filter(item => !isRecommendationHidden(item, value)).map(item => ({ ...item, feedSnapshotId: value.current!.id, feedbackState: feedbackForPaper(value.feedbackProjection ?? [], item), ...(value.saved.includes(item.canonicalId ?? item.id) ? { saved: true } : {}) })) ?? [], { style: input.style, sortMode: input.sort ?? "relevance" }), [value?.current?.id, value?.hidden.join("|"), value?.saved.join("|"), JSON.stringify(value?.feedback), identity, input.style, input.sort]);
   return { recommendationItems: items, recommendationStatus: (!input.enabled ? "disabled" : running && !items.length ? "loading" : value?.current ? "ready" : state.error ? "error" : "idle") as RecommendationStatus,
-    recommendationPending: running, recommendationMessage: value?.message ?? state.error ?? (value?.current && navigator.onLine === false ? "当前离线，显示本机缓存。" : value?.current ? value.current.generatedAt ? `上次更新：${new Date(value.current.generatedAt).toLocaleString()}` : "旧版题录缓存 · 待更新" : "根据资料库和研究兴趣提供推荐；也可明确按选集探索。"),
+    recommendationPending: running, recommendationMessage: state.error ?? value?.message ?? (value?.current && navigator.onLine === false ? "当前离线，显示本机缓存。" : value?.current ? value.current.generatedAt ? `上次更新：${new Date(value.current.generatedAt).toLocaleString()}` : "旧版题录缓存 · 待更新" : "根据资料库和研究兴趣提供推荐；也可明确按选集探索。"),
     recordSignal: async (item: RecommendationItem, action: RecommendationFeedbackMeaning, command?: FeedbackRequest) => { const receipt = await coordinator.recordFeedback(item.canonicalId ?? item.id, action, item.feedSnapshotId, feedbackFacet(item), command); await read(); return receipt; },
     adoptBrief: async (item: RecommendationItem) => { if (!latest.current.assets) throw new Error("当前工作区不能保存笔记。"); return adoptRecommendationBrief(item, latest.current.assets, async source => {
       const controller = new AbortController();

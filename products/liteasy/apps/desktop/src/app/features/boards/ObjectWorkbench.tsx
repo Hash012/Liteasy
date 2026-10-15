@@ -990,7 +990,11 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
           <div className="object-toolbar">
             <Button
               disabled={!refs.length}
-              onClick={() => actions.current.addToTray(refs)}
+              onClick={() => { const board = model.board; if (!board || !port?.resolveLiteasyPath) { actions.current.addToTray(refs); return; }
+                void port.resolveLiteasyPath(liteasyPath(model.repository.scopeId, { kind: "object", ref: { ...refOf(board), selectorId: `placements:${selected.join(",")}` } }))
+                  .then(attachments => actions.current.addToTray(attachments.flatMap(item => item.refs ?? [item.ref])))
+                  .catch(error);
+              }}
             >
               询问所选内容
             </Button>

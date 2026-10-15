@@ -36,5 +36,5 @@ test("late glyph refinement waits until the pointer selection finishes", async (
   await waitFor(() => expect(view.onText).toHaveBeenCalled()); const before = mocks.model.mock.calls.length;
   fireEvent.pointerDown(screen.getByLabelText("PDF.js 页面 1"));
   await act(async () => { finish([{ text: "Native" }]); }); expect(mocks.model).toHaveBeenCalledTimes(before);
-  fireEvent.pointerUp(window); expect(mocks.model).toHaveBeenCalledTimes(before + 1);
+  fireEvent.pointerUp(window); await waitFor(() => expect(mocks.model).toHaveBeenCalledTimes(before + 1));
 });

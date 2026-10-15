@@ -4,7 +4,7 @@ import type { RecommendationItem } from "./recommendation.types";
 export const recommendationStatePrefix = "recommendation/v2/";
 const DAY = 86_400_000;
 export const feedHash = (value: unknown) => { const text = JSON.stringify(value); let hash = 2166136261; for (const char of text) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619); return (hash >>> 0).toString(16); };
-export type FeedSnapshot = { id: string; generatedAt: number; expiresAt: number; items: RecommendationItem[]; sourceRevision?: string; recipe: "stable-feed-v2" };
+export type FeedSnapshot = { selection?: "ai"; feedbackRevision?: number; id: string; generatedAt: number; expiresAt: number; items: RecommendationItem[]; sourceRevision?: string; recipe: "stable-feed-v2" };
 type Lease = { id: string; root?: string; until: number };
 export type RecommendationFeedbackMeaning = "read" | "not_relevant" | "too_basic" | "too_advanced" | "snoozed" | "undo";
 export type FeedState = { feedbackRevision?: number; feedbackProjection?: FeedbackProjection[]; feedback?: { id: string; action: RecommendationFeedbackMeaning; at: number; snapshotId?: string; facetId?: string }[]; epoch: number; current?: FeedSnapshot; previous?: FeedSnapshot; pending?: FeedSnapshot; lease?: Lease; automaticRuns: number[]; hidden: string[]; saved: string[]; message?: string; usage?: Record<string, number | string> };
@@ -90,7 +90,7 @@ export class RecommendationFeedCoordinator {
   async restorePrevious() { return this.edit(value => value.previous ? { ...value, current: value.previous, previous: undefined } : value); }
   async applyPreferences() {
     const preferences = await this.preferences(), projection = projectFeedback(preferences, this.now());
-    return this.edit(value => ({ ...value, current: value.current ? { ...value.current, id: crypto.randomUUID(), items: value.current.items.map(item => ({ ...item, preferencePenalty: feedbackForPaper(projection, item).some(row => row.dimension === "difficulty") ? .12 : 0 })) } : undefined }));
+    return this.edit(value => ({ ...value, current: value.current ? { ...value.current, selection: undefined, id: crypto.randomUUID(), items: value.current.items.map(item => ({ ...item, preferencePenalty: feedbackForPaper(projection, item).some(row => row.dimension === "difficulty") ? .12 : 0 })) } : undefined }));
   }
   async seedLegacy(items: RecommendationItem[]) {
     if (!items.length) return;
@@ -161,7 +161,7 @@ export class RecommendationFeedCoordinator {
       try { items = (await Promise.race([run(task), aborted])).slice(0, 200); } finally { removeAbort(); }
       if (!await active()) return await this.edit(value => value.lease?.id === id ? { ...value, lease: undefined } : value);
       counts.elapsedMs = this.now() - now;
-      const snapshot: FeedSnapshot = { id, sourceRevision, generatedAt: this.now(), expiresAt: this.now() + Math.max(6, this.automaticHours()) * 3_600_000, items, recipe: "stable-feed-v2" };
+      const snapshot: FeedSnapshot = { id, selection: reason === "ai_curate" ? "ai" : reason === "explain" ? state.current?.selection : undefined, feedbackRevision: preferences.feedbackRevision, sourceRevision, generatedAt: this.now(), expiresAt: this.now() + Math.max(6, this.automaticHours()) * 3_600_000, items, recipe: "stable-feed-v2" };
       return await this.edit(value => value.epoch !== state.epoch || value.lease?.id !== id || sourceRevision !== this.options.sourceRevision?.() ? value : { ...value, lease: undefined, usage: counts,
         ...(!value.current || manual ? { current: snapshot, pending: undefined, ...(reason === "ai_curate" ? { previous: value.current } : {}) } : { pending: snapshot }) });
     } catch (error) {
