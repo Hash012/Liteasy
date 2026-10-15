@@ -1,3 +1,4 @@
+import { researchSkillDisplayTitle } from "./researchSkillDisplay";
 import { z } from "zod";
 import { contextRefSchema } from "../context/objectContext";
 import { assistantOriginSchema } from "../assistant/assistantSessionContracts";
@@ -63,6 +64,6 @@ export function researchDocumentMarkdown(document: ResearchDocument) {
     draft.claims.length ? "## 主张与依据\n\n" + draft.claims.map(claim => `- ${claim.text}（${claimNames[claim.kind]}）${claim.citations.map(c => `[${c.sourceId}]${c.quote ? `「${c.quote}」` : ""}`).join(" ")}${claim.conditions.length ? `\n  条件：${claim.conditions.join("；")}` : ""}`).join("\n") : "",
     draft.limitations.length ? `## 待核对与局限\n\n${draft.limitations.map(item => `- ${item}`).join("\n")}` : "",
     draft.nextActions.length ? `## 后续行动\n\n${draft.nextActions.map(item => `- ${item}`).join("\n")}` : "",
-    `## 来源与方法\n\n${document.sources.map(source => `- [${source.id}] ${source.title} · ${source.trustLabel === "derived" ? "派生资料" : "来源材料"} · ${source.coverage === "full" ? "所选内容完整载入" : "部分内容"}`).join("\n")}\n\n方法：${document.invocation.skill.id} ${document.invocation.skill.version}。结构与引用定位已检查，科研结论未经独立验证。`
+    `## 来源与方法\n\n${document.sources.map(source => `- [${source.id}] ${source.title} · ${source.trustLabel === "derived" ? "派生资料" : "来源材料"} · ${source.coverage === "full" ? "所选内容完整载入" : "部分内容"}`).join("\n")}\n\n方法：${researchSkillDisplayTitle(document.invocation.skill)} ${document.invocation.skill.version}。结构与引用定位已检查，科研结论未经独立验证。`
   ].filter(Boolean).join("\n\n");
 }

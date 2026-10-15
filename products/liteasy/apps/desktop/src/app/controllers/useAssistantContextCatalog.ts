@@ -152,7 +152,7 @@ export function useAssistantContextCatalog(input: {
         resourcePath: liteasyPath(scopeId, { kind: "artifact", artifactId: artifact.artifactId }),
         category: "产物", preview: contextPreviewText(artifactContextText(artifact)),
         readOnly: true,
-        detail: artifact.sourcePath ?? artifact.resultPath ?? `产物/${artifact.type === "thin_reading" ? "薄读" : "生成文档"}/${artifact.title}`,
+        detail: `${artifact.type === "thin_reading" ? "薄读" : "生成文档"} · 已保存的结果`,
         resolveToken: () => resolveTransfer(ARTIFACT_CONTEXT_MIME, artifact.artifactId),
       })),
       ...catalog.map((file) => ({

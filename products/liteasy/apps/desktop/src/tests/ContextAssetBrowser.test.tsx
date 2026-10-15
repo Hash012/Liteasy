@@ -236,3 +236,20 @@ it("restores query, grouping and sort within an account without carrying them to
 });
 
 beforeEach(() => { for (const key of Object.keys(localStorage)) if (key.startsWith("liteasy:context-picker:")) localStorage.removeItem(key); });
+
+test("restored missing selection and legacy errors never expose machine IDs or old titles", async () => {
+  const { draftStateKey } = await import("../app/features/context-picker/pickerState");
+  const key = draftStateKey("local", "library", "context", "lost-assets");
+  localStorage.setItem(key, JSON.stringify({ schemaVersion: 1,
+    intents: [{ id: "old-selection", catalogRevision: "old", policy: "items", exclusions: [], members: [{ id: "internal-asset-secret" }] }],
+    receipts: {}, errors: { "0": "internal-asset-secret：资产已不可用" } }));
+  const view = render(<ContextAssetBrowser suggestions={[]} targetDraftId="lost-assets" onClose={vi.fn()} onAddContextToken={vi.fn()} />);
+  expect(screen.queryByText(/internal-asset-secret/)).not.toBeInTheDocument();
+  expect(screen.getByText("上次添加的部分资料未成功，请核对所选资料后重试。")).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: /加入所选|添加所选/ }));
+  expect(screen.getByText("所选资料已不可用，请重新选择。")).toBeVisible();
+  view.unmount();
+  render(<ContextAssetBrowser suggestions={[]} targetDraftId="lost-assets" onClose={vi.fn()} onAddContextToken={vi.fn()} />);
+  expect(screen.queryByText(/internal-asset-secret/)).not.toBeInTheDocument();
+  expect(screen.getByText("所选资料已不可用，请重新选择。")).toBeVisible();
+});

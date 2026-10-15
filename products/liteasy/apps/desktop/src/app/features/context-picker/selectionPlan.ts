@@ -4,7 +4,7 @@ import { contextReferenceIdentity, mergeContextSelection } from "../assistant/co
 /** Only identities and version watermarks are persisted, never bodies or image bytes. */
 export type PlannedMember = { id: string; path?: string; revision?: string; watermark?: string; completeText?: boolean; representation?: "text" | "image" | "file" | "reference" };
 export type SelectionIntent = { id: string; catalogRevision: string; policy: "items" | "originals" | "related" | "filtered"; members: PlannedMember[]; exclusions: string[] };
-export type SelectionDraft = { schemaVersion: 1; intents: SelectionIntent[]; errors: Record<string, string>; receipts: Record<string, "added" | "alreadyPresent"> };
+export type SelectionDraft = { schemaVersion: 1; intents: SelectionIntent[]; errors: Record<string, string>; errorsPresentationVersion?: 1; receipts: Record<string, "added" | "alreadyPresent"> };
 export const emptySelectionDraft = (): SelectionDraft => ({ schemaVersion: 1, intents: [], errors: {}, receipts: {} });
 export function selectionMembers(draft: SelectionDraft): PlannedMember[] {
   const members = new Map<string, PlannedMember>();

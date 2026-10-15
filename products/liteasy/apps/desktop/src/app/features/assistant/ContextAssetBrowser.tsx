@@ -99,7 +99,7 @@ function ContextAssetBrowserContent({ suggestions, contextTokens = [], initialQu
   const close = () => { lifetime.current.abort(); onClose(); };
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
-  const [errors, setErrors] = useState<string[]>(() => Object.values(picker.draft.errors));
+  const [errors, setErrors] = useState<string[]>(() => picker.draft.errorsPresentationVersion === 1 ? Object.values(picker.draft.errors) : Object.keys(picker.draft.errors).length ? ["上次添加的部分资料未成功，请核对所选资料后重试。"] : []);
   const [noteText, setNoteText] = useState("");
   const [previewAttempt, setPreviewAttempt] = useState(0);
   const mounted = useRef(true);
@@ -235,7 +235,7 @@ function ContextAssetBrowserContent({ suggestions, contextTokens = [], initialQu
     for (const id of selected) {
       if (!mounted.current || lifetime.current.signal.aborted) break;
       const asset = catalogRef.current.find((candidate) => candidate.id === id);
-      if (!asset || !available(asset)) { failures.push(`${asset?.label ?? selectedAssets.current.get(id)?.label ?? id}：${asset?.unavailableReason ?? tChinese("contextCatalog.unavailable", "资产已不可用，请重新选择。")}`); continue; }
+      if (!asset || !available(asset)) { failures.push(asset ? `${asset.label}：${asset.unavailableReason ?? tChinese("contextCatalog.unavailable", "资产已不可用，请重新选择。")}` : "所选资料已不可用，请重新选择。"); continue; }
       try {
         const member = picker.members.find(value => value.id === id)!;
         if (member.watermark && !member.revision && member.watermark !== asset.updatedAt) throw new Error("来源已更新，请重新选择以确认新版本。");
@@ -252,7 +252,7 @@ function ContextAssetBrowserContent({ suggestions, contextTokens = [], initialQu
     operation.current = false;
     if (!mounted.current) return;
     setBusy(false); setErrors(failures);
-    picker.setDraft(state => ({ ...state, errors: Object.fromEntries(failures.map((message, index) => [String(index), message])) }));
+    picker.setDraft(state => ({ ...state, errorsPresentationVersion: 1, errors: Object.fromEntries(failures.map((message, index) => [String(index), message])) }));
     setStatus(count ? `已添加 ${count} 项上下文。` : "尚未添加上下文。");
   }
 
@@ -437,7 +437,7 @@ function ContextAssetBrowserContent({ suggestions, contextTokens = [], initialQu
         </DialogContent>
         <DialogActions className="context-asset-actions">
           {!onChooseReference ? <span className="context-asset-selection-count" aria-live="polite"><span>待加入 {selected.size} 项</span> · 已在上下文 {new Set([...contextTokens, ...acceptedTokens.current].map(token => token.id)).size} 项</span> : null}
-          {!onChooseReference && selected.size ? <Popover><PopoverTrigger disableButtonEnhancement><Button size="small">查看待选</Button></PopoverTrigger><PopoverSurface aria-label="全部待选资产" className="context-picker-pending">{picker.members.map(member => <div key={member.id}><Checkbox checked label={catalog.find(asset => asset.id === member.id)?.label ?? selectedAssets.current.get(member.id)?.label ?? "已不可用的资产"} onChange={() => picker.exclude([member.id])} /><small>{catalog.find(asset => asset.id === member.id)?.unavailableReason}</small></div>)}</PopoverSurface></Popover> : null}
+          {!onChooseReference && selected.size ? <Popover><PopoverTrigger disableButtonEnhancement><Button size="small">查看待选</Button></PopoverTrigger><PopoverSurface aria-label="全部待选资产" className="context-picker-pending">{picker.members.map(member => <div key={member.id}><Checkbox checked label={catalog.find(asset => asset.id === member.id)?.label ?? "已不可用的资料"} onChange={() => picker.exclude([member.id])} /><small>{catalog.find(asset => asset.id === member.id)?.unavailableReason}</small></div>)}</PopoverSurface></Popover> : null}
           {!onChooseReference ? <Button disabled={busy || !selected.size} onClick={picker.clear}>清空选择</Button> : null}
           <Button onClick={close}>{closeLabel}</Button>
           {!onChooseReference ? <Button appearance="primary" icon={<AddRegular />} disabled={busy || !selected.size}

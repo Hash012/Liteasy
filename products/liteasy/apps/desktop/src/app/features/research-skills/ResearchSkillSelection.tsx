@@ -12,8 +12,8 @@ export function ResearchSkillSelectionView({ selection, destinations, sources, o
   const skill = listResearchSkills().find(skill => skill.ref?.packageDigest === selection.skill.packageDigest);
   return <section aria-label="所选科研方法" className="research-skill-selection">
     <div className="assistant-context-token-row">
-      <Popover><PopoverTrigger disableButtonEnhancement><Button size="small">{skill?.title ?? selection.skill.id}</Button></PopoverTrigger>
-        <PopoverSurface><strong>{skill?.title ?? selection.skill.id}</strong><p>{skill?.description ?? "此方法版本不可用，请重新选择。"}</p><p>版本 {selection.skill.version} · 生成并保存一份科研文档</p><p>科研结论需自行核对；不会执行实验、投稿或联网检索。</p></PopoverSurface></Popover>
+      <Popover><PopoverTrigger disableButtonEnhancement><Button size="small">{skill?.title ?? "科研方法暂不可用"}</Button></PopoverTrigger>
+        <PopoverSurface><strong>{skill?.title ?? "科研方法暂不可用"}</strong><p>{skill?.description ?? "此方法版本不可用，请重新选择。"}</p><p>版本 {selection.skill.version} · 生成并保存一份科研文档</p><p>科研结论需自行核对；不会执行实验、投稿或联网检索。</p></PopoverSurface></Popover>
       <Tooltip content="移除科研方法" relationship="label"><Button size="small" appearance="subtle" icon={<DismissRegular />} aria-label="移除科研方法" onClick={() => onChange(undefined)} /></Tooltip>
     </div>
     <label>保存到<Dropdown aria-label="科研文档保存到" placeholder="选择原论文条目" value={selection.destination?.title ?? ""} selectedOptions={selection.destination ? [selection.destination.canonicalEntryId] : []}
