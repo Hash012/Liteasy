@@ -1,3 +1,4 @@
+import { curateRecommendationSnapshot } from "./recommendationResearchEnhancer";
 import { feedbackForPaper, feedbackFacet, type FeedbackRequest } from "./recommendationFeedbackProjection";
 import { buildSelectionCacheKey, buildWorkspaceCacheKey } from "./useRecommendations";
 import { adoptRecommendationBrief } from "./recommendationBrief";
@@ -109,6 +110,28 @@ export function useRecommendationFeed(input: FeedInput) {
     });
     return rankRecommendations(items, { style: current.style });
   };
+  const curate = async (only?: RecommendationItem) => {
+    if (running || latest.current.pending) return;
+    setRunning(true);
+    try {
+      const before = await coordinator.read(), snapshot = before.current;
+      if (!snapshot?.items.length) throw new Error("请先检查新论文，获取真实候选。");
+      await coordinator.refresh(only ? "explain" : "ai_curate", async task => {
+        const { version, current, context, preferences, evidenceStore, evidence } = await prepareContext(task);
+        const modelSnapshot = JSON.stringify(current.modelSettings);
+        const active = async () => await task.active() && identityRef.current === identity && version === latestContextVersion.current
+          && JSON.stringify(latest.current.modelSettings) === modelSnapshot && latest.current.preferences.consentEpoch === preferences.consentEpoch
+          && (await coordinator.read()).feedbackRevision === before.feedbackRevision && (await evidenceStore.read()).revision === evidence.revision;
+        const selected = only ? snapshot.items.filter(row => row.id === only.id) : rankRecommendations(snapshot.items.filter(row => !isRecommendationHidden(row, before)).map(item => ({ ...item, preferencePenalty: feedbackForPaper(before.feedbackProjection ?? [], item).some(row => row.dimension === "difficulty") ? .12 : 0 })), { style: current.style });
+        const result = await curateRecommendationSnapshot({ assets: current.assets, items: selected, context, preferences, settings: current.modelSettings, task: { ...task, active }, mode: only ? "explain" : "curate", feedbackRevision: before.feedbackRevision, snapshotId: snapshot.id });
+        if (!await active()) throw new Error("研究依据已变化，请重新精选。");
+        if (!result.items.length) throw new Error("本次没有足够相关的候选，保留原推荐。");
+        return only ? snapshot.items.map(item => result.items.find(row => row.id === item.id) ?? item) : result.items;
+      });
+      await read();
+    } catch (error) { if (mounted.current && identityRef.current === identity) setState(state => ({ ...state, identity, error: error instanceof Error ? error.message : "AI 精选暂不可用。" })); }
+    finally { if (mounted.current && identityRef.current === identity) setRunning(false); }
+  };
   const refresh = async (reason: "initial" | "manual_check" | "scheduled" | "explicit_seed") => {
     if (!latest.current.enabled || latest.current.pending) return;
     if (mounted.current) setRunning(true);
@@ -161,8 +184,13 @@ export function useRecommendationFeed(input: FeedInput) {
   return { recommendationItems: items, recommendationStatus: (!input.enabled ? "disabled" : running && !items.length ? "loading" : value?.current ? "ready" : state.error ? "error" : "idle") as RecommendationStatus,
     recommendationPending: running, recommendationMessage: value?.message ?? state.error ?? (value?.current && navigator.onLine === false ? "当前离线，显示本机缓存。" : value?.current ? value.current.generatedAt ? `上次更新：${new Date(value.current.generatedAt).toLocaleString()}` : "旧版题录缓存 · 待更新" : "根据资料库和研究兴趣提供推荐；也可明确按选集探索。"),
     recordSignal: async (item: RecommendationItem, action: RecommendationFeedbackMeaning, command?: FeedbackRequest) => { const receipt = await coordinator.recordFeedback(item.canonicalId ?? item.id, action, item.feedSnapshotId, feedbackFacet(item), command); await read(); return receipt; },
-    adoptBrief: async (item: RecommendationItem) => { if (!latest.current.assets) throw new Error("当前工作区不能保存笔记。"); return adoptRecommendationBrief(item, latest.current.assets); },
+    adoptBrief: async (item: RecommendationItem) => { if (!latest.current.assets) throw new Error("当前工作区不能保存笔记。"); return adoptRecommendationBrief(item, latest.current.assets, async source => {
+      const controller = new AbortController();
+      const frozen = await prepareContext({ signal: controller.signal, active: async () => true, request: async () => { throw new Error("采用笔记不会调用模型。"); }, upstreamUnknown() {} });
+      return frozen.context.views.some(view => view.id === source.evidenceId && view.revision === source.revision && view.text.startsWith(source.text));
+    }); },
     pendingSnapshot: Boolean(value?.pending), acceptPending: async () => { await coordinator.acceptPending(); await read(); },
+    curateRecommendations: curate, restoreRecommendations: async () => { await coordinator.restorePrevious(); await read(); }, hasPreviousRecommendations: Boolean(value?.previous),
     applyLocalPreferences: async () => { await coordinator.applyPreferences(); await read(); },
     refreshRecommendations: () => refresh("manual_check"),
     clearRecommendationCache: async () => { await coordinator.clear(); await read(); },

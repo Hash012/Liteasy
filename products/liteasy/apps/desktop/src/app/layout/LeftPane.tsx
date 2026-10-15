@@ -92,6 +92,9 @@ export type LeftPaneProps = {
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onClearProfile: () => void;
   onClearRecommendations: () => void;
+  onCurateRecommendations?: (item?: RecommendationItem) => Promise<void>;
+  onRestoreRecommendations?: () => Promise<void>;
+  onApplyRecommendationPreferences?: () => Promise<void>;
   onRecommendationFeedback?: RecommendationFeedbackHandler;
   onAdoptRecommendationBrief?: (item: RecommendationItem) => Promise<unknown>;
   onRefreshRecommendations?: () => void;
@@ -245,6 +248,7 @@ export function LeftPane({
   onAddDroppedPdfFiles,
   onClearProfile,
   onClearRecommendations,
+  onCurateRecommendations, onRestoreRecommendations, onApplyRecommendationPreferences,
   onRecommendationFeedback,
   onAdoptRecommendationBrief,
   onRefreshRecommendations,
@@ -449,6 +453,7 @@ export function LeftPane({
             onAddExternalPdf={onAddExternalPdf}
             onAddDroppedPdfFiles={onAddDroppedPdfFiles}
             onClearRecommendations={onClearRecommendations}
+            onCurateRecommendations={onCurateRecommendations} onRestoreRecommendations={onRestoreRecommendations} onApplyRecommendationPreferences={onApplyRecommendationPreferences}
             onRecommendationFeedback={onRecommendationFeedback}
             onAdoptRecommendationBrief={onAdoptRecommendationBrief}
             onRefreshRecommendations={onRefreshRecommendations}
