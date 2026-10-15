@@ -1228,6 +1228,6 @@ test("starts thin reading from the reader toolbar for only this paper without a 
   expect(start).not.toHaveBeenCalled();
   await userEvent.click(await screen.findByRole("button", { name: "开始生成" }));
   expect(start).toHaveBeenCalledExactlyOnceWith("thin_reading", [readerTestPaper], { systemPrompt: generationPromptTasks.thin_reading.prompt });
-  expect(screen.getByRole("status")).toHaveTextContent("正在准备当前论文。");
+  expect(within(screen.getByRole("toolbar", { name: "PDF 导航工具栏" })).getByRole("status")).toHaveTextContent("正在准备当前论文。");
   expect(screen.queryByLabelText("中间栏悬浮薄读")).not.toBeInTheDocument();
 });

@@ -1,0 +1,222 @@
+{
+  "schema": "liteasy.zotero-benchmark/v1",
+  "date": "2026-10-15",
+  "branch": "feat/reference",
+  "version": "0.1.59",
+  "zoteroSource": "tmp/zotero",
+  "zoteroCommit": "db41b99fddcc52d38897c59c161b6adaca036afb",
+  "zoteroReaderCommit": "132bb787937a540a09513415fd507654eb0e88f9",
+  "approach": "借鉴交互和生命周期设计，以Liteasy现有React/Tauri/Fluent和存储边界独立实现；未复制Zotero代码。",
+  "baseline": {
+    "preservedUserFeatures": "e3c9f26d",
+    "integratedPreviousFixes": "b273322a",
+    "excluded": [
+      "AGENTS.md",
+      ".gitignore",
+      "用户其他无关文档"
+    ]
+  },
+  "improvements": [
+    {
+      "id": 1,
+      "title": "合并 PDF 滚动测量",
+      "commit": "e9a80ab0490f774e1763e1bf7474ebb194ba7ed3",
+      "reference": "reader/src/pdf/pdf-view.js:1143,3632",
+      "result": "同一帧合并滚动，复用页偏移，避免两次全页布局扫描。"
+    },
+    {
+      "id": 2,
+      "title": "有界优先页面绘制",
+      "commit": "e959ef7abe399f93006adde0e307fe29d5bfeb05",
+      "reference": "reader/src/pdf/pdf-view.js:1114–1162",
+      "result": "每文档最多两个绘制任务，优先当前目标，取消过期排队任务。"
+    },
+    {
+      "id": 3,
+      "title": "缩放复用文字与字形数据",
+      "commit": "e4ccbd2d3a2ce244ca97251897345e55a329cd09",
+      "reference": "reader/src/pdf/pdf-view.js:647–653,708–715",
+      "result": "最多缓存八页提取数据，缩放不重复提取，关闭文档释放缓存。"
+    },
+    {
+      "id": 4,
+      "title": "恢复页内阅读位置",
+      "commit": "928b5fda92d3bd5a9f310118abd1e14665fd455f",
+      "reference": "reader/src/pdf/pdf-view.js:482–536,3632–3644",
+      "result": "持久化归一化页内偏移，兼容旧页码记录并保留账号与内容版本隔离。"
+    },
+    {
+      "id": 5,
+      "title": "合并进度保存并支持重试",
+      "commit": "3875dae76783e5ab7820e9d066e125d5f743c929",
+      "reference": "reader/src/common/reader.js:1900–1919",
+      "result": "保留一个在途写入和一个最新位置，离开时提交尾项，可恢复故障允许重试。"
+    },
+    {
+      "id": 6,
+      "title": "缩放与混合尺寸页面保持阅读锚点",
+      "commit": "57a35e6f513f777277def40da6c99867ab8e9d96",
+      "reference": "reader/src/pdf/pdf-view.js:482–536,1728–1745",
+      "result": "缩放、面板尺寸与页面尺寸变化时保持段落位置，显式导航和用户输入优先。"
+    },
+    {
+      "id": 7,
+      "title": "统一本地与团队批注检索",
+      "commit": "8b6d1a0e874afba84ef65a990e04b7df95471ac3",
+      "reference": "reader/src/common/annotation-manager.js:409–472",
+      "result": "侧栏和总览共用检索，包含页码、作者、摘录、笔记和速问内容。"
+    },
+    {
+      "id": 8,
+      "title": "批注类型与颜色组合筛选",
+      "commit": "99a3365ea7cadd411ff102d9790a53d8c4ff7960",
+      "reference": "reader/src/common/components/sidebar/annotations-view.js:11–77,216–246",
+      "result": "组合筛选适用于本地、团队和总览，保持原文标记可见。"
+    },
+    {
+      "id": 9,
+      "title": "批注原文与时间排序",
+      "commit": "a14ab6c1d675b3605db22dae6f6ade5cd35a1799",
+      "reference": "reader/src/common/annotation-manager.js:42,59,340",
+      "result": "提供原文、最近创建、最近修改排序，时间相同按原文稳定排序；时间模式是Liteasy适配。"
+    },
+    {
+      "id": 10,
+      "title": "批注键盘浏览与定位",
+      "commit": "2e79cdb756183c1db6053563d9ba9c1db6789d36",
+      "reference": "reader/src/common/components/sidebar/annotations-view.js:132–151,185–214",
+      "result": "方向键/Home/End浏览，Ctrl或Command+Enter定位，不拦截编辑器光标。"
+    },
+    {
+      "id": 11,
+      "title": "删除批注确认与异步隔离",
+      "commit": "c611b37a71f7fff85121cd1d5c8336336c0d4580",
+      "reference": "reader/src/common/reader.js:2217–2233",
+      "result": "先确认，已公开批注先撤回；阻止重复请求、迟到回调和覆盖等待期间的新编辑。"
+    },
+    {
+      "id": 12,
+      "title": "标识符与引用一致",
+      "commit": "c3f4b11f3b28d7de4627f06997d3f3fecc75e920",
+      "reference": "chrome/content/zotero/elements/itemBox.js:690–706",
+      "result": "清理DOI前缀和网址，正确处理编码，共用引用输出与保存校验。"
+    },
+    {
+      "id": 13,
+      "title": "按文献类型组织元信息",
+      "commit": "932b1c50834e843376caa6bcefda1ac627099c72",
+      "reference": "chrome/content/zotero/elements/itemBox.js:566,1757",
+      "result": "书籍、网页、论文使用相应字段顺序与标签，切换保值且保留未知类型。"
+    },
+    {
+      "id": 14,
+      "title": "调整作者顺序",
+      "commit": "bc310e9fba9aefd8384f7c97c4b402035472ad1c",
+      "reference": "chrome/content/zotero/elements/itemBox.js:2852",
+      "result": "作者可上下移动，保存及复制引用遵循新顺序。"
+    },
+    {
+      "id": 15,
+      "title": "统一标签存储规则",
+      "commit": "2727d8124408820cb3310ca28b935c2057c158bd",
+      "reference": "chrome/content/zotero/xpcom/data/tags.js:909",
+      "result": "统一Unicode、空白与去重规则，50个标签/每项60字符，超限报错不静默截断。"
+    },
+    {
+      "id": 16,
+      "title": "标签逐项编辑与建议",
+      "commit": "a2a2026dfb15b196eb2b4287ae2346b55054b220",
+      "reference": "chrome/content/zotero/elements/tagsBox.js:280,434",
+      "result": "回车添加、批量粘贴、逐项移除和当前文库建议，失败保留草稿。"
+    },
+    {
+      "id": 17,
+      "title": "标签筛选计数与匹配一致",
+      "commit": "0ab1f1e7d767828ccc1ea435bc6cdb9609bdec47",
+      "reference": "chrome/content/zotero/xpcom/data/tags.js:168",
+      "result": "按统一键合并计数，包含排除互斥，活动筛选始终可撤回。"
+    },
+    {
+      "id": 18,
+      "title": "统一文库与元信息字号",
+      "commit": "7f0d519f45528711a2c83385aabc58da3f72c70c",
+      "reference": "scss/abstracts/_variables.scss",
+      "result": "正文、辅助、标题使用Fluent字号层级并随用户字号设置缩放。"
+    },
+    {
+      "id": 19,
+      "title": "统一工具栏和控件尺度",
+      "commit": "79f786e05ebe6ec4a3f14c7a485cb4f91ff6bb57",
+      "reference": "scss/abstracts/_variables.scss",
+      "result": "共享普通/紧凑尺寸，输入、筛选和下拉对齐，大字与触屏保留可用命中区域。"
+    },
+    {
+      "id": 20,
+      "title": "文库键盘连续跨页导航",
+      "commit": "de74fe9133f4b4b9b8cf34397788387dff19dbff",
+      "reference": "chrome/content/zotero/components/virtualized-table.jsx:651–677",
+      "result": "跨50项分页连续浏览，选中项滚入视野，保持有界挂载行数。"
+    }
+  ],
+  "integrationFixes": [
+    {
+      "commit": "b60dd9f9",
+      "result": "正确保留编码DOI与清空后的引用日期。"
+    },
+    {
+      "commit": "6543a37b",
+      "result": "大字号下元信息响应式布局、作者按钮及文库列宽保持可用。"
+    },
+    {
+      "commit": "0ebc38ac",
+      "result": "批注工具随字号缩放，筛选控件完整换行。"
+    }
+  ],
+  "validation": {
+    "environment": {
+      "node": "22.23.2",
+      "rust": "1.98.1",
+      "host": "Linux"
+    },
+    "desktopUnit": {
+      "initialFullRun": {
+        "passed": 4384,
+        "failed": 1,
+        "skippedExisting": 9,
+        "files": 628
+      },
+      "resolvedFailure": "ReaderPane的全局status断言与新增批注结果计数重名；将断言限定到PDF导航工具栏，保留真实请求参数断言。",
+      "focusedRerun": {
+        "file": "src/tests/ReaderPane.test.tsx",
+        "passed": 43,
+        "failed": 0
+      },
+      "log": "/tmp/liteasy-zotero-full-tests.log",
+      "rerunLog": "/tmp/liteasy-zotero-reader-regression.log"
+    },
+    "browser": {
+      "total": 121,
+      "initialPassed": 117,
+      "initialFailed": 4,
+      "resolvedFailure": "并行worktree共享node_modules导致旧Vite缓存提供两份React；使用独立cacheDir重启测试服务，无需修改业务代码或放宽断言。",
+      "focusedRerun": {
+        "passed": 4,
+        "failed": 0,
+        "files": [
+          "studioEditing.browser.spec.ts",
+          "uiRootCauseIntegration.browser.spec.ts",
+          "uiScale.browser.spec.ts"
+        ]
+      },
+      "log": "/tmp/liteasy-zotero-ui-browser.log",
+      "rerunLog": "/tmp/liteasy-zotero-studio-recheck.log"
+    },
+    "build": "passed; 231 production assets verified",
+    "ciSmoke": "passed; 9 tests and 361 i18n keys",
+    "rust": "cargo check --locked --all-targets --no-default-features passed; 5 user_paper_store tests passed",
+    "uiPolicy": "boundaries passed; 15 policy tests passed",
+    "workflow": "lint passed; 99 CI script tests passed",
+    "contentAndExportBoundaries": "passed",
+    "delivery": "发布提交后在干净worktree运行ci:contracts，再请求完整Windows Installer CI；实际安装启动证据以对应GitHub Actions产物为准，本记录不把Linux验证当作Windows验收。"
+  }
+}

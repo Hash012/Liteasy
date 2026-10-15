@@ -19,6 +19,8 @@
   --layer-reading: 0;
   --layer-panel: 1;
   --layer-toolbar: 2;
+  /* Internal link hit regions sit above text within each PDF page. */
+  --layer-pdf-link: 3;
   --layer-overlay: 1000;
   /* Compatibility names retain their consumers while sharing the Fluent palette. */
   --paper-0: var(--surface-app);

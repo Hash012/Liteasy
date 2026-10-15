@@ -2088,7 +2088,8 @@
       "batch": "M4",
       "owner": "M4 surface owner / shared UI review",
       "symbols": [
-        "BibliographicMetadataEditor"
+        "BibliographicMetadataEditor",
+        "moveAuthor"
       ],
       "interactions": [
         "form"
@@ -2117,7 +2118,8 @@
       "batch": "M4",
       "owner": "M4 surface owner / shared UI review",
       "symbols": [
-        "LibraryFacetFilters"
+        "LibraryFacetFilters",
+        "toggle"
       ],
       "interactions": [],
       "styles": [],
@@ -2655,7 +2657,11 @@
         "normalizeMathOutsideCode",
         "normalizeMarkdownMathDelimiters",
         "CodeCopyButton",
-        "MarkdownPre"
+        "MarkdownPre",
+        "resourceLocator",
+        "ResourceMarkdownLink",
+        "ResourceMarkdownImage",
+        "ResourceMarkdownParagraph"
       ],
       "interactions": [],
       "styles": [
@@ -3914,6 +3920,38 @@
       "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
     },
     {
+      "path": "src/app/features/pdf/PdfAnnotationDeleteDialog.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "symbols": [
+        "PdfAnnotationDeleteDialog"
+      ],
+      "interactions": [
+        "Dialog",
+        "DialogActions",
+        "DialogBody",
+        "DialogContent",
+        "DialogSurface",
+        "DialogTitle"
+      ],
+      "styles": [],
+      "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
       "path": "src/app/features/pdf/PdfAnnotationEditor.tsx",
       "batch": "M1",
       "owner": "M1 surface owner / shared UI review",
@@ -3931,6 +3969,32 @@
         "infoPopover": false,
         "filterPopover": false,
         "optionPicker": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
+      "path": "src/app/features/pdf/PdfAnnotationFilters.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "symbols": [
+        "matchesPdfAnnotationFacets",
+        "PdfAnnotationFilters"
+      ],
+      "interactions": [],
+      "styles": [],
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -3993,6 +4057,31 @@
       "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
     },
     {
+      "path": "src/app/features/pdf/PdfAnnotationSortPicker.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "symbols": [
+        "PdfAnnotationSortPicker"
+      ],
+      "interactions": [],
+      "styles": [],
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
       "path": "src/app/features/pdf/PdfAnnotationStatus.tsx",
       "batch": "M1",
       "owner": "M1 surface owner / shared UI review",
@@ -4026,13 +4115,13 @@
       ],
       "interactions": [],
       "styles": [],
-      "migration": "product-primitives",
+      "migration": "existing-Fluent-adapter",
       "disclosure": {
         "contextualActions": false,
         "semanticSection": false,
         "infoPopover": false,
         "filterPopover": false,
-        "optionPicker": true,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -4081,6 +4170,35 @@
       ],
       "interactions": [],
       "styles": [],
+      "migration": "inherited-semantic-surface",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
+      "path": "src/app/features/pdf/PdfInternalLinks.tsx",
+      "batch": "M1",
+      "owner": "M1 surface owner / shared UI review",
+      "symbols": [
+        "PdfInternalLinks",
+        "InternalLinkView",
+        "InternalLinkPreview"
+      ],
+      "interactions": [],
+      "styles": [
+        "./pdfInternalLinks.css"
+      ],
       "migration": "inherited-semantic-surface",
       "disclosure": {
         "contextualActions": false,
@@ -4278,7 +4396,6 @@
         "openSearch",
         "closeSearch",
         "changeLayoutMode",
-        "handleStageScroll",
         "handleStageKeyDown",
         "handleStageCopy",
         "handleFindShortcut",
@@ -4332,7 +4449,10 @@
         "changeTextAnnotationOpacity",
         "updateHighlightColor",
         "setAnnotationPublic",
+        "requestAnnotationDeletion",
+        "confirmAnnotationDeletion",
         "deleteAnnotation",
+        "performAnnotationDeletion",
         "setAutoPublic",
         "shareAnnotationToOrganization",
         "updateOrganizationAnnotation",
@@ -4341,6 +4461,7 @@
       "interactions": [
         "GenerationPromptDialog",
         "InfoPopover",
+        "PdfAnnotationDeleteDialog",
         "PdfSelectionMenu",
         "Popover",
         "PopoverSurface",
@@ -5228,6 +5349,36 @@
       ],
       "styles": [
         "./resourceTags.css"
+      ],
+      "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
+      "path": "src/app/features/resource-tags/ResourceTagEditor.tsx",
+      "batch": "M4",
+      "owner": "M4 surface owner / shared UI review",
+      "symbols": [
+        "createResourceTagDraft",
+        "resourceTagDraftValues",
+        "ResourceTagEditor",
+        "add"
+      ],
+      "interactions": [],
+      "styles": [
+        "./resourceTagEditor.css"
       ],
       "migration": "existing-Fluent-adapter",
       "disclosure": {

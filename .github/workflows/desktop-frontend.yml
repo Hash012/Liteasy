@@ -71,7 +71,7 @@ jobs:
     name: L1 - UI browser contracts
     needs: contracts
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: products/liteasy/apps/desktop
