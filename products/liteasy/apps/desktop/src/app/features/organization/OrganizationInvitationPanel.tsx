@@ -6,6 +6,7 @@ import type { AccountSession } from "../account/account.types";
 import { createOrganizationActionClient, type OrganizationActionTransport, type OrganizationInvitation } from "./organizationActionsClient";
 import { organizationActorBinding, organizationSessionMatchesEndpoint } from "./organizationActorBinding";
 import type { OrganizationSummary } from "./organization.types";
+import { organizationMemberIdentifiable, organizationMemberLabel } from "./organizationIdentityPresentation";
 
 type Props = { session: AccountSession; endpoint: string; summary: OrganizationSummary; onChanged: () => void | Promise<void>; transport?: OrganizationActionTransport };
 const statusLabels = { pending: "待接受", accepted: "已接受", revoked: "已撤回", expired: "已过期" };
@@ -19,13 +20,22 @@ function InvitationManager({ session, endpoint, summary, onChanged, transport }:
   const [expanded, setExpanded] = useState(false);
   const [invitations, setInvitations] = useState<OrganizationInvitation[]>([]);
   const [revision, setRevision] = useState(summary.revision);
-  const [selection, setSelection] = useState<OrganizationInvitation | null>(null);
+  const [selection, setSelection] = useState<{ invitation: OrganizationInvitation; label: string } | null>(null);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const mounted = useRef(true);
   const epoch = useRef(0);
   const binding = organizationActorBinding(session, endpoint);
   const client = createOrganizationActionClient({ endpoint, transport });
+  function identity(subject: string) {
+    const member = summary.members.find((candidate) => candidate.subject === subject);
+    if (member) return { label: organizationMemberLabel(member), identifiable: organizationMemberIdentifiable(member, summary.members) };
+    if (subject === session.userId && organizationSessionMatchesEndpoint(session, endpoint)) {
+      const label = session.name.trim() ? `${session.name}${session.email ? ` · ${session.email}` : ""}` : session.email;
+      return { label: label || "姓名尚未提供", identifiable: Boolean(label) };
+    }
+    return { label: "姓名尚未提供", identifiable: false };
+  }
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; epoch.current += 1; }; }, []);
   function beginRequest() {
     if (!mounted.current || binding !== organizationActorBinding(session, endpoint)) return null;
@@ -54,10 +64,14 @@ function InvitationManager({ session, endpoint, summary, onChanged, transport }:
     finally { if (current()) setBusy(false); }
   }
   async function revoke() {
-    if (!selection || busy || selection.status !== "pending" || (summary.myRole === "admin" && selection.role === "admin")) return;
+    if (!selection || busy || selection.invitation.status !== "pending" || (summary.myRole === "admin" && selection.invitation.role === "admin")) return;
+    const target = identity(selection.invitation.targetSubject);
+    if (!target.identifiable || target.label !== selection.label) {
+      setSelection(null); setStatus("请刷新组织权限与邀请，确认受邀者姓名或邮箱后再操作。"); return;
+    }
     const current = beginRequest();
     if (!current) return;
-    const approved = selection;
+    const approved = selection.invitation;
     setBusy(true); setStatus("");
     try {
       const result = await client.revokeInvitation({ organizationId: summary.organizationId, sessionId: session.sessionId, invitationId: approved.invitationId, expectedInvitationRevision: approved.revision, expectedRevision: revision });
@@ -79,12 +93,16 @@ function InvitationManager({ session, endpoint, summary, onChanged, transport }:
       <Button appearance="subtle" disabled={busy} onClick={() => void load()}>刷新邀请</Button>
       <Button appearance="subtle" disabled={busy} onClick={() => void refreshPermissions()}>刷新组织权限</Button>
       {busy && <p role="status">正在处理邀请…</p>}
-      {invitations.map((item) => <article key={item.invitationId} aria-label={`邀请 ${item.targetSubject}`} className="organization-member-governance-row">
-        <strong>{item.targetSubject}</strong><p>{item.role === "admin" ? "管理员" : "成员"} · <span>{statusLabels[item.status]}</span></p>
-        <p>邀请者：{item.createdBy}</p><p>到期：{new Date(item.expiresAt).toLocaleString("zh-CN")}</p>
-        {item.status === "pending" && Date.parse(item.expiresAt) > Date.now() && (summary.myRole === "owner" || item.role === "member") && <Button appearance="subtle" aria-label={`撤回邀请 ${item.targetSubject}`} disabled={busy} onClick={() => setSelection(item)}>撤回邀请</Button>}
-      </article>)}
-      {selection && <div role="alertdialog" aria-label="确认撤回邀请"><p>确认撤回 {summary.name} 对 {selection.targetSubject} 的邀请？</p><p>原加入令牌将失效。</p>
+      {invitations.map((item) => {
+        const target = identity(item.targetSubject);
+        return <article key={item.invitationId} aria-label={`邀请 ${target.label}`} className="organization-member-governance-row">
+          <strong>{target.label}</strong><p>{item.role === "admin" ? "管理员" : "成员"} · <span>{statusLabels[item.status]}</span></p>
+          <p>邀请者：{identity(item.createdBy).label}</p><p>到期：{new Date(item.expiresAt).toLocaleString("zh-CN")}</p>
+          {!target.identifiable && <p>受邀者资料不足或无法区分，请刷新组织权限与邀请后再操作。</p>}
+          {item.status === "pending" && Date.parse(item.expiresAt) > Date.now() && (summary.myRole === "owner" || item.role === "member") && <Button appearance="subtle" aria-label={`撤回邀请 ${target.label}`} disabled={busy || !target.identifiable} onClick={() => setSelection({ invitation: item, label: target.label })}>撤回邀请</Button>}
+        </article>;
+      })}
+      {selection && <div role="alertdialog" aria-label="确认撤回邀请"><p>确认撤回 {summary.name} 对 {selection.label} 的邀请？</p><p>原加入令牌将失效。</p>
         <Button disabled={busy} onClick={() => setSelection(null)}>取消</Button><Button disabled={busy} onClick={() => void revoke()}>确认撤回</Button>
       </div>}
       {status && <p role="status">{status}</p>}
