@@ -195,3 +195,12 @@
 .pdf-overview .pdf-annotation-card > header { font-size: var(--fontSizeBase200); }
 .pdf-team-annotations .pdf-annotation-excerpt,
 .pdf-team-annotations .annotation-note-preview { font-size: var(--fontSizeBase300); }
+
+.pdf-annotation-color-filters { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.pdf-annotation-color-filter.fui-Button { gap: 4px; min-width: 0; font-size: var(--fontSizeBase200); }
+.pdf-annotation-color-filter[aria-pressed="true"] { background: var(--colorNeutralBackground1Selected); outline: 1px solid var(--colorCompoundBrandStroke); }
+.pdf-annotation-filter-swatch { display: inline-flex; align-items: center; justify-content: center; width: 1em; height: 1em; border: 1px solid var(--colorNeutralStroke1); border-radius: 3px; color: var(--colorNeutralForegroundStatic); }
+.pdf-annotation-color-count { color: var(--colorNeutralForeground3); font-variant-numeric: tabular-nums; }
+.pdf-annotation-editor .color-selector { flex-wrap: wrap; gap: 4px; background: var(--colorNeutralBackground2); border-color: var(--colorNeutralStroke2); box-shadow: none; }
+.pdf-annotation-editor .color-option.fui-Button { min-width: var(--control-size-compact); width: var(--control-size-compact); height: var(--control-size-compact); padding: 0; color: var(--colorNeutralForegroundStatic); }
+.pdf-annotation-editor .color-option[aria-pressed="true"] { outline: 2px solid var(--colorCompoundBrandStroke); outline-offset: 1px; }

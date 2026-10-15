@@ -1,9 +1,9 @@
-import { getHighlightColor } from "../pdf/pdfAnnotationAppearance";
+import { pdfAnnotationColors } from "../pdf/pdfAnnotationAppearance";
 import { useEffect, useId, useRef, type RefObject } from "react";
 import type { PdfAnnotationV2 } from "../pdf/pdfAnnotationStorage";
 import { indexReadingHighlights, readingHighlightRange } from "./readingHighlightRanges";
 
-const colors = { yellow: getHighlightColor("yellow"), red: getHighlightColor("red"), blue: getHighlightColor("blue"), green: getHighlightColor("green"), pink: getHighlightColor("pink"), default: "#1b66b3" };
+const colors = { ...pdfAnnotationColors, default: "#1b66b3" };
 export function useReadingHighlights(root: RefObject<HTMLElement>, annotations: readonly PdfAnnotationV2[], onSelect: (id: string) => void) {
   const prefix = `reading${useId().replace(/[^a-z0-9]/gi, "")}`;
   const callback = useRef(onSelect); callback.current = onSelect;

@@ -80,3 +80,13 @@ test("does not let a member update another author's annotation", async () => {
   assert.equal(queries.some((sql) => sql === "ROLLBACK"), true);
   assert.equal(queries.some((sql) => /UPDATE team_annotations/.test(sql)), false);
 });
+
+for (const color of ["orange", "purple", "cyan", "gray"]) test(`accepts ${color} highlights before the organization transaction`, async () => {
+  const entered = new Error("transaction reached");
+  const repository = new PostgresTeamAnnotationRepository({ async connect() { throw entered; } });
+  await assert.rejects(repository.create(memberScope, {
+    documentId: "document_1", idempotencyKey: `color-${color}-0001`,
+    body: { clientAnnotationId: `local-${color}`, kind: "highlight", color, excerpt: "Evidence", page: 1,
+      text: "高亮", rects: [{ left: 0.1, top: 0.1, width: 0.2, height: 0.03 }], updatedAt: "2026-10-15T00:00:00.000Z" }
+  }), (error) => error === entered);
+});

@@ -27,8 +27,8 @@ import { schedulePdfPageRender } from "./pdfPageRenderQueue";
 import { pdfReaderContentRevision } from "./pdfReaderPosition";
 import { usePdfReaderFeedback } from "./usePdfReaderFeedback";
 import { usePdfReaderPosition } from "./usePdfReaderPosition";
-import { getHighlightColor, getOverlayStyle } from "./pdfAnnotationAppearance";
-import { DrawShapeRegular, EraserRegular, ArrowUndoRegular } from "@fluentui/react-icons";
+import { getHighlightColor, getOverlayStyle, pdfAnnotationColorLabels } from "./pdfAnnotationAppearance";
+import { CheckmarkRegular, DrawShapeRegular, EraserRegular, ArrowUndoRegular } from "@fluentui/react-icons";
 import { PdfInkLayer } from "./PdfInkLayer";
 import { canGroupPdfInkStroke, pdfInkGroupBounds, pdfInkStrokes, type PdfInkMode, type PdfInkStroke } from "./pdfInk";
 import { PdfPaneResizeHandle } from "./PdfPaneResizeHandle";
@@ -117,6 +117,7 @@ import {
   type PdfAnnotationPublication,
   type PdfAnnotationRect,
   type PdfAnnotationV2,
+  pdfHighlightColors,
   type PdfHighlightColor
 } from "./pdfAnnotationStorage";
 import { resolvePaperIdentity } from "../paper-identity/paperIdentity";
@@ -500,7 +501,7 @@ function getHighlightBorderColor(color: HighlightColor): string {
     case "pink":
       return "#f5b7e9";
     default:
-      return "#ffe69c";
+      return getHighlightColor(color);
   }
 }
 
@@ -3919,7 +3920,7 @@ export function PdfReader({
                   {annotationQuery ? <Tooltip content="清除批注搜索" relationship="description"><Button aria-label="清除批注搜索" size="small" appearance="subtle"
                     icon={<DismissRegular />} onClick={() => setAnnotationQuery("")} /></Tooltip> : null}
                 </div>
-                <PdfAnnotationFilters value={annotationFacets} onChange={setAnnotationFacets} />
+                <PdfAnnotationFilters annotations={[...annotations, ...teamAnnotations.map((item) => item.body)]} value={annotationFacets} onChange={setAnnotationFacets} />
                 <div className="pdf-annotation-list-options"><NoteLabelFilter compact value={annotationFilter} onChange={setAnnotationFilter} />
                   <PdfAnnotationSortPicker value={annotationSort} onChange={setAnnotationSort} /></div>
                 <p className="pdf-annotation-result-count" role="status" aria-label="批注检索结果">{filteredAnnotations.length + filteredTeamAnnotations.length} / {annotations.length + teamAnnotations.length} 条批注</p>
@@ -4087,19 +4088,13 @@ export function PdfReader({
                                 onSave={saveAnnotationNote} onCancel={cancelAnnotationEditing} />
                               {annotation.kind === "highlight" && (
                                 <div className="color-selector">
-                                  {(["yellow", "red", "blue", "green", "pink"] as HighlightColor[]).map((color) => (
-                                    <button
-                                      key={color}
-                                      className={`color-option ${selectedColor === color ? "active" : ""}`}
+                                  {pdfHighlightColors.map((color) => <Tooltip key={color} content={`选择${pdfAnnotationColorLabels[color]}高亮`} relationship="description">
+                                    <Button size="small" appearance="subtle" className="color-option"
                                       style={{ backgroundColor: getHighlightColor(color) }}
-                                      onClick={() => {
-                                        // 更新高亮颜色
-                                        updateHighlightColor(annotation.id, color);
-                                      }}
-                                      title={`选择${color === "yellow" ? "黄色" : color === "red" ? "红色" : color === "blue" ? "蓝色" : color === "green" ? "绿色" : "粉色"}高亮`}
-                                      type="button"
-                                    />
-                                  ))}
+                                      aria-label={`选择${pdfAnnotationColorLabels[color]}高亮`} aria-pressed={(annotation.color ?? "yellow") === color}
+                                      onClick={() => updateHighlightColor(annotation.id, color)}
+                                      icon={(annotation.color ?? "yellow") === color ? <CheckmarkRegular /> : undefined} />
+                                  </Tooltip>)}
                                 </div>
                               )}
                               </>}

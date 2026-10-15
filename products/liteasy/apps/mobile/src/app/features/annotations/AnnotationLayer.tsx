@@ -4,7 +4,7 @@ import type { PdfAnnotationV2 } from "@liteasy/reading-core/pdfAnnotations";
 import { pagePoint } from "./annotationGeometry";
 import type { AnnotationControls, AnnotationMode } from "./annotation.types";
 
-const colors = { yellow: "#fff100", red: "#f15b50", blue: "#2196f3", green: "#4caf50", pink: "#e573b3" };
+const colors = { yellow: "#fff100", red: "#f15b50", blue: "#2196f3", green: "#4caf50", pink: "#e573b3", orange: "#ffb366", purple: "#c3a6ff", cyan: "#76d7ea", gray: "#b8bfc8" };
 const path = (points: PdfInkPoint[]) => points.map((point, index) => `${index ? "L" : "M"}${point.x},${point.y}`).join(" ");
 export function AnnotationLayer({ page, mode, controls, onPlace, onEdit }: {
   page: number; mode: AnnotationMode; controls: AnnotationControls;

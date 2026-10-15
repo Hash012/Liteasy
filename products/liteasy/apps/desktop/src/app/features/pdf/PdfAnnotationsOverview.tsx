@@ -40,7 +40,7 @@ export function PdfAnnotationsOverview({ annotations, teamAnnotations, paperIden
       <strong>全部批注 · {entries.length}</strong>
       <Input aria-label="搜索全部批注" placeholder="搜索摘录、批注或页码" contentBefore={<SearchRegular />} value={query} onChange={(_, data) => { setQuery(data.value); setLimit(80); }} />
       <SearchOptions query={query} onChange={setQuery} tags={Object.values(noteLabels)} />
-      <PdfAnnotationFilters value={facets} onChange={(value) => { setFacets(value); setLimit(80); }} />
+      <PdfAnnotationFilters annotations={entries.map(({ annotation }) => annotation)} value={facets} onChange={(value) => { setFacets(value); setLimit(80); }} />
       <PdfAnnotationSortPicker value={order} onChange={(value) => { setOrder(value); setLimit(80); }} />
     </header>
     <div className="pdf-annotations-overview-scroll">

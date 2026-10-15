@@ -1,15 +1,10 @@
 import { Button, Tooltip } from "@fluentui/react-components";
 import { CheckmarkRegular, CopyRegular, HighlightRegular, TextUnderlineRegular, WhiteboardRegular, ChatRegular, SparkleRegular, TextQuoteRegular, TranslateRegular } from "@fluentui/react-icons";
 import type { DragEventHandler, ReactNode } from "react";
-import { getHighlightColor } from "./pdfAnnotationAppearance";
-import type { PdfHighlightColor } from "./pdfAnnotationStorage";
+import { getHighlightColor, pdfAnnotationColorLabels } from "./pdfAnnotationAppearance";
+import { pdfHighlightColors, type PdfHighlightColor } from "./pdfAnnotationStorage";
 import "./paperSelectionTools.css";
 
-const highlightColors: { value: PdfHighlightColor; label: string }[] = [
-  { value: "yellow", label: "黄色" }, { value: "red", label: "红色" },
-  { value: "blue", label: "蓝色" }, { value: "green", label: "绿色" },
-  { value: "pink", label: "粉色" }
-];
 
 export function PaperSelectionTools(props: {
   extensionActions?: ReactNode;
@@ -32,9 +27,9 @@ export function PaperSelectionTools(props: {
     {props.onColorChange ? <div className="paper-selection-colors" role="group" aria-label="标记颜色">
       <span>标记颜色</span>
       <div className="paper-selection-swatches">
-        {highlightColors.map(({ value, label }) => <Tooltip key={value} content={`选择${label}高亮`} relationship="description">
+        {pdfHighlightColors.map((value) => <Tooltip key={value} content={`选择${pdfAnnotationColorLabels[value]}高亮`} relationship="description">
           <Button appearance="transparent" size="small" className="paper-selection-swatch"
-            aria-label={`选择${label}高亮`} aria-pressed={props.color === value} disabled={props.disabled}
+            aria-label={`选择${pdfAnnotationColorLabels[value]}高亮`} aria-pressed={props.color === value} disabled={props.disabled}
             style={{ backgroundColor: getHighlightColor(value) }} onClick={() => props.onColorChange?.(value)}
             icon={props.color === value ? <CheckmarkRegular /> : undefined} />
         </Tooltip>)}

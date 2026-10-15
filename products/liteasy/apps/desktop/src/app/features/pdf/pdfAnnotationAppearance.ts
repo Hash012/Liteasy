@@ -1,21 +1,16 @@
 import type { CSSProperties } from "react";
 import type { PdfAnnotationKind as AnnotationKind, PdfHighlightColor as HighlightColor, PdfAnnotationRect } from "./pdfAnnotationStorage";
 
+export const pdfAnnotationColorLabels: Record<HighlightColor, string> = {
+  yellow: "黄色", red: "红色", blue: "蓝色", green: "绿色", pink: "粉色",
+  orange: "橙色", purple: "紫色", cyan: "青色", gray: "灰色"
+};
+export const pdfAnnotationColors: Record<HighlightColor, string> = {
+  yellow: "#ffeaa7", red: "#fab1a0", blue: "#74b9ff", green: "#55efc4", pink: "#fd79a8",
+  orange: "#ffb366", purple: "#c3a6ff", cyan: "#76d7ea", gray: "#b8bfc8"
+};
 export function getHighlightColor(color: HighlightColor): string {
-  switch (color) {
-    case "yellow":
-      return "#ffeaa7";
-    case "red":
-      return "#fab1a0";
-    case "blue":
-      return "#74b9ff";
-    case "green":
-      return "#55efc4";
-    case "pink":
-      return "#fd79a8";
-    default:
-      return "#ffeaa7";
-  }
+  return pdfAnnotationColors[color] ?? pdfAnnotationColors.yellow;
 }
 
 export function getOverlayStyle(kind: AnnotationKind, rect: PdfAnnotationRect, color?: HighlightColor): CSSProperties {

@@ -2,8 +2,8 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, expect, test, vi } from "vitest";
 import { PdfReader } from "../app/features/pdf/PdfReader";
 import { PdfAnnotationsOverview } from "../app/features/pdf/PdfAnnotationsOverview";
-import { matchesPdfAnnotationFacets } from "../app/features/pdf/PdfAnnotationFilters";
-import { pdfAnnotationStorageKey, savePdfAnnotations, type PdfAnnotationV2 } from "../app/features/pdf/pdfAnnotationStorage";
+import { PdfAnnotationFilters, matchesPdfAnnotationFacets } from "../app/features/pdf/PdfAnnotationFilters";
+import { pdfAnnotationStorageKey, savePdfAnnotations, loadPdfAnnotations, pdfHighlightColors, type PdfAnnotationV2 } from "../app/features/pdf/pdfAnnotationStorage";
 import { resolvePaperIdentity } from "../app/features/paper-identity/paperIdentity";
 import type { TeamAnnotation } from "../app/features/organization/teamAnnotationClient";
 
@@ -32,7 +32,7 @@ test("sidebar combines kind and color filters across local and team annotations 
     createdAt: "2026-10-01", updatedAt: "2026-10-01", revision: 1, uploadedBy: "reader", documentId: "doc", organizationId: "org" };
   render(<PdfReader selectedPapers={[paper]} zoom={100} loadOrganizationAnnotations={async () => [shared]} />);
   await screen.findByText("team underline");
-  choose("筛选批注颜色", "蓝色");
+  fireEvent.click(screen.getByRole("button", { name: "筛选蓝色批注" }));
   expect(screen.queryByRole("button", { name: "编辑批注：yellow highlight" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "编辑批注：blue highlight" })).toBeVisible();
   choose("筛选批注类型", "划线");
@@ -48,7 +48,7 @@ test("sidebar combines kind and color filters across local and team annotations 
 test("overview combines query, type and color and keeps an empty filter removable", () => {
   render(<PdfAnnotationsOverview annotations={items} teamAnnotations={[]} onNavigate={vi.fn()} onClose={vi.fn()} />);
   choose("筛选批注类型", "高亮");
-  choose("筛选批注颜色", "蓝色");
+  fireEvent.click(screen.getByRole("button", { name: "筛选蓝色批注" }));
   expect(screen.getAllByRole("listitem")).toHaveLength(1);
   expect(screen.getByText("blue highlight")).toBeVisible();
   fireEvent.change(screen.getByRole("textbox", { name: "搜索全部批注" }), { target: { value: "yellow" } });
@@ -56,4 +56,31 @@ test("overview combines query, type and color and keeps an empty filter removabl
   fireEvent.click(screen.getByRole("button", { name: "清除类型与颜色筛选" }));
   expect(screen.getAllByRole("listitem")).toHaveLength(1);
   expect(screen.getByText("yellow", { selector: "mark" })).toBeVisible();
+});
+
+
+test("exposes only present colors with counts and toggles a selected color off", () => {
+  const onChange = vi.fn();
+  const props = { annotations: [...items, item("violet evidence", "highlight", "purple")], onChange };
+  const mounted = render(<PdfAnnotationFilters {...props} value={{ kind: "all", color: "purple" }} />);
+  expect(screen.queryByRole("combobox", { name: "筛选批注颜色" })).not.toBeInTheDocument();
+  const group = screen.getByRole("group", { name: "按批注颜色筛选" });
+  expect(within(group).getAllByRole("button")).toHaveLength(3);
+  expect(within(group).getByRole("button", { name: "筛选蓝色批注" })).toHaveTextContent("2");
+  const purple = within(group).getByRole("button", { name: "筛选紫色批注" });
+  expect(purple).toHaveAttribute("aria-pressed", "true");
+  fireEvent.click(purple);
+  expect(onChange).toHaveBeenCalledWith({ kind: "all", color: "all" });
+  mounted.rerender(<PdfAnnotationFilters {...props} annotations={items} value={{ kind: "all", color: "purple" }} />);
+  expect(screen.getByRole("button", { name: "筛选紫色批注" })).toHaveTextContent("0");
+});
+
+test("every selectable color survives annotation persistence and matches the filter", () => {
+  const colored = pdfHighlightColors.map((color) => item(color, "highlight", color));
+  savePdfAnnotations(pdfAnnotationStorageKey(paper), colored);
+  const restored = loadPdfAnnotations(pdfAnnotationStorageKey(paper));
+  expect(restored.map(({ color }) => color)).toEqual([...pdfHighlightColors]);
+  for (const color of pdfHighlightColors) {
+    expect(restored.filter((annotation) => matchesPdfAnnotationFacets(annotation, { kind: "all", color }))).toHaveLength(1);
+  }
 });

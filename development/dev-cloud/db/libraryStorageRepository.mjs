@@ -155,7 +155,7 @@ function normalizeTeamAnnotationBody(value) {
   const allowed = new Set([
     "clientAnnotationId", "color", "excerpt", "kind", "note", "page", "rects", "text", "updatedAt"
   ]);
-  const colors = new Set(["yellow", "red", "blue", "green", "pink"]);
+  const colors = new Set(["yellow", "red", "blue", "green", "pink", "orange", "purple", "cyan", "gray"]);
   const kinds = new Set(["highlight", "underline", "note"]);
   if (
     Object.keys(value).some((key) => !allowed.has(key)) ||

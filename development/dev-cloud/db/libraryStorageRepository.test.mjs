@@ -1132,3 +1132,19 @@ test("folders reject cross-scope parents and descendant cycles", () => {
     harness.close();
   }
 });
+
+test("team annotation colors persist across storage and listing", () => {
+  const harness = createHarness();
+  try {
+    const upload = harness.repository.uploadDocument({ ...withRevision(harness, "organization", "org-colors"),
+      bytes: pdf, fileName: "Colors.pdf", scopeId: "org-colors", scopeType: "organization", uploadedBy: "member-1" });
+    const colors = ["orange", "purple", "cyan", "gray"];
+    for (const color of colors) harness.repository.uploadTeamAnnotation({
+      organizationId: "org-colors", documentId: upload.document.documentId, uploadedBy: "member-1",
+      expectedRevision: harness.repository.getRevision("organization", "org-colors"),
+      body: { clientAnnotationId: `local-${color}`, kind: "highlight", color, excerpt: "Evidence", page: 1,
+        text: "高亮", rects: [{ left: 0.1, top: 0.1, width: 0.2, height: 0.03 }], updatedAt: "2026-10-15T00:00:00.000Z" }
+    });
+    assert.deepEqual(harness.repository.listTeamAnnotations("org-colors", upload.document.documentId).map((item) => item.body.color).sort(), colors.sort());
+  } finally { harness.close(); }
+});

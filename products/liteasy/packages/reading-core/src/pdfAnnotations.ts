@@ -7,7 +7,8 @@ import { isPdfTextBoxImages, type PdfTextBoxImages } from "./pdfTextBoxImages";
 import { normalizePublicationAuthorProfile, normalizePublicationActorBinding, type ForumAnnotationPublicationOperation, type PublicationActorBinding } from "./annotationPublication";
 
 export type PdfAnnotationKind = "highlight" | "underline" | "note" | "text" | "ink";
-export type PdfHighlightColor = "yellow" | "red" | "blue" | "green" | "pink";
+export const pdfHighlightColors = ["yellow", "red", "blue", "green", "pink", "orange", "purple", "cyan", "gray"] as const;
+export type PdfHighlightColor = typeof pdfHighlightColors[number];
 export type PdfAnnotationVisibility = "private" | "pending_public";
 export type PdfAnnotationSyncState =
   | { error: string; lastAttemptAt: string; status: "failed" }
@@ -137,7 +138,7 @@ type PdfAnnotationPublicationReceipt = {
 };
 
 const annotationKinds = new Set<PdfAnnotationKind>(["highlight", "underline", "note", "text", "ink"]);
-const highlightColors = new Set<PdfHighlightColor>(["yellow", "red", "blue", "green", "pink"]);
+const highlightColors = new Set<PdfHighlightColor>(pdfHighlightColors);
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);

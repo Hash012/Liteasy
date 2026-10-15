@@ -46,8 +46,9 @@ for (const fontSize of [14, 24]) test(`annotation management remains usable at f
   await expect(summaries.last()).toBeFocused();
   await page.keyboard.press("Control+Enter");
   await expect(sidebar.getByText("已定位到第 1 页的高亮。", { exact: true })).toBeVisible();
-  await sidebar.getByRole("combobox", { name: "筛选批注颜色" }).click();
-  await page.getByRole("option", { name: "蓝色", exact: true }).click();
+  await sidebar.getByRole("button", { name: "筛选蓝色批注" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(sidebar.getByRole("button", { name: "筛选蓝色批注" })).toHaveAttribute("aria-pressed", "true");
   await expect(summaries).toHaveCount(1);
   await sidebar.getByRole("button", { name: "清除类型与颜色筛选" }).click();
   await sidebar.getByRole("combobox", { name: "批注排序" }).click();
@@ -67,4 +68,54 @@ for (const fontSize of [14, 24]) test(`annotation management remains usable at f
   await dialog.getByRole("button", { name: "确认删除" }).click();
   await expect(summaries).toHaveCount(1);
   await page.screenshot({ path: info.outputPath(`annotation-management-${fontSize}.png`), fullPage: true });
+});
+
+for (const fontSize of [14, 24]) test(`new colors persist and filter with keyboard at font size ${fontSize}`, async ({ page }, info) => {
+  test.setTimeout(90_000);
+  await page.addInitScript((size) => {
+    localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true");
+    localStorage.setItem("liteasy.view-settings.v1", JSON.stringify({ "view.font_size": String(size), "view.display_scale": "100" }));
+  }, fontSize);
+  const pdf = await readFile(new URL("../../../../../../../development/test-data/pdf-selection/glyph-boundaries.pdf", import.meta.url));
+  await page.route("**/manual-preview/das24a.pdf", route => route.fulfill({ body: pdf, contentType: "application/pdf" }));
+  await page.setViewportSize({ width: 1680, height: 1100 });
+  await page.goto("/?pdf-highlight-fixture#annotation-management");
+  await expect(page.locator(".pdf-text-layer").first()).not.toBeEmpty({ timeout: 30_000 });
+  await page.evaluate(async () => {
+    const storagePath = "/src/app/features/pdf/pdfAnnotationStorage.ts", identityPath = "/src/app/features/paper-identity/paperIdentity.ts";
+    const storage = await import(storagePath), identity = await import(identityPath);
+    const paper = { id: "manual-das24a-preview", sourcePath: new URL("/manual-preview/das24a.pdf", location.origin).href, title: "das24a.pdf" };
+    localStorage.setItem(storage.pdfAnnotationStorageKey(paper), JSON.stringify(["orange", "purple", "cyan", "gray"].map((color, index) => ({
+      id: `color-${color}`, page: 1, excerpt: `Evidence ${color}`, note: `Comment ${color}`, kind: "highlight", color, text: "高亮",
+      paperIdentity: identity.resolvePaperIdentity(paper), rects: [{ left: 10, top: 15 + index * 10, width: 30, height: 3 }],
+      createdAt: "2026-10-15", updatedAt: "2026-10-15", revision: 1, publication: { desiredVisibility: "private", state: "not_published" }
+    }))));
+  });
+  await page.reload();
+  const sidebar = page.getByRole("complementary", { name: "PDF 左侧批注栏" });
+  const summaries = sidebar.getByRole("button", { name: /^编辑批注：/ });
+  await expect(summaries).toHaveCount(4);
+  await expect(sidebar.getByRole("combobox", { name: "筛选批注颜色" })).toHaveCount(0);
+  await expect(sidebar.getByRole("group", { name: "按批注颜色筛选" }).getByRole("button")).toHaveCount(4);
+  const purpleFilter = sidebar.getByRole("button", { name: "筛选紫色批注" });
+  await purpleFilter.focus(); await page.keyboard.press("Enter");
+  await expect(purpleFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(summaries).toHaveCount(1);
+  await page.keyboard.press("Space"); await expect(summaries).toHaveCount(4);
+  await summaries.filter({ hasText: "Evidence orange" }).click();
+  const palette = sidebar.locator(".color-selector");
+  expect(await palette.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  await page.screenshot({ path: info.outputPath(`annotation-colors-${fontSize}.png`) });
+  await sidebar.getByRole("button", { name: "选择紫色高亮", exact: true }).click();
+  await expect(sidebar.getByRole("button", { name: "筛选橙色批注" })).toHaveCount(0);
+  await expect(purpleFilter).toHaveText(/2/);
+  await page.reload();
+  await expect(page.locator(".pdf-text-layer").first()).not.toBeEmpty({ timeout: 30_000 });
+  await expect(sidebar.getByRole("button", { name: "筛选紫色批注" })).toHaveText(/2/);
+  await sidebar.getByRole("button", { name: "批注", exact: true }).dblclick();
+  const overview = page.getByRole("region", { name: "全部批注", exact: true });
+  await overview.getByRole("button", { name: "筛选紫色批注" }).click();
+  await expect(overview.getByRole("listitem")).toHaveCount(2);
+  await expect(overview).toContainText("Evidence orange");
+  await expect(overview).toContainText("Evidence purple");
 });

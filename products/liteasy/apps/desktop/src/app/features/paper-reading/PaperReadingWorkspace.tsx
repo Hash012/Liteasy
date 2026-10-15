@@ -1,3 +1,4 @@
+import { pdfAnnotationColorLabels } from "../pdf/pdfAnnotationAppearance";
 import { DisclosureSection } from "../../shared/ui/productPrimitives";
 import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { MarkdownEditor } from "../markdown/MarkdownEditor";
@@ -279,7 +280,7 @@ function ReadingSession({ session, chunks, children }: { session: PdfReadingAnno
           <Field label="PDF 页码"><OptionPicker aria-label="批注页码" value={String(draft.page ?? "")} disabled={busy || Boolean(draft.id)} onValueChange={nextValue => setDraft({ ...draft, page: nextValue })} options={[{ value: String(""), label: String("\u8BF7\u9009\u62E9\u9875\u7801") }, ...(pages.map((page) => ({ value: String(page), label: String(["\u7B2C", page, "\u9875"].join(" ")) })))]} /></Field>
           {markStyle ? <>
             <Field label="标记"><OptionPicker aria-label="标记类型" value={String(markStyle.kind ?? "")} onValueChange={nextValue => setMarkStyle({ ...markStyle, kind: nextValue as ReadingMarkStyle["kind"] })} options={[{ value: String("highlight"), label: String("\u9AD8\u4EAE") }, { value: String("underline"), label: String("\u4E0B\u5212\u7EBF") }, ...(!draft.id ? [{ value: String("note"), label: String("\u9875\u6279\u6CE8") }] : [])]} /></Field>
-            {markStyle.kind !== "note" ? <Field label="颜色"><OptionPicker aria-label="标记颜色" value={String(markStyle.color ?? (markStyle.kind === "underline" ? "blue" : "yellow"))} onValueChange={nextValue => setMarkStyle({ ...markStyle, color: nextValue as ReadingMarkStyle["color"] })} options={[{ value: String("yellow"), label: String("\u9EC4\u8272") }, { value: String("red"), label: String("\u7EA2\u8272") }, { value: String("blue"), label: String("\u84DD\u8272") }, { value: String("green"), label: String("\u7EFF\u8272") }, { value: String("pink"), label: String("\u7C89\u8272") }]} /></Field> : null}
+            {markStyle.kind !== "note" ? <Field label="颜色"><OptionPicker aria-label="标记颜色" value={String(markStyle.color ?? (markStyle.kind === "underline" ? "blue" : "yellow"))} onValueChange={nextValue => setMarkStyle({ ...markStyle, color: nextValue as ReadingMarkStyle["color"] })} options={Object.entries(pdfAnnotationColorLabels).map(([value, label]) => ({ value, label }))} /></Field> : null}
           </> : null}
           <Field label="批注内容"><MarkdownEditor documentKey={draft.id ?? "new-reading-comment"} label="阅读批注内容" value={note} readOnly={busy} onChange={setNote} /></Field>
           <div className="paper-reading-comment-actions"><Button appearance="primary" disabled={busy || !session.ready || !draft.page || (!draft.id && !note.trim() && !draft.excerpt)} onClick={() => void save()}>保存批注</Button>
