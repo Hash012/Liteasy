@@ -124,7 +124,7 @@ describe("LiteratureResolutionDialog", () => {
     expect(screen.getByText("来源：Crossref")).toBeInTheDocument();
   });
 
-  test("shows the official PMLR volume artifact and digest for audit", () => {
+  test("shows the official PMLR source and volume without surfacing its integrity digest", () => {
     render(<LiteratureResolutionDialog {...actions()} model={{
       ...candidatesModel,
       candidates: [{
@@ -148,10 +148,11 @@ describe("LiteratureResolutionDialog", () => {
       }]
     }} />);
 
-    expect(screen.getByText("来源：PMLR · 官方卷 BibTeX v235 · SHA-256 aaaaaaaa…aaaaaaaa")).toHaveAttribute(
+    expect(screen.getByText("来源：PMLR · 官方卷 BibTeX · 第 235 卷")).toHaveAttribute(
       "title",
-      `https://proceedings.mlr.press/v235/assets/bib/bibliography.bib\nsha256:${"a".repeat(64)}`
+      "https://proceedings.mlr.press/v235/assets/bib/bibliography.bib"
     );
+    expect(screen.queryByText(/SHA-256|aaaaaaaa/)).not.toBeInTheDocument();
   });
 
   test("allows corrected bibliography to restart provider search without creating a manual record", async () => {

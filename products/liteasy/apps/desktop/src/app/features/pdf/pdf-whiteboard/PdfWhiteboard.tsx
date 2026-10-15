@@ -132,7 +132,7 @@ function PdfWhiteboardNodeView({ data, selected }: NodeProps<WhiteboardFlowNode>
       ) : (
         <div className="pdf-whiteboard-extension-card">
           <strong>{item.content.title}</strong>
-          <small>扩展渲染器：{item.content.renderer}</small>
+          <small>扩展内容</small>
         </div>
       )}
     </article>

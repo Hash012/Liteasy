@@ -74,7 +74,7 @@ test("keeps @ paper scope and requirements when starting an outline without a lo
     selectedSetStatus={{ importedCount: 0, selectedCount: 0, selectionLocked: false }} />);
   const input = screen.getByPlaceholderText("输入你的问题或命令");
   await user.type(input, "@");
-  const paperSuggestion = within(screen.getByLabelText("输入候选")).getByRole("button", { name: /Learning Materials Paper.*整篇论文/ });
+  const paperSuggestion = within(screen.getByLabelText("输入候选")).getByRole("button", { name: /Learning Materials Paper.*PDF 文献/ });
   expect(paperSuggestion).toHaveTextContent("论文");
   expect(paperSuggestion).not.toHaveTextContent("只读参考");
   await user.click(paperSuggestion);

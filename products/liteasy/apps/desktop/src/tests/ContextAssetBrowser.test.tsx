@@ -70,7 +70,7 @@ describe("ContextAssetBrowser", () => {
     await user.click(screen.getByRole("button", { name: "预览 注意力论文原文" }));
     expect(screen.getByRole("status")).toHaveTextContent("正在读取预览");
     await user.click(screen.getByRole("button", { name: "预览 实验记录" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("文件暂不可读");
+    expect(await screen.findByRole("alert")).toHaveTextContent("预览暂不可用，请重试。");
     await act(async () => { complete({ text: "已切走的原文" }); });
     expect(screen.queryByText("已切走的原文")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "重试预览" }));

@@ -124,7 +124,7 @@ test("sends @ papers as one-turn attachments without changing the locked selecti
 
   const input = screen.getByPlaceholderText("输入你的问题或命令");
   await user.type(input, "@Alpha");
-  await user.click(screen.getByRole("button", { name: /Paper Alpha.*整篇论文/ }));
+  await user.click(screen.getByRole("button", { name: /Paper Alpha.*PDF 文献/ }));
   await user.type(input, "补充说明它的记忆写入机制");
   await user.click(screen.getByRole("button", { name: "发送" }));
 

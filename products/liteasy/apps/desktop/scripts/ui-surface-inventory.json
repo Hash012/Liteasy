@@ -48,6 +48,8 @@
         "getTraceIdFromRuntimeEvents",
         "createConversationIdempotencyKey",
         "AssistantSessionController",
+        "setHistoryError",
+        "showHistoryFailure",
         "persistConversation",
         "addReaderContext",
         "syncAssistant",
@@ -111,6 +113,7 @@
         "beginTaskDiscussion",
         "analyzeTaskFailure",
         "updateSessionMetadata",
+        "deleteSession",
         "exportSession",
         "branchConversation",
         "handleSend",
@@ -131,7 +134,7 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "semanticSection": false,
+        "semanticSection": true,
         "infoPopover": false,
         "filterPopover": false,
         "optionPicker": true,
@@ -670,26 +673,21 @@
       "batch": "M3",
       "owner": "M3 surface owner / shared UI review",
       "symbols": [
+        "formatSessionModifiedDate",
         "AssistantSessionSummary",
+        "AssistantSessionRow",
         "AssistantHistoryPanel"
       ],
-      "interactions": [
-        "Menu",
-        "MenuItem",
-        "MenuList",
-        "MenuPopover",
-        "MenuTrigger",
-        "form"
-      ],
+      "interactions": [],
       "styles": [],
       "migration": "product-primitives",
       "disclosure": {
-        "contextualActions": true,
+        "contextualActions": false,
         "semanticSection": false,
         "infoPopover": false,
         "filterPopover": false,
         "optionPicker": false,
-        "commandMenu": true,
+        "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
       },
@@ -777,6 +775,44 @@
         "filterPopover": false,
         "optionPicker": false,
         "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
+      "path": "src/app/features/assistant/AssistantSessionActions.tsx",
+      "batch": "M3",
+      "owner": "M3 surface owner / shared UI review",
+      "symbols": [
+        "AssistantSessionActions",
+        "action"
+      ],
+      "interactions": [
+        "Dialog",
+        "DialogActions",
+        "DialogBody",
+        "DialogContent",
+        "DialogSurface",
+        "DialogTitle",
+        "Menu",
+        "MenuItem",
+        "MenuList",
+        "MenuPopover",
+        "MenuTrigger"
+      ],
+      "styles": [],
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
+        "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
       },
@@ -2520,6 +2556,32 @@
       "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
     },
     {
+      "path": "src/app/features/local-diagnostics/OperationFailureNotice.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "symbols": [
+        "operationFailureSummary",
+        "OperationFailureNotice"
+      ],
+      "interactions": [],
+      "styles": [],
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
       "path": "src/app/features/local-file-operations/LocalFileOperationsPanel.tsx",
       "batch": "M6",
       "owner": "M6 surface owner / shared UI review",
@@ -3190,7 +3252,9 @@
         "ObjectSurface",
         "ObjectDetails"
       ],
-      "interactions": [],
+      "interactions": [
+        "DocumentExportDialog"
+      ],
       "styles": [],
       "migration": "product-primitives",
       "disclosure": {
@@ -3389,6 +3453,7 @@
       "symbols": [
         "OrganizationInvitationPanel",
         "InvitationManager",
+        "identity",
         "beginRequest",
         "load",
         "refreshPermissions",
@@ -3983,6 +4048,7 @@
       "batch": "M1",
       "owner": "M1 surface owner / shared UI review",
       "symbols": [
+        "visibleColor",
         "matchesPdfAnnotationFacets",
         "PdfAnnotationFilters"
       ],
@@ -5294,7 +5360,7 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "semanticSection": false,
+        "semanticSection": true,
         "infoPopover": false,
         "filterPopover": false,
         "optionPicker": false,
@@ -6113,6 +6179,7 @@
       "owner": "M5 surface owner / shared UI review",
       "symbols": [
         "BlockComposer",
+        "loadInstallations",
         "run"
       ],
       "interactions": [
@@ -6122,7 +6189,7 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "semanticSection": false,
+        "semanticSection": true,
         "infoPopover": false,
         "filterPopover": false,
         "optionPicker": true,
@@ -6946,7 +7013,7 @@
       "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "semanticSection": false,
+        "semanticSection": true,
         "infoPopover": false,
         "filterPopover": false,
         "optionPicker": true,

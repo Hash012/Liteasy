@@ -131,3 +131,16 @@ test("literature cards show the document title while retaining the exact relatio
   fireEvent.click(screen.getByRole("button", { name: "文字" }));
   expect(onChange.mock.calls[0][0].nodes[0]).toEqual(node);
 });
+
+
+test("extension cards keep renderer keys in the model instead of the visible caption", async () => {
+  const onChange = vi.fn();
+  const node = { ...createPdfWhiteboardNode({ kind: "markdown", markdown: "" }, { x: 20, y: 20 }), kind: "extension" as const, content: { title: "研究卡片", renderer: "internal.renderer-opaque", payload: {} } };
+  const document = { ...createEmptyPdfWhiteboard("paper-1"), nodes: [node] };
+  render(<PdfWhiteboard document={document} onChange={onChange} onClose={vi.fn()} paperTitle="Test Paper" />);
+  expect(await screen.findByText("研究卡片", { selector: ".pdf-whiteboard-extension-card strong" })).toBeInTheDocument();
+  expect(screen.getByText("扩展内容")).toBeInTheDocument();
+  expect(screen.queryByText("internal.renderer-opaque")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "文字" }));
+  expect(onChange.mock.calls[0][0].nodes[0]).toEqual(node);
+});

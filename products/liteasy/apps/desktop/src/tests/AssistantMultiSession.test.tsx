@@ -179,7 +179,10 @@ describe("AssistantPane multi-session registry", () => {
     expect(cancel).toHaveBeenCalledWith("run-chat-1", "用户终止了 AI 对话");
     expect(await screen.findByText(/运行已取消：用户终止了 AI 对话/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "历史" }));
-    expect(screen.getByText("普通对话 · 已终止")).toBeInTheDocument();
+    const row = screen.getByRole("button", { name: "当前会话：解释 MaxSim" });
+    expect(row.querySelector("time")).toBeInTheDocument();
+    await user.click(row);
+    expect(await screen.findByText(/运行已取消：用户终止了 AI 对话/)).toBeInTheDocument();
   });
 
   test("cancels the active ordinary AI run by idempotency key when duplicate messages overlap", async () => {
@@ -388,7 +391,7 @@ describe("AssistantPane multi-session registry", () => {
       expect(screen.getByLabelText("当前会话")).toHaveAttribute("data-session-kind", "conversation");
     });
     await user.click(screen.getByRole("button", { name: "任务", exact: true }));
-    expect(screen.getByText("产物生成 · 已完成")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "打开会话：生成：文献树" })).toHaveTextContent("已完成");
     await user.click(screen.getByRole("button", { name: "打开会话：生成：文献树" }));
 
     expect(screen.getByLabelText("当前会话")).toHaveAttribute("data-session-kind", "artifact_generation");
