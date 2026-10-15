@@ -3,6 +3,7 @@ import { highlightSearchText } from "../search/searchDomHighlight";
 import { SearchHighlight, SearchOptions } from "../search/SearchOptions";
 import { noteLabels } from "../notes/noteLabels";
 import { comparePdfAnnotations, type PdfAnnotationSort } from "./pdfAnnotationSort";
+import { navigatePdfAnnotationList } from "./pdfAnnotationNavigation";
 import { PdfAnnotationSortPicker } from "./PdfAnnotationSortPicker";
 import { PdfAnnotationFilters, emptyPdfAnnotationFacets, matchesPdfAnnotationFacets } from "./PdfAnnotationFilters";
 import { compilePdfAnnotationQuery, teamPdfAnnotation } from "./pdfAnnotationQuery";
@@ -1869,6 +1870,13 @@ export function PdfReader({
     return matchesNoteFilter(annotationNoteLabels(annotation as PdfAnnotationV2), annotationFilter) &&
       matchesPdfAnnotationFacets(annotation, annotationFacets) && annotationSearch.matches(annotation, team.uploadedBy);
   }).sort((left, right) => comparePdfAnnotations(teamPdfAnnotation(left, resolvePaperIdentity(activePaper!)), teamPdfAnnotation(right, resolvePaperIdentity(activePaper!)), annotationSort));
+  const activeAnnotationVisible = filteredAnnotations.some((annotation) => annotation.id === activeAnnotationId);
+  useEffect(() => {
+    if (!activeAnnotationId || !activeAnnotationVisible || sidebarCollapsed || sidebarMode !== "annotations" || readerView !== "document") return;
+    const entry = Array.from(workspaceRef.current?.querySelectorAll<HTMLElement>("[data-search-annotation]") ?? [])
+      .find((element) => element.dataset.searchAnnotation === activeAnnotationId);
+    entry?.scrollIntoView?.({ block: "nearest" });
+  }, [activeAnnotationId, activeAnnotationVisible, sidebarCollapsed, sidebarMode, readerView]);
   const popupAnnotation = useMemo(
     () => annotations.find((annotation) => annotation.id === annotationPopup?.annotationId) ?? null,
     [annotationPopup?.annotationId, annotations]
@@ -3838,6 +3846,9 @@ export function PdfReader({
                 <div className="pdf-annotation-list-options"><NoteLabelFilter compact value={annotationFilter} onChange={setAnnotationFilter} />
                   <PdfAnnotationSortPicker value={annotationSort} onChange={setAnnotationSort} /></div>
                 <p className="pdf-annotation-result-count" role="status" aria-label="批注检索结果">{filteredAnnotations.length + filteredTeamAnnotations.length} / {annotations.length + teamAnnotations.length} 条批注</p>
+                {activeAnnotationId && !activeAnnotationVisible && annotations.some((annotation) => annotation.id === activeAnnotationId) ?
+                  <Tooltip content="清除筛选并显示已选中的批注" relationship="description"><Button size="small" appearance="subtle" icon={<LocationRegular />}
+                    onClick={() => { setAnnotationQuery(""); setAnnotationFilter(emptyNoteFilter); setAnnotationFacets(emptyPdfAnnotationFacets); }}>显示选中批注</Button></Tooltip> : null}
               </>}
               </div>
               {sidebarMode === "outline" ? (
@@ -3915,12 +3926,14 @@ export function PdfReader({
                             draggable={Boolean(objectWorkbench)}
                             onDragStart={(event) => dragAnnotation(annotation, event.dataTransfer)}
                             onClick={() => openAnnotationEditor(annotation)}
+                            onKeyDown={(event) => navigatePdfAnnotationList(event, () => locateAnnotation(annotation))}
+                            aria-keyshortcuts="Control+Enter Meta+Enter ArrowUp ArrowDown Home End"
                             onDoubleClick={(event) => {
                               event.preventDefault();
                               event.stopPropagation();
                               locateAnnotation(annotation);
                             }}
-                            title={`${annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)} · 第 ${annotation.page} 页；展开完整内容；双击定位到 PDF 原文；拖到白板或对话添加引用`}
+                            title={`${annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)} · 第 ${annotation.page} 页；展开完整内容；双击或 Ctrl/⌘+Enter 定位原文；方向键浏览批注；拖到白板或对话添加引用`}
                             type="button"
                           >
                             <Tooltip content={annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)} relationship="description">
