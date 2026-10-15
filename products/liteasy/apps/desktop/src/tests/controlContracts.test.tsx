@@ -100,3 +100,23 @@ test("picker distinguishes filtered selections, unavailable objects, failed name
   expect(screen.getByRole("combobox")).toHaveTextContent("未命名项目");
   expect(shared.onValueChange).not.toHaveBeenCalled();
 });
+
+test("resolved empty names remain identifiable form values with an explicit unnamed label", async () => {
+  const value = "private-unnamed-object";
+  const change = vi.fn();
+  const shared = { value, scopeKey: "authorized-scope", name: "target", required: true, "aria-label": "对象", onValueChange: change };
+  const view = render(<form aria-label="选择配置"><OptionPicker {...shared} options={[{ value, label: "" }]} /></form>);
+  const form = screen.getByRole("form", { name: "选择配置" }) as HTMLFormElement;
+  expect(screen.getByRole("combobox")).toHaveTextContent("未命名项目");
+  expect(screen.getByRole("combobox").closest("[data-selection-state]")).toHaveAttribute("data-selection-state", "unnamed");
+  await userEvent.click(screen.getByRole("combobox"));
+  expect(screen.getByRole("option", { name: "未命名项目" })).toHaveAttribute("data-option-value", value);
+  await userEvent.keyboard("{Escape}");
+  view.rerender(<form aria-label="选择配置"><OptionPicker {...shared} options={[]} selectedDisplay={{ value, scopeKey: shared.scopeKey, state: "ready", label: "   " }} /></form>);
+  expect(screen.getByRole("combobox")).toHaveTextContent("未命名项目");
+  expect(screen.getByRole("combobox").closest("[data-selection-state]")).toHaveAttribute("data-selection-state", "unnamed");
+  expect(new FormData(form).get("target")).toBe(value);
+  expect(form.checkValidity()).toBe(true);
+  expect(form.textContent).not.toContain(value);
+  expect(change).not.toHaveBeenCalled();
+});

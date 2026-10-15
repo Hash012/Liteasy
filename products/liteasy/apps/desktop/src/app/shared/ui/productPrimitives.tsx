@@ -83,15 +83,19 @@ export function OptionPicker({ scopeKey, selectedDisplay, value, onValueChange, 
   useEffect(() => { if (value) setInvalid(false); }, [value]);
   const selected = options.find(option => option.value === value);
   const display = selectedDisplay?.value === value && selectedDisplay.scopeKey === scopeKey ? selectedDisplay : undefined;
-  const displayState = !value ? "empty" : display?.state ?? (selected ? "ready" : "loading");
-  const displayLabel = !value ? selected?.label ?? "" : display
-    ? display.state === "ready" ? display.label
-      : display.state === "unnamed" ? display.label ?? "未命名项目"
-      : display.state === "error" ? "名称加载失败"
-      : display.state === "unavailable" ? "所选项已不可用，请重新选择" : "正在加载所选项…"
-    : selected?.label ?? "正在加载所选项…";
+  const requestedState = !value ? "empty" : display?.state ?? (selected ? "ready" : "loading");
+  const resolvedLabel = display?.state === "ready" || display?.state === "unnamed" ? display.label : selected?.label;
+  const displayState = requestedState === "ready" && !resolvedLabel?.trim() ? "unnamed" : requestedState;
+  const displayLabel = displayState === "empty" ? selected?.label ?? ""
+    : displayState === "ready" ? resolvedLabel!
+    : displayState === "unnamed" ? resolvedLabel?.trim() ? resolvedLabel : "未命名项目"
+    : displayState === "error" ? "名称加载失败"
+    : displayState === "unavailable" ? "所选项已不可用，请重新选择" : "正在加载所选项…";
   return <span className={`product-option-picker-field ${className}`} data-density={density} data-selection-state={displayState}><Dropdown id={id} title={title} button={{ ref: trigger, autoFocus }} className="product-option-picker" data-density={density} aria-label={label} aria-labelledby={labelledBy} aria-describedby={[describedBy, invalid ? errorId : undefined].filter(Boolean).join(" ") || undefined} aria-required={required} aria-invalid={invalid || undefined} disabled={disabled} value={displayLabel} selectedOptions={value ? [value] : []} placeholder={placeholder} onBlur={onBlur} onOptionSelect={(_, data) => { if (data.optionValue !== undefined) { setInvalid(Boolean(required && !data.optionValue)); onValueChange(data.optionValue); } }} listbox={{ className: "product-option-listbox" }}>
-    {options.map(option => <Option key={option.value} value={option.value} data-option-value={option.value} text={option.label} disabled={option.disabled}>{option.icon}<span className="product-option-text">{option.label}{option.description ? <small>{option.description}</small> : null}</span></Option>)}
+    {options.map(option => {
+      const optionLabel = option.label.trim() ? option.label : option.value ? "未命名项目" : placeholder;
+      return <Option key={option.value} value={option.value} data-option-value={option.value} text={optionLabel} disabled={option.disabled}>{option.icon}<span className="product-option-text">{optionLabel}{option.description ? <small>{option.description}</small> : null}</span></Option>;
+    })}
   </Dropdown>{value && display?.state === "error" && display.onRetry ? <ActionButton appearance="subtle" onClick={display.onRetry}>重试加载名称</ActionButton> : null}{name ? <input type="hidden" name={name} form={form} value={value} disabled={disabled} /> : null}{required ? <input className="product-validation-proxy" tabIndex={-1} aria-label={label ? `${label}验证` : "选项验证"} value={value} onChange={() => {}} required disabled={disabled} form={form} onInvalid={event => { event.preventDefault(); setInvalid(true); trigger.current?.focus(); }} /> : null}{invalid ? <span id={errorId} role="alert" className="product-field-error">请选择一个选项。</span> : null}</span>;
 }
 export function InlineNotice({ intent = "info", message, action }: { intent?: "normal" | "info" | "warning" | "error" | "success" | "busy"; message: string; action?: ReactNode }) {
