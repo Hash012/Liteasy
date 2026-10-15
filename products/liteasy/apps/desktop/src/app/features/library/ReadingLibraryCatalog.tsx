@@ -1,8 +1,8 @@
-import { FilterPopover, OptionPicker } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, ControlToolbar, FilterPopover, OptionPicker } from "../../shared/ui/productPrimitives";
 import { SearchOptions } from "../search/SearchOptions";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { readingResourceCapabilities } from "../reading-library/readingResourceCapabilities";
-import { Button, Input, Tooltip } from "@fluentui/react-components";
+import { Input, Tooltip } from "@fluentui/react-components";
 import { AddRegular, ArrowLeftRegular, ArrowRightRegular, BookOpenRegular, DismissRegular, DocumentPdfRegular, DocumentTextRegular, SearchRegular } from "@fluentui/react-icons";
 import { ReadingCatalogDetails, type ReadingCatalogActions } from "./ReadingCatalogDetails";
 import { indexReadingCatalog, queryReadingCatalog, type ReadingCatalogFilters, type ReadingCatalogSort } from "./readingCatalogSearch";
@@ -77,7 +77,7 @@ export function ReadingLibraryCatalog({ entries, loading = false, message, onImp
         void Promise.resolve().then(onImport).catch((error: unknown) => setActionMessage(error instanceof Error ? error.message : "导入未完成，请重试。"));
       }}>导入文件</Button> : null}
     </header>
-    <div className="reading-catalog-controls" role="search" aria-label="筛查阅读库">
+    <ControlToolbar className="reading-catalog-controls" role="search" label="筛查阅读库">
       <Input ref={searchInput} className="reading-catalog-search" aria-label="搜索文献与文件" placeholder="搜索文献与文件" contentBefore={<SearchRegular />} value={filters.query} onChange={(_, data) => updateFilter("query", data.value)} contentAfter={filters.query ? <Tooltip content="清空搜索" relationship="description"><Button appearance="transparent" size="small" icon={<DismissRegular />} aria-label="清空搜索" onClick={() => { updateFilter("query", ""); searchInput.current?.focus(); }} /></Tooltip> : undefined} />
       <SearchOptions query={filters.query} onChange={(value) => updateFilter("query", value)} tags={entries.flatMap((entry) => entry.tags ?? [])} />
       <FilterPopover label="文件筛选" activeCount={[filters.format !== "all", filters.status !== "all", !!filters.collection, !!filters.year].filter(Boolean).length}>
@@ -88,7 +88,7 @@ export function ReadingLibraryCatalog({ entries, loading = false, message, onImp
       </FilterPopover>
       <OptionPicker density="compact" aria-label="文件排序" value={filters.sort} onValueChange={value => updateFilter("sort", value as ReadingCatalogSort)} options={[{ value: "added", label: "最近添加" }, { value: "title", label: "标题 A–Z" }, { value: "author", label: "作者 A–Z" }, { value: "year-desc", label: "发表时间：新到旧" }, { value: "year-asc", label: "发表时间：旧到新" }]} />
       {hasFilters ? <Button appearance="subtle" onClick={() => setFilters(defaultFilters)}>重置筛选</Button> : null}
-    </div>
+    </ControlToolbar>
     <div className="reading-catalog-summary"><span aria-live="polite">{loading ? "正在读取文件库…" : `${results.length} / ${entries.length} 项`}</span><span>单击查看信息 · 双击或 Enter 阅读</span></div>
     {message || actionMessage ? <p className="reading-catalog-message" role="status">{actionMessage || message}</p> : null}
     <div className="reading-catalog-body">

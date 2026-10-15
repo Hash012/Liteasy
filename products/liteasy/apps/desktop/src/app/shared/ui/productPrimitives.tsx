@@ -5,8 +5,8 @@ import "./productPrimitives.css";
 
 export type ControlDensity = "compact" | "default";
 const ControlDensityContext = createContext<ControlDensity>("default");
-export function ControlToolbar({ children, density = "compact", className = "", label }: { children: ReactNode; density?: ControlDensity; className?: string; label: string }) {
-  return <ControlDensityContext.Provider value={density}><div role="group" aria-label={label} data-density={density} className={`product-control-toolbar ${className}`}>{children}</div></ControlDensityContext.Provider>;
+export function ControlToolbar({ children, density = "compact", className = "", label, role = "group" }: { children: ReactNode; density?: ControlDensity; className?: string; label: string; role?: "group" | "search" }) {
+  return <ControlDensityContext.Provider value={density}><div role={role} aria-label={label} data-density={density} className={`product-control-toolbar ${className}`}>{children}</div></ControlDensityContext.Provider>;
 }
 export const ActionButton = forwardRef<HTMLButtonElement, ButtonProps & { density?: ControlDensity }>(({ density, ...props }, ref) => { const inherited = useContext(ControlDensityContext); return <Button {...props} ref={ref} data-density={density ?? inherited} className={`product-action ${props.className ?? ""}`} />; });
 ActionButton.displayName = "ActionButton";
@@ -73,7 +73,7 @@ export function OptionPicker({ value, onValueChange, options, "aria-label": labe
   const errorId = useId();
   useEffect(() => { if (value) setInvalid(false); }, [value]);
   const selected = options.find(option => option.value === value);
-  return <span className={`product-option-picker-field ${className}`}><Dropdown id={id} title={title} button={{ ref: trigger, autoFocus }} className="product-option-picker" data-density={density} aria-label={label} aria-labelledby={labelledBy} aria-describedby={[describedBy, invalid ? errorId : undefined].filter(Boolean).join(" ") || undefined} aria-required={required} aria-invalid={invalid || undefined} disabled={disabled} value={selected?.label ?? value} selectedOptions={selected ? [value] : []} placeholder={placeholder} onBlur={onBlur} onOptionSelect={(_, data) => { if (data.optionValue !== undefined) { setInvalid(Boolean(required && !data.optionValue)); onValueChange(data.optionValue); } }} listbox={{ className: "product-option-listbox" }}>
+  return <span className={`product-option-picker-field ${className}`} data-density={density}><Dropdown id={id} title={title} button={{ ref: trigger, autoFocus }} className="product-option-picker" data-density={density} aria-label={label} aria-labelledby={labelledBy} aria-describedby={[describedBy, invalid ? errorId : undefined].filter(Boolean).join(" ") || undefined} aria-required={required} aria-invalid={invalid || undefined} disabled={disabled} value={selected?.label ?? value} selectedOptions={selected ? [value] : []} placeholder={placeholder} onBlur={onBlur} onOptionSelect={(_, data) => { if (data.optionValue !== undefined) { setInvalid(Boolean(required && !data.optionValue)); onValueChange(data.optionValue); } }} listbox={{ className: "product-option-listbox" }}>
     {options.map(option => <Option key={option.value} value={option.value} data-option-value={option.value} text={option.label} disabled={option.disabled}>{option.icon}<span className="product-option-text">{option.label}{option.description ? <small>{option.description}</small> : null}</span></Option>)}
   </Dropdown>{name ? <input type="hidden" name={name} form={form} value={value} disabled={disabled} /> : null}{required ? <input className="product-validation-proxy" tabIndex={-1} aria-label={label ? `${label}验证` : "选项验证"} value={value} onChange={() => {}} required disabled={disabled} form={form} onInvalid={event => { event.preventDefault(); setInvalid(true); trigger.current?.focus(); }} /> : null}{invalid ? <span id={errorId} role="alert" className="product-field-error">请选择一个选项。</span> : null}</span>;
 }

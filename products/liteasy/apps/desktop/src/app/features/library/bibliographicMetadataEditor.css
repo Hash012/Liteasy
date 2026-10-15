@@ -42,3 +42,5 @@
 .bibliographic-summary-section dl > div { display:grid; grid-template-columns:minmax(64px, 30%) minmax(0, 1fr); gap:12px; margin:10px 0; }
 .bibliographic-summary-section dt { color:var(--colorNeutralForeground2); }
 .bibliographic-summary-section dd { margin:0; }
+
+.bibliographic-field > .fui-Input, .bibliographic-author > .fui-Input { min-height: var(--control-size); }
