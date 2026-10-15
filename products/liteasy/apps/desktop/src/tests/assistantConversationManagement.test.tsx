@@ -85,3 +85,33 @@ test("a failed deletion restores the conversation and lets the user retry", asyn
   await userEvent.click(within(screen.getByRole("dialog", { name: "删除对话确认" })).getByRole("button", { name: "删除对话" }));
   await waitFor(() => expect(disk.sessions[0].lifecycle).toBe("tombstoned"));
 });
+
+
+test("recovery after deleting the active conversation does not move its draft into a new conversation", async () => {
+  const saved = fixture(); saved.sessions[0].lifecycle = "tombstoned";
+  saved.draft.input = "已删除对话的未发送内容";
+  render(<AssistantSessionController {...props} historyPersistence={createAssistantHistoryPersistence({ load: async () => saved, save: async () => {} })} />);
+  await screen.findByLabelText("助手首页");
+  await waitFor(() => expect(screen.queryByText("正在恢复对话…")).not.toBeInTheDocument());
+  expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveValue("");
+  expect(screen.queryByText("区分采样偏差与测量误差。")).not.toBeInTheDocument();
+});
+
+test("opening a lazily loaded renamed history item preserves its newer title", async () => {
+  const snapshot = fixture();
+  const old = { ...snapshot.sessions[0], id: "lazy-chat", title: "未载入的旧标题", messages: [], messagesLoaded: false, messageCount: 2 };
+  snapshot.sessions.push(old);
+  const persistence = createAssistantHistoryPersistence({ load: async () => snapshot, save: async () => {} });
+  persistence.loadSession = vi.fn(async () => ({ ...fixture().sessions[0], id: old.id, title: old.title, messagesLoaded: true }));
+  render(<AssistantSessionController {...props} historyPersistence={persistence} />);
+  await screen.findByText("区分采样偏差与测量误差。");
+  await userEvent.click(screen.getByRole("button", { name: "历史", exact: true }));
+  await userEvent.click(screen.getByRole("button", { name: "管理 未载入的旧标题" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: "重命名对话", exact: true }));
+  await userEvent.clear(screen.getByRole("textbox", { name: "会话名称" }));
+  await userEvent.type(screen.getByRole("textbox", { name: "会话名称" }), "刚修改的标题");
+  await userEvent.click(screen.getByRole("button", { name: "保存名称" }));
+  await userEvent.click(screen.getByRole("button", { name: "打开会话：刚修改的标题" }));
+  await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("刚修改的标题"));
+  expect(persistence.loadSession).toHaveBeenCalledWith(old.id);
+});

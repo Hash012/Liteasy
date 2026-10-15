@@ -521,11 +521,12 @@ export function AssistantSessionController({
         setSessionHistory([...sessionRegistryRef.current]);
         setActiveSessionId(session.id);
         setView(session.kind === "artifact_generation" ? { kind: "task-detail", taskId: session.id } : session.messages.length ? { kind: "conversation", conversationId: session.id } : { kind: "home" });
-        for (const item of snapshot.sessions) savedRevisionsRef.current.set(`${objectWorkbench?.scopeId ?? "local"}:${item.id}`, assistantContentRevision(item, item.id === session.id ? snapshot.draft : item.draft));
-        setInput(snapshot.draft.input);
-        setSelectedResearchSkill(snapshot.draft.selectedResearchSkill);
-        setComposerContextTokens(snapshot.draft.tokens);
-        setReaderContexts(snapshot.draft.readerContexts);
+        const restoredDraft = session.id === snapshot.activeSessionId ? snapshot.draft : session.draft ?? { input: "", tokens: [], readerContexts: [] };
+        for (const item of snapshot.sessions) savedRevisionsRef.current.set(`${objectWorkbench?.scopeId ?? "local"}:${item.id}`, assistantContentRevision(item, item.id === session.id ? restoredDraft : item.draft));
+        setInput(restoredDraft.input);
+        setSelectedResearchSkill(restoredDraft.selectedResearchSkill);
+        setComposerContextTokens(restoredDraft.tokens);
+        setReaderContexts(restoredDraft.readerContexts);
       }
       historyReadyRef.current = true;
       setHistoryReady(true);
@@ -1126,9 +1127,14 @@ export function AssistantSessionController({
     let session = sessionRegistryRef.current.find((candidate) => candidate.id === sessionId);
     if (session?.messagesLoaded === false && historyPersistence?.loadSession) {
       try {
-        session = await historyPersistence.loadSession(sessionId);
+        const generation = getAccountSessionGeneration();
+        const loaded = await historyPersistence.loadSession(sessionId);
         checkCurrent?.();
-        if (!mountedRef.current || !session) return;
+        if (!mountedRef.current || !loaded || generation !== getAccountSessionGeneration()) return;
+        const current = sessionRegistryRef.current.find(item => item.id === sessionId);
+        if (!current || current.lifecycle === "tombstoned") return;
+        // Loading old message bodies must not roll back a title just edited in this window.
+        session = current.messagesLoaded === false ? { ...loaded, ...current, messages: loaded.messages, draft: loaded.draft, outbox: loaded.outbox, taskInput: loaded.taskInput, messagesLoaded: true } : current;
         sessionRegistryRef.current = upsertAssistantSession(sessionRegistryRef.current, session);
       } catch (error) { showHistoryFailure("读取", error); return; }
     }
@@ -2294,8 +2300,11 @@ export function AssistantSessionController({
   async function exportSession(id: string) {
     const generation = getAccountSessionGeneration(), scope = objectWorkbench?.scopeId ?? "local";
     let session = sessionRegistryRef.current.find((item) => item.id === id);
-    if (session?.messagesLoaded === false) session = await historyPersistence?.loadSession?.(id);
-    if (!session || owner.disposed || getAccountSessionGeneration() !== generation || currentSaveTargetRef.current.scope !== scope || sessionRegistryRef.current.find(item => item.id === id)?.lifecycle === "tombstoned") throw new Error("对话或账号已变化，请重试。");
+    if (session?.messagesLoaded === false) {
+      const snapshot = session, loaded = await historyPersistence?.loadSession?.(id);
+      session = loaded ? { ...loaded, ...snapshot, messages: loaded.messages, messagesLoaded: true } : undefined;
+    }
+    if (!session || owner.disposed || getAccountSessionGeneration() !== generation || currentSaveTargetRef.current.scope !== scope || session.scopeId && session.scopeId !== scope || sessionRegistryRef.current.find(item => item.id === id)?.lifecycle === "tombstoned") throw new Error("对话或账号已变化，请重试。");
     const text = redactDiagnostic(`# ${session.title}\n\n` + session.messages.filter((message) => message.content && message.kind !== "system_notice")
       .map((message) => `## ${message.kind === "task_reference" ? "任务引用" : message.role === "user" ? "用户" : "AI 派生内容"}\n\n${message.content}`).join("\n\n") +
       (session.resultRefs?.length ? `\n\n## 技术元数据（用于精确引用）\n\n\`\`\`json\n${JSON.stringify(session.resultRefs, null, 2)}\n\`\`\`` : ""));
