@@ -5,8 +5,8 @@ async function expectBiologyFixture(page: import("@playwright/test").Page) {
   await expect(stage).toBeVisible();
   await expect(stage.locator("svg")).toBeVisible();
   await expect(stage.locator("path")).toHaveCount(4);
-  await stage.getByRole("button", { name: "connection-1" }).click();
-  await expect(stage.getByRole("button", { name: "connection-1" })).toHaveAttribute("aria-pressed", "true");
+  await stage.getByRole("button", { name: "sends signal" }).click();
+  await expect(stage.getByRole("button", { name: "sends signal" })).toHaveAttribute("aria-pressed", "true");
   expect(await stage.locator("svg").evaluate((svg) => svg.outerHTML.includes("<script"))).toBe(false);
   await expect(stage.getByTestId("biology-structure-metadata")).toHaveText("neuron,soma,axon,synapse,connection-1");
 }

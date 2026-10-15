@@ -17,6 +17,6 @@ describe("renderBiologyStructure", () => {
     render(<BiologyStructureRenderer rendered={renderBiologyStructure(neuralFixture())} />);
 
     expect(screen.getByRole("img", { name: /神经元, 胞体, 轴突, 突触/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "connection-1" })).toHaveAttribute("data-object-id", "connection-1");
+    expect(screen.getByRole("button", { name: "sends signal" })).toHaveAttribute("data-object-id", "connection-1");
   });
 });

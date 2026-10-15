@@ -158,7 +158,7 @@ export function FunctionPlotRenderer({ rendered }: { rendered: FunctionPlotRende
             onClick={() => setSelectedObjectId((current) => current === id ? null : id)}
             size="small"
           >
-            {id}
+            {activeRender.semanticObjects.find(object => object.objectId === id)?.label || "对象名称不可用"}
           </Button>
         ))}
       </div>

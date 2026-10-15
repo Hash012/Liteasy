@@ -1,3 +1,4 @@
+import { operationLabels } from "../workflows/operationCatalog";
 import { useEffect, useMemo, useState } from "react";
 import { Background, Controls, ReactFlow, applyNodeChanges, type Connection, type Node, type Edge, type NodeProps, type NodeChange } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -17,7 +18,7 @@ export const studioEdgeId = (edge: WorkflowDefinition["edges"][number]) => JSON.
 export function StudioGraph({ value, onChange, onSelect, blocks = noBlocks, readOnly = false }: { value: WorkflowDefinition | BoardTemplate; onChange(value: WorkflowDefinition | BoardTemplate): void; onSelect(id: string): void; blocks?: DerivedBlockDefinition[]; readOnly?: boolean }) {
   const scheme = useApplicationColorScheme();
   const workflow = value.schema === "liteasy.workflow/v2";
-  const nodes: Node[] = useMemo(() => workflow ? value.nodes.map((node, i) => ({ id: node.id, position: value.layout[node.id] ?? { x: (i % 3) * 240, y: Math.floor(i / 3) * 130 }, data: { label: `${node.title}\n${node.operation.id}` }, ariaLabel: node.title })) : value.cards.map((card) => ({ id: card.id, type: "card", position: card.position, data: { card, blocks }, style: { width: card.size.width, height: card.size.height }, ariaLabel: card.title })), [value, blocks, workflow]);
+  const nodes: Node[] = useMemo(() => workflow ? value.nodes.map((node, i) => ({ id: node.id, position: value.layout[node.id] ?? { x: (i % 3) * 240, y: Math.floor(i / 3) * 130 }, data: { label: `${node.title}\n${operationLabels[node.operation.id]}` }, ariaLabel: node.title })) : value.cards.map((card) => ({ id: card.id, type: "card", position: card.position, data: { card, blocks }, style: { width: card.size.width, height: card.size.height }, ariaLabel: card.title })), [value, blocks, workflow]);
   const [displayNodes, setDisplayNodes] = useState(nodes);
   useEffect(() => { setDisplayNodes((old) => nodes.map((node) => ({ ...node, selected: old.find((item) => item.id === node.id)?.selected }))); }, [nodes]);
   const edges: Edge[] = workflow ? value.edges.map((edge) => ({ id: studioEdgeId(edge), source: edge.from, target: edge.to, label: edge.when === undefined ? undefined : edge.when ? "是" : "否" })) : [];

@@ -60,8 +60,8 @@ describe("renderRasterIllustration", () => {
     const initialViewport = stage.getAttribute("data-viewport");
     fireEvent.click(screen.getByRole("button", { name: "放大生成插图" }));
     expect(stage).not.toHaveAttribute("data-viewport", initialViewport);
-    fireEvent.click(screen.getByRole("button", { name: "label-1" }));
-    expect(screen.getByRole("button", { name: "label-1" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "cell" }));
+    expect(screen.getByRole("button", { name: "cell" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getAllByText("cell").length).toBeGreaterThanOrEqual(2);
   });
 

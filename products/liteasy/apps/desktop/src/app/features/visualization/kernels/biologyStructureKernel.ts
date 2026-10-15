@@ -73,10 +73,10 @@ export function validateBiologyStructure(spec: BiologyStructureSpecV1): BiologyS
     objectPath: structure.parentId ? [structure.parentId, structure.id] : [structure.id],
     selectable: true
   } satisfies SemanticObjectV1));
-  const connectionObjects = spec.connections.map((connection) => ({
+  const connectionObjects = spec.connections.map((connection, index) => ({
     evidenceClaimIds: [...connection.evidenceClaimIds],
     kind: "neural_connection",
-    label: connection.label ?? connection.id,
+    label: connection.label || `结构连接 ${index + 1}`,
     objectId: connection.id,
     objectPath: [connection.from, connection.to],
     selectable: true

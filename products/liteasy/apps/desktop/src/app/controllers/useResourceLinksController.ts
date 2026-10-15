@@ -27,7 +27,7 @@ export function useResourceLinksController(input: { repository: ObjectRepository
   const scope = input.repository.scopeId;
   const suggestions = useMemo(() => [...input.suggestions.filter((item) => item.resourcePath), ...input.papers.map((paper): AssistantComposerSuggestion => ({
     searchMetadata: catalogSearchMetadata(input.entries?.find((entry) => entry.id === paper.id) ?? { id: paper.id, title: paper.title, format: "pdf", subjects: paper.literature?.subjects }),
-    id: `paper-${paper.id}`, trigger: "@", label: paper.literature?.title || paper.title, category: "论文", detail: paper.sourcePath,
+    id: `paper-${paper.id}`, trigger: "@", label: paper.literature?.title || paper.title, category: "论文", detail: "PDF 文献",
     resourcePath: liteasyPath(scope, { kind: "paper", paperId: paper.id }),
     resolveToken: async () => { const attachments = await latest.current.assets.context(liteasyPath(scope, { kind: "paper", paperId: paper.id }));
       return { id: `paper-${paper.id}`, kind: "object", label: paper.title, prompt: "", contextRefs: attachments.flatMap((item) => item.refs) }; },

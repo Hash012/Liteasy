@@ -61,7 +61,7 @@ export function quickAskPresetResourceType({ settings, objects, active }: { sett
     },
     context: { supported: true, async implementation(path) { const preset = fromPath(path); check();
       const frozen = await objects.create({ kind: "content.note", title: `快捷指令：${preset.name}`, content: { schema: "liteasy.note/v1", payload: { text: text(preset), origin: "derived" } } }, `quick-ask-preset:${preset.id}:${preset.revision}`);
-      check(); return [{ ref: refOf(frozen), refs: [refOf(frozen)], title: frozen.title, kind: "ai.quick-ask-preset", detail: `固定版本 ${preset.revision}` }]; } },
+      check(); return [{ ref: refOf(frozen), refs: [refOf(frozen)], title: frozen.title, kind: "ai.quick-ask-preset", detail: "已固定本次快捷指令版本" }]; } },
     write: { supported: false, reason: "请通过速问管理器按版本修改设置；内置指令保存为个人副本。" },
     file: { supported: true, implementation: provider },
     navigation: { supported: false, reason: "请在阅读器的速问卡片中打开管理快捷指令。" },

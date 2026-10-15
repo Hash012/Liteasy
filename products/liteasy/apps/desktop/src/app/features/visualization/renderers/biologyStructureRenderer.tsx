@@ -7,6 +7,7 @@ import { createSafeSvgScene } from "../rendering/safeSvgScene";
 export type BiologyStructureRenderResult = {
   accessibility: { summary: string };
   selectableObjectIds: readonly string[];
+  semanticObjects: ReturnType<typeof validateBiologyStructure>["semanticObjects"];
   svg: string;
 };
 
@@ -18,6 +19,7 @@ export function renderBiologyStructure(spec: BiologyStructureSpecV1): BiologyStr
   return {
     accessibility: { summary: structureLabels.join(", ") },
     selectableObjectIds: result.selectableObjectIds,
+    semanticObjects: result.semanticObjects,
     svg: createSafeSvgScene({
       description: structureLabels.join(", "),
       edges: result.layout.edges,
@@ -42,7 +44,7 @@ export function BiologyStructureRenderer({ rendered }: { rendered: BiologyStruct
             onClick={() => setSelectedObjectId(id)}
             type="button"
           >
-            {id}
+            {rendered.semanticObjects.find(object => object.objectId === id)?.label || "对象名称不可用"}
           </button>
         ))}
       </div>

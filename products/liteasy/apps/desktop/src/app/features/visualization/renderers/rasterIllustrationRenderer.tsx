@@ -162,15 +162,15 @@ export function RasterIllustrationRenderer({
             onClick={() => setSelectedObjectId((current) => current === id ? null : id)}
             size="small"
           >
-            {id}
+            {rendered.table.find(row => row.label === id)?.value || "标注名称不可用"}
           </Button>
         ))}
       </div>
       <table className="visualization-raster-illustration__table">
         <tbody>
-          {rendered.table.map((row) => (
+          {rendered.table.map((row, index) => (
             <tr className={selectedObjectId === row.label ? "is-selected" : undefined} key={row.label}>
-              <th scope="row">{row.label}</th>
+              <th scope="row">标注 {index + 1}</th>
               <td>{row.value}</td>
             </tr>
           ))}

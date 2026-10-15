@@ -45,8 +45,8 @@ async function expectRasterIllustrationRendered(page: import("@playwright/test")
   await expect(stage).not.toHaveAttribute("data-viewport", viewportBeforeDrag ?? "");
 
   const beforeSelection = await stage.screenshot();
-  await fixture.getByRole("button", { name: "output" }).click();
-  await expect(fixture.getByRole("button", { name: "output" })).toHaveAttribute("aria-pressed", "true");
+  await fixture.getByRole("button", { name: "Output stage", exact: true }).click();
+  await expect(fixture.getByRole("button", { name: "Output stage", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(stage).toContainText("Output stage");
   const afterSelection = await stage.screenshot();
   expect(afterSelection.equals(beforeSelection)).toBe(false);
