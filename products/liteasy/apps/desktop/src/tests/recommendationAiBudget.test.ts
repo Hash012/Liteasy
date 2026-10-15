@@ -15,4 +15,6 @@ test("request reservation includes structured-output schema, message overhead, a
   expect(estimateRecommendationRequestTokens(input, schema)).toBeGreaterThan(estimateRecommendationTextTokens(input) + budget.maxOutputTokens);
   expect(budget.maxRequestTokens - budget.maxOutputTokens).toBe(budget.maxInputTokens);
   expect(budget.maxCandidates).toBe(budget.maxBatches * budget.maxCandidatesPerBatch);
+  expect(budget.maxRunTokens).toBe(budget.maxBatches * budget.maxRequestTokens);
+  expect(budget.maxRunTokens).toBeLessThanOrEqual(50_000);
 });

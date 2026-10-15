@@ -4,9 +4,11 @@ export const RECOMMENDATION_AI_BUDGET = Object.freeze({
   maxCandidatesPerBatch: 8,
   maxCandidates: 24,
   maxInputTokens: 12_000,
-  maxOutputTokens: 2_000,
-  maxRequestTokens: 14_000,
-  maxRunTokens: 40_000,
+  // Providers can count reasoning against this same completion allowance.
+  // Keep room for the bounded JSON decision without changing model settings.
+  maxOutputTokens: 4_096,
+  maxRequestTokens: 16_096,
+  maxRunTokens: 48_288,
   deadlineMs: 180_000
 });
 
