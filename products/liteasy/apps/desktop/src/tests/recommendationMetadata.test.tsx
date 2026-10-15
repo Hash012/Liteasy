@@ -103,3 +103,14 @@ test("does not run a stale filename interest query beside a selected paper's ver
   await waitFor(() => expect(request).toHaveBeenCalledOnce());
   expect((request.mock.calls[0][0] as unknown as URL).searchParams.get("query.bibliographic")).toContain("database");
 });
+
+test("public paper discovery works without a Liteasy account or a local-service override", async () => {
+  const request = fetchMock();
+  const hook = renderHook(() => useKnowledgeSyncController({ ...input, localMode: false, localService: undefined,
+    documents: [confirmed], selectedPapers: [confirmed] }));
+  await waitFor(() => expect(hook.result.current.model.recommendationStatus).toBe("ready"), { timeout: 3000 });
+  expect(request).toHaveBeenCalledOnce();
+  const url = new URL(String(request.mock.calls[0][0]));
+  expect(url.origin).toBe("https://api.crossref.org");
+  expect(url.searchParams.get("query.bibliographic")).toBe(title);
+});

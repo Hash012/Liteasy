@@ -1,6 +1,7 @@
 import { commitFeedback, emptyFeedback, projectFeedback, feedbackHides, type FeedbackCommand, type FeedbackState, type FeedbackReceipt, type FeedbackProjection, feedbackForPaper } from "./recommendationFeedbackProjection";
 import type { ObjectStorage, StorageRow } from "../objects/objectStorage";
 import type { RecommendationItem } from "./recommendation.types";
+import { RECOMMENDATION_AI_BUDGET } from "./recommendationAiBudget";
 export const recommendationStatePrefix = "recommendation/v2/";
 const DAY = 86_400_000;
 export const feedHash = (value: unknown) => { const text = JSON.stringify(value); let hash = 2166136261; for (const char of text) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619); return (hash >>> 0).toString(16); };
@@ -8,8 +9,8 @@ export type FeedSnapshot = { selection?: "ai"; feedbackRevision?: number; id: st
 type Lease = { id: string; root?: string; until: number };
 export type RecommendationFeedbackMeaning = "read" | "not_relevant" | "too_basic" | "too_advanced" | "snoozed" | "undo";
 export type FeedState = { feedbackRevision?: number; feedbackProjection?: FeedbackProjection[]; feedback?: { id: string; action: RecommendationFeedbackMeaning; at: number; snapshotId?: string; facetId?: string }[]; epoch: number; current?: FeedSnapshot; previous?: FeedSnapshot; pending?: FeedSnapshot; lease?: Lease; automaticRuns: number[]; hidden: string[]; saved: string[]; message?: string; usage?: Record<string, number | string> };
-type Ledger = { entries: { at: number; kind: string; units: number }[]; active: { id: string; until: number; kind: string }[]; cooldown?: number };
-export type RecommendationTask = { signal: AbortSignal; active: () => Promise<boolean>; request: <T>(kind: "provider" | "embedding" | "reranker" | "generation", run: () => Promise<T>, units?: number) => Promise<T>; upstreamUnknown: () => void };
+type Ledger = { entries: { at: number; kind: string; units: number; automatic?: boolean }[]; active: { id: string; until: number; kind: string }[]; cooldowns?: Record<string, number> };
+export type RecommendationTask = { signal: AbortSignal; active: () => Promise<boolean>; request: <T>(kind: "provider" | "embedding" | "reranker" | "generation", run: () => Promise<T>, units?: number, service?: string) => Promise<T>; upstreamUnknown: () => void };
 const empty = (): FeedState => ({ epoch: 0, automaticRuns: [], hidden: [], saved: [] });
 export function isRecommendationHidden(item: RecommendationItem, state: FeedState) {
   if (state.feedbackProjection) return feedbackHides(state.feedbackProjection, item);
@@ -36,7 +37,7 @@ export class RecommendationFeedCoordinator {
   constructor(private options: { storage: ObjectStorage; scope: string; key: string; workspaceId?: string; provider: string; now?: () => number; deadlineMs?: number; sourceRevision?: () => string; automaticHours?: number | (() => number); unreadCap?: number | (() => number) }) {
     this.feedbackKey = recommendationStatePrefix + "feedback/" + feedHash(options.workspaceId ?? "default");
     this.key = recommendationStatePrefix + "feed/" + options.key;
-    // The account-wide cap is deliberately stricter than per-workspace/provider limits.
+    // Automatic traffic shares an account-wide allowance; explicit work is bounded per task.
     this.ledgerKey = recommendationStatePrefix + "budget/providers";
   }
   private now() { return (this.options.now ?? Date.now)(); }
@@ -100,6 +101,9 @@ export class RecommendationFeedCoordinator {
     const preferences = await this.read();
     const sourceRevision = this.options.sourceRevision?.();
     const now = this.now(), id = crypto.randomUUID(), manual = ["manual_check", "explicit_seed", "ai_curate", "explain"].includes(reason);
+    const ai = reason === "ai_curate" || reason === "explain";
+    const deadlineMs = Math.min(ai ? RECOMMENDATION_AI_BUDGET.deadlineMs : 45_000, this.options.deadlineMs ?? Infinity);
+    const leaseUntil = now + deadlineMs + 1000;
     let acquired = false;
     const state = await this.edit(value => {
       acquired = false;
@@ -110,7 +114,7 @@ export class RecommendationFeedCoordinator {
       const hours = this.automaticHours();
       if (!manual && (hours === 0 || !recovering && automaticRuns.length >= 1 || preferences.saved.filter(id => !preferences.feedback?.some(row => row.id === id && row.action === "read")).length >= this.unreadCap())) return value;
       acquired = true;
-      return { ...value, lease: { id, root: recovering ? value.lease?.root ?? value.lease?.id : id, until: now + 46_000 }, automaticRuns: manual || recovering ? automaticRuns : [...automaticRuns, now], message: undefined };
+      return { ...value, lease: { id, root: recovering ? value.lease?.root ?? value.lease?.id : id, until: leaseUntil }, automaticRuns: manual || recovering ? automaticRuns : [...automaticRuns, now], message: undefined };
     });
     if (!acquired) return state;
     if (!manual) {
@@ -123,34 +127,44 @@ export class RecommendationFeedCoordinator {
       if (!allowed) return this.edit(value => value.lease?.id === id ? { ...value, lease: undefined } : value);
     }
     const controller = new AbortController(); this.controller = controller;
-    const timeout = setTimeout(() => controller.abort(), Math.max(1, Math.min(45_000, this.options.deadlineMs ?? 45_000) - (this.now() - now)));
+    let timedOut = false;
+    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, Math.max(1, deadlineMs - (this.now() - now)));
     const reservations: Record<string, number> = { provider: 0, embedding: 0, reranker: 0, generation: 0 };
+    let generationTokens = 0;
     const counts: Record<string, number | string> = { provider: 0, embedding: 0, reranker: 0, generation: 0, trigger: reason, modelCost: "unknown" };
     const active = async () => { if (controller.signal.aborted || sourceRevision !== this.options.sourceRevision?.()) return false; const value = await this.read(); return value.epoch === state.epoch && value.lease?.id === id && value.lease.until > this.now(); };
     const heartbeat = setInterval(() => { void active().then(valid => { if (!valid) controller.abort(); }, () => controller.abort()); }, 1000);
     const task: RecommendationTask = { signal: controller.signal, active, upstreamUnknown: () => { counts.upstreamProviderRequests = "unknown-v1"; },
-      request: async (kind, execute, units = 0) => {
+      request: async (kind, execute, units = 0, service = this.options.provider) => {
         if (!await active()) { controller.abort(); throw new DOMException("Task revoked", "AbortError"); }
-        const max = { provider: 6, embedding: 8, reranker: 2, generation: 2 }[kind];
-        if (reservations[kind] >= max || kind === "generation" && (reservations.generation >= 1 || units > 8000)) throw new Error("本次推荐已达到请求额度，保留现有结果。");
+        const max = { provider: manual ? 48 : 6, embedding: 8, reranker: 2, generation: RECOMMENDATION_AI_BUDGET.maxBatches }[kind];
+        if (!Number.isFinite(units) || units < 0) throw new Error("无法计算本次请求用量，请重新推荐。");
+        if (reservations[kind] >= max || kind === "generation" && (units > RECOMMENDATION_AI_BUDGET.maxRequestTokens || generationTokens + units > RECOMMENDATION_AI_BUDGET.maxRunTokens)) throw new Error("本次处理的论文较多，已达到单次处理上限。可缩小选集后继续。");
         reservations[kind]++;
+        if (kind === "generation") generationTokens += units;
         const ledgerKey = kind === "provider" ? this.ledgerKey : recommendationStatePrefix + "budget/models";
+        const serviceKey = feedHash([kind, service]);
         const at = this.now(), reservation = crypto.randomUUID();
         await updateRecommendationRow<Ledger>(this.options.storage, ledgerKey, () => ({ entries: [], active: [] }), value => {
-          value.entries = value.entries.filter(entry => entry.at > at - DAY); value.active = value.active.filter(entry => entry.until > at);
-          if ((value.cooldown ?? 0) > at) throw new Error("文献服务冷却中，保留已有推荐。");
-          const used = value.entries.filter(entry => entry.kind === kind);
-          if ((kind === "provider" && used.length >= 12) || (kind === "generation" && (used.length >= 2 || used.reduce((sum, entry) => sum + entry.units, 0) + units > 12000)) || (kind === "embedding" && used.reduce((sum, entry) => sum + entry.units, 0) + units > 50_000)) throw new Error("今日推荐额度已用完，仍可查看缓存。");
+          value.entries = value.entries.filter(entry => entry.at > at - DAY).slice(-5000); value.active = value.active.filter(entry => entry.until > at);
+          if ((value.cooldowns?.[serviceKey] ?? 0) > at) throw new Error(kind === "provider" ? "文献服务请求较频繁，请稍后重试或切换文献服务，已有推荐仍可阅读。" : "AI 服务请求较频繁，请稍后重试或切换 AI 接入，已有推荐仍可阅读。");
+          const used = value.entries.filter(entry => entry.kind === kind && entry.automatic !== false);
+          if (!manual && ((kind === "provider" && used.length >= 12) || (kind === "embedding" && used.reduce((sum, entry) => sum + entry.units, 0) + units > 50_000))) throw new Error("今天的自动更新已完成，仍可手动检查新论文。");
           if (value.active.filter(entry => kind === "provider" ? entry.kind === "provider" : entry.kind !== "provider").length >= (kind === "provider" ? 2 : 1)) throw new Error("推荐服务正忙，请稍后检查。");
-          value.entries.push({ at, kind, units }); value.active.push({ id: reservation, kind, until: now + 46_000 }); return value;
+          value.entries.push({ at, kind, units, automatic: !manual }); value.active.push({ id: reservation, kind, until: leaseUntil }); return value;
         });
         counts[kind] = Number(counts[kind]) + 1;
         if (units) counts[`${kind}ReservedTokens`] = Number(counts[`${kind}ReservedTokens`] ?? 0) + units;
-        if (kind === "generation") counts.generationOutputReservedTokens = 1500;
-        try { return await execute(); }
+        if (kind === "generation") counts.generationOutputReservedTokens = reservations.generation * RECOMMENDATION_AI_BUDGET.maxOutputTokens;
+        try {
+          if (!await active()) { controller.abort(); throw new DOMException("Task revoked", "AbortError"); }
+          return await execute();
+        }
         catch (error) {
           const status = (error as { status?: number }).status;
-          if ([401, 403, 429].includes(status ?? 0)) await updateRecommendationRow<Ledger>(this.options.storage, ledgerKey, () => ({ entries: [], active: [] }), value => ({ ...value, cooldown: at + Math.max(60_000, Math.min(DAY, (error as { retryAfterMs?: number }).retryAfterMs ?? 3_600_000)) }));
+          // Authentication can be corrected immediately. Only a real rate limit cools
+          // down its own endpoint; it must not disable another source's fallback.
+          if (status === 429) await updateRecommendationRow<Ledger>(this.options.storage, ledgerKey, () => ({ entries: [], active: [] }), value => ({ ...value, cooldowns: { ...value.cooldowns, [serviceKey]: this.now() + Math.max(1000, Math.min(DAY, (error as { retryAfterMs?: number }).retryAfterMs ?? 60_000)) } }));
           throw error;
         } finally { await updateRecommendationRow<Ledger>(this.options.storage, ledgerKey, () => ({ entries: [], active: [] }), value => ({ ...value, active: value.active.filter(entry => entry.id !== reservation) })); }
       } };
@@ -165,7 +179,7 @@ export class RecommendationFeedCoordinator {
       return await this.edit(value => value.epoch !== state.epoch || value.lease?.id !== id || sourceRevision !== this.options.sourceRevision?.() ? value : { ...value, lease: undefined, usage: counts,
         ...(!value.current || manual ? { current: snapshot, pending: undefined, ...(reason === "ai_curate" ? { previous: value.current } : {}) } : { pending: snapshot }) });
     } catch (error) {
-      return await this.edit(value => value.epoch !== state.epoch || value.lease?.id !== id ? value : { ...value, lease: undefined, usage: counts, message: controller.signal.aborted ? "更新已取消，保留上次推荐。" : `更新暂不可用，保留上次推荐。${error instanceof Error && error.name !== "ZodError" ? error.message.slice(0, 180) : "返回内容未通过校验，请重试。"}` });
+      return await this.edit(value => value.epoch !== state.epoch || value.lease?.id !== id ? value : { ...value, lease: undefined, usage: counts, message: controller.signal.aborted ? timedOut ? "推荐服务响应较慢，本次已超时。已有结果保留，可重试或检查服务连接。" : "更新已取消，保留上次推荐。" : `更新暂不可用，保留上次推荐。${error instanceof Error && error.name !== "ZodError" ? error.message.slice(0, 180) : "返回内容未通过校验，请重试。"}` });
     } finally { clearTimeout(timeout); clearInterval(heartbeat); if (this.controller === controller) this.controller = undefined; }
   }
 }

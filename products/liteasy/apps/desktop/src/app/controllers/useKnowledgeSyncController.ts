@@ -92,7 +92,8 @@ export function useKnowledgeSyncController({
         void store.read().then(state => store.forget(state.events.filter(event => removed.some(id => event.sourceId === `paper:${id}` || event.sourceId.startsWith(`annotation:${id}:`))).map(event => event.sourceId))).catch(() => {}); }
     }
   }, [documentScope, documents.map(paper => paper.id).join("|")]);
-  const directRecommendations = localMode || Boolean(localService);
+  const directRecommendations = localMode || Boolean(localService) || !accountSession;
+  const publicService: PaperServiceConfig = localService ?? { provider: "crossref", endpoint: "https://api.crossref.org" };
   const [seed, setSeed] = useState<{ workspace: string; id: string; papers: Paper[]; resources?: RecommendationResourceInput }>();
   const activeSeed = seed?.workspace === workspaceSourceKey ? seed : undefined;
   const metadata = useRecommendationMetadataController({ enabled: recommendationsEnabled,
@@ -102,7 +103,7 @@ export function useKnowledgeSyncController({
   const recommendations = useRecommendationFeed({ enabled: recommendationsEnabled, direct: directRecommendations,
     accountSession, endpoint: controlPlaneEndpoint, scope: recommendationResources?.scope ?? "local", workspace: workspaceSourceKey,
     context: context.context, pending: context.pending || metadata.blocked, preferences: context.preferences, profile: researchProfile,
-    style: recommendationStyle ?? "balanced", sort: recommendationSortMode, config: localService, assets: recommendationResources?.assets,
+    style: recommendationStyle ?? "balanced", sort: recommendationSortMode, config: publicService, assets: recommendationResources?.assets,
     transport: recommendationTransport, feedbackTransport: recommendationFeedbackTransport, generator: recommendationGeneratorDeps,
     modelSettings: recommendationModelSettings, legacyCache: recommendationCacheDeps, seedId: activeSeed?.id });
   const documentMetadataSync = useDocumentMetadataSync({
@@ -134,6 +135,7 @@ export function useKnowledgeSyncController({
     },
     model: {
       localRecommendations: directRecommendations,
+      hasPreviousRecommendations: recommendations.hasPreviousRecommendations,
       recommendationPendingSnapshot: recommendations.pendingSnapshot,
       recommendationExploringSelection: Boolean(activeSeed),
       documentMetadataSyncMessage: documentMetadataSync.message,

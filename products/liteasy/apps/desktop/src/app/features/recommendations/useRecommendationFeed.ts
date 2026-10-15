@@ -1,5 +1,6 @@
 import { getActiveModelProvider, getModelForSettings } from "../models/modelPolicy";
 import { curateRecommendationSnapshot } from "./recommendationResearchEnhancer";
+import { enrichRecommendationCandidates } from "./recommendationPaperEvidence";
 import { feedbackForPaper, feedbackFacet, type FeedbackRequest } from "./recommendationFeedbackProjection";
 import { buildSelectionCacheKey, buildWorkspaceCacheKey } from "./useRecommendations";
 import { adoptRecommendationBrief } from "./recommendationBrief";
@@ -47,7 +48,22 @@ export function useRecommendationFeed(input: FeedInput) {
   const coordinator = useMemo(() => new RecommendationFeedCoordinator({ storage: createObjectStorage(owner, () => currentOwner.current), scope: owner, key: identity, workspaceId: input.workspace, sourceRevision: () => latestContextVersion.current,
     provider: feedHash([input.direct ? input.config : input.endpoint, input.accountSession?.userId ?? input.accountSession?.email ?? localAccount]), automaticHours: () => latest.current.preferences.feed.automaticHours, unreadCap: () => latest.current.preferences.feed.unreadCap }), [identity]);
   const [state, setState] = useState<{ identity: string; value?: FeedState; error?: string }>({ identity });
-  const [running, setRunning] = useState(false);
+  const [runState, setRunState] = useState({ identity, active: false });
+  const running = runState.identity === identity && runState.active;
+  const operation = useRef<{ identity: string; token: symbol }>();
+  const begin = () => {
+    if (operation.current?.identity === identity) return undefined;
+    const token = Symbol("recommendation-operation");
+    operation.current = { identity, token }; setRunState({ identity, active: true });
+    return token;
+  };
+  const finish = (token: symbol) => {
+    if (operation.current?.token !== token) return;
+    operation.current = undefined;
+    if (mounted.current && identityRef.current === identity) { setRunState({ identity, active: false }); setPhase(undefined); }
+  };
+  const [phase, setPhase] = useState<{ identity: string; message: string }>();
+  const reportProgress = (message: string) => { if (mounted.current && identityRef.current === identity) setPhase({ identity, message }); };
   const evidenceEpoch = useRef<{ identity: string; epoch: number }>();
   const read = async () => { try { let value = await coordinator.read(); if (!latest.current.pending && value.current && value.current.sourceRevision !== latestContextVersion.current) value = await coordinator.invalidateEvidence(); if (mounted.current && identityRef.current === identity) setState({ identity, value }); } catch (error) { if (mounted.current && identityRef.current === identity) setState({ identity, error: String(error) }); } };
   const prepareContext = async (task: RecommendationTask) => {
@@ -77,23 +93,34 @@ export function useRecommendationFeed(input: FeedInput) {
     return { version, current, context, preferences, evidenceStore, evidence, projected };
   };
   const run = async (task: RecommendationTask) => {
+    reportProgress("正在检索相关论文…");
     const { version, current, context, preferences, evidenceStore, evidence, projected } = await prepareContext(task);
-    const documents = context.documents.filter(doc => preferences.sendPrivateText || !context.views.find(view => view.id === doc.id)?.private);
+    const documents = context.documents.filter(doc => preferences.sendPrivateText || !context.views.find(view => view.id === doc.id || view.id === `paper:${doc.id}`)?.private);
     const profile = preferences.sendPrivateText && preferences.useProfile ? current.profile : undefined;
     let items: RecommendationItem[];
     if (navigator.onLine === false) throw new Error("当前离线，显示本机缓存。");
     if (current.direct) {
       const derived = preferences.privacy.externalDerivedQueries ? evidence.facets.filter(facet => facet.status !== "paused").map(facet => facet.label).slice(0, 6) : [];
       const queries = derived.length ? [...derived, ...documents].slice(0, 6) : documents.length ? documents : [...(profile?.topics ?? []), ...(profile?.methods ?? [])].slice(0, 6);
-      if (!queries.length) return [];
+      if (!queries.length) throw new Error("请先选中一篇论文并选择“按此选集探索”，或在推荐设置中添加研究主题。");
       if (!current.config) throw new Error("请在设置中配置文献服务。");
-      items = await fetchLocalRecommendations(current.config, queries, current.style, task.signal, { citations: preferences.hybridEnabled, task });
+      items = await fetchLocalRecommendations(current.config, queries, current.style, task.signal, { citations: preferences.hybridEnabled, task, onSourceFailure: () => reportProgress("所选文献服务暂不可用，正在改用公开来源检索…") });
     } else {
       if (!current.accountSession) throw new Error("请登录后检查新论文。");
-      if (!documents.length && !profile?.topics?.length && !profile?.methods?.length) return [];
+      if (!documents.length && !profile?.topics?.length && !profile?.methods?.length) throw new Error("请先选中一篇论文并选择“按此选集探索”，或在推荐设置中添加研究主题。");
       task.upstreamUnknown();
-      items = await task.request("provider", () => (current.generator?.fetch ?? (request => fetchCloudRecommendations(request, { transport: current.transport })))({
-        controlPlaneEndpoint: current.endpoint, sessionId: current.accountSession!.sessionId, selectedDocuments: documents.slice(0, 3), researchProfile: profile, style: current.style, sortMode: "relevance", signal: task.signal }));
+      try {
+        items = await task.request("provider", () => (current.generator?.fetch ?? (request => fetchCloudRecommendations(request, { transport: current.transport })))({
+          controlPlaneEndpoint: current.endpoint, sessionId: current.accountSession!.sessionId, selectedDocuments: documents.slice(0, 3), researchProfile: profile, style: current.style, sortMode: "relevance", signal: task.signal }));
+      } catch (error) {
+        task.signal.throwIfAborted();
+        // A cloud outage must not force account setup for public bibliographic discovery.
+        // Private notes/profile text are never redirected to a public registry.
+        const publicDocuments = documents.filter(doc => context.views.some(view => (view.id === doc.id || view.id === `paper:${doc.id}`) && !view.private && view.provenance === "metadata"));
+        if (!publicDocuments.length) throw error;
+        reportProgress("推荐服务暂不可用，正在通过公开文献信息检索…");
+        items = await fetchLocalRecommendations({ provider: "crossref", endpoint: "https://api.crossref.org" }, publicDocuments.slice(0, 3), current.style, task.signal, { task });
+      }
     }
     if (!await task.active() || (await evidenceStore.read()).revision !== evidence.revision) throw new DOMException("Task evidence changed", "AbortError");
     items = rankRecommendations(items.slice(0, 200), { style: current.style, sortMode: "relevance", selectedDocuments: context.documents });
@@ -113,10 +140,21 @@ export function useRecommendationFeed(input: FeedInput) {
   };
   const curate = async (only?: RecommendationItem) => {
     if (running || latest.current.pending) return;
-    setRunning(true);
+    const token = begin();
+    if (!token) return;
+    setState(current => ({ ...current, error: undefined }));
     try {
-      const before = await coordinator.read(), snapshot = before.current;
-      if (!snapshot?.items.length) throw new Error("请先检查新论文，获取真实候选。");
+      if (!latest.current.enabled) throw new Error("请在推荐设置中开启联网推荐。");
+      if (!latest.current.preferences.generationEnabled) throw new Error("请在“推荐与文献服务设置”中开启 AI 研究建议；精选将使用当前对话模型。");
+      if (!latest.current.modelSettings) throw new Error("请先在设置的“AI 接入”中配置可用模型。");
+      let before = await coordinator.read();
+      if (!before.current?.items.length && !only) {
+        await coordinator.refresh("manual_check", run);
+        before = await coordinator.read();
+        await read();
+      }
+      const snapshot = before.current;
+      if (!snapshot?.items.length) throw new Error(before.message || "没有找到相关论文。请选择有摘要的论文，或补充研究主题后再试。");
       await coordinator.refresh(only ? "explain" : "ai_curate", async task => {
         const { version, current, context, preferences, evidenceStore, evidence } = await prepareContext(task);
         const modelSnapshot = JSON.stringify(current.modelSettings);
@@ -124,18 +162,24 @@ export function useRecommendationFeed(input: FeedInput) {
           && JSON.stringify(latest.current.modelSettings) === modelSnapshot && latest.current.preferences.consentEpoch === preferences.consentEpoch
           && (await coordinator.read()).feedbackRevision === before.feedbackRevision && (await evidenceStore.read()).revision === evidence.revision;
         const selected = only ? snapshot.items.filter(row => row.id === only.id) : rankRecommendations(snapshot.items.filter(row => !isRecommendationHidden(row, before)).map(item => ({ ...item, preferencePenalty: feedbackForPaper(before.feedbackProjection ?? [], item).some(row => row.dimension === "difficulty") ? .12 : 0 })), { style: current.style });
-        const result = await curateRecommendationSnapshot({ assets: current.assets, items: selected, context, preferences, settings: current.modelSettings, task: { ...task, active }, mode: only ? "explain" : "curate", feedbackRevision: before.feedbackRevision, snapshotId: snapshot.id });
+        reportProgress(`正在获取 ${Math.min(selected.length, 24)} 篇候选的摘要与 Introduction…`);
+        const enriched = await enrichRecommendationCandidates(current.config, selected, task.signal, { ...task, active });
+        if (!await active()) throw new Error("研究依据已变化，请重新精选。");
+        reportProgress("AI 正在阅读摘要与 Introduction，并整理推荐理由…");
+        const result = await curateRecommendationSnapshot({ assets: current.assets, items: enriched, context, preferences, settings: current.modelSettings, task: { ...task, active }, mode: only ? "explain" : "curate", feedbackRevision: before.feedbackRevision, snapshotId: snapshot.id });
         if (!await active()) throw new Error("研究依据已变化，请重新精选。");
         if (!result.items.length) throw new Error("本次没有足够相关的候选，保留原推荐。");
         return only ? snapshot.items.map(item => result.items.find(row => row.id === item.id) ?? item) : result.items;
       });
       await read();
     } catch (error) { if (mounted.current && identityRef.current === identity) setState(state => ({ ...state, identity, error: error instanceof Error ? error.message : "AI 精选暂不可用。" })); }
-    finally { if (mounted.current && identityRef.current === identity) setRunning(false); }
+    finally { finish(token); }
   };
   const refresh = async (reason: "initial" | "manual_check" | "scheduled" | "explicit_seed") => {
     if (!latest.current.enabled || latest.current.pending) return;
-    if (mounted.current) setRunning(true);
+    const token = begin();
+    if (!token) return;
+    if (mounted.current) setState(current => ({ ...current, error: undefined }));
     try {
       if (!(await coordinator.read()).current) {
         let legacy: RecommendationItem[] = [];
@@ -151,7 +195,7 @@ export function useRecommendationFeed(input: FeedInput) {
       await coordinator.refresh(reason, run); await read();
     }
     catch (error) { if (mounted.current && identityRef.current === identity) setState(current => ({ ...current, identity, error: String(error) })); }
-    finally { if (mounted.current && identityRef.current === identity) setRunning(false); }
+    finally { finish(token); }
   };
   useEffect(() => {
     let alive = true;
@@ -179,11 +223,12 @@ export function useRecommendationFeed(input: FeedInput) {
     const previous = previousContext.current; previousContext.current = { identity, version: contextVersion };
     if (previous?.identity === identity && previous.version !== contextVersion) void coordinator.invalidateEvidence().then(read).catch(() => {});
   }, [identity, contextVersion, input.pending]);
-  useEffect(() => () => { if (identityRef.current !== identity) coordinator.cancel(); }, [identity]);
+  useEffect(() => () => coordinator.cancel(), [identity]);
+  const error = state.identity === identity ? state.error : undefined;
   const value = state.identity === identity && input.enabled ? state.value : undefined;
   const items = useMemo(() => (value?.current?.selection === "ai" ? (rows: RecommendationItem[]) => rows : rankRecommendations)(value?.current?.items.filter(item => !isRecommendationHidden(item, value)).map(item => ({ ...item, feedSnapshotId: value.current!.id, feedbackState: feedbackForPaper(value.feedbackProjection ?? [], item), ...(value.saved.includes(item.canonicalId ?? item.id) ? { saved: true } : {}) })) ?? [], { style: input.style, sortMode: input.sort ?? "relevance" }), [value?.current?.id, value?.hidden.join("|"), value?.saved.join("|"), JSON.stringify(value?.feedback), identity, input.style, input.sort]);
-  return { recommendationItems: items, recommendationStatus: (!input.enabled ? "disabled" : running && !items.length ? "loading" : value?.current ? "ready" : state.error ? "error" : "idle") as RecommendationStatus,
-    recommendationPending: running, recommendationMessage: state.error ?? value?.message ?? (value?.current && navigator.onLine === false ? "当前离线，显示本机缓存。" : value?.current ? value.current.generatedAt ? `上次更新：${new Date(value.current.generatedAt).toLocaleString()}` : "旧版题录缓存 · 待更新" : "根据资料库和研究兴趣提供推荐；也可明确按选集探索。"),
+  return { recommendationItems: items, recommendationStatus: (!input.enabled ? "disabled" : running && !items.length ? "loading" : value?.current ? "ready" : error ? "error" : "idle") as RecommendationStatus,
+    recommendationPending: running, recommendationMessage: (running && phase?.identity === identity ? phase.message : undefined) ?? error ?? value?.message ?? (value?.current && navigator.onLine === false ? "当前离线，显示本机缓存。" : value?.current ? value.current.selection === "ai" ? `AI 已精选 ${items.length} 篇 · 已阅读 ${value.current.items[0]?.researchReason?.evaluatedCount ?? items.length} 篇候选的可用摘要与引言` : value.current.generatedAt ? `上次更新：${new Date(value.current.generatedAt).toLocaleString()}` : "旧版题录缓存 · 待更新" : "根据资料库和研究兴趣提供推荐；也可明确按选集探索。"),
     recordSignal: async (item: RecommendationItem, action: RecommendationFeedbackMeaning, command?: FeedbackRequest) => { const receipt = await coordinator.recordFeedback(item.canonicalId ?? item.id, action, item.feedSnapshotId, feedbackFacet(item), command); await read(); return receipt; },
     adoptBrief: async (item: RecommendationItem) => { if (!latest.current.assets) throw new Error("当前工作区不能保存笔记。"); return adoptRecommendationBrief(item, latest.current.assets, async source => {
       const controller = new AbortController();

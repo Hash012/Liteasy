@@ -52,11 +52,11 @@ export function RecommendationIntelligenceSettings() {
     <Switch label="在本机结合已发送的用户问题" checked={draft.signals.userQuestions} onChange={(_, data) => setDraft({ ...draft, signals: { ...draft.signals, userQuestions: data.checked } })} />
     <Switch label="允许发送由私有兴趣提取的检索词" checked={draft.privacy.externalDerivedQueries} onChange={(_, data) => setDraft({ ...draft, privacy: { ...draft.privacy, externalDerivedQueries: data.checked } })} />
     <Switch label="生成有依据的研究价值建议（可选）" checked={draft.generationEnabled} onChange={(_, data) => setDraft({ ...draft, generationEnabled: data.checked })} />
-    <p>使用已配置的自备模型，每天最多两次；默认关闭，可随时停用。未配置时保留题录解释。</p>
+    <p>点击“AI 精选”时，使用当前对话模型阅读候选摘要与可获取的 Introduction，生成论文列表和推荐理由。自动检查不会调用生成模型；笔记、批注和画像仍遵循上方的发送设置。</p>
     <Button onClick={() => save(draft)}>保存推荐设置</Button>
     <DisclosureSection title="资源额度">
-      <p>每次最多检索 200 篇、重排 24 篇、新增 60 个文本向量。每次文献请求最多 6 个，共用服务每天最多 12 个；生成建议每天最多 2 次。</p>
-      <p>达到额度后仍可浏览缓存、换一组和筛选。使用旧版云端接口时，上游请求用量无法核实。</p>
+      <p>每次检索最多 200 篇，AI 分批阅读最多 24 篇候选，展示实际评价范围。主动精选可重复运行，费用由当前模型服务计收。</p>
+      <p>后台自动查询每天最多 12 次；手动任务单独限制请求数量和处理时间。服务限流时仍可浏览已有结果、换一组和筛选。</p>
     </DisclosureSection>
     <RecommendationInterestsSettings />
     {(["embedding", "reranker"] as const).map((provider) => <DisclosureSection key={provider} title={<>{provider === "embedding" ? "语义检索服务" : "精细重排服务"}（可选）</>}>
