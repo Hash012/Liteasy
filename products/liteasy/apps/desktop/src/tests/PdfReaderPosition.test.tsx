@@ -79,3 +79,14 @@ test("evidence navigation wins over saved page when PDF page count becomes avail
   await waitFor(() => expect(screen.getByRole("spinbutton", { name: "当前页码" })).toHaveValue(3));
   await waitFor(() => expect((rows.get(`reader-state/pdf/${paper.id}`)?.value as { page: number }).page).toBe(3));
 });
+
+test("retrying a failed reading-position save writes the requested page", async () => {
+  const paper = await buildOriginalReaderPaper(original, bytes);
+  vi.mocked(storage.commit).mockRejectedValueOnce(new Error("disk busy"));
+  render(view(paper)); await screen.findByLabelText("共 6 页");
+  const input = screen.getByRole("spinbutton", { name: "当前页码" });
+  fireEvent.change(input, { target: { value: "5" } }); fireEvent.keyDown(input, { key: "Enter" });
+  fireEvent.click(await screen.findByRole("button", { name: "重试保存阅读位置" }));
+  await waitFor(() => expect((rows.get(`reader-state/pdf/${paper.id}`)?.value as { page: number })?.page).toBe(5));
+  expect(screen.queryByRole("button", { name: "重试保存阅读位置" })).not.toBeInTheDocument();
+});

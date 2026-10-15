@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPdfReaderPositionStore } from "./pdfReaderPosition";
+import { createPdfReaderPositionStore, isPdfPositionReadOnlyError } from "./pdfReaderPosition";
+import { createPdfPositionWriter } from "./pdfPositionWriter";
 
 export type PdfReaderPositionInput = {
   scopeId?: string;
@@ -23,7 +24,7 @@ type Session = {
   lastTopRatio?: number;
   restoredPage?: number;
   savedIntent: number;
-  save: (page: number, topRatio?: number) => Promise<void>;
+  writer: ReturnType<typeof createPdfPositionWriter>;
 };
 
 export function usePdfReaderPosition(input: PdfReaderPositionInput) {
@@ -38,9 +39,10 @@ export function usePdfReaderPosition(input: PdfReaderPositionInput) {
   const sessionRef = useRef<Session | null>(null);
   const [tick, setTick] = useState(0);
   const [error, setError] = useState("");
+  const [canRetry, setCanRetry] = useState(false);
 
   useEffect(() => {
-    setError("");
+    setError(""); setCanRetry(false);
     sessionRef.current = null;
     const { scopeId, paperId, sourcePath, document, contentRevision } = input;
     if (!scopeId || !paperId || !document || !contentRevision) return;
@@ -49,8 +51,19 @@ export function usePdfReaderPosition(input: PdfReaderPositionInput) {
     const current = () => active && latest.current.scopeId === scopeId && latest.current.paperId === paperId &&
       latest.current.sourcePath === sourcePath && latest.current.document === document && latest.current.contentRevision === contentRevision;
     const store = createPdfReaderPositionStore(scopeId, () => latest.current.scopeId);
-    const session: Session = { current, ready: false, blocked: false, restoring: false, savedIntent: 0,
-      save: (page, topRatio) => store.save(paperId, contentRevision, page, topRatio) };
+    const writer = createPdfPositionWriter({
+      save: ({ page, topRatio }) => store.save(paperId, contentRevision, page, topRatio),
+      onSaved: () => { if (current()) { setError(""); setCanRetry(false); } },
+      onError: (cause) => {
+        const blocked = isPdfPositionReadOnlyError(cause);
+        if (current()) {
+          session.blocked = blocked; setCanRetry(!blocked);
+          setError(`阅读位置尚未保存。${cause instanceof Error ? cause.message : "请检查本地存储。"}`);
+        }
+        return blocked;
+      }
+    });
+    const session: Session = { current, ready: false, blocked: false, restoring: false, savedIntent: 0, writer };
     sessionRef.current = session;
     const initialPage = input.page;
     void store.loadLocation(paperId, contentRevision).then((saved) => {
@@ -84,7 +97,15 @@ export function usePdfReaderPosition(input: PdfReaderPositionInput) {
       session.blocked = true;
       setError(`阅读位置无法恢复，原记录保持不变。${cause instanceof Error ? cause.message : "请检查本地存储。"}`);
     });
-    return () => { active = false; cancelAnimationFrame(frame); };
+    const flush = () => writer.flush();
+    const visibility = () => { if (window.document.visibilityState === "hidden") flush(); };
+    window.addEventListener("pagehide", flush);
+    window.document.addEventListener("visibilitychange", visibility);
+    return () => {
+      writer.flush(); active = false; cancelAnimationFrame(frame);
+      window.removeEventListener("pagehide", flush);
+      window.document.removeEventListener("visibilitychange", visibility);
+    };
   }, [input.scopeId, input.paperId, input.sourcePath, input.document, input.contentRevision, opening]);
 
   useEffect(() => {
@@ -97,15 +118,12 @@ export function usePdfReaderPosition(input: PdfReaderPositionInput) {
     session.lastPage = input.page;
     session.lastTopRatio = input.topRatio;
     session.savedIntent = opening.intent;
-    void session.save(input.page, input.topRatio).catch((cause: unknown) => {
-      if (!session.current()) return;
-      session.blocked = true;
-      setError(`阅读位置尚未保存。${cause instanceof Error ? cause.message : "请检查本地存储。"}`);
-    });
+    session.writer.enqueue({ page: input.page, topRatio: input.topRatio });
   }, [input.page, input.topRatio, input.pageCount, input.document, input.contentRevision, input.scopeId, input.paperId, opening, tick]);
 
   return {
-    error,
+    error, canRetry,
+    retrySave() { const session = sessionRef.current; if (session?.current() && !session.blocked) session.writer.retry(); },
     markNavigation() {
       opening.intent += 1;
       const session = sessionRef.current;

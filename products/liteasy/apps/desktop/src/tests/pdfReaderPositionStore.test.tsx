@@ -185,3 +185,23 @@ test.each([-0.1, 1.1, NaN])("rejects an invalid saved page offset %s without ove
   await expect(store.save("paper-a", "sha256:aaa", 2, 0.2)).rejects.toThrow(/偏移/);
   expect(state.storage.commit).not.toHaveBeenCalled();
 });
+
+test("unmount flushes the trailing position before a reopen reads storage", async () => {
+  const options = input(); const hook = renderHook((props) => usePdfReaderPosition(props), { initialProps: options });
+  await act(async () => {});
+  act(() => hook.result.current.markNavigation()); hook.rerender({ ...options, page: 7, topRatio: 0.3 });
+  expect(state.storage.commit).not.toHaveBeenCalled(); hook.unmount();
+  const store = createPdfReaderPositionStore("local", () => "local", state.storage);
+  await expect(store.loadLocation("paper-a", "sha256:aaa")).resolves.toEqual({ page: 7, topRatio: 0.3 });
+});
+
+test("temporary save failures can be retried without reopening the document", async () => {
+  vi.mocked(state.storage.commit).mockRejectedValueOnce(new Error("disk busy"));
+  const options = input(); const hook = renderHook((props) => usePdfReaderPosition(props), { initialProps: options });
+  await act(async () => {});
+  act(() => hook.result.current.markNavigation()); hook.rerender({ ...options, page: 5 });
+  await waitFor(() => expect(hook.result.current.canRetry).toBe(true));
+  act(() => hook.result.current.retrySave());
+  await waitFor(() => expect(hook.result.current.error).toBe(""));
+  expect((state.rows.get(key)?.value as { page: number }).page).toBe(5);
+});

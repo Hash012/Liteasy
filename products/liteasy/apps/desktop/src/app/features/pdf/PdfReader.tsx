@@ -32,7 +32,7 @@ import { preparePdfQuickAskContext } from "./quickAskContext";
 import { useQuickAskTask } from "./useQuickAskTask";
 import { QuickAskProvenance } from "./QuickAskProvenance";
 import { QuickAskSurface } from "./QuickAskSurface";
-import { ResponsiveOverlay, DisclosureSection, InfoPopover, IconAction, InlineNotice } from "../../shared/ui/productPrimitives";
+import { ResponsiveOverlay, DisclosureSection, InfoPopover, IconAction, InlineNotice, ActionButton } from "../../shared/ui/productPrimitives";
 import { resolveLocalAccountKey } from "../library/localAccountKey";
 import { useQuickAskPresets } from "../quick-ask-presets/useQuickAskPresets";
 import { QuickAskPresetPicker } from "../quick-ask-presets/QuickAskPresetPicker";
@@ -3862,7 +3862,7 @@ export function PdfReader({
                       <Checkbox checked={autoPublicAnnotations} onChange={(_, data) => setAutoPublic(data.checked === true)} label="新批注自动公开到论坛" />
                     </PopoverSurface></Popover>
                   </div>
-                  {readerPosition.error ? <InlineNotice intent="error" message={readerPosition.error} /> : null}
+                  {readerPosition.error ? <InlineNotice intent="error" message={readerPosition.error} action={readerPosition.canRetry ? <ActionButton size="small" onClick={readerPosition.retrySave}>重试保存阅读位置</ActionButton> : undefined} /> : null}
                   {citationParsing.loading ? <InlineNotice intent="busy" message="正在提取结构化引用…" /> : null}
                   {citationParsing.warning ? <InlineNotice intent="warning" message="引用解析受限" action={<InfoPopover label="查看引用解析问题"><p>{citationParsing.warning}</p><p>{citationParsing.modeDescription}</p></InfoPopover>} /> : null}
                   {filteredAnnotations.length > 0 ? (
