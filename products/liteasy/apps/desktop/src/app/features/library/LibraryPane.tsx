@@ -1,3 +1,4 @@
+import type { RecommendationFeedbackHandler } from "../recommendations/recommendationFeedbackProjection";
 import { DisclosureSection } from "../../shared/ui/productPrimitives";
 import type { RecommendationFeedbackMeaning } from "../recommendations/recommendationCoordinator";
 import { OptionPicker } from "../../shared/ui/productPrimitives";
@@ -170,7 +171,7 @@ type LibraryPaneProps = {
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onAddExternalPdf?: (item: ExternalPdfDragPayload) => void | Promise<void>;
   onClearRecommendations: () => void;
-  onRecommendationFeedback?: (item: RecommendationItem, action: RecommendationFeedbackMeaning) => Promise<unknown>;
+  onRecommendationFeedback?: RecommendationFeedbackHandler;
   onAdoptRecommendationBrief?: (item: RecommendationItem) => Promise<unknown>;
   onRefreshRecommendations?: () => void;
   onExploreSelectedRecommendations?: () => void;

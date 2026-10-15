@@ -1,3 +1,4 @@
+import type { RecommendationFeedbackHandler } from "../features/recommendations/recommendationFeedbackProjection";
 import type { RecommendationFeedbackMeaning } from "../features/recommendations/recommendationCoordinator";
 import type { LibraryInventory } from "../features/library/libraryInventory";
 import type { SpaceOperationsView } from "../features/spaces/SpaceOperationsPanel";
@@ -91,7 +92,7 @@ export type LeftPaneProps = {
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onClearProfile: () => void;
   onClearRecommendations: () => void;
-  onRecommendationFeedback?: (item: RecommendationItem, action: RecommendationFeedbackMeaning) => Promise<unknown>;
+  onRecommendationFeedback?: RecommendationFeedbackHandler;
   onAdoptRecommendationBrief?: (item: RecommendationItem) => Promise<unknown>;
   onRefreshRecommendations?: () => void;
   onExploreSelectedRecommendations?: () => void;
