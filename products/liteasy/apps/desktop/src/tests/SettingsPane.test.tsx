@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { SettingsPane } from "../app/layout/SettingsPane";
@@ -281,4 +281,18 @@ test("lookup connection and secret drafts survive categories, search and securit
   expect(update).toHaveBeenLastCalledWith({ intent: "update_setting", target: "lookup.libretranslate_endpoint", value: "https://translate.example.test" });
   expect(screen.getByLabelText("翻译服务密钥")).toHaveValue("");
   expect(JSON.stringify(update.mock.calls)).not.toContain("synthetic-draft-key");
+});
+
+
+test("recommendation settings navigation clears a previous search and focuses its section", async () => {
+  const user = userEvent.setup();
+  const base = { documentMetadataSyncResult: null, documentMetadataSyncStatus: "idle" as const };
+  const view = render(<SettingsPane {...base} />);
+  const search = screen.getByRole("textbox", { name: "搜索设置" });
+  await user.type(search, "WebDAV");
+  view.rerender(<SettingsPane {...base} navigationRequest={{ section: "recommendations", nonce: 1 }} />);
+  expect(search).toHaveValue("");
+  await waitFor(() => expect(screen.getByRole("heading", { name: "论文推荐", exact: true })).toHaveFocus());
+  expect(screen.getByRole("region", { name: "论文推荐设置" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "论文与推荐", exact: true })).toHaveAttribute("aria-pressed", "true");
 });

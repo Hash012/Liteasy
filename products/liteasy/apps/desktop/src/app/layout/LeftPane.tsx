@@ -12,6 +12,7 @@ import {
 import { OrganizationSidebarPanel } from "../features/organization/OrganizationSidebarPanel";
 import { PersonalCenterPanel } from "../features/profile/PersonalCenterPanel";
 import { SettingsPane } from "./SettingsPane";
+import type { SettingsNavigationRequest } from "../features/settings/settingsNavigation";
 import { ArtifactLibraryPane } from "../features/artifacts/ArtifactLibraryPane";
 import type { AcademicProfile } from "../features/profile/profile.types";
 import type { AgentCoreCatalogEntry, AgentMemoryEntry } from "../features/agent-core/agentCoreConfig";
@@ -92,6 +93,8 @@ export type LeftPaneProps = {
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onClearProfile: () => void;
   onClearRecommendations: () => void;
+  onConfigureRecommendations?: () => void;
+  settingsNavigationRequest?: SettingsNavigationRequest;
   onCurateRecommendations?: (item?: RecommendationItem) => Promise<void>;
   onRestoreRecommendations?: () => Promise<void>;
   onApplyRecommendationPreferences?: () => Promise<void>;
@@ -248,6 +251,7 @@ export function LeftPane({
   onAddDroppedPdfFiles,
   onClearProfile,
   onClearRecommendations,
+  onConfigureRecommendations, settingsNavigationRequest,
   onCurateRecommendations, onRestoreRecommendations, onApplyRecommendationPreferences,
   onRecommendationFeedback,
   onAdoptRecommendationBrief,
@@ -415,6 +419,7 @@ export function LeftPane({
             />
         ) : leftRailView === "settings" ? (
           <SettingsPane
+            navigationRequest={settingsNavigationRequest}
             localScope={contextScopeId ?? (accountScopeId ? `user:${accountScopeId}` : "local")}
             documentMetadataSyncMessage={documentMetadataSyncMessage}
             documentMetadataSyncResult={documentMetadataSyncResult}
@@ -453,6 +458,7 @@ export function LeftPane({
             onAddExternalPdf={onAddExternalPdf}
             onAddDroppedPdfFiles={onAddDroppedPdfFiles}
             onClearRecommendations={onClearRecommendations}
+            onConfigureRecommendations={onConfigureRecommendations}
             onCurateRecommendations={onCurateRecommendations} onRestoreRecommendations={onRestoreRecommendations} onApplyRecommendationPreferences={onApplyRecommendationPreferences}
             onRecommendationFeedback={onRecommendationFeedback}
             onAdoptRecommendationBrief={onAdoptRecommendationBrief}

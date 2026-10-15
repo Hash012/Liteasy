@@ -60,3 +60,4 @@ export function matchesSettingsSearch(section: SettingsSection, query: string) {
   ].join(" ").toLocaleLowerCase();
   return query.trim().toLocaleLowerCase().split(/\s+/).every((term) => text.includes(term));
 }
+export type SettingsNavigationRequest = { section: SettingsSectionId; nonce: number };

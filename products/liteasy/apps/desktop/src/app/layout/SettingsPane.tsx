@@ -25,12 +25,13 @@ import { LibraryLocationPanel } from "../features/library/LibraryLocationPanel";
 import { DocumentMetadataSyncPanel } from "../features/metadata/DocumentMetadataSyncPanel";
 import type { DocumentMetadataSyncResult, DocumentMetadataSyncStatus } from "../features/metadata/metadata.types";
 import type { SettingsState, UpdateSettingCommand } from "../features/settings/settings.types";
-import { matchesSettingsSearch, settingsCategories, settingsSections, type SettingsCategory, type SettingsSectionId } from "../features/settings/settingsNavigation";
+import { matchesSettingsSearch, settingsCategories, settingsSections, type SettingsCategory, type SettingsSectionId, type SettingsNavigationRequest } from "../features/settings/settingsNavigation";
 import "../features/settings/settingsPage.css";
 import { LocalMcpSettingsPanel } from "../features/local-mcp/LocalMcpSettingsPanel";
 import { SelectionLookupSettingsPanel } from "../features/selection-lookup/SelectionLookupSettingsPanel";
 
 type SettingsPaneProps = {
+  navigationRequest?: SettingsNavigationRequest;
   localScope?: string;
   documentMetadataSyncMessage?: string;
   libraryRootPath?: string | null;
@@ -71,6 +72,17 @@ export function SettingsPane(props: SettingsPaneProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const id = useId();
+  useEffect(() => {
+    const request = props.navigationRequest;
+    const section = settingsSections.find(item => item.id === request?.section);
+    if (!section) return;
+    setCategory(section.category); setQuery("");
+    const frame = requestAnimationFrame(() => {
+      const heading = document.getElementById(`${id}-${section.id}`);
+      heading?.scrollIntoView?.({ block: "start" }); heading?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [props.navigationRequest, id]);
   const searching = query.trim().length > 0;
   const visibleSections = settingsSections.filter((section) => searching
     ? matchesSettingsSearch(section, query)
@@ -142,7 +154,7 @@ export function SettingsPane(props: SettingsPaneProps) {
           aria-label={section.id === "recommendations" ? message("settings.recommendations.aria") : section.title}
           className="settings-card" hidden={!visibleIds.has(section.id)}>
           <header className="settings-card-header">
-            <h2 id={`${id}-${section.id}`}>{section.title}</h2>
+            <h2 id={`${id}-${section.id}`} tabIndex={-1}>{section.title}</h2>
             {["appearance", "generation-prompts"].includes(section.id) ? <InfoPopover label={`${section.title}说明`}><p>{section.description}</p></InfoPopover> : <p>{section.description}</p>}
           </header>
           <div className="settings-card-content">{panels[section.id]}</div>

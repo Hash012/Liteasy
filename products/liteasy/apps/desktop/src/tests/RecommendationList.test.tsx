@@ -192,3 +192,31 @@ test("shows the supplied research rationale and discloses its actual evidence li
   await userEvent.click(screen.getByRole("menuitem", { name: "解释为什么推荐" }));
   expect(explain).toHaveBeenCalledWith(expect.objectContaining({ id: item.id, researchReason: curated.researchReason }));
 });
+
+
+test.each(["introduction", "abstract_and_introduction"])("new AI results describe %s evidence and allow restoring the previous group", async basis => {
+  const restore = vi.fn().mockResolvedValue(undefined);
+  render(<RecommendationList items={[{ ...item, reasonState: "grounded", researchReason: {
+    consentEpoch: 1, candidateId: item.id, evidenceIds: ["source"], text: "引言提出在图遍历中应用过滤条件。", role: "next_read", model: "configured", recipe: "explicit-curation-v4", generatedAt: "2026-10-15", evidence: [], basis
+  } }]} pendingIds={[]} canSave onSave={vi.fn()} onDismiss={vi.fn()} onRestore={restore} />);
+  await userEvent.click(screen.getByRole("button", { name: "推荐详情", exact: true }));
+  expect(screen.getByText(/依据：论文.*引言节选/)).toBeVisible();
+  expect(screen.queryByText(/依据：题录信息/)).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "更多推荐操作" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: "返回原组" }));
+  expect(restore).toHaveBeenCalledOnce();
+});
+
+
+test("new AI selections are visible even after the reader changed groups in the original pool", async () => {
+  const rows = Array.from({ length: 6 }, (_, index) => ({ ...item, id: `paper-${index}`, canonicalId: `paper-${index}`, title: `Vector search study ${index}`, feedSnapshotId: "original", relevanceScore: .9 - index * .01 }));
+  const props = { pendingIds: [], canSave: true, onSave: vi.fn(), onDismiss: vi.fn() };
+  const view = render(<RecommendationList {...props} items={rows} />);
+  const first = screen.getAllByRole("button", { name: /^查看推荐/ }).map(button => button.getAttribute("aria-label"));
+  await userEvent.click(screen.getByRole("button", { name: "更多推荐操作" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: "换一组" }));
+  expect(screen.getAllByRole("button", { name: /^查看推荐/ }).map(button => button.getAttribute("aria-label"))).not.toEqual(first);
+  const curated = rows.filter(row => first.includes(`查看推荐 ${row.title}`)).map(row => ({ ...row, feedSnapshotId: "ai-selection" }));
+  view.rerender(<RecommendationList {...props} items={curated} />);
+  expect(screen.getAllByRole("button", { name: /^查看推荐/ }).map(button => button.getAttribute("aria-label"))).toEqual(first);
+});

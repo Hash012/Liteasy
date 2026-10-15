@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { SettingsNavigationRequest, SettingsSectionId } from "../features/settings/settingsNavigation";
 import type {
   DockBaseRegionId,
   DockItemId,
@@ -27,6 +28,7 @@ export function useWorkbenchNavigationController(input: {
   activeDynamicItems: Partial<Record<DockRegionId, string | null>>;
 }) {
   const [hiddenRegions, setHiddenRegions] = useState<DockRegionId[]>([]);
+  const [settingsRequest, setSettingsRequest] = useState<SettingsNavigationRequest>();
   function reveal(region: DockRegionId) {
     setHiddenRegions((current) => current.includes(region) ? current.filter((id) => id !== region) : current);
     if (input.dock.layout.bottomOrder.includes(region)) input.setCollapsed("bottom", false);
@@ -34,6 +36,7 @@ export function useWorkbenchNavigationController(input: {
   }
   return {
     hiddenRegions,
+    settingsRequest,
     restoreVisibility(visibility: { collapsed: typeof input.collapsed; hiddenRegions: DockRegionId[] }) {
       setHiddenRegions(visibility.hiddenRegions.filter(region => Boolean(input.dock.layout.regions[region])));
       for (const region of ["left", "right", "bottom"] as const) input.setCollapsed(region, visibility.collapsed[region]);
@@ -48,7 +51,8 @@ export function useWorkbenchNavigationController(input: {
           input.setCollapsed("bottom", true);
       }
     },
-    open(item: DockItemId) {
+    open(item: DockItemId, settingsSection?: SettingsSectionId) {
+      if (item === "settings" && settingsSection) setSettingsRequest(current => ({ section: settingsSection, nonce: (current?.nonce ?? 0) + 1 }));
       if (item === "metadata-editor") {
         input.dock.moveItem(item, "right"); reveal("right"); input.activate("right", item); return;
       }

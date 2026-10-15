@@ -74,6 +74,13 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
   const [explore, setExplore] = useState(false);
   const [page, setPage] = useState(0);
   const [seen, setSeen] = useState<string[]>([]);
+  const lastVisibleSnapshot = useRef(items[0]?.feedSnapshotId);
+  useEffect(() => {
+    const snapshot = items[0]?.feedSnapshotId;
+    if (!snapshot || snapshot === lastVisibleSnapshot.current) return;
+    lastVisibleSnapshot.current = snapshot;
+    setSeen([]); setPage(0);
+  }, [items[0]?.feedSnapshotId]);
   const [query, setQuery] = useState("");
   const [year, setYear] = useState("");
   const [savedOnly, setSavedOnly] = useState(false);
@@ -103,7 +110,7 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
       <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="更多推荐操作" appearance="subtle" icon={<MoreHorizontalRegular />} /></MenuTrigger><MenuPopover className="recommendation-menu"><MenuList>
         {!explore ? <MenuItem disabled={!filtered.length} onClick={() => { const next = [...seen, ...slate.map(canonicalCandidate)]; setSeen(composeSlate(filtered, { excluded: next }).length ? next : []); }}>换一组</MenuItem> : null}
         <MenuItem onClick={() => { setExplore(!explore); setPage(0); }}>{explore ? "返回精选" : `查看更多候选 · ${items.length}`}</MenuItem>
-        {items.some(item => item.researchReason?.recipe === "explicit-curation-v3") && onRestore ? <MenuItem onClick={() => void onRestore()}>返回原组</MenuItem> : null}
+        {onRestore ? <MenuItem onClick={() => void onRestore()}>返回原组</MenuItem> : null}
         {onApplyPreferences ? <MenuItem onClick={() => void onApplyPreferences()}>应用反馈</MenuItem> : null}
         {menuActions ? <><MenuDivider />{menuActions}</> : null}
       </MenuList></MenuPopover></Menu>
@@ -173,7 +180,7 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
         <SourceDisclosure summary="推荐详情">
           {item.researchReason?.evaluatedCount ? <p>本次评估 {item.researchReason.evaluatedCount} / {item.researchReason.poolCount} 篇候选。</p> : null}
           {item.reasonState === "grounded" && item.researchReason ? <>
-            <p>依据：{item.researchReason.basis === "abstract" ? "论文摘要" : "题录信息"}与已授权资料；研究关系仍需阅读核实。</p>
+            <p>依据：{item.researchReason.basis === "abstract" ? "论文摘要" : item.researchReason.basis === "introduction" ? "论文引言节选" : item.researchReason.basis === "abstract_and_introduction" ? "论文摘要与引言节选" : "题录信息"}与已授权资料；研究关系仍需阅读核实。</p>
             {item.researchReason.limitation ? <p>局限：{item.researchReason.limitation}</p> : null}
           </> : <p>当前匹配依据来自题录与已提供的信息。</p>}
           <ResourceTagChips tags={tags.get(item.id) ?? []} label={`${displayTitle} 的关键词`} onSelect={tag => setQuery(tag.label)} />

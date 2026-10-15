@@ -3903,7 +3903,9 @@
       "owner": "M6 surface owner / shared UI review",
       "symbols": [
         "ServiceCredentials",
+        "cancelTest",
         "change",
+        "testConnection",
         "PaperServicesSettingsPanel"
       ],
       "interactions": [],
@@ -5041,10 +5043,10 @@
       "styles": [
         "./recommendationList.css"
       ],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
-        "semanticSection": false,
+        "semanticSection": true,
         "infoPopover": false,
         "filterPopover": false,
         "optionPicker": false,
@@ -5142,6 +5144,13 @@
         "submitFeedback"
       ],
       "interactions": [
+        "Menu",
+        "MenuDivider",
+        "MenuItem",
+        "MenuItemCheckbox",
+        "MenuList",
+        "MenuPopover",
+        "MenuTrigger",
         "Popover",
         "PopoverSurface",
         "PopoverTrigger"
@@ -5156,7 +5165,7 @@
         "infoPopover": false,
         "filterPopover": false,
         "optionPicker": true,
-        "commandMenu": false,
+        "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
       },

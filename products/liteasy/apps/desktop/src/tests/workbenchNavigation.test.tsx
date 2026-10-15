@@ -116,3 +116,14 @@ test("recommendation previews open in the main region while retaining the librar
   expect(result.current.dock.layout.regions.main.itemIds).toContain("document-reader");
   expect(result.current.dock.layout.regions.left.itemIds).toContain("library");
 });
+
+
+test("recommendation connection entry opens settings and renews the target even when already open", () => {
+  const { result } = renderHook(useFixture);
+  act(() => result.current.navigation.open("settings", "recommendations"));
+  const first = result.current.navigation.settingsRequest;
+  expect(first?.section).toBe("recommendations");
+  expect(result.current.dock.layout.regions.main.activeItemId).toBe("settings");
+  act(() => result.current.navigation.open("settings", "recommendations"));
+  expect(result.current.navigation.settingsRequest?.nonce).toBeGreaterThan(first!.nonce);
+});

@@ -54,6 +54,10 @@ export function RecommendationDetails({ item, onDownload, locations, page = fals
         {page ? <h2>摘要</h2> : null}
         {item.abstract ? <ContentView content={legacyContent(item.abstract)} /> : <p className="recommendation-muted">来源暂未提供摘要，可打开论文网站阅读全文介绍。</p>}
       </section>
+      {page && item.introduction ? <section className="recommendation-abstract" aria-label="论文引言">
+        <h2>引言节选</h2>
+        <ContentView content={legacyContent(item.introduction)} />
+      </section> : null}
       {page && (item.reason || item.relatedDocumentTitle) ? <aside className="recommendation-rationale">
         <h2>为什么推荐这篇论文</h2>
         <ContentView content={legacyContent(recommendationReasonText(item))} onOpenLiteasyPath={openPath} />

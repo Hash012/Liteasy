@@ -287,12 +287,12 @@
       "fingerprint": "695738e30725d69e42c0d448",
       "file": "products/liteasy/apps/desktop/src/app/features/recommendations/RecommendationList.tsx",
       "rule": "source-disclosure-wrapper",
-      "reviewedGitBlob": "d2f590253064481dd9576149e3e55c80606c1a71",
+      "reviewedGitBlob": "a1467ea4664382f584e41b0afc1b1556767648d3",
       "decision": "migrate",
       "owner": "recommendations",
       "renderedSurface": "推荐详情",
-      "reason": "已复核 SourceDisclosure：只展示依据、覆盖范围和关键词，不重复标题；反馈的 pending/失败/回执和精确撤销在当前卡保持可见，AI 精选由显式按钮触发。",
-      "acceptanceTest": "src/tests/RecommendationList.test.tsx; src/tests/browser/recommendationList.browser.spec.ts"
+      "reason": "已复核 Fluent SourceDisclosure：真实摘要/引言依据、覆盖范围与关键词按需展开；操作菜单独立占位，反馈状态与正文不重叠。 新推荐批次清除已看组分页记录，AI 精选不会被旧分组隐藏。",
+      "acceptanceTest": "src/tests/RecommendationList.test.tsx; src/tests/recommendationFullText.test.tsx; src/tests/browser/recommendationList.browser.spec.ts"
     },
     {
       "fingerprint": "daac2cd05bfe8f038e690809",
@@ -397,6 +397,17 @@
       "reason": "普通失败先展示可理解的恢复摘要与重试操作；此默认收起的技术详情保留脱敏后的原始错误。复用 SourceDisclosure → DisclosureSection / Fluent Accordion，资源定位、取消与作用域绑定保持原有控制器负责。",
       "acceptanceTest": "src/tests/internalIdentityPresentation.test.tsx; src/tests/sourcePreviewLifecycle.test.tsx; src/tests/controlContracts.test.tsx",
       "coverage": "链接错误回归验证默认摘要不显示原始对象键，显式展开后可读取诊断；引用生命周期与共享 disclosure 契约独立验证。"
+    },
+    {
+      "fingerprint": "8a767fb807f9101ec81a3487",
+      "file": "products/liteasy/apps/desktop/src/app/features/recommendations/RecommendationDetails.tsx",
+      "rule": "source-disclosure-wrapper",
+      "reviewedGitBlob": "4ecb8439276cf0273cfe442f254e0ac3efcea69e",
+      "decision": "migrate",
+      "owner": "recommendations",
+      "renderedSurface": "题录信息",
+      "reason": "已复核 Fluent SourceDisclosure：作者、发表时间与期刊在摘要前展示；其余题录字段折叠，避免窄栏拥挤。",
+      "acceptanceTest": "src/tests/RecommendationList.test.tsx; src/tests/recommendationFullText.test.tsx; src/tests/browser/recommendationList.browser.spec.ts"
     }
   ]
 }
