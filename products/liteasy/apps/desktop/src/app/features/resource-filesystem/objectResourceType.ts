@@ -1,3 +1,4 @@
+import { contentPresentation } from "./resourcePresentation";
 import { compileDocument } from "../document-export/documentCompiler";
 import { compileBoardDocument } from "../document-export/boardExportAdapter";
 import { sha256, stableJson } from "../document-export/documentExport.types";
@@ -81,6 +82,14 @@ export function objectResourceType(input: {
     return { ...legacy, asset, ...(legacy.content ? { content: { ...legacy.content, binding: { kind: "pinned" as const, path: asset.path, revision: object.revision, scopeId: repository.scopeId }, representationId: `${asset.path}:text/v1` } } : {}) };
   };
   return { typeId, schemaVersion: 1, owner: "ObjectRepository", nativeCodec: input.kind === "workspace.board" ? "liteasy.board-bundle/v1" : "liteasy.object/v1", profile: "liteasy-research-markdown/v1", viewId: "content", fixtureIds: [input.fixtureId], source,
+    presentation: { supported: true, implementation: async (path, options) => {
+      const object = await resolve(refForPath(path));
+      const result = await (adapter.present ?? contentPresentation(adapter))(address(object), options);
+      check();
+      const asset = await source.stat(path, options);
+      if (result.kind === "content") { const read = await source.read(path, options); return read.content ? { kind: "content", asset, read: { ...read, content: read.content } } : { kind: "unavailable", asset, code: "not_supported", message: "正文预览不可用。", retryable: false }; }
+      return { ...result, asset };
+    } },
     export: { supported: true, implementation: { formats: ["markdown", "html", "docx", "pdf"], async compile(path, options) {
       const object = await resolve(refForPath(path));
       if (object.kind === "workspace.board") return compileBoardDocument(object, repository, { options, active: input.active, assets: input.assets?.() });

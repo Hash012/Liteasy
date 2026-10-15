@@ -1,0 +1,6 @@
+.board-scene-preview { display: block; width: 100%; min-width: 0; }
+.board-scene-preview__viewport { position: relative; overflow: hidden; margin-block: 8px; }
+.board-scene-preview__scene { position: relative; transform-origin: top left; }
+.board-scene-preview__edges { position: absolute; color: var(--colorNeutralStroke1); }
+.board-scene-preview__card { position: absolute; overflow: hidden; padding: 8px; box-sizing: border-box; border: 1px solid var(--colorNeutralStroke1); border-radius: 6px; background: var(--colorNeutralBackground1); }
+.board-scene-preview__card .content-excerpt { max-height: 100%; }

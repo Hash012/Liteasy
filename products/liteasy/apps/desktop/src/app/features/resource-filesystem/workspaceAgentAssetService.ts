@@ -1,3 +1,8 @@
+import { nativeAnnotationAssets } from "./nativeAnnotationAssets";
+import { contentPresentation } from "./resourcePresentation";
+import { readBoardViewSnapshot } from "../boards/boardViewSnapshot";
+import { sourceContent } from "../markdown/contentStructure";
+import { canvasNodeText } from "../boards/boardFileFormat";
 import { compileArtifactDocument } from "../document-export/artifactExportAdapter";
 import { compileDocument } from "../document-export/documentCompiler";
 import { resourceUri, parseResourceUri } from "./resourceFileService";
@@ -435,11 +440,37 @@ export function createWorkspaceAgentAssetService(input: WorkspaceAgentAssetInput
       async read(path, options) { const artifact = await findArtifact(path); return readAgentAssetText(artifactStat(artifact, await resourceContentRevision(canonicalResourceJson(artifact))), artifactContextText(artifact), options, { kind: "derived", coverage: "unknown" }); },
     });
   }
+  objects.present = async (path, options) => {
+    const object = await findObject(path), asset = await objects.stat(path, options);
+    if (options.intent === "source" || object.kind === "source.document") return { kind: "pdf", asset, path, intent: options.intent ?? "self" };
+    if (object.kind === "workspace.board") return { kind: "board", asset, scene: await readBoardViewSnapshot(input.repository, object, options.signal) };
+    return contentPresentation(objects)(path, options);
+  };
+  for (const adapter of adapters) {
+    if (adapter.id === "papers") adapter.present = async (path, options) => ({ kind: "pdf", asset: await adapter.stat(path, options), path, intent: options.intent ?? "self" });
+    if (adapter.id === "files") adapter.present = async (path, options) => {
+      const asset = await adapter.stat(path, options);
+      if (asset.kind === "image") return { kind: "image", asset, path };
+      if (/\.canvas(?:\?|$)/i.test(path)) {
+        const read = await adapter.read(path, { ...options, maxCharacters: 80000 });
+        if (read.truncated) return { kind: "unavailable", asset, code: "not_supported", message: "白板较大，请打开原板查看完整布局。", retryable: false };
+        const canvas = parseCanvasFile(read.text), revision = asset.revision!;
+        return { kind: "board", asset, scene: { boardRef: { objectId: path, revision }, sceneRevision: revision,
+          members: canvas.nodes.map(node => ({ title: node.type === "group" ? node.label ?? "分组" : "卡片", path,
+            placement: { placementId: node.id, revision, boardId: path, ref: { objectId: path, revision }, position: { x: node.x, y: node.y }, size: { width: node.width, height: node.height }, viewId: "content", collapsed: false },
+            content: sourceContent({ text: canvasNodeText(node), path, revision, scopeId: scope, profile: node.type === "text" ? undefined : "literal/v1" }) })),
+          edges: canvas.edges.map(edge => ({ edgeId: edge.id, from: edge.fromNode, to: edge.toNode, label: edge.label, kind: "related_to" })) } };
+      }
+      return contentPresentation(adapter)(path, options);
+    };
+  }
+  adapters.push(...nativeAnnotationAssets(input));
   const artifacts = adapters.find(adapter => adapter.id === "artifacts");
   if (artifacts && input.artifactScopeId) adapters.push(artifactResourceAlias(artifacts, scope, input.artifactScopeId));
   const registry = createResourceTypeRegistry(input.active);
   adapters.forEach(adapter => {
     const definition = legacyAssetDefinition(adapter);
+    if (["paper-annotations", "artifact-annotations"].includes(adapter.id)) definition.navigation = { supported: true, implementation: async path => { const asset = await adapter.stat(path); return { path, revision: asset.revision!, scopeId: scope }; } };
     if (adapter.id === "artifacts" || adapter.id === "artifact-resources") definition.export = { supported: true, implementation: { formats: ["pdf", "markdown", "docx", "html"], async compile(path, options) {
       check();
       const parsed = adapter.id === "artifact-resources" ? parseResourceUri(path) : target(path);

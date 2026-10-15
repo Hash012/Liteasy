@@ -10,8 +10,7 @@ test("production composition exposes exactly which native annotation route is re
   const hook = renderHook(() => useObjectWorkbenchController({ scopeId, getApi: () => { throw new Error("No model request"); },
     getPapers: () => [], getSettings: () => createSettingsStore().getState(), openEvidence() {} }));
   const diagnosis = hook.result.current.agentAssets.diagnose(`liteasy://paper-annotations/p/a?scope=${scopeId}`);
-  // Baseline characterization; PR-1 must change this to the production native handler.
-  expect(diagnosis).toEqual({ matches: [], state: "unsupported_type" });
+  expect(diagnosis).toEqual({ matches: ["paper-annotations"], state: "resolved" });
   expect(JSON.stringify(diagnosis)).not.toContain(scopeId);
   hook.unmount();
 });

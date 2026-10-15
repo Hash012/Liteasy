@@ -48,6 +48,11 @@ export function quickAskPresetResourceType({ settings, objects, active }: { sett
       return { resource: stat(preset), representation: options.representation, fileName: `${preset.id}.${options.representation === "native" ? "json" : "md"}`, mediaType: options.representation === "native" ? "application/json" : "text/markdown", byteLength, encoding: "utf8", content }; },
   };
   return { typeId: providerId, schemaVersion: 1, owner: "settings.store", nativeCodec: "liteasy.quick-ask-preset/v1", profile: "literal/v1", viewId: "native", fixtureIds: ["quickAskPresets:scope-cas-projection"],
+    presentation: { supported: true, implementation: async (path, options) => {
+      const preset = fromPath(path);
+      const read = readAgentAssetText(asset(preset), text(preset), options);
+      return { kind: "content", asset: read.asset, read: { ...read, content: { ...read.content, profile: "literal/v1" } } };
+    } },
     source: { id: providerId, scopeId, accepts(path) { try { return parseResourceUri(path).providerId === providerId; } catch { return false; } },
       async stat(path, options) { check(options?.signal); return asset(fromPath(path)); },
       async search({ query, limit = 30, signal }) { check(signal); return settings.read().presets.filter(preset => `${preset.name} ${preset.instruction}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())).slice(0, limit).map(asset); },

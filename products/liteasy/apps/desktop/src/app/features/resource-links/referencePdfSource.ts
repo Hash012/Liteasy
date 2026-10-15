@@ -1,3 +1,4 @@
+import { loadPdfNotes } from "../notes/pdfNotesSource";
 import type { ObjectRepository } from "../objects/objectRepository";
 import type { ObjectEnvelope, ObjectRef } from "../objects/object.types";
 import type { ObjectAnchor } from "../objects/objectAnchor.types";
@@ -88,6 +89,15 @@ export async function resolveReferencePdf(input: {
   if (target.kind === "paper" || target.kind === "pdf-annotation") {
     paperId = target.paperId;
     requiresLocation = target.kind === "pdf-annotation";
+    if (target.kind === "pdf-annotation") {
+      const paper = input.papers.find(paper => paper.id === target.paperId);
+      const item = paper ? (await loadPdfNotes([paper], () => { throw new Error("批注暂时无法读取，请重试。"); })).find(item => item.annotation?.id === target.annotationId) : undefined;
+      input.signal?.throwIfAborted();
+      if (!item?.annotation) throw new Error("批注已删除或不可读取，请打开原文件查看。");
+      if (page !== undefined && page !== item.annotation.page) throw new Error("所选页码与批注位置不一致，请重新选择来源。");
+      page = item.annotation.page;
+      if (item.annotation.rects.length) region = { coordinateSpace: "normalized-viewport", rects: item.annotation.rects.map(rect => ({ x: rect.left / 100, y: rect.top / 100, width: rect.width / 100, height: rect.height / 100 })) };
+    }
   } else if (target.kind === "object") await source(target.followLatest
     ? await input.repository.resolveLatest(target.ref.objectId) : await input.repository.get(target.ref));
   else return undefined;

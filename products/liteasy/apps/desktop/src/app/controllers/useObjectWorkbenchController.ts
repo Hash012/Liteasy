@@ -596,8 +596,7 @@ export function useObjectWorkbenchController(input: {
     searchLiteasyPaths: async (query) => (await agentAssets.search({ query })).map((asset) => ({
       title: asset.title, kind: asset.kind, path: asset.path,
     })),
-    resolveLiteasyPath: (path) => /^liteasy:\/\/(?:resources|paper-annotations|artifact-annotations)\//.test(path)
-      ? resolveLegacyContext(path) : agentAssets.context(path),
+    resolveLiteasyPath: (path) => agentAssets.context(path),
     describeResource: (target, reveal) => describeResourceLocation({ target, reveal, repository, active,
       files: createNoteFileService(repository.scopeId, () => latest.current.scopeId),
       getPapers: () => latest.current.getPapers(), artifactScopeId: latest.current.artifactScopeId ?? "device" }),

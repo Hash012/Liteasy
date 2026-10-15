@@ -1,3 +1,4 @@
+import { contentPresentation } from "../resource-filesystem/resourcePresentation";
 import { resourceUri, parseResourceUri } from "../resource-filesystem/resourceFileService";
 import { providerAssetSource, type ResourceTypeDefinition } from "../resource-filesystem/resourceTypeRegistry";
 import { ResourceFileError, type ResourceProvider, type ResourceRef } from "../resource-filesystem/resourceFile.types";
@@ -61,7 +62,7 @@ export function researchResourceType(input: { host: ResearchHostPort; scope: str
   // Discovery of unrelated research tasks is opt-in through the research directory, not ordinary chat.
   source.search = async () => [];
   return { typeId: "research.task", schemaVersion: 1, owner: "ResearchHost", nativeCodec: "liteasy.research-task/v1", profile: "liteasy-research-markdown/v1", viewId: "native",
-    fixtureIds: ["research:host-ledger"], source,
+    fixtureIds: ["research:host-ledger"], source, presentation: { supported: true, implementation: contentPresentation(source) },
     context: { supported: false, reason: "请按固定版本读取研究报告；不自动把完整任务加入模型上下文。" },
     write: { supported: false, reason: "正式测量只能由宿主执行服务写入。" }, file: { supported: true, implementation: provider },
     navigation: { supported: false, reason: "通过研究工作台选择任务。" },
