@@ -1,0 +1,1276 @@
+{
+  "schema_version": 1,
+  "source": "/tmp/liteasy-id-candidates.json",
+  "baseline_commit": "56b0c4b8658ed6c2335f7b7159c1c6f0a6794095",
+  "review_scope": "140 AST candidates individually classified; fields outside these candidates and error scanner covered by respective agent dispositions",
+  "note": "fixed across another agent domain records its reported change; final merged runtime checks remain root-owned. needs_check entries are explicitly assigned and must merge with owner disposition before final claim. Public scientific identifiers are grouped under authored_identifier, not application IDs.",
+  "counts": {
+    "technical": 25,
+    "non_display": 7,
+    "fixed": 66,
+    "authored_identifier": 42
+  },
+  "candidates": [
+    {
+      "candidate_index": 0,
+      "file": "products/liteasy/apps/desktop/src-tauri/src/note-files/store.rs",
+      "line": 349,
+      "expression": "let path = format!(\"{}.canvas\", hash(object_id.as_bytes()));",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "Rust托管存储哈希是正确物理身份；消费者及标题扩散链已修复，不改文件路径"
+    },
+    {
+      "candidate_index": 1,
+      "file": "products/liteasy/apps/desktop/src/app/controllers/agent/runCodexResearch.ts",
+      "line": 14,
+      "expression": "capability.actionId",
+      "classification": "non_display",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "模型工具调用协议name=actionId，不是UI显示名"
+    },
+    {
+      "candidate_index": 2,
+      "file": "products/liteasy/apps/desktop/src/app/controllers/assistant/AssistantSessionController.tsx",
+      "line": 989,
+      "expression": "paper.sourcePath ?? \"整篇论文\"",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_chats",
+      "evidence": "b503d10f：sourcePath可来自cachedReaderPapers.cachePath及组织org://定位符，确认非仅用户文件路径；普通候选/token改“PDF 文献”，原resourcePath/论文身份保持，缓存+组织回归覆盖。"
+    },
+    {
+      "candidate_index": 3,
+      "file": "products/liteasy/apps/desktop/src/app/controllers/assistant/AssistantSessionController.tsx",
+      "line": 997,
+      "expression": "paper.sourcePath ?? \"整篇论文\"",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_chats",
+      "evidence": "b503d10f：同一paper建议的detail统一PDF文献；标题与实际来源定位独立，测试验证选择后仍保存原paper资源引用。"
+    },
+    {
+      "candidate_index": 4,
+      "file": "products/liteasy/apps/desktop/src/app/controllers/assistant/AssistantSessionController.tsx",
+      "line": 1036,
+      "expression": "skill.id",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_chats",
+      "evidence": "bf2c3621：内置技能建议label使用skill.label，机器skill.id仅keywords/执行prompt保留；不改技能协议身份。"
+    },
+    {
+      "candidate_index": 5,
+      "file": "products/liteasy/apps/desktop/src/app/controllers/assistant/AssistantSessionController.tsx",
+      "line": 1041,
+      "expression": "skill.id",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_chats",
+      "evidence": "bf2c3621：已选技能token的label/detail使用skill.label，实际prompt仍携带原skill.id执行绑定。"
+    },
+    {
+      "candidate_index": 6,
+      "file": "products/liteasy/apps/desktop/src/app/controllers/assistant/AssistantSessionController.tsx",
+      "line": 2248,
+      "expression": "refs.map((ref) => ref.revision).join(\" · \")",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_chats",
+      "evidence": "bf2c3621：任务结果token detail改“已固定本次任务的结果版本”；id及contextRefs中的原revision不变。"
+    },
+    {
+      "candidate_index": 7,
+      "file": "products/liteasy/apps/desktop/src/app/controllers/assistant/AssistantSessionController.tsx",
+      "line": 2703,
+      "expression": "(selectedTaskRun?.status === \"completed\" ? selectedTaskRun.resultRefs : activeSession.taskBinding?.resultRefs)?.map((ref) => ref.revision).join(\" · \") || \"旧版结果，版本待核对\"",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_chats",
+      "evidence": "b503d10f：任务结果版本摘要显示“已固定保存的结果”；精确revision仅developerDiagnostics技术版本保留；先成功再失败测试断言默认无hash且继续提问仍用原冻结ref。"
+    },
+    {
+      "candidate_index": 8,
+      "file": "products/liteasy/apps/desktop/src/app/controllers/assistant/AssistantSessionController.tsx",
+      "line": 2711,
+      "expression": "selectedTaskRun.id",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_chats",
+      "evidence": "selectedTaskRun.id仅 developerDiagnostics 开启后的“技术关联”可见；正常运行选择显示第N次+状态，assistantViewTruth覆盖普通视图无raw run ID。"
+    },
+    {
+      "candidate_index": 9,
+      "file": "products/liteasy/apps/desktop/src/app/controllers/useAssistantContextCatalog.ts",
+      "line": 155,
+      "expression": "artifact.sourcePath ?? artifact.resultPath ?? `产物/${artifact.type === \"thin_reading\" ? \"薄读\" : \"生成文档\"}/${artifact.title}`",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_chats",
+      "evidence": "32b72e6b：产物上下文detail以人类产物类型+已保存结果替代内部sourcePath/resultPath；内部artifact资源定位和身份保留。"
+    },
+    {
+      "candidate_index": 10,
+      "file": "products/liteasy/apps/desktop/src/app/controllers/useCommunitySourceController.tsx",
+      "line": 157,
+      "expression": "visible?.reference.revision",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "社区文章正整数修订号，面向用户可理解且有版本意义"
+    },
+    {
+      "candidate_index": 11,
+      "file": "products/liteasy/apps/desktop/src/app/controllers/useCommunitySourceController.tsx",
+      "line": 160,
+      "expression": "visible.source.historical ? `正在阅读引用时的历史修订 ${visible.source.revision}；当前为修订 ${visible.source.currentRevision}。` : `引用修订与当前修订一致：${visible.source.revision}。`",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "社区文章历史/当前正整数修订号"
+    },
+    {
+      "candidate_index": 12,
+      "file": "products/liteasy/apps/desktop/src/app/controllers/useCommunitySourceController.tsx",
+      "line": 171,
+      "expression": "String([new Date(draft.updatedAt).toLocaleString(), \"\\u00B7 \\u4FEE\\u8BA2\", draft.reference.revision, \"\\u00B7\", draft.text.slice(0, 24) || \"空白想法\"].join(\" \"))",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "社区草稿日期+正整数文章修订号，不是对象hash"
+    },
+    {
+      "candidate_index": 13,
+      "file": "products/liteasy/apps/desktop/src/app/controllers/useCommunitySourceController.tsx",
+      "line": 172,
+      "expression": "copy.draft.reference.revision",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "同上：已发布文章正整数修订号"
+    },
+    {
+      "candidate_index": 14,
+      "file": "products/liteasy/apps/desktop/src/app/controllers/useResearchWorkbenchController.ts",
+      "line": 232,
+      "expression": "`${reference.objectId} · ${reference.revision}\\n\\n${excerpt.text}${excerpt.nextOffset ? \"\\n\\n此处仅为部分原文。\" : \"\"}`",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 15,
+      "file": "products/liteasy/apps/desktop/src/app/controllers/useResourceLinksController.ts",
+      "line": 30,
+      "expression": "paper.sourcePath",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 16,
+      "file": "products/liteasy/apps/desktop/src/app/features/account/AccountDataExportPanel.tsx",
+      "line": 90,
+      "expression": "plan.subject",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "362cccc3：导出主体显示绑定准备计划的姓名/邮箱快照"
+    },
+    {
+      "candidate_index": 17,
+      "file": "products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactExportMenu.tsx",
+      "line": 44,
+      "expression": "`已导出到 ${outcome.record.path}`",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "已导出到用户选择的真实物理文件路径，是可操作保存位置"
+    },
+    {
+      "candidate_index": 18,
+      "file": "products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactExportMenu.tsx",
+      "line": 79,
+      "expression": "outcome.record.location === \"desktop\" ? `已导出到 ${outcome.record.path}${outcome.warnings?.length ? \"（导出历史未保存）\" : \"\"}` : \"已交给浏览器下载，保存位置由浏览器管理。\"",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "同上：用户明确导出产生的目标路径"
+    },
+    {
+      "candidate_index": 19,
+      "file": "products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactLibraryPane.tsx",
+      "line": 562,
+      "expression": "record.path",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "导出错误出口人话+技术详情；本候选record.path为真实导出路径保留"
+    },
+    {
+      "candidate_index": 20,
+      "file": "products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactLibraryPane.tsx",
+      "line": 562,
+      "expression": "record.path",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "同上，Tooltip实际导出路径可操作且不是内部locator"
+    },
+    {
+      "candidate_index": 21,
+      "file": "products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactTabs.tsx",
+      "line": 479,
+      "expression": "activeFailure.traceId",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "traceId从普通运行详情移至明确折叠技术详情"
+    },
+    {
+      "candidate_index": 22,
+      "file": "products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactTabs.tsx",
+      "line": 517,
+      "expression": "activeTab.sourcePath",
+      "classification": "non_display",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "ArtifactTabs sourcePath仅可选真实文件位置，当前openSkillDocument没有写入该字段；未作为title兜底。"
+    },
+    {
+      "candidate_index": 23,
+      "file": "products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactTabs.tsx",
+      "line": 584,
+      "expression": "activeTab.regeneratedFromArtifactId",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "重新生成来源内部artifactId改人话"
+    },
+    {
+      "candidate_index": 24,
+      "file": "products/liteasy/apps/desktop/src/app/features/artifacts/useArtifactActions.ts",
+      "line": 1335,
+      "expression": "`${entry.id}.md`",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_chats",
+      "evidence": "b503d10f：确认不是物理存储文件名，而是openSkillDocument→upsertTab实际页签标题；改entry.label＋使用说明，缺省正文标题同改；机器artifactId与现有docMarkdown原文保持，useArtifactActions测试验证真实tab回调。"
+    },
+    {
+      "candidate_index": 25,
+      "file": "products/liteasy/apps/desktop/src/app/features/boards/ObjectWorkbench.tsx",
+      "line": 433,
+      "expression": "model.boardFile\n                  ? `保存 ${model.boardFile.name}`\n                  : \"选择白板存储文件\"",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "5e7de67c：托管白板保存提示使用业务标题"
+    },
+    {
+      "candidate_index": 26,
+      "file": "products/liteasy/apps/desktop/src/app/features/boards/ObjectWorkbench.tsx",
+      "line": 456,
+      "expression": "outcome.record.location === \"desktop\" ? `已导出到 ${outcome.record.path}` : \"已交给浏览器下载，保存位置由浏览器管理。\"",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "白板用户明确导出产生的真实目标路径"
+    },
+    {
+      "candidate_index": 27,
+      "file": "products/liteasy/apps/desktop/src/app/features/boards/ObjectWorkbench.tsx",
+      "line": 810,
+      "expression": "model.boardFile.path",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "5e7de67c：物理路径仅显式文件存储位置详情"
+    },
+    {
+      "candidate_index": 28,
+      "file": "products/liteasy/apps/desktop/src/app/features/boards/ObjectWorkbench.tsx",
+      "line": 812,
+      "expression": "model.boardFile.name",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "5e7de67c：托管文件名使用业务标题"
+    },
+    {
+      "candidate_index": 29,
+      "file": "products/liteasy/apps/desktop/src/app/features/citation-graph/CitationGraphDialog.tsx",
+      "line": 91,
+      "expression": "focus.work.doi ?? focus.work.id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "公开论文DOI/OpenAlex work标识，有学术检索用途，非Liteasy内部ID"
+    },
+    {
+      "candidate_index": 30,
+      "file": "products/liteasy/apps/desktop/src/app/features/document-export/documentDocx.ts",
+      "line": 122,
+      "expression": "asset.id",
+      "classification": "technical",
+      "covered_by_agent": "root",
+      "evidence": "DOCX ImageRun altText.name是OOXML内部绘图名；可访问title/description来自用户alt。"
+    },
+    {
+      "candidate_index": 31,
+      "file": "products/liteasy/apps/desktop/src/app/features/evidence/components/EvidenceLens.tsx",
+      "line": 115,
+      "expression": "source.revision",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 32,
+      "file": "products/liteasy/apps/desktop/src/app/features/evidence/components/EvidenceLens.tsx",
+      "line": 115,
+      "expression": "source.revision",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 33,
+      "file": "products/liteasy/apps/desktop/src/app/features/extensions/ExtensionSettings.tsx",
+      "line": 55,
+      "expression": "JSON.stringify(migration.values, null, 2)",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "显式插件设置迁移预览展示配置JSON"
+    },
+    {
+      "candidate_index": 34,
+      "file": "products/liteasy/apps/desktop/src/app/features/extensions/ExtensionViews.tsx",
+      "line": 71,
+      "expression": "`切换 ${pkg?.manifest.name ?? state.id} 的版本`",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "不可用扩展的aria-label不再回退state.id"
+    },
+    {
+      "candidate_index": 35,
+      "file": "products/liteasy/apps/desktop/src/app/features/extensions/SchemaFields.tsx",
+      "line": 19,
+      "expression": "typeof option === \"string\" ? option : JSON.stringify(option)",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "插件配置schema enum的实际值是编辑对象，非内部实体查找失败兜底"
+    },
+    {
+      "candidate_index": 36,
+      "file": "products/liteasy/apps/desktop/src/app/features/extensions/extensionApi.ts",
+      "line": 575,
+      "expression": "titles.get(item.commandId) ?? item.commandId",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "扩展注册schema已有命令完整性校验；防御性缺失菜单改“扩展操作”"
+    },
+    {
+      "candidate_index": 37,
+      "file": "products/liteasy/apps/desktop/src/app/features/forum/LiteratureResolutionDialog.tsx",
+      "line": 130,
+      "expression": "pmlrEvidence ? `${pmlrEvidence.artifactUrl}\\n${pmlrEvidence.artifactHash}` : undefined",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 38,
+      "file": "products/liteasy/apps/desktop/src/app/features/forum/LiteratureResolutionDialog.tsx",
+      "line": 134,
+      "expression": "pmlrAuditLabel",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 39,
+      "file": "products/liteasy/apps/desktop/src/app/features/forum/usePublicationPreview.tsx",
+      "line": 60,
+      "expression": "pending?.actor.subject",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "362cccc3：发布主体姓名/邮箱与actor绑定并冻结"
+    },
+    {
+      "candidate_index": 40,
+      "file": "products/liteasy/apps/desktop/src/app/features/intuition-graph/cglParser.ts",
+      "line": 114,
+      "expression": "id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "CGL语言作者提供的符号；parse/serialize无生产调用"
+    },
+    {
+      "candidate_index": 41,
+      "file": "products/liteasy/apps/desktop/src/app/features/intuition-graph/cglParser.ts",
+      "line": 119,
+      "expression": "typeof block.properties.label === \"string\" ? block.properties.label : id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "CGL合法语言符号fallback；无生产调用"
+    },
+    {
+      "candidate_index": 42,
+      "file": "products/liteasy/apps/desktop/src/app/features/intuition-graph/cglParser.ts",
+      "line": 123,
+      "expression": "typeof block.properties.label === \"string\" ? block.properties.label : id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "同上"
+    },
+    {
+      "candidate_index": 43,
+      "file": "products/liteasy/apps/desktop/src/app/features/library/LibraryItemIcon.tsx",
+      "line": 134,
+      "expression": "id.slice(6)",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "emoji:后缀为用户选择的图标字形，不是对象ID"
+    },
+    {
+      "candidate_index": 44,
+      "file": "products/liteasy/apps/desktop/src/app/features/library/paperFileMetadata.ts",
+      "line": 96,
+      "expression": "paperId",
+      "classification": "non_display",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "CustomEvent detail=paperId，仅通知缓存刷新"
+    },
+    {
+      "candidate_index": 45,
+      "file": "products/liteasy/apps/desktop/src/app/features/library/userPaperArtifactClient.ts",
+      "line": 60,
+      "expression": "input.paperId",
+      "classification": "non_display",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "CustomEvent detail=paperId，批注持久化通知"
+    },
+    {
+      "candidate_index": 46,
+      "file": "products/liteasy/apps/desktop/src/app/features/library/userPaperArtifactClient.ts",
+      "line": 62,
+      "expression": "input.paperId",
+      "classification": "non_display",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "CustomEvent detail=paperId，全文持久化通知"
+    },
+    {
+      "candidate_index": 47,
+      "file": "products/liteasy/apps/desktop/src/app/features/local-archive/LocalArchivePanel.tsx",
+      "line": 96,
+      "expression": "file.path",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "归档管理展示用户文献实际路径便于选择还原"
+    },
+    {
+      "candidate_index": 48,
+      "file": "products/liteasy/apps/desktop/src/app/features/local-file-operations/LocalFileOperationsPanel.tsx",
+      "line": 54,
+      "expression": "entry.path",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "文件操作面板展示用户选择的目标路径"
+    },
+    {
+      "candidate_index": 49,
+      "file": "products/liteasy/apps/desktop/src/app/features/local-file-operations/LocalFileOperationsPanel.tsx",
+      "line": 63,
+      "expression": "item.sourcePath",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "移动/复制计划中的真实源文件路径，必须可辨认实际操作对象"
+    },
+    {
+      "candidate_index": 50,
+      "file": "products/liteasy/apps/desktop/src/app/features/local-mcp/paperImportJobs.ts",
+      "line": 29,
+      "expression": "paper.title || id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "标题缺失时为用户提供的DOI/arXiv号/HTTPS论文地址，不是随机内部ID"
+    },
+    {
+      "candidate_index": 51,
+      "file": "products/liteasy/apps/desktop/src/app/features/markdown/contentTitle.ts",
+      "line": 14,
+      "expression": "value.slice(range.start, range.end) || fallback",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "用户Markdown标题内容，禁止模式替换误伤"
+    },
+    {
+      "candidate_index": 52,
+      "file": "products/liteasy/apps/desktop/src/app/features/note-files/ExternalNoteEditor.tsx",
+      "line": 49,
+      "expression": "session.snapshot.path",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "外部编辑器的用户文件路径，非托管白板路径"
+    },
+    {
+      "candidate_index": 53,
+      "file": "products/liteasy/apps/desktop/src/app/features/note-files/browserNoteFiles.ts",
+      "line": 158,
+      "expression": "path",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "浏览器文件服务返回物理文件名，存储语义正确；托管白板消费者已分离"
+    },
+    {
+      "candidate_index": 54,
+      "file": "products/liteasy/apps/desktop/src/app/features/notes/pdfNotesSource.ts",
+      "line": 76,
+      "expression": "paper.id",
+      "classification": "non_display",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "onError(paper.id,error)第一参为回调路由身份，不是显示message"
+    },
+    {
+      "candidate_index": 55,
+      "file": "products/liteasy/apps/desktop/src/app/features/organization/OrganizationSpacePanel.tsx",
+      "line": 24,
+      "expression": "`${item.name}${list.organizations.filter((other) => other.name === item.name).length > 1 ? `（${item.organizationId}）` : \"\"}`",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "6ac0b870：同名组织用角色/成员数/资料库说明"
+    },
+    {
+      "candidate_index": 56,
+      "file": "products/liteasy/apps/desktop/src/app/features/organization/organizationSummaryClient.ts",
+      "line": 57,
+      "expression": "string(item.name) ?? subject",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "362cccc3：name不再回退subject，缺失状态显式且危险操作需可辨认身份"
+    },
+    {
+      "candidate_index": 57,
+      "file": "products/liteasy/apps/desktop/src/app/features/pdf/QuickAskSurface.tsx",
+      "line": 46,
+      "expression": "props.context.source.documentRevision",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 58,
+      "file": "products/liteasy/apps/desktop/src/app/features/pdf/pdf-whiteboard/PdfWhiteboard.tsx",
+      "line": 130,
+      "expression": "item.content.literatureId ?? \"本地文献链接\"",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "PdfReader实际生产import并使用PdfWhiteboard；agent复核后将literatureId默认显示改已关联文献，身份字段保留，补回归"
+    },
+    {
+      "candidate_index": 59,
+      "file": "products/liteasy/apps/desktop/src/app/features/profile/ProfileMemoryPanel.tsx",
+      "line": 42,
+      "expression": "memory.data.entries.find((item) => item.id === entry.replacesId)?.value ?? \"未设置\"",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "通过id查找后展示的是用户记忆value，并未展示id"
+    },
+    {
+      "candidate_index": 60,
+      "file": "products/liteasy/apps/desktop/src/app/features/quick-ask-presets/QuickAskPresetManager.tsx",
+      "line": 47,
+      "expression": "`${item.builtIn ? \"内置\" : item.id.slice(-6)}${item.pinned ? \" · 已置顶\" : \"\"}`",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 61,
+      "file": "products/liteasy/apps/desktop/src/app/features/quick-ask-presets/QuickAskPresetPicker.tsx",
+      "line": 19,
+      "expression": "`${item.name}${others.some(other => other.id !== item.id && other.name === item.name) ? ` · ${item.id.slice(-6)}` : \"\"}`",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 62,
+      "file": "products/liteasy/apps/desktop/src/app/features/quick-ask-presets/quickAskPresetResourceType.ts",
+      "line": 64,
+      "expression": "`固定版本 ${preset.revision}`",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 63,
+      "file": "products/liteasy/apps/desktop/src/app/features/recommendations/RecommendationDetails.tsx",
+      "line": 46,
+      "expression": "item.canonicalId",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "canonicalId来自公开DOI/arXiv/OpenAlex/SemanticScholar来源标识，非Liteasy主键"
+    },
+    {
+      "candidate_index": 64,
+      "file": "products/liteasy/apps/desktop/src/app/features/research-loop/ResearchWorkbench.tsx",
+      "line": 74,
+      "expression": "`${item.title} · ${item.ref.revision.slice(0, 8)}`",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 65,
+      "file": "products/liteasy/apps/desktop/src/app/features/research-loop/ResearchWorkbench.tsx",
+      "line": 85,
+      "expression": "`${String(record.body.question)} · ${record.hash.slice(0, 8)}`",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 66,
+      "file": "products/liteasy/apps/desktop/src/app/features/research-loop/ResearchWorkbench.tsx",
+      "line": 92,
+      "expression": "`检查固定规格 · ${latestSpec.hash.slice(0, 12)}`",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 67,
+      "file": "products/liteasy/apps/desktop/src/app/features/research-loop/ResearchWorkbench.tsx",
+      "line": 92,
+      "expression": "JSON.stringify(latestSpec.body, null, 2)",
+      "classification": "technical",
+      "covered_by_agent": "root",
+      "evidence": "原始固定规格仅在明确技术折叠内容中；标题无hash。"
+    },
+    {
+      "candidate_index": 68,
+      "file": "products/liteasy/apps/desktop/src/app/features/research-loop/ResearchWorkbench.tsx",
+      "line": 96,
+      "expression": "run.runId.slice(0, 20)",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 69,
+      "file": "products/liteasy/apps/desktop/src/app/features/research-loop/ResearchWorkbench.tsx",
+      "line": 103,
+      "expression": "JSON.stringify(run, null, 2).slice(0, 32000)",
+      "classification": "technical",
+      "covered_by_agent": "root",
+      "evidence": "完整run JSON位于主动展开的原始运行数据折叠内。"
+    },
+    {
+      "candidate_index": 70,
+      "file": "products/liteasy/apps/desktop/src/app/features/research-loop/ResearchWorkbench.tsx",
+      "line": 108,
+      "expression": "`${run.runId} · ${states[run.status]}`",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 71,
+      "file": "products/liteasy/apps/desktop/src/app/features/research-loop/ResearchWorkbench.tsx",
+      "line": 120,
+      "expression": "span.reference.revision.slice(0, 8)",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 72,
+      "file": "products/liteasy/apps/desktop/src/app/features/research-skills/ResearchDocumentDetails.tsx",
+      "line": 15,
+      "expression": "document.invocation.skill.id",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_chats",
+      "evidence": "32b72e6b：普通方法显示通过精确id+version+digest解析中文标题；完整skill引用仅默认收起“方法技术信息”。"
+    },
+    {
+      "candidate_index": 73,
+      "file": "products/liteasy/apps/desktop/src/app/features/research-skills/ResearchDocumentDetails.tsx",
+      "line": 18,
+      "expression": "resources && \"objectId\" in source.ref ? <ResourceLink locator={liteasyPath(resources.service.scope, { kind: \"object\", ref: source.ref })}>{source.id} · {source.title}</ResourceLink> : `${source.id} · ${source.title}`",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_chats",
+      "evidence": "researchDocumentGeneration显式生成S1/S2来源引用序号，researchDocument.v1 schema限定 ^S[1-9][0-9]*$；用于科研正文引文与来源对照，非随机对象主键，保留。"
+    },
+    {
+      "candidate_index": 74,
+      "file": "products/liteasy/apps/desktop/src/app/features/research-skills/ResearchDocumentDetails.tsx",
+      "line": 18,
+      "expression": "source.id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_chats",
+      "evidence": "同一Source列表中的S1/S2来源引用别名，由schema限定并与正文sourceIds对应；实际objectId/revision隐藏于ResourceLink定位符。"
+    },
+    {
+      "candidate_index": 75,
+      "file": "products/liteasy/apps/desktop/src/app/features/research-skills/ResearchSkillSelection.tsx",
+      "line": 15,
+      "expression": "skill?.title ?? selection.skill.id",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_chats",
+      "evidence": "32b72e6b：失效精确技能包按钮显示“科研方法暂不可用”，不回退selection.skill.id；ResearchSkillSelection.test覆盖。"
+    },
+    {
+      "candidate_index": 76,
+      "file": "products/liteasy/apps/desktop/src/app/features/research-skills/ResearchSkillSelection.tsx",
+      "line": 16,
+      "expression": "skill?.title ?? selection.skill.id",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_chats",
+      "evidence": "32b72e6b：同一缺失技能的弹出说明也显示“科研方法暂不可用”，仍可移除重选；版本身份保留。"
+    },
+    {
+      "candidate_index": 77,
+      "file": "products/liteasy/apps/desktop/src/app/features/resource-filesystem/ResourceLocationButton.tsx",
+      "line": 38,
+      "expression": "path",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "主动打开“位置与Liteasy Path”技术位置面板，保留复制的原始locator"
+    },
+    {
+      "candidate_index": 78,
+      "file": "products/liteasy/apps/desktop/src/app/features/search/SearchFilterFields.tsx",
+      "line": 42,
+      "expression": "value",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "用户搜索词/标签facet实际值，保留用户文本"
+    },
+    {
+      "candidate_index": 79,
+      "file": "products/liteasy/apps/desktop/src/app/features/search/SearchFilterFields.tsx",
+      "line": 42,
+      "expression": "value",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "同上：筛选选项的用户内容值"
+    },
+    {
+      "candidate_index": 80,
+      "file": "products/liteasy/apps/desktop/src/app/features/search/SearchFilterFields.tsx",
+      "line": 62,
+      "expression": "value",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "同上：用户选中筛选条件"
+    },
+    {
+      "candidate_index": 81,
+      "file": "products/liteasy/apps/desktop/src/app/features/search/SearchFilterFields.tsx",
+      "line": 65,
+      "expression": "value",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "同上：用户选中筛选条件"
+    },
+    {
+      "candidate_index": 82,
+      "file": "products/liteasy/apps/desktop/src/app/features/settings/quickAskPresetSettings.ts",
+      "line": 41,
+      "expression": "scopeId",
+      "classification": "non_display",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "CustomEvent detail=scopeId，设置变更路由"
+    },
+    {
+      "candidate_index": 83,
+      "file": "products/liteasy/apps/desktop/src/app/features/thin-reading/thinReadingIntuechoSyncQueue.ts",
+      "line": 466,
+      "expression": "`${prefix}${target.page ? ` · 第 ${target.page} 页` : \"\"}`",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "本分支最后提交：发送预览以文献标题/来源序号说明原文"
+    },
+    {
+      "candidate_index": 84,
+      "file": "products/liteasy/apps/desktop/src/app/features/thin-reading/thinReadingIntuechoSyncQueue.ts",
+      "line": 468,
+      "expression": "`${prefix} · 生成内容`",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "本分支最后提交：生成片段预览不暴露literatureId"
+    },
+    {
+      "candidate_index": 85,
+      "file": "products/liteasy/apps/desktop/src/app/features/thin-reading/thinReadingIntuechoSyncQueue.ts",
+      "line": 470,
+      "expression": "`${prefix} · 证据 ${evidenceIndex + 1} · 文献 ${evidence.literature.literatureId}${evidence.page ? ` · 第 ${evidence.page} 页` : \"\"}`",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "本分支最后提交：证据预览按精确literatureId取title，缺失用来源序号"
+    },
+    {
+      "candidate_index": 86,
+      "file": "products/liteasy/apps/desktop/src/app/features/visual-blocks/BlockComposer.tsx",
+      "line": 63,
+      "expression": "extensions.snapshot.packages.find((pkg) => pkg.manifest.id === item.id)?.manifest.name ?? item.id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "根代理已明确报告BlockComposer回退ID与失败ID显示已修复"
+    },
+    {
+      "candidate_index": 87,
+      "file": "products/liteasy/apps/desktop/src/app/features/visual-blocks/BlockComposer.tsx",
+      "line": 67,
+      "expression": "failure.id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "根代理已明确报告BlockComposer回退ID与失败ID显示已修复"
+    },
+    {
+      "candidate_index": 88,
+      "file": "products/liteasy/apps/desktop/src/app/features/visual-blocks/ComponentTreeView.tsx",
+      "line": 34,
+      "expression": "path",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "ResourceCard预览内部liteasy路径改查看内容"
+    },
+    {
+      "candidate_index": 89,
+      "file": "products/liteasy/apps/desktop/src/app/features/visual-blocks/ComponentTreeView.tsx",
+      "line": 35,
+      "expression": "path.startsWith(\"liteasy://\") ? `[查看内容](${path})` : path",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "内部路径显示查看内容；外部HTTPS及用户路径保留"
+    },
+    {
+      "candidate_index": 90,
+      "file": "products/liteasy/apps/desktop/src/app/features/visual-blocks/ComponentTreeView.tsx",
+      "line": 39,
+      "expression": "typeof cell === \"string\" ? cell : JSON.stringify(cell)",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "Table/Markdown块由作者提供的原文内容，应保留"
+    },
+    {
+      "candidate_index": 91,
+      "file": "products/liteasy/apps/desktop/src/app/features/visual-blocks/CompositePrimitives.tsx",
+      "line": 22,
+      "expression": "typeof value === \"string\" ? value : JSON.stringify(value)",
+      "classification": "authored_identifier",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "内容块将用户/插件创作的数据转为文本，非查找失败时自动补系统ID"
+    },
+    {
+      "candidate_index": 92,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/biologyStructureKernel.ts",
+      "line": 79,
+      "expression": "connection.label ?? connection.id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 93,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/circuitKernel.ts",
+      "line": 89,
+      "expression": "component.id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 94,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/circuitKernel.ts",
+      "line": 94,
+      "expression": "component.id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 95,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/circuitKernel.ts",
+      "line": 102,
+      "expression": "wire.id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 96,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/functionPlotKernel.ts",
+      "line": 126,
+      "expression": "curve.id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 97,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/functionPlotKernel.ts",
+      "line": 127,
+      "expression": "point.label ?? point.id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 98,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/functionPlotKernel.ts",
+      "line": 146,
+      "expression": "point.label ?? point.id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 99,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/functionPlotKernel.ts",
+      "line": 154,
+      "expression": "curve.id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 100,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/geometry2dKernel.ts",
+      "line": 64,
+      "expression": "object.id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 101,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/geometry2dKernel.ts",
+      "line": 65,
+      "expression": "point.id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 102,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/geometry2dKernel.ts",
+      "line": 84,
+      "expression": "id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 103,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/geometry3dKernel.ts",
+      "line": 72,
+      "expression": "object.id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 104,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/geometry3dKernel.ts",
+      "line": 73,
+      "expression": "section.id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 105,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/geometry3dKernel.ts",
+      "line": 94,
+      "expression": "id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 106,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/physicsDiagramKernel.ts",
+      "line": 57,
+      "expression": "object.label ?? object.id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 107,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/physicsDiagramKernel.ts",
+      "line": 62,
+      "expression": "object.label ?? object.id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 108,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/physicsDiagramKernel.ts",
+      "line": 70,
+      "expression": "vector.id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 109,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/physicsProcessKernel.ts",
+      "line": 108,
+      "expression": "parameter.id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 110,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/physicsProcessKernel.ts",
+      "line": 131,
+      "expression": "id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 111,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/reactionProcessKernel.ts",
+      "line": 112,
+      "expression": "equation.id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 112,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/kernels/reactionProcessKernel.ts",
+      "line": 133,
+      "expression": "species?.formula ?? id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 113,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/renderers/biologyStructureRenderer.tsx",
+      "line": 45,
+      "expression": "id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 114,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/renderers/circuitRenderer.tsx",
+      "line": 45,
+      "expression": "id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 115,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/renderers/functionPlotRenderer.tsx",
+      "line": 136,
+      "expression": "parameter.id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 116,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/renderers/functionPlotRenderer.tsx",
+      "line": 138,
+      "expression": "`参数 ${parameter.id}`",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 117,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/renderers/functionPlotRenderer.tsx",
+      "line": 161,
+      "expression": "id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 118,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/renderers/geometry2dRenderer.tsx",
+      "line": 114,
+      "expression": "id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 119,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/renderers/geometry3dRenderer.tsx",
+      "line": 173,
+      "expression": "id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 120,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/renderers/physicsProcessRenderer.tsx",
+      "line": 191,
+      "expression": "parameter.id",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 121,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/renderers/physicsProcessRenderer.tsx",
+      "line": 193,
+      "expression": "`参数 ${parameter.id}`",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "可编辑科学规格中的领域符号/作者赋予的变量或元件名（如R1、f、A、速度参数），保留计算和公式含义；不是应用存储生成的UUID。已有显式label的交互入口使用语义名称。"
+    },
+    {
+      "candidate_index": 122,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/renderers/physicsProcessRenderer.tsx",
+      "line": 220,
+      "expression": "id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 123,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/renderers/rasterIllustrationRenderer.tsx",
+      "line": 34,
+      "expression": "label.id",
+      "classification": "technical",
+      "covered_by_agent": "root",
+      "evidence": "raster table.label作为内部选择映射键保留；UI行标题改标注序号，按钮使用label.text。"
+    },
+    {
+      "candidate_index": 124,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/renderers/rasterIllustrationRenderer.tsx",
+      "line": 165,
+      "expression": "id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 125,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/renderers/reactionProcessRenderer.tsx",
+      "line": 164,
+      "expression": "condition.value ?? \"present\"",
+      "classification": "authored_identifier",
+      "covered_by_agent": "root",
+      "evidence": "condition.value是化学反应条件值，不是身份键；缺值present表示存在性。"
+    },
+    {
+      "candidate_index": 126,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/renderers/reactionProcessRenderer.tsx",
+      "line": 179,
+      "expression": "id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 127,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/renderers/semanticGraphRenderer.tsx",
+      "line": 80,
+      "expression": "object?.label ?? objectId",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 128,
+      "file": "products/liteasy/apps/desktop/src/app/features/visualization/rendering/stableLayout.ts",
+      "line": 104,
+      "expression": "source.label ?? id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 129,
+      "file": "products/liteasy/apps/desktop/src/app/features/webdav/WebDavSettingsPanel.tsx",
+      "line": 87,
+      "expression": "conflict.path",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "WebDAV冲突文件真实路径是冲突处理对象"
+    },
+    {
+      "candidate_index": 130,
+      "file": "products/liteasy/apps/desktop/src/app/features/workflow-studio/ExtensionDraftHistory.tsx",
+      "line": 20,
+      "expression": "path",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "扩展草稿版本的源代码文件路径，显式开发编辑面板"
+    },
+    {
+      "candidate_index": 131,
+      "file": "products/liteasy/apps/desktop/src/app/features/workflow-studio/StudioCardPreview.tsx",
+      "line": 13,
+      "expression": "card.type.id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 132,
+      "file": "products/liteasy/apps/desktop/src/app/features/workflow-studio/StudioGraph.tsx",
+      "line": 20,
+      "expression": "`${node.title}\\n${node.operation.id}`",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 133,
+      "file": "products/liteasy/apps/desktop/src/app/features/workflow-studio/WorkflowStudio.tsx",
+      "line": 119,
+      "expression": "`${id} · ${operationCatalog[id].effect}`",
+      "classification": "technical",
+      "covered_by_agent": "root",
+      "evidence": "API目录为用户主动选择的协议参考页，保留可复制操作键以编写扩展。"
+    },
+    {
+      "candidate_index": 134,
+      "file": "products/liteasy/apps/desktop/src/app/features/workflow-studio/WorkflowStudio.tsx",
+      "line": 130,
+      "expression": "node.operation.id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 135,
+      "file": "products/liteasy/apps/desktop/src/app/features/workflow-studio/WorkflowStudio.tsx",
+      "line": 130,
+      "expression": "id",
+      "classification": "fixed",
+      "covered_by_agent": "root",
+      "evidence": "已逐项修复正常显示出口，精确身份保留操作负载/数据属性；参见ID审计主记录及相应源码提交。"
+    },
+    {
+      "candidate_index": 136,
+      "file": "products/liteasy/apps/desktop/src/app/features/workflow-studio/WorkflowStudio.tsx",
+      "line": 141,
+      "expression": "`${change.path} · ${change.text === null ? \"删除\" : draft.files[change.path] ? \"修改\" : \"新增\"}`",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "扩展工作室文件变更预览中的源代码路径"
+    },
+    {
+      "candidate_index": 137,
+      "file": "products/liteasy/apps/desktop/src/app/features/workflows/WorkflowViews.tsx",
+      "line": 61,
+      "expression": "JSON.stringify(detail.receipts[id], null, 2)",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "显式“操作技术回执”折叠JSON"
+    },
+    {
+      "candidate_index": 138,
+      "file": "products/liteasy/apps/desktop/src/app/features/workflows/WorkflowViews.tsx",
+      "line": 61,
+      "expression": "JSON.stringify(detail.nodes[node.id], null, 2)",
+      "classification": "technical",
+      "covered_by_agent": "acceptance_pdf",
+      "evidence": "显式“技术详情：结构化输出”折叠JSON"
+    },
+    {
+      "candidate_index": 139,
+      "file": "products/liteasy/apps/desktop/src/app/shared/ui/productPrimitives.tsx",
+      "line": 76,
+      "expression": "selected?.label ?? value",
+      "classification": "fixed",
+      "covered_by_agent": "acceptance_identity",
+      "evidence": "3b1afabc：完整selectedDisplay状态契约；精确隐藏value保留；8ab015ef将已解析空label转unnamed，精确value不变"
+    }
+  ],
+  "final_note": "行号和expression来自修复前扫描，用于追踪候选；当前代码已变化。显示/技术/作者内容边界分别核查，候选数不是泄露数。"
+}

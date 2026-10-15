@@ -68,10 +68,16 @@ jobs:
           if-no-files-found: error
 
   ui-browser:
-    name: L1 - UI browser contracts
+    name: L1 - UI browser contracts (${{ matrix.shard }}/2)
     needs: contracts
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    strategy:
+      # The complete browser suite now exceeds twelve minutes locally.
+      # Split files without omitting tests; preserve evidence from both shards.
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     defaults:
       run:
         working-directory: products/liteasy/apps/desktop
@@ -81,12 +87,12 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Exercise real UI components and Dock
-        run: npm run ci:ui-browser
+        run: npm run ci:ui-browser -- --shard=${{ matrix.shard }}/2
       - name: Preserve UI evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: desktop-ui-browser-${{ github.run_attempt }}
+          name: desktop-ui-browser-${{ matrix.shard }}-${{ github.run_attempt }}
           path: products/liteasy/apps/desktop/test-results/ui-browser-ci
           retention-days: 7
           if-no-files-found: error

@@ -35,5 +35,7 @@ test("previews every frozen target and evidence excerpt, including multiple deri
     ] };
   const result = thinReadingPublicationExcerpts({ pendingOperation } as Parameters<typeof thinReadingPublicationExcerpts>[0]);
   expect(result.map(({ text }) => text)).toEqual(["First source", "Derived excerpt", "Second source", "Third source"]);
-  expect(result[3].label).toContain("source-3");
+  expect(result[3].label).toBe("目标 2 · 证据 2 · 来源 3 · 第 2 页");
+  expect(result.some(item => /source-[123]/.test(item.label))).toBe(false);
+  expect(pendingOperation.targets[1]).toMatchObject({ evidence: [expect.anything(), { literature: { literatureId: "source-3" } }] });
 });

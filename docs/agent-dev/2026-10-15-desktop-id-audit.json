@@ -1,0 +1,1254 @@
+{
+  "schema": "liteasy.desktop-id-audit-disposition/v1",
+  "source_pack": "tmp/Liteasy-Desktop-ID-Audit-20261015.zip",
+  "baseline": "56b0c4b8658ed6c2335f7b7159c1c6f0a6794095",
+  "source_pack_baseline": "0bbc0b69920c96bea0491c13cafecbe1b38eba28",
+  "version": "0.1.60",
+  "items": [
+    {
+      "id": "ID-001",
+      "status": "fixed_and_tested",
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/boards/ObjectWorkbench.tsx",
+        "products/liteasy/apps/desktop/src/app/features/boards/boardFilePresentation.ts",
+        "products/liteasy/apps/desktop/src/app/features/note-files/noteFileCatalogIndex.ts"
+      ],
+      "changes": [
+        "从mount.managed确证托管来源，普通文件行显示业务标题/本机位置，不使用hash文件名或path Tooltip",
+        "物理路径保留在主动展开的文件存储位置详情",
+        "托管文件从external catalog移除，清理旧条目及pending events，异步扫描发布前复核mount属性"
+      ],
+      "tests_run": [
+        "boardFileController.test.tsx: 8 passed",
+        "ObjectWorkbenchInteractions.test.tsx: 20 passed",
+        "noteFileCatalogIndex.test.ts: 7 passed",
+        "boardFiles.test.ts: 11 passed",
+        "noteFileService.test.ts: 7 passed",
+        "objectWorkbenchController.test.ts: 8 passed",
+        "Chromium boardFileConnections browser scenarios: drag/connect+reload, external OPFS save-as/reopen/autosave, managed title reload+explicit path disclosure all passed"
+      ],
+      "evidence": "3b1afabc/5e7de67c；真实浏览器截图managed-board-title.png：普通UI业务标题，path仅展开后出现；外部hash命名文件仍原样展示。",
+      "remaining_risk": "旧持久化标题若已被早期版本污染，无法仅凭hash形状证明不是用户刻意命名，本次不自动改写；新导入优先采用已有业务标题或Canvas显式title，缺失为名称待恢复。真实Windows/Tauri存储交付验证由root最终CI负责。"
+    },
+    {
+      "id": "ID-002",
+      "status": "fixed_and_tested",
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/boards/ObjectWorkbench.tsx",
+        "products/liteasy/apps/desktop/src/app/features/boards/boardFilePresentation.ts"
+      ],
+      "changes": [
+        "保存按钮Tooltip由boardFileDisplayName根据已确认locationKind选择业务标题或真实外部文件名"
+      ],
+      "tests_run": [
+        "boardFileController.test.tsx: 8 passed",
+        "ObjectWorkbenchInteractions.test.tsx: 20 passed",
+        "noteFileCatalogIndex.test.ts: 7 passed",
+        "boardFiles.test.ts: 11 passed",
+        "noteFileService.test.ts: 7 passed",
+        "objectWorkbenchController.test.ts: 8 passed",
+        "Chromium boardFileConnections browser scenarios: drag/connect+reload, external OPFS save-as/reopen/autosave, managed title reload+explicit path disclosure all passed"
+      ],
+      "evidence": "5e7de67c；真实浏览器命名白板保存按钮Tooltip始终包含用户标题，不包含托管hash文件名。",
+      "remaining_risk": "旧持久化标题若已被早期版本污染，无法仅凭hash形状证明不是用户刻意命名，本次不自动改写；新导入优先采用已有业务标题或Canvas显式title，缺失为名称待恢复。真实Windows/Tauri存储交付验证由root最终CI负责。"
+    },
+    {
+      "id": "ID-003",
+      "status": "fixed_and_tested",
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/controllers/useBoardFileController.ts",
+        "products/liteasy/apps/desktop/src/app/features/boards/boardFilePresentation.ts"
+      ],
+      "changes": [
+        "打开/保存/更新状态消息使用与授权board绑定的业务标题",
+        "操作失败状态使用允许列表人话摘要，原始cause链仅显式技术详情"
+      ],
+      "tests_run": [
+        "boardFileController.test.tsx: 8 passed",
+        "ObjectWorkbenchInteractions.test.tsx: 20 passed",
+        "noteFileCatalogIndex.test.ts: 7 passed",
+        "boardFiles.test.ts: 11 passed",
+        "noteFileService.test.ts: 7 passed",
+        "objectWorkbenchController.test.ts: 8 passed",
+        "Chromium boardFileConnections browser scenarios: drag/connect+reload, external OPFS save-as/reopen/autosave, managed title reload+explicit path disclosure all passed"
+      ],
+      "evidence": "5e7de67c/5b81a9c7；测试覆盖源操作到真实ObjectWorkbench status与technical disclosure，native ENOENT含UUID仅展开后可见。",
+      "remaining_risk": "旧持久化标题若已被早期版本污染，无法仅凭hash形状证明不是用户刻意命名，本次不自动改写；新导入优先采用已有业务标题或Canvas显式title，缺失为名称待恢复。真实Windows/Tauri存储交付验证由root最终CI负责。"
+    },
+    {
+      "id": "ID-004",
+      "status": "fixed_and_tested",
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/controllers/useBoardFileController.ts",
+        "products/liteasy/apps/desktop/src/app/features/boards/boardFileFormat.ts",
+        "products/liteasy/apps/desktop/src/app/features/note-files/noteFileCatalogIndex.ts"
+      ],
+      "changes": [
+        "仅通过mount.managed区分存储来源，不按hash匹配",
+        "托管reload保留已有业务title；恢复对象使用Canvas.liteasy.title；缺失来源显式名称待恢复",
+        "保留物理mount/path/version和用户外部文件名；异步文件处理不跨board错误复用状态"
+      ],
+      "tests_run": [
+        "boardFileController.test.tsx: 8 passed",
+        "ObjectWorkbenchInteractions.test.tsx: 20 passed",
+        "noteFileCatalogIndex.test.ts: 7 passed",
+        "boardFiles.test.ts: 11 passed",
+        "noteFileService.test.ts: 7 passed",
+        "objectWorkbenchController.test.ts: 8 passed",
+        "Chromium boardFileConnections browser scenarios: drag/connect+reload, external OPFS save-as/reopen/autosave, managed title reload+explicit path disclosure all passed"
+      ],
+      "evidence": "5e7de67c；真实浏览器保存、刷新并重新选择原白板后标题未污染；外部save-as、重新打开自动保存通过。",
+      "remaining_risk": "旧持久化标题若已被早期版本污染，无法仅凭hash形状证明不是用户刻意命名，本次不自动改写；新导入优先采用已有业务标题或Canvas显式title，缺失为名称待恢复。真实Windows/Tauri存储交付验证由root最终CI负责。"
+    },
+    {
+      "id": "ID-005",
+      "status": "fixed_and_tested",
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/shared/ui/productPrimitives.tsx",
+        "products/liteasy/apps/desktop/src/app/features/boards/ObjectWorkbench.tsx"
+      ],
+      "changes": [
+        "引入value+scopeKey绑定的selectedDisplay ready/loading/error/unavailable/unnamed契约",
+        "过滤列表或异步数据缺失时保留真实选中身份和隐藏表单value，required校验仍使用原值",
+        "不保存跨scope label缓存；不自动清空选中值；error可重试",
+        "全量AST扫描共121处OptionPicker，跨领域调用者适配由对应agent负责",
+        "已解析空label及ready空白label投影为unnamed，选项菜单显示未命名项目；不匹配ID字符串模式"
+      ],
+      "tests_run": [
+        "controlContracts.test.tsx: 8 passed",
+        "ObjectWorkbenchInteractions.test.tsx: 20 passed",
+        "npm run build passed"
+      ],
+      "evidence": "3b1afabc；覆盖UUID/hash/Ref JSON缺失→loading→ready、filter合法快照、scope不匹配、错误重试、不存在/未命名状态。 8ab015ef验证真实空label/空白ready快照，菜单可读且FormData精确原值。",
+      "remaining_risk": "root需整合其workflow/research等调用者状态适配与完整桌面测试；本次无机械value清除。"
+    },
+    {
+      "id": "ID-006",
+      "status": "fixed_and_tested",
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/research-skills/ResearchSkillSelection.tsx"
+      ],
+      "changes": [
+        "失效精确技能版本的按钮和预览统一显示“科研方法暂不可用”，原 skill ref 不变。"
+      ],
+      "tests_run": [
+        "ResearchSkillSelection.test.tsx: 1 passed"
+      ],
+      "evidence": "恢复缺失 packageDigest 的选择，打开按钮/预览不显示机器名，仍可移除重选。",
+      "remaining_risk": ""
+    },
+    {
+      "id": "ID-007",
+      "status": "fixed_and_tested",
+      "changes": [
+        "同名快捷指令以内容摘要和稳定序号区分，操作值仍为原ID。"
+      ],
+      "tests_run": [
+        "internalIdentityPresentation.test.tsx; quickAskPresets.browser.spec.ts"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/quick-ask-presets/QuickAskPresetPicker.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-008",
+      "status": "fixed_and_tested",
+      "changes": [
+        "个人指令描述显示来源、日期和置顶状态，不显示ID片段。"
+      ],
+      "tests_run": [
+        "quickAskPresets.test.tsx"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/quick-ask-presets/QuickAskPresetManager.tsx",
+        "products/liteasy/apps/desktop/src/app/features/quick-ask-presets/QuickAskPresetManager.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-009",
+      "status": "fixed_and_tested",
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/assistant/ContextAssetBrowser.tsx",
+        "products/liteasy/apps/desktop/src/app/features/context-picker/selectionPlan.ts"
+      ],
+      "changes": [
+        "缺失资产使用“所选资料已不可用，请重新选择”，不回退 ID 或撤销前标题。",
+        "旧持久化错误保留原值；未标记 errorsPresentationVersion 的旧错误仅投影通用恢复摘要，防止重新打开泄漏。",
+        "新错误写入显式呈现版本；选择与错误仍绑定既有scope/workspace/purpose/draft。"
+      ],
+      "tests_run": [
+        "ContextAssetBrowser.test.tsx",
+        "contextPickerUi.test.tsx",
+        "contextPickerV3Ui.test.tsx"
+      ],
+      "evidence": "新增旧选择+原始ID错误恢复→重试→重新进入测试；现有权限变更/账号作用域/待选集测试通过。未进行按哈希外观猜测或数据迁移。",
+      "remaining_risk": "历史原始错误作为诊断数据保留，未对用户命名做正则清洗。"
+    },
+    {
+      "id": "ID-010",
+      "status": "fixed_and_tested",
+      "changes": [
+        "实验标题和选择项采用第N次实验与候选方法名称，取消/读取仍传精确runId。"
+      ],
+      "tests_run": [
+        "researchWorkbench.test.tsx"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/research-loop/ResearchWorkbench.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-011",
+      "status": "fixed_and_tested",
+      "changes": [
+        "固定来源显示标题与已固定版本，精确ref留在值和证据链。"
+      ],
+      "tests_run": [
+        "researchWorkbench.test.tsx"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/research-loop/ResearchWorkbench.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-012",
+      "status": "fixed_and_tested",
+      "changes": [
+        "假设显示问题和方案序号，内部hash绑定不变。"
+      ],
+      "tests_run": [
+        "researchWorkbench.test.tsx"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/research-loop/ResearchWorkbench.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-013",
+      "status": "fixed_and_tested",
+      "changes": [
+        "折叠标题使用检查本次实验规格，完整原始规格仅在显式技术内容内。"
+      ],
+      "tests_run": [
+        "researchWorkbench.test.tsx"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/research-loop/ResearchWorkbench.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-014",
+      "status": "fixed_and_tested",
+      "changes": [
+        "速问来源版本移入默认收起的来源技术信息。"
+      ],
+      "tests_run": [
+        "quickAskTask.test.tsx; quickAskTransfer.test.tsx"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/pdf/QuickAskSurface.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-015",
+      "status": "fixed_and_tested",
+      "changes": [
+        "证据卡被动页脚不含revision或hash tooltip，明确展开技术信息后可查看。"
+      ],
+      "tests_run": [
+        "evidenceLens.browser.spec.ts; evidenceReport.test.ts"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/evidence/components/EvidenceLens.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-016",
+      "status": "fixed_and_tested",
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/organization/organizationSummaryClient.ts",
+        "products/liteasy/apps/desktop/src/app/features/organization/organization.types.ts",
+        "products/liteasy/apps/desktop/src/app/features/organization/organizationIdentityPresentation.ts",
+        "products/liteasy/apps/desktop/src/app/features/organization/OrganizationMemberGovernancePanel.tsx",
+        "products/liteasy/apps/desktop/src/app/features/organization/OrganizationOverview.tsx",
+        "products/liteasy/apps/desktop/src/app/features/organization/OrganizationInvitationPanel.tsx"
+      ],
+      "changes": [
+        "成员显示name/email来源明确，不再subject兜底",
+        "缺失/同名不可区分对象禁用破坏性操作并提示刷新；同名不同邮箱可正确区分",
+        "确认与执行保留精确targetSubject、revision、actor绑定",
+        "邀请target/creator从同组织members或当前已绑定账号解析；确认冻结label，身份显示变化时需重新确认"
+      ],
+      "tests_run": [
+        "organizationSummaryClient.test.ts: 5 passed",
+        "OrganizationMemberGovernancePanel.test.tsx: 5 passed",
+        "OrganizationPresentation.test.tsx: 3 passed",
+        "OrganizationInvitationPanel.test.tsx: 7 passed"
+      ],
+      "evidence": "362cccc3/998bcee0；同名邮箱选择与实际请求目标断言，缺姓名/跨账号/跨服务迟到响应不泄漏、不错误撤回。",
+      "remaining_risk": "正式服务当前成员DTO只提供subject时只能显示资料缺失并禁用需辨认目标的操作；本次未越权获取姓名，不把显示名当授权身份。"
+    },
+    {
+      "id": "ID-017",
+      "status": "fixed_and_tested",
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/organization/organizationSummaryClient.ts",
+        "products/liteasy/apps/desktop/src/app/features/organization/organizationIdentityPresentation.ts",
+        "products/liteasy/apps/desktop/src/app/features/organization/OrganizationOverview.tsx"
+      ],
+      "changes": [
+        "audit actor解析显式actor或同授权summary中的member姓名，不回退actorSubject",
+        "action已知代码映射中文，未知代码显示一般操作说明",
+        "原始事件actorSubject/actionCode保留在主动展开的活动技术详情"
+      ],
+      "tests_run": [
+        "organizationSummaryClient.test.ts: 5 passed",
+        "OrganizationPresentation.test.tsx: 3 passed"
+      ],
+      "evidence": "362cccc3；原始审计字段保留便于排查，普通列表不会输出subject/action code。",
+      "remaining_risk": "尚未解析到的成员姓名明确缺失，不猜测身份。"
+    },
+    {
+      "id": "ID-018",
+      "status": "fixed_and_tested",
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/forum/usePublicationPreview.tsx",
+        "products/liteasy/apps/desktop/src/app/layout/AppShell.tsx",
+        "products/liteasy/apps/desktop/src/app/features/thin-reading/thinReadingIntuechoSyncQueue.ts"
+      ],
+      "changes": [
+        "发布发送身份改为与同一actor匹配并冻结的姓名/邮箱快照",
+        "账号/服务/session generation变化仍中止确认；身份显示getter与actor不一致拒绝打开",
+        "薄读预览精确匹配文献title，未解析标题使用来源序号，不显示literatureId；wire targets原样保留"
+      ],
+      "tests_run": [
+        "usePublicationPreview.test.tsx: 4 passed",
+        "thinReadingIntuechoSyncQueue.test.ts: 14 passed"
+      ],
+      "evidence": "362cccc3/61430048；验证确认期间名称变化不改已冻结快照、actor不匹配不能确认、原始发布targets/pendingOperation未被展示信息污染。",
+      "remaining_risk": "显示快照仅用于人类确认，不参与服务授权；跨端旧操作保留原身份规则。"
+    },
+    {
+      "id": "ID-019",
+      "status": "fixed_and_tested",
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/account/accountDataExport.ts",
+        "products/liteasy/apps/desktop/src/app/features/account/AccountDataExportPanel.tsx"
+      ],
+      "changes": [
+        "导出准备计划从同一验证session冻结accountDisplay name/email",
+        "普通确认不再显示subject；subject仍用于manifest、权限校验和原计划身份绑定"
+      ],
+      "tests_run": [
+        "accountDataExport.test.ts: 12 passed",
+        "AccountDataExportPanel.test.tsx: 5 passed"
+      ],
+      "evidence": "362cccc3；账号切换和过期计划验证保持原有行为；UI展示计划身份快照而非当前任意账号。",
+      "remaining_risk": "技术导出manifest中原始身份保留作为机器契约。"
+    },
+    {
+      "id": "ID-020",
+      "status": "fixed_and_tested",
+      "changes": [
+        "部分投影按objectId合并，SVG、按钮和阅读顺序使用同一名称映射；不丢失其他对象。"
+      ],
+      "tests_run": [
+        "semanticGraphRenderer.test.tsx; semanticGraph.browser.spec.ts"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/visualization/renderers/semanticGraphRenderer.tsx",
+        "products/liteasy/apps/desktop/src/app/features/visualization/renderers/semanticGraphRenderer.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-021",
+      "status": "fixed_and_tested",
+      "changes": [
+        "可视化步骤列表/操作选项使用中文操作名，API目录保留技术协议。失效来源步骤显示不可用，绑定不被擅自清空。"
+      ],
+      "tests_run": [
+        "workflowPickerContracts.test.tsx; studioEditing.browser.spec.ts"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/workflow-studio/WorkflowStudio.tsx",
+        "products/liteasy/apps/desktop/src/app/features/workflow-studio/WorkflowStudio.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-022",
+      "status": "fixed_and_tested",
+      "changes": [
+        "旧PdfWhiteboard关联文献使用已关联文献，literatureId保留引用/回调。"
+      ],
+      "tests_run": [
+        "PdfWhiteboard.test.tsx"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/pdf/pdf-whiteboard/PdfWhiteboard.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-023",
+      "status": "fixed_and_tested",
+      "changes": [
+        "旧PDF白板扩展卡普通说明改为扩展内容；renderer完整保留模型，新增编辑后不变回归。"
+      ],
+      "tests_run": [
+        "PdfWhiteboard.test.tsx"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/pdf/pdf-whiteboard/PdfWhiteboard.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-024",
+      "status": "fixed_and_tested",
+      "changes": [
+        "仅在文献标识出口显示识别为DOI或arXiv的公开标识，内部canonicalId不作显示回退。"
+      ],
+      "tests_run": [
+        "internalIdentityPresentation.test.tsx"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/recommendations/RecommendationDetails.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-025",
+      "status": "fixed_and_tested",
+      "changes": [
+        "匹配候选常驻来源保留官方题录/卷号，tooltip仅公开来源地址，不重复artifactHash。"
+      ],
+      "tests_run": [
+        "全桌面测试，文献匹配组件"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/forum/LiteratureResolutionDialog.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-026",
+      "status": "fixed_and_tested",
+      "changes": [
+        "对象导出接入DocumentExportDialog，正文保留用户内容，精确revision及provenance进入ZIP元数据附件。"
+      ],
+      "tests_run": [
+        "internalIdentityPresentation.test.tsx; documentExport.test.ts"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/object-surface/ObjectSurface.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-027",
+      "status": "fixed_and_tested",
+      "changes": [
+        "缺label节点使用确定性未命名节点序号，不回退机器键，稳定布局不受输入重排影响。"
+      ],
+      "tests_run": [
+        "stableLayout.test.ts"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/visualization/rendering/stableLayout.ts"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-028",
+      "status": "fixed_and_tested",
+      "changes": [
+        "反应步骤使用方程与步骤序号，元素和物种公式仍保留。"
+      ],
+      "tests_run": [
+        "reactionProcessKernel.test.ts; reactionProcessRenderer.test.tsx; reactionProcess.browser.spec.ts"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/visualization/kernels/reactionProcessKernel.ts"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-029",
+      "status": "unreachable_with_evidence",
+      "changes": [
+        "parseCglDocument及serializeCglDocument仅有测试调用；语言声明标识由作者编写，不改写其内容。"
+      ],
+      "tests_run": [
+        "rg生产调用核查"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/intuition-graph/cglParser.ts"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-030",
+      "status": "fixed_and_tested",
+      "changes": [
+        "几何派生切点/截面、物理轨迹/事件显示有意义名称；输入几何变量等作者领域符号保留。"
+      ],
+      "tests_run": [
+        "geometry2d/geometry3d/physicsProcess kernel, renderer and browser tests"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/visualization/kernels/geometry2dKernel.ts",
+        "products/liteasy/apps/desktop/src/app/features/visualization/kernels/geometry3dKernel.ts",
+        "products/liteasy/apps/desktop/src/app/features/visualization/kernels/physicsProcessKernel.ts"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-031",
+      "status": "fixed_and_tested",
+      "changes": [
+        "本地扩展按精确版本读取manifest名称，缺失名称禁用管理动作；机器ID和异常仅显式技术详情。"
+      ],
+      "tests_run": [
+        "objectWorkbenchInteractions.test.tsx; 全桌面测试"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/visual-blocks/BlockComposer.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-032",
+      "status": "fixed_and_tested",
+      "changes": [
+        "原先defaultOpen的失败区traceId改为独立默认收起技术详情；正常原因/建议保留。"
+      ],
+      "tests_run": [
+        "ArtifactTabs.test.tsx",
+        "operationIdentityPresentation.test.tsx"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactTabs.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-033",
+      "status": "already_fixed_with_evidence",
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/controllers/assistant/AssistantSessionController.tsx"
+      ],
+      "changes": [
+        "原有运行选择使用“第 N 次 · 状态”；run id 仅 developerDiagnostics 的“技术关联”保留。",
+        "新增对普通运行选择与无 raw run ID 的断言。",
+        "另将任务结果上下文 detail 从 revision 列表改成“已固定本次任务的结果版本”；引用身份不变。"
+      ],
+      "tests_run": [
+        "assistantViewTruth.test.tsx"
+      ],
+      "evidence": "检查任务默认摘要/日志与 taskDiagnostic 分支；开发者开关之外不存在运行身份字段。",
+      "remaining_risk": "开发者诊断和导出明确标识的技术元数据保留完整身份，供排查及精确引用。"
+    },
+    {
+      "id": "ID-034",
+      "status": "fixed_and_tested",
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/features/workspace/workspaceShell.types.ts",
+        "products/liteasy/apps/desktop/src/app/layout/FileStatusBar.tsx",
+        "products/liteasy/apps/desktop/src/app/features/library/paperFileMetadata.ts",
+        "products/liteasy/apps/desktop/src/app/controllers/useNotesController.ts",
+        "products/liteasy/apps/desktop/src/app/layout/AppShell.tsx"
+      ],
+      "changes": [
+        "追踪证明board tab未使用FileStatusBar，notes controller过滤managed mount",
+        "额外确认paper org://和reading liteasyPath会进入状态栏：用显式pathPresentation区分technical locator",
+        "普通Tooltip仅业务name；主动展开文件元信息仍提供原始路径；外部用户路径不变"
+      ],
+      "tests_run": [
+        "workspaceShell.test.tsx: 9 passed"
+      ],
+      "evidence": "0b7b496d；原托管白板扩散分支不可达有代码证据；实际internal locator Tooltip回归已补。",
+      "remaining_risk": "真实外部path与公开链接作为可用位置保留；不按UUID正则篡改用户文件名。"
+    },
+    {
+      "id": "ID-035",
+      "subset": "ResourceReferenceView / semanticGraphRenderer",
+      "status": "fixed_and_tested",
+      "changes": [
+        "资源读取与打开异常统一恢复摘要，脱敏原始错误保留在默认收起技术详情。语义图错误由VisualizationArtifactHost封闭为可访问摘要，无原始错误文本出口。"
+      ],
+      "tests_run": [
+        "internalIdentityPresentation.test.tsx",
+        "resourceReferences.test.tsx",
+        "semanticGraphRenderer.test.tsx"
+      ],
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/controllers/useBoardFileController.ts",
+        "products/liteasy/apps/desktop/src/app/controllers/assistant/AssistantSessionController.tsx",
+        "products/liteasy/apps/desktop/src/app/features/resource-links/ResourceReferenceView.tsx",
+        "products/liteasy/apps/desktop/src/app/features/visualization/renderers/semanticGraphRenderer.tsx"
+      ],
+      "remaining_risk": "精确身份保留在数据、操作协议或显式技术信息中。"
+    },
+    {
+      "id": "ID-035",
+      "status": "fixed_and_tested",
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/controllers/useBoardFileController.ts",
+        "products/liteasy/apps/desktop/src/app/features/boards/boardFilePresentation.ts",
+        "products/liteasy/apps/desktop/src/app/features/boards/ObjectWorkbench.tsx"
+      ],
+      "changes": [
+        "覆盖本agent白板出口：原生存储失败经人话摘要到status；原始消息/cause只在主动展开的技术详情",
+        "保留BoardSnapshotChanged专用异常类型，自动保存冲突重试行为不改变",
+        "切换board/repository清除上个对象的错误展示"
+      ],
+      "tests_run": [
+        "boardFileController.test.tsx: 8 passed",
+        "ObjectWorkbenchInteractions.test.tsx: 20 passed"
+      ],
+      "evidence": "5e7de67c/5b81a9c7；真实hook+ObjectWorkbench端到端组件用native ENOENT/private UUID.canvas，证明被动UI没有ID且展开后诊断完整。",
+      "remaining_risk": "本条仅提交白板范围；ID035其余通用错误出口由root及其他agent合并处置。"
+    },
+    {
+      "id": "ID-035",
+      "subset": "AssistantSessionController and conversation actions",
+      "status": "fixed_and_tested",
+      "current_locations": [
+        "products/liteasy/apps/desktop/src/app/controllers/assistant/AssistantSessionController.tsx",
+        "products/liteasy/apps/desktop/src/app/features/assistant/assistantHistoryError.ts",
+        "products/liteasy/apps/desktop/src/app/features/assistant/AssistantSessionActions.tsx"
+      ],
+      "changes": [
+        "历史读取、保存、回执核对改成人类恢复摘要；权限变更和修订冲突有专用提示。",
+        "完整已脱敏错误链留在默认收起的“错误技术详情”内；不是删除日志。",
+        "AI改名失败保留旧标题，删除写盘失败恢复会话并可重试。"
+      ],
+      "tests_run": [
+        "assistantConversationManagement.test.tsx: 7 passed",
+        "AssistantHistoryPanel.test.tsx: 6 passed"
+      ],
+      "evidence": "从 persistence.load 注入含对象键/内部路径的真实拒绝，默认摘要无机器串，显式展开技术详情可读，点击重试成功恢复。",
+      "remaining_risk": "本记录只覆盖助手域；白板、资源预览、语义图由主agent合并各自处置。"
+    }
+  ],
+  "retained_boundaries": [
+    "精确身份、修订、subject、协议键、存储路径、授权及操作负载不被显示名称替换。",
+    "DOI/arXiv、作者输入的领域符号、代码、真实外部路径与刻意使用的哈希标题保留。",
+    "诊断、原始源码、API目录、证据包元数据明确标为技术内容；正常摘要不直接传播原始异常。"
+  ],
+  "historical_data": [
+    "新生产者不再把托管文件哈希写回业务标题。缺少可验证来源的旧标题不按字符外观自动迁移，避免覆盖用户命名。",
+    "旧上下文错误原数据保留，显示按版本隔离；重新进入不显示旧内部ID。"
+  ],
+  "validation": {
+    "local": "完整634测试文件扫描：4441通过、9失败、9既有跳过；8个失败文件均为新呈现契约/测试夹具需同步，修正后52项全部通过（含原9项失败）；生产实现未因消除失败而回退。最终干净提交由Installer CI再次完整测试。",
+    "windows_installer": "安装包及Windows安装/启动/卸载证据随 tmp/Liteasy-0.1.60-windows/verification/release-validation.json 交付；本文件不将Linux检查视作Windows验收。",
+    "rust": "cargo +1.98.1 check --locked --all-targets --no-default-features passed",
+    "smoke": "npm run ci:smoke passed",
+    "ui_review": "1547 sources, 32 exact controls, 701 existing exceptions; 15 review-policy tests passed",
+    "focused_browser": "图形、证据、预设等定向浏览器通过；PDF关闭/重开6场景及颜色4场景、白板3场景、对话真实模型请求/真实栏宽调整/导出/删除另分别验证。",
+    "build": "npm run build passed; 231 production assets verified",
+    "contracts": "隔离的干净提交执行ci:contracts通过，生成schema与锁文件无漂移。",
+    "browser": "完整157场景扫描：156通过，1处旧历史卡片断言失败；修正为标题/日期/菜单新行为后，对应2场景复验通过。其余源码未再改变。",
+    "ci_workflow": "浏览器分两组并行，无用例删除；actionlint及既有CI脚本测试通过，--list验证两组无交集且并集完整覆盖157个场景。"
+  },
+  "remaining_validation": [
+    "真实用户旧数据库未接入，不能证明旧哈希标题源自系统；不自动迁移。"
+  ],
+  "additional_changes": [
+    {
+      "file": "OrganizationSpacePanel.tsx",
+      "commit": "6ac0b870",
+      "change": "同名组织不附organizationId；使用角色/成员数/资料库说明，选择value保持原ID",
+      "tests": "OrganizationPresentation.test.tsx: 3 passed"
+    },
+    {
+      "id": "CHAT-ID-001",
+      "status": "fixed_and_tested",
+      "location": "products/liteasy/apps/desktop/src/app/controllers/assistant/AssistantSessionController.tsx",
+      "change": "内置技能建议和上下文 token 展示 skill.label；skill.id 留在 keywords、实际prompt和内部身份，不影响命令定位。"
+    },
+    {
+      "id": "CHAT-ID-002",
+      "status": "fixed_and_tested",
+      "location": "products/liteasy/apps/desktop/src/app/features/research-skills/ResearchDocumentDetails.tsx",
+      "change": "科研文档方法与Markdown导出通过精确id+version+digest绑定解析中文名称，缺失时说明名称不可用；原skill引用仅“方法技术信息”展示。S1来源别名为schema定义的文献引用编号，合法保留。"
+    },
+    {
+      "id": "CHAT-ID-003",
+      "status": "fixed_and_tested",
+      "location": "products/liteasy/apps/desktop/src/app/controllers/useAssistantContextCatalog.ts",
+      "change": "产物上下文detail改成人类产物类型+已保存结果，不以内部sourcePath/resultPath作说明。外部用户文件名/位置仍按契约保留；托管白板生产者由另一agent处理。"
+    },
+    {
+      "id": "CHAT-ID-004",
+      "status": "fixed_and_tested",
+      "location": "products/liteasy/apps/desktop/src/app/controllers/agent/runCodexResearch.ts",
+      "change": "research工具机器键通过manager.activity投影到默认执行过程；生产者现在传入中文动作说明，协议工具名/activityId/请求身份不变。真实get_run host调用→activity reducer→AgentActivityCard展开测试覆盖。",
+      "tests_run": [
+        "runCodexResearchPresentation.test.tsx: 1 passed",
+        "agentActivity + codexAppServer + recovery: 18 passed"
+      ]
+    },
+    {
+      "id": "CHAT-ID-005",
+      "status": "fixed_and_tested",
+      "location": "AssistantSessionController.tsx paper suggestions",
+      "change": "b503d10f：sourcePath可来自cachedReaderPapers.cachePath及组织org://定位符，确认非仅用户文件路径；普通候选/token改“PDF 文献”，原resourcePath/论文身份保持，缓存+组织回归覆盖。"
+    },
+    {
+      "id": "CHAT-ID-006",
+      "status": "fixed_and_tested",
+      "location": "AssistantSessionController.tsx task result version",
+      "change": "b503d10f：任务结果版本摘要显示“已固定保存的结果”；精确revision仅developerDiagnostics技术版本保留；先成功再失败测试断言默认无hash且继续提问仍用原冻结ref。"
+    },
+    {
+      "id": "CHAT-ID-007",
+      "status": "fixed_and_tested",
+      "location": "useArtifactActions.ts openSkillDocument",
+      "change": "b503d10f：确认不是物理存储文件名，而是openSkillDocument→upsertTab实际页签标题；改entry.label＋使用说明，缺省正文标题同改；机器artifactId与现有docMarkdown原文保持，useArtifactActions测试验证真实tab回调。"
+    },
+    {
+      "id": "ROOT-SCAN",
+      "changes": [
+        "白板画布操作名称、卡片预览错误、PDF上下文detail、快捷指令上下文版本、生成插图和生物结构交互标签均使用可读呈现；保留原操作身份。"
+      ],
+      "tests": [
+        "15项定向单元测试、7项真实浏览器场景通过；最后白板renderer回归纳入完整测试。"
+      ]
+    }
+  ],
+  "coverage": {
+    "audit_ids": 35,
+    "expected": 35,
+    "baseline_scan": {
+      "files": 1097,
+      "candidates": 140,
+      "parse_errors": 0,
+      "option_picker_callsites": 121
+    },
+    "error_scan": {
+      "files": 1076,
+      "candidates": 309,
+      "parse_errors": 0
+    },
+    "note": "候选计数不是缺陷计数，逐项分类另附；error扫描补充追踪ID-035路径，不声称所有异常均已重构。",
+    "final_scan": {
+      "files_examined": 1106,
+      "candidates": 83,
+      "option_picker_callsites": 120,
+      "parse_errors": 0,
+      "skipped": 0
+    }
+  },
+  "candidate_classification": "docs/agent-dev/2026-10-15-desktop-id-candidates.json",
+  "supplemental_pdf_audit": {
+    "findings": [
+      {
+        "file": "products/liteasy/apps/desktop/src/app/controllers/useCommunitySourceController.tsx",
+        "line": 157,
+        "column": 28,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "revision-or-digest"
+        ],
+        "expression": "visible?.reference.revision",
+        "status": "retained_domain_version",
+        "evidence": "CommunitySourceReference validates a positive integer article revision; current/history comparison and reflection citations depend on it. Not an opaque object revision."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/controllers/useCommunitySourceController.tsx",
+        "line": 160,
+        "column": 31,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "revision-or-digest"
+        ],
+        "expression": "visible.source.historical ? `正在阅读引用时的历史修订 ${visible.source.revision}；当前为修订 ${visible.source.currentRevision}。` : `引用修订与当前修订一致：${visible.source.revision}。`",
+        "status": "retained_domain_version",
+        "evidence": "CommunitySourceReference validates a positive integer article revision; current/history comparison and reflection citations depend on it. Not an opaque object revision."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/controllers/useCommunitySourceController.tsx",
+        "line": 171,
+        "column": 81,
+        "rule": "display-field-producer",
+        "confidence": "candidate",
+        "reasons": [
+          "revision-or-digest"
+        ],
+        "expression": "String([new Date(draft.updatedAt).toLocaleString(), \"\\u00B7 \\u4FEE\\u8BA2\", draft.reference.revision, \"\\u00B7\", draft.text.slice(0, 24) || \"空白想法\"].join(\" \"))",
+        "field": "label",
+        "status": "retained_domain_version",
+        "evidence": "CommunitySourceReference validates a positive integer article revision; current/history comparison and reflection citations depend on it. Not an opaque object revision."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/controllers/useCommunitySourceController.tsx",
+        "line": 172,
+        "column": 41,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "revision-or-digest"
+        ],
+        "expression": "copy.draft.reference.revision",
+        "status": "retained_domain_version",
+        "evidence": "CommunitySourceReference validates a positive integer article revision; current/history comparison and reflection citations depend on it. Not an opaque object revision."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactLibraryPane.tsx",
+        "line": 562,
+        "column": 59,
+        "rule": "jsx-display-attribute",
+        "confidence": "candidate",
+        "reasons": [
+          "locator"
+        ],
+        "expression": "record.path",
+        "attribute": "title",
+        "component": "span",
+        "status": "retained_user_file_path",
+        "evidence": "Desktop export record path is the real selected destination, used by Open File and Reveal; browser-managed exports omit this path. Existing test verifies filename, path and record callbacks."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactTabs.tsx",
+        "line": 479,
+        "column": 41,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "identifier"
+        ],
+        "expression": "activeFailure.traceId",
+        "status": "fixed",
+        "evidence": "presentArtifactFailure gates diagnostics but returns traceId regardless of developerDiagnostics. Moved traceId and error code from default-open guidance into nested closed Technical Details; authorized developer-only fields remain gated."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactTabs.tsx",
+        "line": 517,
+        "column": 49,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "locator"
+        ],
+        "expression": "activeTab.sourcePath",
+        "status": "retained_user_file_path",
+        "evidence": "Optional skill_doc source file location; no production writer currently sets it (openSkillDocument sets title/markdown only). Retained for actual file locations, not used as title fallback."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactTabs.tsx",
+        "line": 584,
+        "column": 19,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "identifier"
+        ],
+        "expression": "activeTab.regeneratedFromArtifactId",
+        "status": "fixed",
+        "evidence": "Regeneration relation now says the original artifact was supplemented and regenerated; parent artifactId retained in the model."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/extensions/ExtensionViews.tsx",
+        "line": 71,
+        "column": 64,
+        "rule": "jsx-display-attribute",
+        "confidence": "candidate",
+        "reasons": [
+          "identifier"
+        ],
+        "expression": "`切换 ${pkg?.manifest.name ?? state.id} 的版本`",
+        "attribute": "aria-label",
+        "component": "OptionPicker",
+        "status": "fixed",
+        "evidence": "Unavailable package version picker uses readable fallback; rollback still receives exact state.id/version/revision. Raw failures use human summary + collapsed redacted diagnostics; success messages have separate state."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/intuition-graph/cglParser.ts",
+        "line": 114,
+        "column": 46,
+        "rule": "display-field-producer",
+        "confidence": "candidate",
+        "reasons": [
+          "identifier"
+        ],
+        "expression": "id",
+        "field": "label",
+        "status": "retained_domain_symbol",
+        "evidence": "CGL parser uses user-declared node symbols as labels when an explicit label is omitted; this is language semantics. rg parseCglDocument/serializeCglDocument under src/app finds definitions only, no production importer/caller."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/intuition-graph/cglParser.ts",
+        "line": 119,
+        "column": 36,
+        "rule": "display-field-producer",
+        "confidence": "candidate",
+        "reasons": [
+          "identifier"
+        ],
+        "expression": "typeof block.properties.label === \"string\" ? block.properties.label : id",
+        "field": "label",
+        "status": "retained_domain_symbol",
+        "evidence": "CGL parser uses user-declared node symbols as labels when an explicit label is omitted; this is language semantics. rg parseCglDocument/serializeCglDocument under src/app finds definitions only, no production importer/caller."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/intuition-graph/cglParser.ts",
+        "line": 123,
+        "column": 7,
+        "rule": "display-field-producer",
+        "confidence": "candidate",
+        "reasons": [
+          "identifier"
+        ],
+        "expression": "typeof block.properties.label === \"string\" ? block.properties.label : id",
+        "field": "label",
+        "status": "retained_domain_symbol",
+        "evidence": "CGL parser uses user-declared node symbols as labels when an explicit label is omitted; this is language semantics. rg parseCglDocument/serializeCglDocument under src/app finds definitions only, no production importer/caller."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/pdf/pdf-whiteboard/PdfWhiteboard.tsx",
+        "line": 130,
+        "column": 18,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "identifier"
+        ],
+        "expression": "item.content.literatureId ?? \"本地文献链接\"",
+        "status": "fixed",
+        "evidence": "Reachable from PdfReader.tsx:4414 for legacyBoardPreview/fallback. Literature card now displays title + readable linked status; original literatureId survives board edits. Earlier no-entry assumption was corrected after checking actual import and JSX."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/visual-blocks/ComponentTreeView.tsx",
+        "line": 34,
+        "column": 147,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "locator"
+        ],
+        "expression": "path",
+        "status": "fixed",
+        "evidence": "Preview ResourceCard no longer prints liteasy:// identifiers; title and explanatory text remain. Real https URLs and user filesystem paths retained."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/visual-blocks/ComponentTreeView.tsx",
+        "line": 35,
+        "column": 229,
+        "rule": "jsx-display-attribute",
+        "confidence": "candidate",
+        "reasons": [
+          "locator"
+        ],
+        "expression": "path.startsWith(\"liteasy://\") ? `[查看内容](${path})` : path",
+        "attribute": "text",
+        "component": "RichTextBlock",
+        "status": "retained_navigation_identity",
+        "evidence": "Internal URI stays in href/navigation payload; displayed anchor is 查看内容. Added test exact openPath callback while path absent from visible text."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/visual-blocks/ComponentTreeView.tsx",
+        "line": 39,
+        "column": 235,
+        "rule": "jsx-display-attribute",
+        "confidence": "candidate",
+        "reasons": [
+          "serialized-structured-value"
+        ],
+        "expression": "typeof cell === \"string\" ? cell : JSON.stringify(cell)",
+        "attribute": "text",
+        "component": "RichTextBlock",
+        "status": "retained_user_content",
+        "evidence": "Table values are author-provided component data, not fallback identity labels. Added test preserving user-written revision/model symbols."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/workflows/WorkflowViews.tsx",
+        "line": 61,
+        "column": 377,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "serialized-structured-value"
+        ],
+        "expression": "JSON.stringify(detail.receipts[id], null, 2)",
+        "status": "fixed",
+        "evidence": "Receipt JSON remains behind explicit 操作技术回执 disclosure and is redacted; unchanged exported/stored record."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/workflows/WorkflowViews.tsx",
+        "line": 61,
+        "column": 623,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "serialized-structured-value"
+        ],
+        "expression": "JSON.stringify(detail.nodes[node.id], null, 2)",
+        "status": "fixed",
+        "evidence": "Structured runtime output is behind nested 技术详情：结构化输出; plain string authored output is unchanged."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/controllers/useCommunitySourceController.tsx",
+        "line": 159,
+        "column": 41,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "raw-error"
+        ],
+        "expression": "visible.error",
+        "status": "fixed",
+        "evidence": "Remote failure is summarized by OperationFailureNotice; redacted raw source identifier available only in collapsed technical details. Source permission and account generation checks unchanged."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactLibraryPane.tsx",
+        "line": 525,
+        "column": 15,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "raw-error"
+        ],
+        "expression": "error ?? \"加载导出记录失败。\"",
+        "status": "fixed",
+        "evidence": "Export history raw failure replaced with retry guidance and explicitly opened technical details."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactLibraryPane.tsx",
+        "line": 541,
+        "column": 76,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "raw-error"
+        ],
+        "expression": "error",
+        "status": "fixed",
+        "evidence": "Export history raw failure replaced with retry guidance and explicitly opened technical details."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/extensions/ExtensionViews.tsx",
+        "line": 48,
+        "column": 141,
+        "rule": "notification-or-state-producer",
+        "confidence": "candidate",
+        "reasons": [
+          "raw-error"
+        ],
+        "expression": "error instanceof Error ? error.message : String(error)",
+        "callee": "setMessage",
+        "status": "fixed",
+        "evidence": "Unavailable package version picker uses readable fallback; rollback still receives exact state.id/version/revision. Raw failures use human summary + collapsed redacted diagnostics; success messages have separate state."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/extensions/ExtensionViews.tsx",
+        "line": 60,
+        "column": 47,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "raw-error"
+        ],
+        "expression": "message || host.error",
+        "status": "fixed",
+        "evidence": "Unavailable package version picker uses readable fallback; rollback still receives exact state.id/version/revision. Raw failures use human summary + collapsed redacted diagnostics; success messages have separate state."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/extensions/ExtensionViews.tsx",
+        "line": 64,
+        "column": 32,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "raw-error"
+        ],
+        "expression": "error",
+        "status": "fixed",
+        "evidence": "Unavailable package version picker uses readable fallback; rollback still receives exact state.id/version/revision. Raw failures use human summary + collapsed redacted diagnostics; success messages have separate state."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/extensions/ExtensionViews.tsx",
+        "line": 110,
+        "column": 30,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "raw-error"
+        ],
+        "expression": "error",
+        "status": "fixed",
+        "evidence": "Unavailable package version picker uses readable fallback; rollback still receives exact state.id/version/revision. Raw failures use human summary + collapsed redacted diagnostics; success messages have separate state."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/pdf/pdf-whiteboard/PdfWhiteboard.tsx",
+        "line": 275,
+        "column": 7,
+        "rule": "notification-or-state-producer",
+        "confidence": "candidate",
+        "reasons": [
+          "raw-error"
+        ],
+        "expression": "error instanceof Error ? error.message : \"无法读取图片。\"",
+        "callee": "setMessage",
+        "status": "retained_controlled_error",
+        "evidence": "Image import catches bounded size/type and FileReader errors only; source file names are user data. No package/node/run ID producer in this path. No blanket rewriting."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/workflows/WorkflowViews.tsx",
+        "line": 30,
+        "column": 30,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "raw-error"
+        ],
+        "expression": "error",
+        "status": "fixed",
+        "evidence": "Raw workflow operation/list/trigger/node failure summarized with folded redacted diagnostic evidence."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/workflows/WorkflowViews.tsx",
+        "line": 47,
+        "column": 157,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "raw-error"
+        ],
+        "expression": "error || model.error",
+        "status": "fixed",
+        "evidence": "Raw workflow operation/list/trigger/node failure summarized with folded redacted diagnostic evidence."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/workflows/WorkflowViews.tsx",
+        "line": 48,
+        "column": 187,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "raw-error"
+        ],
+        "expression": "trigger.error",
+        "status": "fixed",
+        "evidence": "Raw workflow operation/list/trigger/node failure summarized with folded redacted diagnostic evidence."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/workflows/WorkflowViews.tsx",
+        "line": 60,
+        "column": 44,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "raw-error"
+        ],
+        "expression": "detail.run.error",
+        "status": "fixed",
+        "evidence": "Failed run message summarized with folded diagnostics. waiting_input message is a deliberate human prompt, preserved and regression-tested with revision-like user content."
+      },
+      {
+        "file": "products/liteasy/apps/desktop/src/app/features/workflows/WorkflowViews.tsx",
+        "line": 61,
+        "column": 200,
+        "rule": "jsx-text",
+        "confidence": "candidate",
+        "reasons": [
+          "raw-error"
+        ],
+        "expression": "detail.run.nodes[node.id].error",
+        "status": "fixed",
+        "evidence": "Raw workflow operation/list/trigger/node failure summarized with folded redacted diagnostic evidence."
+      }
+    ],
+    "validation": {
+      "targeted_tests": [
+        "/tmp/liteasy-pdf-id-tests-final.log",
+        "/tmp/liteasy-pdf-id-last-tests.log",
+        "/tmp/liteasy-pdf-id-export-final.log"
+      ],
+      "typecheck": "/tmp/liteasy-pdf-id-final-tsc.log",
+      "build": "/tmp/liteasy-pdf-id-build.log",
+      "build_note": "Build passed prior to final WorkflowStudio changes; parent will run final integrated build as requested.",
+      "unique_tests_passed": 110,
+      "test_files": [
+        {
+          "file": "useCommunitySourceController.test.tsx",
+          "passed": 15,
+          "log": "/tmp/liteasy-pdf-id-tests-final.log"
+        },
+        {
+          "file": "ArtifactTabs.test.tsx",
+          "passed": 29,
+          "log": "/tmp/liteasy-pdf-id-last-tests.log"
+        },
+        {
+          "file": "operationIdentityPresentation.test.tsx",
+          "passed": 6,
+          "log": "/tmp/liteasy-pdf-id-tests-final.log"
+        },
+        {
+          "file": "ArtifactLibraryPane.test.tsx",
+          "passed": 18,
+          "log": "/tmp/liteasy-pdf-id-export-final.log"
+        },
+        {
+          "file": "researchTemplateViews.test.tsx",
+          "passed": 9,
+          "log": "/tmp/liteasy-pdf-id-tests-final.log"
+        },
+        {
+          "file": "uiReviewPatterns.test.tsx",
+          "passed": 5,
+          "log": "/tmp/liteasy-pdf-id-tests-final.log"
+        },
+        {
+          "file": "PdfWhiteboard.test.tsx",
+          "passed": 5,
+          "log": "/tmp/liteasy-pdf-id-last-tests.log"
+        },
+        {
+          "file": "extensionApi.test.ts",
+          "passed": 8,
+          "log": "/tmp/liteasy-pdf-id-tests-final.log"
+        },
+        {
+          "file": "visualBlockFoundation.test.tsx",
+          "passed": 5,
+          "log": "/tmp/liteasy-pdf-id-tests-final.log"
+        },
+        {
+          "file": "studioEditing.test.tsx",
+          "passed": 5,
+          "log": "/tmp/liteasy-pdf-id-last-tests.log"
+        },
+        {
+          "file": "workflowStudioFailures.test.tsx",
+          "passed": 2,
+          "log": "/tmp/liteasy-pdf-id-last-tests.log"
+        },
+        {
+          "file": "studioGraph.test.tsx",
+          "passed": 3,
+          "log": "/tmp/liteasy-pdf-id-last-tests.log"
+        }
+      ],
+      "resolved_test_adjustments": [
+        "DisclosureSection retains DOM under hidden panels, so tests assert not-visible before opening and visible afterwards rather than absence from DOM.",
+        "ReactFlow nodes remain hidden before layout in jsdom; whiteboard regression asserts rendered title/link status and preserved model identity (actual PDF browser coverage belongs to previous progress/color commits).",
+        "Export tab is named 已导出, not 导出记录; opening it triggers refresh once, explicit retry triggers second refresh. Corrected integration test and reran entire ArtifactLibraryPane file."
+      ]
+    }
+  }
+}

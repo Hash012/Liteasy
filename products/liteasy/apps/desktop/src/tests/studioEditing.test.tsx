@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { StudioCardPreview } from "../app/features/workflow-studio/StudioCardPreview";
 import { studioTutorialFiles } from "../app/features/workflow-studio/studioTutorial";
@@ -33,8 +33,11 @@ test("preview cannot inherit remote images, resource reading, editing or navigat
 });
 test("missing types remain explicit and preserve editable original data", () => {
   render(<StudioCardPreview card={{ id: "missing", title: "Missing", type: { id: "plugin.missing/Type", version: "1.0.0" }, data: { text: "保留内容" }, position: { x: 0, y: 0 }, size: { width: 320, height: 200 } }} />);
-  expect(screen.getByRole("status")).toHaveTextContent("缺少组件版本");
-  expect(screen.getByRole("status")).toHaveTextContent("原始内容仍保留");
+  expect(screen.getByRole("alert")).toHaveTextContent("无法预览此卡片");
+  expect(screen.getByRole("alert")).toHaveTextContent("原始内容仍保留");
+  expect(screen.getByRole("alert")).not.toHaveTextContent("plugin.missing/Type");
+  fireEvent.click(screen.getByRole("button", { name: "技术详情" }));
+  expect(screen.getByText(/缺少组件版本/)).toBeVisible();
 });
 test("canonical edit, move, delete, undo, redo and reload use the same draft storage", async () => {
   const files = await studioTutorialFiles(), path = "templates/comparison.json";
