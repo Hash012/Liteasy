@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { bibliographicDraft, bibliographicDraftSchema, type BibliographicDraft } from "../features/library/bibliographicFields";
+import { bibliographicDraft, parseBibliographicDraft, type BibliographicDraft } from "../features/library/bibliographicFields";
 import type { ReadingCatalogEntry } from "../features/library/readingCatalog.types";
 
 type Session = { scope: string; entry: ReadingCatalogEntry; draft: BibliographicDraft; baseline: string; revision: number };
@@ -54,16 +54,14 @@ export function useBibliographicMetadataController(input: {
     reload() { if (entry && !busy.current && (!dirty || window.confirm("重新载入会放弃尚未保存的更改，是否继续？"))) load(entry); },
     async save() {
       if (!active || !dirty || busy.current) return;
-      const result = bibliographicDraftSchema.safeParse({ ...active.draft, authors: active.draft.authors.map((author) => author.trim()).filter(Boolean) });
-      if (!result.success) { setFeedback({ error: result.error.issues[0]?.message || "请检查元信息格式。", message: "" }); return; }
-      if (result.data.url && !/^https?:\/\/\S+$/i.test(result.data.url)) {
-        setFeedback({ error: "网址请使用完整的 http:// 或 https:// 地址，或留空。", message: "" }); return;
-      }
+      let draft: BibliographicDraft;
+      try { draft = parseBibliographicDraft({ ...active.draft, authors: active.draft.authors.map((author) => author.trim()).filter(Boolean) }); }
+      catch (error) { setFeedback({ error: error instanceof Error ? error.message : "请检查元信息格式。", message: "" }); return; }
       busy.current = true; setPending(true); setFeedback({ error: "", message: "" });
       try {
-        await input.save(active.entry.id, result.data, active.revision);
+        await input.save(active.entry.id, draft, active.revision);
         if (latest.current.scope === active.scope) {
-          setSession({ ...active, draft: result.data, baseline: JSON.stringify(result.data), revision: active.revision + 1 });
+          setSession({ ...active, draft, baseline: JSON.stringify(draft), revision: active.revision + 1 });
           setFeedback({ error: "", message: "元信息已保存。" });
           setEditing(false);
         }

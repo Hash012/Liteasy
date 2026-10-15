@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ReadingCatalogEntry } from "./readingCatalog.types";
+import { bibliographicIdentifierError, normalizeBibliographicDoi } from "./bibliographicIdentifiers";
 
 export const bibliographicFields = [
   { key: "title", label: "标题", limit: 2000, multiline: true },
@@ -31,6 +32,12 @@ export const bibliographicDraftSchema = z.object({ ...fields,
   title: fields.title.min(1, "请填写标题。"),
   authors: z.array(z.string().trim().min(1).max(300)).max(200), assetType: z.string().trim().max(80),
 });
+export function parseBibliographicDraft(value: unknown) {
+  const draft = bibliographicDraftSchema.parse(value);
+  const error = bibliographicIdentifierError(draft);
+  if (error) throw new Error(error);
+  return { ...draft, doi: normalizeBibliographicDoi(draft.doi) };
+}
 // Complete local display overrides: an empty value intentionally clears a registry field.
 // Registry-confirmed identity and the original file remain untouched.
 export const bibliographicSnapshotSchema = bibliographicDraftSchema.extend({

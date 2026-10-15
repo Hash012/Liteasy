@@ -2,6 +2,7 @@ import { compileSearchQuery } from "../search/searchQuery";
 import { catalogSearchMetadata } from "../search/searchMetadata";
 import type { ReadingCatalogEntry, ReadingCatalogFormat, ReadingCatalogStatus } from "./readingCatalog.types";
 import { assetTypeLabels, inferAssetType } from "./libraryAssetMetadata";
+import { bibliographicDoiUrl } from "./bibliographicIdentifiers";
 
 export type ReadingCatalogSort = "added" | "title" | "author" | "year-desc" | "year-asc";
 
@@ -76,8 +77,8 @@ export function queryReadingCatalog(index: ReturnType<typeof indexReadingCatalog
 
 export function readingCatalogCitation(entry: ReadingCatalogEntry) {
   return [
-    entry.authors?.join(", "), entry.year ? `(${entry.year})` : undefined,
-    entry.title, entry.publication, entry.doi ? `https://doi.org/${entry.doi.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "")}` : undefined
+    entry.authors?.join(", "), entry.publishedAt || entry.year ? `(${entry.publishedAt || entry.year})` : undefined,
+    entry.title, entry.publication, entry.doi ? bibliographicDoiUrl(entry.doi) : entry.url
   ].filter(Boolean).join(". ");
 }
 

@@ -65,3 +65,8 @@ describe("reading catalog search", () => {
     expect(formatCatalogFileSize(undefined)).toBe("未提供");
   });
 });
+
+test("citations normalize DOI links, encode fragments and include webpage addresses", () => {
+  expect(readingCatalogCitation({ id: "doi", title: "Paper", format: "pdf", doi: "doi: https://doi.org/10.1234/manual#part" })).toBe("Paper. https://doi.org/10.1234/manual%23part");
+  expect(readingCatalogCitation({ id: "web", title: "Research blog", format: "html", publishedAt: "2026-10", url: "https://example.test/blog" })).toBe("(2026-10). Research blog. https://example.test/blog");
+});

@@ -5,7 +5,7 @@ import { objectRefSchema, refOf } from "../objects/object.types";
 import type { ObjectStorage, StorageRow } from "../objects/objectStorage";
 import type { StagedObjectAsset } from "../objects/objectAssets";
 import type { ParsedReadingDocument } from "./readingDocument.types";
-import { bibliographicDraftSchema, bibliographicSnapshotSchema, type BibliographicDraft } from "../library/bibliographicFields";
+import { parseBibliographicDraft, bibliographicSnapshotSchema, type BibliographicDraft } from "../library/bibliographicFields";
 import { readingImportBibliography, readingImportSourceSchema, type ReadingImportSource } from "./readingImportIdentity";
 
 export const MAX_LIBRARY_FILE_BYTES = 20 * 1024 * 1024;
@@ -97,7 +97,7 @@ export function createReadingLibraryRepository(storage: ObjectStorage, scopeId: 
       if (existing && !existing.success) throw new Error("已保存的元信息格式无法安全编辑，请先导出或使用兼容的应用版本。");
       const revision = existing?.success ? existing.data.revision : 0;
       if (revision !== expectedRevision) throw new Error("元信息已在其他位置修改，请重新载入后再保存。");
-      const value = { ...metadata, bibliographic: { ...(existing?.success ? existing.data : {}), ...bibliographicDraftSchema.parse(draft),
+      const value = { ...metadata, bibliographic: { ...(existing?.success ? existing.data : {}), ...parseBibliographicDraft(draft),
         version: 1 as const, revision: revision + 1, updatedAt: new Date().toISOString() } };
       await storage.commit([change(key, value, previous)]);
       return value;

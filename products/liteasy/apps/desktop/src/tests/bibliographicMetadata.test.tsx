@@ -79,3 +79,30 @@ test("editor retains draft after failure and cannot carry it into another accoun
   act(() => { hook.result.current.open(entry); });
   expect(hook.result.current.draft?.title).toBe(entry.title);
 });
+
+test("normalizes pasted DOI links on save and preserves them when reopening", async () => {
+  const { repository } = fixture();
+  const draft = { ...bibliographicDraft(entry), doi: " doi: https://dx.doi.org/10.1234/manual#part ", url: "https://example.test/paper" };
+  const saved = await repository.saveBibliography(entry.id, draft, 0);
+  expect(applyBibliographicMetadata(entry, saved.bibliographic).doi).toBe("10.1234/manual#part");
+  await expect(repository.saveBibliography(entry.id, { ...draft, url: "https://#" }, 1)).rejects.toThrow("网址请使用完整");
+  expect((await repository.metadata())[entry.id]).toEqual(saved);
+});
+
+test("invalid identifiers keep the editor draft and never reach persistence", async () => {
+  const save = vi.fn(async () => {});
+  const hook = renderHook(() => useBibliographicMetadataController({ scope: "identifiers", entries: [entry], save }));
+  act(() => { hook.result.current.open(entry); });
+  act(() => { hook.result.current.change({ url: "https://#" }); });
+  await act(async () => { await hook.result.current.save(); });
+  expect(hook.result.current.error).toContain("网址请使用完整");
+  expect(hook.result.current.draft?.url).toBe("https://#");
+  expect(save).not.toHaveBeenCalled();
+  act(() => { hook.result.current.change({ url: "", doi: "not-a-doi" }); });
+  await act(async () => { await hook.result.current.save(); });
+  expect(hook.result.current.error).toContain("DOI 请填写");
+  expect(save).not.toHaveBeenCalled();
+  act(() => { hook.result.current.change({ doi: "https://doi.org/10.1234/revised" }); });
+  await act(async () => { await hook.result.current.save(); });
+  expect(save).toHaveBeenCalledWith(entry.id, expect.objectContaining({ doi: "10.1234/revised", url: "" }), 0);
+});
