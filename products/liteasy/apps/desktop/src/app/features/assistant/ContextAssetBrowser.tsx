@@ -106,7 +106,7 @@ function ContextAssetBrowserContent({ suggestions, contextTokens = [], initialQu
   const operation = useRef(false);
   const referencePaths = useMemo(() => new Map((references?.suggestions ?? []).map((asset) => [asset.id, asset.resourcePath])), [references?.suggestions]);
   const catalog = useMemo(() => [...new Map([...suggestions, ...(references?.suggestions ?? [])].filter((asset) => asset.trigger === "@" && (!asset.scopeId || asset.scopeId === scopeId) &&
-    (asset.token || asset.resolveToken || asset.unavailableReason || onChooseReference && asset.resourcePath)).map((asset) => [asset.id,
+    (asset.token || asset.resolveToken || asset.unavailableReason || asset.resourcePath)).map((asset) => [asset.id,
       { ...asset, scopeId: asset.scopeId ?? references?.service.scope, resourcePath: asset.resourcePath ?? referencePaths.get(asset.id) }])).values()], [suggestions, referencePaths, references?.service.scope, references?.suggestions, scopeId, onChooseReference]);
   const catalogRef = useRef(catalog);
   catalogRef.current = catalog;
@@ -152,13 +152,14 @@ function ContextAssetBrowserContent({ suggestions, contextTokens = [], initialQu
     focused?.querySelector<HTMLElement>("[data-picker-focus]")?.focus({ preventScroll: true });
   }, [routeKey(route), limit]);
   const preview = catalog.find((asset) => asset.id === previewId);
-  const previewResult = useStableAssetPreview(preview, !(openContent && Boolean(preview?.resourcePath && references)), previewAttempt);
+  const typedPreview = Boolean(preview?.resourcePath && references);
+  const previewResult = useStableAssetPreview(preview, !typedPreview, previewAttempt);
   const previewPositionKey = preview ? assetPreviewKey(preview, "viewport") : "";
   const initialViewport = picker.location.previewPosition?.resourceKey === previewPositionKey ? picker.location.previewPosition : undefined;
   const saveViewport = (patch: PreviewViewport) => picker.setLocation({ previewPosition: { ...initialViewport, ...patch, resourceKey: previewPositionKey } });
   const loadedPreview = previewResult?.value;
   const previewError = previewResult?.error;
-  const previewLoading = Boolean(!openContent && preview?.loadPreview && !loadedPreview && !previewError);
+  const previewLoading = Boolean(!typedPreview && !openContent && preview?.loadPreview && !loadedPreview && !previewError);
   const previewText = loadedPreview?.text ?? preview?.preview;
   const addedIds = new Set(contextTokens.map(token => token.id));
   for (const [id, tokenId] of resolvedIdentities.current) if (addedIds.has(tokenId) || acceptedTokens.current.some(token => token.id === tokenId)) addedIds.add(id);
@@ -409,11 +410,11 @@ function ContextAssetBrowserContent({ suggestions, contextTokens = [], initialQu
                     } finally { operation.current = false; if (mounted.current) setBusy(false); }
                   }} /> : <>
                 <strong className="context-asset-preview-heading">内容预览</strong>
-                {["paper", "text", "document"].includes(contextKind(preview)) && preview.resourcePath && references ? <ResourceReferenceView locator={preview.resourcePath} sourceMember={preview.sourceMember} initialViewport={initialViewport} onViewportChange={saveViewport} /> : null}
+                {typedPreview ? <ResourceReferenceView locator={preview.resourcePath!} sourceMember={preview.sourceMember} initialViewport={initialViewport} onViewportChange={saveViewport} /> : null}
                 {loadedPreview?.images?.map((image, index) => <PickerImagePreview key={`${preview.id}:${index}`} url={image.url} label={image.label} initialViewport={initialViewport} onViewportChange={saveViewport} />)}
-                {!previewLoading && !previewError ? <>
+                {!typedPreview && !previewLoading && !previewError ? <>
                   {previewText ? <div className="context-asset-preview-text"><ContentView content={legacyContent(previewText)} /></div> :
-                    !loadedPreview?.images?.length && !(references && ["paper", "text", "document"].includes(contextKind(preview))) ? <p>此资产暂无可预览的内容。</p> : null}
+                    !loadedPreview?.images?.length ? <p>此资产暂无可预览的内容。</p> : null}
                 </> : null}
                 </>}
                 {!onChooseReference && preview.readOnly && preview.createEditableCopy ? <Button icon={<CopyRegular />} disabled={busy || Boolean(preview.unavailableReason)}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ContentExcerpt } from "../markdown/ContentExcerpt";
 import type { BoardViewSnapshot } from "../resource-filesystem/resourcePresentation";
 import { ReferenceSourceContext } from "../resource-links/ResourceReferencesContext";
+import { AssetImage } from "../visual-blocks/AssetImage";
 import "./boardScenePreview.css";
 
 /** Read-only spatial projection; the editable board remains the sole mutation surface. */
@@ -24,11 +25,12 @@ export function BoardScenePreview({ scene }: { scene: BoardViewSnapshot }) {
           {scene.edges.map(edge => { const a = positions.get(edge.from), b = positions.get(edge.to); if (!a || !b) return null;
             const x1 = a.position.x + a.size.width / 2 - left + 12, y1 = a.position.y + a.size.height / 2 - top + 12;
             const x2 = b.position.x + b.size.width / 2 - left + 12, y2 = b.position.y + b.size.height / 2 - top + 12;
-            return <g key={edge.edgeId}><line x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" /><title>{edge.label || "卡片连接"}</title></g>;
+            return <g key={edge.edgeId}><line x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" /><title>{edge.label || "卡片连接"}</title>{edge.label ? <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 4} textAnchor="middle" fill="currentColor">{edge.label}</text> : null}</g>;
           })}
         </svg>
-        {members.map(member => <article key={member.placement.placementId} className="board-scene-preview__card" aria-label={member.title}
+        {members.map(member => <article key={member.placement.placementId} className={`board-scene-preview__card${member.group ? " is-group" : ""}`} aria-label={member.title}
           style={{ left: member.placement.position.x - left + 12, top: member.placement.position.y - top + 12, width: member.placement.size.width, height: member.placement.size.height }}>
+          {member.object?.assets.some(asset => asset.mediaType.startsWith("image/")) ? <AssetImage source={member.path} alt={member.title} /> : null}
           <ReferenceSourceContext.Provider value={member.path}><ContentExcerpt content={member.content} /></ReferenceSourceContext.Provider>
         </article>)}
       </div>

@@ -4,7 +4,7 @@ import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import { paperAnchorFromObject, type PaperAnchorEntity } from "../paper-anchors/paperAnchorEntity";
 import { z } from "zod";
 import {
-  objectRefSchema,
+  objectRefSchema, placementSchema,
   objectText,
   type ObjectRef,
   type ObjectEnvelope,
@@ -31,6 +31,8 @@ export const boardContextSnapshotSchema = z.strictObject({
   snapshotId: z.string(),
   scopeId: z.string(),
   boardRef: objectRefSchema,
+  placements: z.array(placementSchema).optional(),
+  edges: z.array(z.object({ edgeId: z.string(), from: z.string(), to: z.string(), kind: z.string(), label: z.string().optional(), fromSide: z.enum(["top", "right", "bottom", "left"]).optional(), toSide: z.enum(["top", "right", "bottom", "left"]).optional(), fromEnd: z.enum(["none", "arrow"]).optional(), toEnd: z.enum(["none", "arrow"]).optional(), relationId: z.string().optional() }).strict()).optional(),
   text: z.string(),
 });
 export type ContextSnapshot = {

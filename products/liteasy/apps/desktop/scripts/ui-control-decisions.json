@@ -188,23 +188,23 @@
       "fingerprint": "b6759fc80d029c89dc790d38",
       "file": "products/liteasy/apps/desktop/src/app/controllers/useNotesController.ts",
       "rule": "embedded-details",
-      "reviewedGitBlob": "c79f6d4f26f180138586b68de371863aafadf306",
+      "reviewedGitBlob": "4818060fd3c1cb504bb0b2fb61b03337a71039d6",
       "decision": "keep-content",
       "owner": "notes-and-boards",
       "renderedSurface": "导出的 Markdown 原文引用",
-      "reason": "已复核导出引用的 details/summary：本次仅补论文身份元数据，原文引用 HTML 仍属于导出的用户文档，不是应用壳层控件。",
-      "acceptanceTest": "src/tests/boardFiles.test.ts; src/tests/notesPersistenceAndFiles.test.tsx"
+      "reason": "已复核白板聚合与自动标题改动；导出原文引用的 details/summary 继续保留引用正文和来源块，属于用户文档内容；聚合只改变列表投影，不改写源对象。",
+      "acceptanceTest": "src/tests/boardNotesProjection.test.tsx; src/tests/boardFiles.test.ts; src/tests/notesPersistenceAndFiles.test.tsx"
     },
     {
       "fingerprint": "64dcf947a1d42d9f897dd4d6",
       "file": "products/liteasy/apps/desktop/src/app/controllers/useNotesController.ts",
       "rule": "embedded-summary",
-      "reviewedGitBlob": "c79f6d4f26f180138586b68de371863aafadf306",
+      "reviewedGitBlob": "4818060fd3c1cb504bb0b2fb61b03337a71039d6",
       "decision": "keep-content",
       "owner": "notes-and-boards",
       "renderedSurface": "导出的 Markdown 原文引用",
-      "reason": "已复核导出引用的 details/summary：本次仅补论文身份元数据，原文引用 HTML 仍属于导出的用户文档，不是应用壳层控件。",
-      "acceptanceTest": "src/tests/boardFiles.test.ts; src/tests/notesPersistenceAndFiles.test.tsx"
+      "reason": "已复核白板聚合与自动标题改动；导出原文引用的 details/summary 继续保留引用正文和来源块，属于用户文档内容；聚合只改变列表投影，不改写源对象。",
+      "acceptanceTest": "src/tests/boardNotesProjection.test.tsx; src/tests/boardFiles.test.ts; src/tests/notesPersistenceAndFiles.test.tsx"
     },
     {
       "fingerprint": "37c3eea6b188d6831d741e9e",
@@ -287,11 +287,11 @@
       "fingerprint": "695738e30725d69e42c0d448",
       "file": "products/liteasy/apps/desktop/src/app/features/recommendations/RecommendationList.tsx",
       "rule": "source-disclosure-wrapper",
-      "reviewedGitBlob": "a3f7d6e8e6cd905ca73a747423d12413631c175a",
+      "reviewedGitBlob": "d2f590253064481dd9576149e3e55c80606c1a71",
       "decision": "migrate",
       "owner": "recommendations",
       "renderedSurface": "推荐详情",
-      "reason": "推荐详情继续使用共享 SourceDisclosure/Fluent Accordion；阅读难度反馈仅在展开后出现，默认三篇精选与本地分页保留键盘和来源交互。",
+      "reason": "已复核 SourceDisclosure：只展示依据、覆盖范围和关键词，不重复标题；反馈的 pending/失败/回执和精确撤销在当前卡保持可见，AI 精选由显式按钮触发。",
       "acceptanceTest": "src/tests/RecommendationList.test.tsx; src/tests/browser/recommendationList.browser.spec.ts"
     },
     {

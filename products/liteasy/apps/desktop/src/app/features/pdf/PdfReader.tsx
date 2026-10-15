@@ -1169,9 +1169,10 @@ export function PdfPageView({
   const selecting = useRef(false);
   const pendingRefinement = useRef<(() => void) | undefined>();
   useEffect(() => {
-    const finish = () => { selecting.current = false; const refine = pendingRefinement.current; pendingRefinement.current = undefined; refine?.(); };
+    let frame = 0;
+    const finish = () => { selecting.current = false; cancelAnimationFrame(frame); frame = requestAnimationFrame(() => { if (selecting.current) return; const refine = pendingRefinement.current; pendingRefinement.current = undefined; refine?.(); }); };
     window.addEventListener("pointerup", finish); window.addEventListener("pointercancel", finish);
-    return () => { window.removeEventListener("pointerup", finish); window.removeEventListener("pointercancel", finish); pendingRefinement.current = undefined; };
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("pointerup", finish); window.removeEventListener("pointercancel", finish); pendingRefinement.current = undefined; };
   }, []);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pageShellRef = useRef<HTMLElement | null>(null);
@@ -4252,7 +4253,7 @@ export function PdfReader({
                 onKeyDown={(event) => {
                   if (event.key === "Escape") cancelAnnotationEditing();
                 }}
-                style={{ left: annotationPopup.left, top: annotationPopup.top }}
+                style={{ left: `clamp(min(172px, 50%), ${annotationPopup.left}px, calc(100% - min(172px, 50%)))`, top: annotationPopup.top }}
               >
                 <header>
                   <strong>{popupAnnotation.aiGuide ? guideCategories[popupAnnotation.aiGuide.category] : popupAnnotation.quickAsk ? "速问" : getAnnotationLabel(popupAnnotation.kind)} · 第 {popupAnnotation.page} 页</strong>

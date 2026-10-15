@@ -1,0 +1,1129 @@
+{
+  "schema": "liteasy.root-fix-acceptance/v1",
+  "version": "0.1.57",
+  "baseline": "0bbc0b69920c96bea0491c13cafecbe1b38eba28",
+  "environment": {
+    "os": "Linux",
+    "node": "22.23.2",
+    "rust": "1.98.1",
+    "browser": "Playwright Chromium 1234"
+  },
+  "evidenceRoot": "Liteasy-root-fix-0.1.57-evidence.zip",
+  "statusMeaning": "PASS 仅代表对应记录中已运行的层级；NOT_RUN 附部分证据，不降低原验收定义。",
+  "counts": {
+    "PASS": 40,
+    "FAIL": 0,
+    "NOT_RUN": 24,
+    "BLOCKED": 0
+  },
+  "cases": [
+    {
+      "id": "A01",
+      "finding": "F01",
+      "topic": "board self preview",
+      "given": "空板",
+      "when": "从笔记打开预览",
+      "then": "显示空板提示；普通内容不露 nodes/edges JSON",
+      "level": "integration",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/resourcePresentation.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-scenes-final.log"
+      ],
+      "observation": "生产组合根及 IndexedDB：空板/普通 JSON 代码隔离；固定选区保留两种对象版本、内部边和布局；并发布局更新与缺历史版本拒绝混用。"
+    },
+    {
+      "id": "A02",
+      "finding": "F01",
+      "topic": "native view isolation",
+      "given": "带 nodes/edges 的用户 Markdown 代码块",
+      "when": "在普通笔记显示",
+      "then": "合法代码保持可见，不误判成白板",
+      "level": "component",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/resourcePresentation.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-scenes-final.log"
+      ],
+      "observation": "生产组合根及 IndexedDB：空板/普通 JSON 代码隔离；固定选区保留两种对象版本、内部边和布局；并发布局更新与缺历史版本拒绝混用。"
+    },
+    {
+      "id": "A03",
+      "finding": "F01",
+      "topic": "native export",
+      "given": "有节点和边的板",
+      "when": "显式原生导出并重新读取",
+      "then": "节点/边/未知字段可保留；不是 Markdown 冒充原生",
+      "level": "integration",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/boardFiles.test.ts"
+      ],
+      "evidence": [
+        "root-fix-full-tests.log"
+      ],
+      "observation": "原生 Canvas 往返测试通过，包含未知字段、分组、链接和图片引用；完整测试运行的其他失败另行记录。"
+    },
+    {
+      "id": "A04",
+      "finding": "F01",
+      "topic": "cross-surface",
+      "given": "同一 pinned board ref",
+      "when": "从 Notes、聊天引用、context picker 预览",
+      "then": "三处是同一 scene/版本；走同一注册分派",
+      "level": "integration",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/browser/rootFix.browser.spec.ts",
+        "src/tests/browser/contextPickerV3.browser.spec.ts"
+      ],
+      "evidence": [
+        "root-fix-ui-browser-all.log",
+        "ui-browser-ci/"
+      ],
+      "observation": "Linux Chromium 真实页面：同一白板在 Notes/聊天/选择器预览；旋转裁剪页 10/50/101；360/680/1280 布局无横向溢出。"
+    },
+    {
+      "id": "A05",
+      "finding": "F02",
+      "topic": "aggregate count",
+      "given": "2 块板合计 20 placement",
+      "when": "进入白板默认列表",
+      "then": "显示 2 个根；计数不包含 20 个独立同级 node",
+      "level": "component",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/boardNotesProjection.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-policies.log"
+      ],
+      "observation": "两个白板各 20 个 placement，仅两个根；共享成员保留两个位置、成员检索定位与显式文件夹引用，原对象序列化内容未变化。"
+    },
+    {
+      "id": "A06",
+      "finding": "F02",
+      "topic": "explicit reference",
+      "given": "成员笔记另被显式收入个人文件夹",
+      "when": "启用聚合",
+      "then": "显式引用仍可见，原物 hash/ID 不变",
+      "level": "integration",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/boardNotesProjection.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-policies.log"
+      ],
+      "observation": "两个白板各 20 个 placement，仅两个根；共享成员保留两个位置、成员检索定位与显式文件夹引用，原对象序列化内容未变化。"
+    },
+    {
+      "id": "A07",
+      "finding": "F02",
+      "topic": "search in board",
+      "given": "hello 节点属于板 A",
+      "when": "搜索 hello",
+      "then": "按 A 聚合展示命中，可定位 placement",
+      "level": "integration",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/boardNotesProjection.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-policies.log"
+      ],
+      "observation": "两个白板各 20 个 placement，仅两个根；共享成员保留两个位置、成员检索定位与显式文件夹引用，原对象序列化内容未变化。"
+    },
+    {
+      "id": "A08",
+      "finding": "F02",
+      "topic": "group selection",
+      "given": "用户选定一个 group 或多个 placement",
+      "when": "预览/加入上下文",
+      "then": "保留选择范围和内部关系，不冒充整板",
+      "level": "integration",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/resourcePresentation.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-scenes-final.log"
+      ],
+      "observation": "生产组合根及 IndexedDB：空板/普通 JSON 代码隔离；固定选区保留两种对象版本、内部边和布局；并发布局更新与缺历史版本拒绝混用。"
+    },
+    {
+      "id": "A09",
+      "finding": "F03",
+      "topic": "many-to-many",
+      "given": "一个对象被放入 A、B 两块板",
+      "when": "查询 membership",
+      "then": "两个位置都在；不因遍历顺序改变",
+      "level": "unit",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/boardNotesProjection.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-policies.log"
+      ],
+      "observation": "两个白板各 20 个 placement，仅两个根；共享成员保留两个位置、成员检索定位与显式文件夹引用，原对象序列化内容未变化。"
+    },
+    {
+      "id": "A10",
+      "finding": "F03",
+      "topic": "placements/revisions",
+      "given": "同对象两个 placement 指向不同 revision",
+      "when": "读取 scene",
+      "then": "两处均保留相应 ref，不按 objectId 去重",
+      "level": "unit",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/resourcePresentation.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-scenes-final.log"
+      ],
+      "observation": "生产组合根及 IndexedDB：空板/普通 JSON 代码隔离；固定选区保留两种对象版本、内部边和布局；并发布局更新与缺历史版本拒绝混用。"
+    },
+    {
+      "id": "A11",
+      "finding": "F03",
+      "topic": "concurrent layout",
+      "given": "读 scene 时布局被另一窗口改动",
+      "when": "完成快照读取",
+      "then": "一致重试/明确 stale，不发布混合 scene",
+      "level": "storage",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/resourcePresentation.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-scenes-final.log"
+      ],
+      "observation": "生产组合根及 IndexedDB：空板/普通 JSON 代码隔离；固定选区保留两种对象版本、内部边和布局；并发布局更新与缺历史版本拒绝混用。"
+    },
+    {
+      "id": "A12",
+      "finding": "F03",
+      "topic": "history unavailable",
+      "given": "历史 object ref 缺布局历史",
+      "when": "预览 pinned 旧板",
+      "then": "明确 unavailable，绝不静默展示最新布局",
+      "level": "integration",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/resourcePresentation.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-scenes-final.log"
+      ],
+      "observation": "生产组合根及 IndexedDB：空板/普通 JSON 代码隔离；固定选区保留两种对象版本、内部边和布局；并发布局更新与缺历史版本拒绝混用。"
+    },
+    {
+      "id": "A13",
+      "finding": "F04",
+      "topic": "derived Markdown title",
+      "given": "批注首行有 **bold**、代码、公式",
+      "when": "显示笔记列表",
+      "then": "不露非预期 Markdown 标记且同源首句不重复",
+      "level": "component",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/boardNotesProjection.test.tsx",
+        "src/tests/notesPresentation.test.tsx",
+        "src/tests/unifiedContent.test.tsx"
+      ],
+      "observation": "AST 标题、literal 标题、结构化摘录已有辅助测试；尚未完整运行题述所有标题/原文相同、脚注、导出组合的逐项组件场景。"
+    },
+    {
+      "id": "A14",
+      "finding": "F04",
+      "topic": "explicit title",
+      "given": "用户手写标题恰好等于正文开头",
+      "when": "显示/导出",
+      "then": "不删除原文或改写用户命名；有明确展示策略",
+      "level": "component",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/boardNotesProjection.test.tsx",
+        "src/tests/notesPresentation.test.tsx",
+        "src/tests/unifiedContent.test.tsx"
+      ],
+      "observation": "AST 标题、literal 标题、结构化摘录已有辅助测试；尚未完整运行题述所有标题/原文相同、脚注、导出组合的逐项组件场景。"
+    },
+    {
+      "id": "A15",
+      "finding": "F04",
+      "topic": "distinct provenance",
+      "given": "评论和 PDF quote 字面相同",
+      "when": "展开批注",
+      "then": "不靠全局去重消除语义不同的来源块",
+      "level": "unit",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/boardNotesProjection.test.tsx",
+        "src/tests/notesPresentation.test.tsx",
+        "src/tests/unifiedContent.test.tsx"
+      ],
+      "observation": "AST 标题、literal 标题、结构化摘录已有辅助测试；尚未完整运行题述所有标题/原文相同、脚注、导出组合的逐项组件场景。"
+    },
+    {
+      "id": "A16",
+      "finding": "F04",
+      "topic": "structured excerpt",
+      "given": "代码围栏、表格、脚注、中文和 emoji",
+      "when": "裁切/搜索命中",
+      "then": "复用共享 AST；不截坏结构或错乱 UTF-16 范围",
+      "level": "component",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/boardNotesProjection.test.tsx",
+        "src/tests/notesPresentation.test.tsx",
+        "src/tests/unifiedContent.test.tsx"
+      ],
+      "observation": "AST 标题、literal 标题、结构化摘录已有辅助测试；尚未完整运行题述所有标题/原文相同、脚注、导出组合的逐项组件场景。"
+    },
+    {
+      "id": "A17",
+      "finding": "F05",
+      "topic": "production annotation route",
+      "given": "真实 native annotation store 与生产组合根",
+      "when": "Notes 来源链接→stat→preview",
+      "then": "恰好一个 handler；正确批注及源页",
+      "level": "integration",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/resourcePresentation.test.tsx",
+        "src/tests/resourceRoutingDiagnostics.test.ts"
+      ],
+      "evidence": [
+        "root-fix-scenes-final.log",
+        "root-fix-verification-final.log"
+      ],
+      "observation": "使用实际控制器注册原生批注，不创建代理对象；自身正文、PDF 来源和路由歧义分别验证。"
+    },
+    {
+      "id": "A18",
+      "finding": "F05",
+      "topic": "provider ambiguity",
+      "given": "故意注册两个重叠 provider",
+      "when": "打开相同地址",
+      "then": "诊断 ambiguous_provider，不随机选一个",
+      "level": "unit",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/resourcePresentation.test.tsx",
+        "src/tests/resourceRoutingDiagnostics.test.ts"
+      ],
+      "evidence": [
+        "root-fix-scenes-final.log",
+        "root-fix-verification-final.log"
+      ],
+      "observation": "使用实际控制器注册原生批注，不创建代理对象；自身正文、PDF 来源和路由歧义分别验证。"
+    },
+    {
+      "id": "A19",
+      "finding": "F05",
+      "topic": "page anchor",
+      "given": "第 10 页旋转/裁剪坐标批注",
+      "when": "source preview / 打开原文",
+      "then": "页码转换一次，位置正确，不默认第一页",
+      "level": "browser",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/browser/rootFix.browser.spec.ts",
+        "src/tests/browser/contextPickerV3.browser.spec.ts"
+      ],
+      "evidence": [
+        "root-fix-ui-browser-all.log",
+        "ui-browser-ci/"
+      ],
+      "observation": "Linux Chromium 真实页面：同一白板在 Notes/聊天/选择器预览；旋转裁剪页 10/50/101；360/680/1280 布局无横向溢出。"
+    },
+    {
+      "id": "A20",
+      "finding": "F05",
+      "topic": "deletion/scope",
+      "given": "预览请求中删除批注或切换账号",
+      "when": "请求晚到",
+      "then": "禁止旧内容显示/写入；明确错误",
+      "level": "integration",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/resourcePresentation.test.tsx",
+        "src/tests/sourcePreviewLifecycle.test.tsx",
+        "src/tests/browser/productUi.browser.spec.ts"
+      ],
+      "observation": "删除后拒绝、scope guard、超时取消、共享浮层键盘测试已过；原生批注读取中删除/切账号及全部恢复动作/hover 焦点组合未完成专项验收。"
+    },
+    {
+      "id": "A21",
+      "finding": "F06",
+      "topic": "error recovery",
+      "given": "分别 unsupported、网络失败、历史缺失",
+      "when": "打开/重试",
+      "then": "不同恢复动作；unsupported 不无限重试",
+      "level": "component",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/resourcePresentation.test.tsx",
+        "src/tests/sourcePreviewLifecycle.test.tsx",
+        "src/tests/browser/productUi.browser.spec.ts"
+      ],
+      "observation": "删除后拒绝、scope guard、超时取消、共享浮层键盘测试已过；原生批注读取中删除/切账号及全部恢复动作/hover 焦点组合未完成专项验收。"
+    },
+    {
+      "id": "A22",
+      "finding": "F06",
+      "topic": "hover and focus",
+      "given": "链接与可交互浮窗",
+      "when": "移动鼠标、Tab、Esc、关闭",
+      "then": "可 hover、可滚动、可关闭并恢复焦点",
+      "level": "browser",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/resourcePresentation.test.tsx",
+        "src/tests/sourcePreviewLifecycle.test.tsx",
+        "src/tests/browser/productUi.browser.spec.ts"
+      ],
+      "observation": "删除后拒绝、scope guard、超时取消、共享浮层键盘测试已过；原生批注读取中删除/切账号及全部恢复动作/hover 焦点组合未完成专项验收。"
+    },
+    {
+      "id": "A23",
+      "finding": "F06",
+      "topic": "stable viewport",
+      "given": "预览图片/字体延迟完成",
+      "when": "观察加载和多次 resize",
+      "then": "不重挂载/反复 fit；保留缩放和滚动",
+      "level": "browser",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/browser/contextPickerV3.browser.spec.ts"
+      ],
+      "evidence": [
+        "root-fix-stability-30s.log",
+        "root-fix-preview-stability.log"
+      ],
+      "observation": "持续 30 秒目录对象重建只读取一次图片，缩放保持 125%；旧请求晚到和宽度改变不覆盖当前预览。首轮在修改源码时遇到 Vite reload，稳定源码复测通过。"
+    },
+    {
+      "id": "A24",
+      "finding": "F07",
+      "topic": "toolbar density",
+      "given": "360/680/1280 视口与中英文本",
+      "when": "调整宽度",
+      "then": "基线/高度按公共 density；无横向溢出",
+      "level": "browser",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/browser/rootFix.browser.spec.ts",
+        "src/tests/browser/contextPickerV3.browser.spec.ts"
+      ],
+      "evidence": [
+        "root-fix-ui-browser-all.log",
+        "ui-browser-ci/"
+      ],
+      "observation": "Linux Chromium 真实页面：同一白板在 Notes/聊天/选择器预览；旋转裁剪页 10/50/101；360/680/1280 布局无横向溢出。"
+    },
+    {
+      "id": "A25",
+      "finding": "F07",
+      "topic": "typography/DPI",
+      "given": "Windows 100/125/150/200% DPI 和应用字号",
+      "when": "检查工具栏、树、正文、来源",
+      "then": "字号只缩放一次；键盘/触屏目标可用",
+      "level": "native",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/browser/uiScale.browser.spec.ts",
+        "src/tests/browser/exportPreview.browser.spec.ts"
+      ],
+      "observation": "Linux Chromium DPR 与字号测试不能证明 Windows 100/125/150/200% 物理 DPI；需要 Windows 交互桌面实测。"
+    },
+    {
+      "id": "A26",
+      "finding": "F08",
+      "topic": "unknown vs zero",
+      "given": "未知、失败、ready 空清单",
+      "when": "展开文献",
+      "then": "仅已知空显示零；不把错误当无资源",
+      "level": "unit",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/libraryInventory.test.ts"
+      ],
+      "evidence": [
+        "root-fix-ui-gate.log"
+      ],
+      "observation": "清单 unknown/error/ready-empty 分开处理；解析状态不能代替全部资源能力。"
+    },
+    {
+      "id": "A27",
+      "finding": "F08",
+      "topic": "same import batch",
+      "given": "两篇不同源/状态的论文",
+      "when": "查看能力/任务详情",
+      "then": "可解释差异，无题录完整=解析成功的推断",
+      "level": "integration",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/pdfProcessingPolicy.test.ts",
+        "src/tests/libraryInventory.test.ts"
+      ],
+      "observation": "能力独立投影和双窗口串行任务已测；两篇真实异源文献任务详情对照，以及 100 个运行中任务的交互延迟/并发压力尚未测量。"
+    },
+    {
+      "id": "A28",
+      "finding": "F09",
+      "topic": "on-open import",
+      "given": "策略 on-open，100 篇原生 PDF",
+      "when": "导入但不打开",
+      "then": "文件持久化；重解析调用次数为 0",
+      "level": "integration",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/pdfProcessingPolicy.test.ts",
+        "src/tests/useWorkspaceActions.test.ts",
+        "src/tests/pdfPageStages.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-policies-final.log",
+        "root-fix-workspace-final.log",
+        "root-fix-policies.log"
+      ],
+      "observation": "实际工作区动作与持久 CAS，文件/OCR 边界使用合成夹具：100 导入零重任务；首次打开复用队列；manual/on-import；重开保留单篇策略；跨窗口合并；recipe/active fence、取消和写盘失败不发布 ready。真实阅读层另有浏览器证据。"
+    },
+    {
+      "id": "A29",
+      "finding": "F09",
+      "topic": "first open",
+      "given": "策略 on-open，未准备全文",
+      "when": "打开 reader",
+      "then": "当前页先可用；只排一次后台重解析",
+      "level": "integration",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/pdfProcessingPolicy.test.ts",
+        "src/tests/useWorkspaceActions.test.ts",
+        "src/tests/pdfPageStages.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-policies-final.log",
+        "root-fix-workspace-final.log",
+        "root-fix-policies.log"
+      ],
+      "observation": "实际工作区动作与持久 CAS，文件/OCR 边界使用合成夹具：100 导入零重任务；首次打开复用队列；manual/on-import；重开保留单篇策略；跨窗口合并；recipe/active fence、取消和写盘失败不发布 ready。真实阅读层另有浏览器证据。"
+    },
+    {
+      "id": "A30",
+      "finding": "F09",
+      "topic": "idempotent jobs",
+      "given": "同源同 recipe 多窗口/反复打开",
+      "when": "请求同一能力",
+      "then": "同一有效任务/结果复用，不重复消费",
+      "level": "storage",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/pdfProcessingPolicy.test.ts",
+        "src/tests/useWorkspaceActions.test.ts",
+        "src/tests/pdfPageStages.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-policies-final.log",
+        "root-fix-workspace-final.log",
+        "root-fix-policies.log"
+      ],
+      "observation": "实际工作区动作与持久 CAS，文件/OCR 边界使用合成夹具：100 导入零重任务；首次打开复用队列；manual/on-import；重开保留单篇策略；跨窗口合并；recipe/active fence、取消和写盘失败不发布 ready。真实阅读层另有浏览器证据。"
+    },
+    {
+      "id": "A31",
+      "finding": "F09",
+      "topic": "options identity",
+      "given": "同源但 OCR 语言或 parser 版本不同",
+      "when": "请求处理",
+      "then": "不能错误复用不兼容结果",
+      "level": "unit",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/pdfProcessingPolicy.test.ts",
+        "src/tests/useWorkspaceActions.test.ts",
+        "src/tests/pdfPageStages.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-policies-final.log",
+        "root-fix-workspace-final.log",
+        "root-fix-policies.log"
+      ],
+      "observation": "实际工作区动作与持久 CAS，文件/OCR 边界使用合成夹具：100 导入零重任务；首次打开复用队列；manual/on-import；重开保留单篇策略；跨窗口合并；recipe/active fence、取消和写盘失败不发布 ready。真实阅读层另有浏览器证据。"
+    },
+    {
+      "id": "A32",
+      "finding": "F09",
+      "topic": "manual/import modes",
+      "given": "设置 manual 或 on-import",
+      "when": "导入、hover、显式 prepare",
+      "then": "按策略触发；hover 永不隐式全篇重任务",
+      "level": "integration",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/pdfProcessingPolicy.test.ts",
+        "src/tests/useWorkspaceActions.test.ts",
+        "src/tests/pdfPageStages.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-policies-final.log",
+        "root-fix-workspace-final.log",
+        "root-fix-policies.log"
+      ],
+      "observation": "实际工作区动作与持久 CAS，文件/OCR 边界使用合成夹具：100 导入零重任务；首次打开复用队列；manual/on-import；重开保留单篇策略；跨窗口合并；recipe/active fence、取消和写盘失败不发布 ready。真实阅读层另有浏览器证据。"
+    },
+    {
+      "id": "A33",
+      "finding": "F09",
+      "topic": "priority/concurrency",
+      "given": "批量后台任务加当前页请求",
+      "when": "运行任务中心",
+      "then": "交互 lane 不被占满；并发上限有测量",
+      "level": "integration",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/pdfProcessingPolicy.test.ts",
+        "src/tests/libraryInventory.test.ts"
+      ],
+      "observation": "能力独立投影和双窗口串行任务已测；两篇真实异源文献任务详情对照，以及 100 个运行中任务的交互延迟/并发压力尚未测量。"
+    },
+    {
+      "id": "A34",
+      "finding": "F09",
+      "topic": "late commit",
+      "given": "处理时切 scope、删源或替换文件",
+      "when": "旧结果完成",
+      "then": "commit 前拒绝，当前库不受污染",
+      "level": "storage",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/pdfProcessingPolicy.test.ts",
+        "src/tests/useWorkspaceActions.test.ts",
+        "src/tests/pdfPageStages.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-policies-final.log",
+        "root-fix-workspace-final.log",
+        "root-fix-policies.log"
+      ],
+      "observation": "实际工作区动作与持久 CAS，文件/OCR 边界使用合成夹具：100 导入零重任务；首次打开复用队列；manual/on-import；重开保留单篇策略；跨窗口合并；recipe/active fence、取消和写盘失败不发布 ready。真实阅读层另有浏览器证据。"
+    },
+    {
+      "id": "A35",
+      "finding": "F10",
+      "topic": "independent selection",
+      "given": "嵌入文字 PDF，全部重解析关闭/失败",
+      "when": "选字并保存高亮，重开",
+      "then": "正常可用，不读取 parsed 作为 gate",
+      "level": "browser",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/browser/pdfSelection.browser.spec.ts"
+      ],
+      "evidence": [
+        "root-fix-browser-final.log",
+        "root-fix-preview-stability.log"
+      ],
+      "observation": "真实 PDF.js：100/120/80% 正反拖选、复制与高亮范围一致并重开保留；双栏不跨列，编辑 Markdown 后可实际点击保存。"
+    },
+    {
+      "id": "A36",
+      "finding": "F10",
+      "topic": "scanned page",
+      "given": "无嵌入字/无 OCR 模型",
+      "when": "尝试选字/区域批注",
+      "then": "文字选择明确不可用；区域批注可用",
+      "level": "browser",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/pdfPageStages.test.tsx",
+        "src/tests/browser/pdfSelection.browser.spec.ts"
+      ],
+      "observation": "真实原生选字/高亮重开已过；无 OCR 扫描件区域批注、geometry 悬挂/拒绝、阶段失败和拖选晚到的故障注入目前只有组件证据，未冒充浏览器层验收。"
+    },
+    {
+      "id": "A37",
+      "finding": "F10",
+      "topic": "glyph fallback",
+      "given": "operator geometry 拒绝或悬挂",
+      "when": "读取原生文本页",
+      "then": "使用 DOM 基础模型，不等待增强无限期阻塞",
+      "level": "browser",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/pdfPageStages.test.tsx",
+        "src/tests/browser/pdfSelection.browser.spec.ts"
+      ],
+      "observation": "真实原生选字/高亮重开已过；无 OCR 扫描件区域批注、geometry 悬挂/拒绝、阶段失败和拖选晚到的故障注入目前只有组件证据，未冒充浏览器层验收。"
+    },
+    {
+      "id": "A38",
+      "finding": "F10",
+      "topic": "stage isolation",
+      "given": "raster 成功后文本/增强失败",
+      "when": "触发阶段异常",
+      "then": "保留页面；错误限定在相应能力",
+      "level": "browser",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/pdfPageStages.test.tsx",
+        "src/tests/browser/pdfSelection.browser.spec.ts"
+      ],
+      "observation": "真实原生选字/高亮重开已过；无 OCR 扫描件区域批注、geometry 悬挂/拒绝、阶段失败和拖选晚到的故障注入目前只有组件证据，未冒充浏览器层验收。"
+    },
+    {
+      "id": "A39",
+      "finding": "F10",
+      "topic": "drag stability",
+      "given": "用户正在拖选，几何/zoom task 晚到",
+      "when": "完成一次拖选",
+      "then": "旧任务不清新层；选区采用一致 generation",
+      "level": "browser",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/pdfPageStages.test.tsx",
+        "src/tests/browser/pdfSelection.browser.spec.ts"
+      ],
+      "observation": "真实原生选字/高亮重开已过；无 OCR 扫描件区域批注、geometry 悬挂/拒绝、阶段失败和拖选晚到的故障注入目前只有组件证据，未冒充浏览器层验收。"
+    },
+    {
+      "id": "A40",
+      "finding": "F09",
+      "topic": "old anchors",
+      "given": "旧 OCR/全文有证据 offsets",
+      "when": "新 parser 重新解析",
+      "then": "旧快照/锚点保留，不无痕覆盖",
+      "level": "storage",
+      "application_status": "PASS",
+      "tests": [
+        "src-tauri/src/user_paper_store.rs",
+        "src/tests/paperFulltextStore.test.ts",
+        "src/tests/pdfAnnotationStorage.test.ts"
+      ],
+      "evidence": [
+        "root-fix-rusttests.log",
+        "root-fix-verification-final.log"
+      ],
+      "observation": "Rust 真正写入临时文件并重开旧全文版本；哈希可重复且不含提取时间；TS/native 哈希格式相同，损坏可选版本字段不丢弃批注正文。"
+    },
+    {
+      "id": "A41",
+      "finding": "F11",
+      "topic": "compact inventory",
+      "given": "有文字/图片/图文三视图",
+      "when": "展开文献",
+      "then": "紧凑入口；各视图仍独立可寻址/加入上下文",
+      "level": "component",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/LibraryPaneFileManagement.test.tsx",
+        "src/tests/libraryAssetContextDrop.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-regressions.log"
+      ],
+      "observation": "先展开提取结果入口，三个派生视图仍独立可见并通过原拖放上下文路径交付。"
+    },
+    {
+      "id": "A42",
+      "finding": "F11",
+      "topic": "publish result",
+      "given": "处理成功/写盘失败两种情形",
+      "when": "刷新清单并重开",
+      "then": "结果先提交再 ready；失败不冒充完成",
+      "level": "integration",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/pdfProcessingPolicy.test.ts",
+        "src/tests/useWorkspaceActions.test.ts",
+        "src/tests/pdfPageStages.test.tsx"
+      ],
+      "evidence": [
+        "root-fix-policies-final.log",
+        "root-fix-workspace-final.log",
+        "root-fix-policies.log"
+      ],
+      "observation": "实际工作区动作与持久 CAS，文件/OCR 边界使用合成夹具：100 导入零重任务；首次打开复用队列；manual/on-import；重开保留单篇策略；跨窗口合并；recipe/active fence、取消和写盘失败不发布 ready。真实阅读层另有浏览器证据。"
+    },
+    {
+      "id": "A43",
+      "finding": "F12",
+      "topic": "no repeated title",
+      "given": "正常推荐卡",
+      "when": "展开推荐详情",
+      "then": "题名只出现一次；详情用于理由/依据",
+      "level": "component",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/browser/uiRootCause.browser.spec.ts"
+      ],
+      "evidence": [
+        "root-fix-widths-final.log"
+      ],
+      "observation": "深浅主题 280/360/480 宽度：展开详情后标题仅出现一次；无理由时明确暂无，键盘收藏和忽略仍可操作。"
+    },
+    {
+      "id": "A44",
+      "finding": "F13",
+      "topic": "explicit curation",
+      "given": "当前候选池和已有 slate",
+      "when": "点击 AI 精选",
+      "then": "调用现有网关/预算；不是只改 reason",
+      "level": "integration",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/recommendationResearchEnhancer.test.ts",
+        "src/tests/recommendationCoordinator.test.ts",
+        "src/tests/recommendationStability.test.tsx",
+        "src/tests/RecommendationList.test.tsx"
+      ],
+      "observation": "已验证显式调用机制、预算子集、证据一致性、撤权拒绝、偏好排序与 pending；尚缺真实 UI→coordinator→网关的全链专项和带持久反馈的浏览器 slate 验收。不以 mock 模型机制测试宣称实际模型质量。"
+    },
+    {
+      "id": "A45",
+      "finding": "F13",
+      "topic": "no accidental calls",
+      "given": "checkbox/hover/resize/看详情",
+      "when": "重复交互",
+      "then": "不新增 provider/LLM 请求",
+      "level": "integration",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/recommendationResearchEnhancer.test.ts",
+        "src/tests/recommendationCoordinator.test.ts",
+        "src/tests/recommendationStability.test.tsx",
+        "src/tests/RecommendationList.test.tsx"
+      ],
+      "observation": "已验证显式调用机制、预算子集、证据一致性、撤权拒绝、偏好排序与 pending；尚缺真实 UI→coordinator→网关的全链专项和带持久反馈的浏览器 slate 验收。不以 mock 模型机制测试宣称实际模型质量。"
+    },
+    {
+      "id": "A46",
+      "finding": "F13",
+      "topic": "AI skip states",
+      "given": "禁用/无证据/不支持模式/预算不足",
+      "when": "点击增强",
+      "then": "有具体可用性状态，不静默完成",
+      "level": "component",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/recommendationResearchEnhancer.test.ts",
+        "src/tests/recommendationCoordinator.test.ts",
+        "src/tests/recommendationStability.test.tsx",
+        "src/tests/RecommendationList.test.tsx"
+      ],
+      "observation": "已验证显式调用机制、预算子集、证据一致性、撤权拒绝、偏好排序与 pending；尚缺真实 UI→coordinator→网关的全链专项和带持久反馈的浏览器 slate 验收。不以 mock 模型机制测试宣称实际模型质量。"
+    },
+    {
+      "id": "A47",
+      "finding": "F13",
+      "topic": "out-of-pool hallucination",
+      "given": "模型返回候选外 paperId",
+      "when": "校验结果",
+      "then": "拒绝发布；旧 slate 保留",
+      "level": "unit",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/recommendationResearchEnhancer.test.ts"
+      ],
+      "evidence": [
+        "root-fix-verification-final.log"
+      ],
+      "observation": "候选外 ID、无摘要却声称摘要、v1 文本配 v2 revision、错误 quote/hash 均拒绝；这是结构和绑定证明，不是理由语义正确性的证明。"
+    },
+    {
+      "id": "A48",
+      "finding": "F13",
+      "topic": "budget and coverage",
+      "given": "100 候选仅预算内子集可发送",
+      "when": "完成精选",
+      "then": "显示真实评估数量；不超已有任务/账户限制",
+      "level": "integration",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/recommendationResearchEnhancer.test.ts",
+        "src/tests/recommendationCoordinator.test.ts",
+        "src/tests/recommendationStability.test.tsx",
+        "src/tests/RecommendationList.test.tsx"
+      ],
+      "observation": "已验证显式调用机制、预算子集、证据一致性、撤权拒绝、偏好排序与 pending；尚缺真实 UI→coordinator→网关的全链专项和带持久反馈的浏览器 slate 验收。不以 mock 模型机制测试宣称实际模型质量。"
+    },
+    {
+      "id": "A49",
+      "finding": "F14",
+      "topic": "legacy explanations",
+      "given": "旧缓存题录无可靠个别理由",
+      "when": "展示/请求新解释",
+      "then": "feed 级一次迁移提示；不编理由或伪造全文依据",
+      "level": "component",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/recommendationResearchEnhancer.test.ts",
+        "src/tests/recommendationCoordinator.test.ts",
+        "src/tests/recommendationStability.test.tsx",
+        "src/tests/RecommendationList.test.tsx"
+      ],
+      "observation": "已验证显式调用机制、预算子集、证据一致性、撤权拒绝、偏好排序与 pending；尚缺真实 UI→coordinator→网关的全链专项和带持久反馈的浏览器 slate 验收。不以 mock 模型机制测试宣称实际模型质量。"
+    },
+    {
+      "id": "A50",
+      "finding": "F14",
+      "topic": "read coverage",
+      "given": "某候选只有标题或摘要",
+      "when": "模型给出全文级理由",
+      "then": "拒绝夸大级别；保留可读范围和局限",
+      "level": "unit",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/recommendationResearchEnhancer.test.ts"
+      ],
+      "evidence": [
+        "root-fix-verification-final.log"
+      ],
+      "observation": "候选外 ID、无摘要却声称摘要、v1 文本配 v2 revision、错误 quote/hash 均拒绝；这是结构和绑定证明，不是理由语义正确性的证明。"
+    },
+    {
+      "id": "A51",
+      "finding": "F15",
+      "topic": "visible pending",
+      "given": "慢存储",
+      "when": "点击已读/暂缓/难度",
+      "then": "当前卡有 pending，持久提交后有反馈",
+      "level": "component",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/RecommendationList.test.tsx",
+        "src/tests/recommendationFeedbackProjection.test.ts"
+      ],
+      "evidence": [
+        "root-fix-verification-final.log"
+      ],
+      "observation": "慢提交先 pending，失败不宣称保存；同 commandId 重试及响应丢失重试只产生一个有效事件。"
+    },
+    {
+      "id": "A52",
+      "finding": "F15",
+      "topic": "write failure",
+      "given": "模拟 CAS 最终失败/空间不足",
+      "when": "点击/重试",
+      "then": "不假成功；同 commandId 可重试且幂等",
+      "level": "storage",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/RecommendationList.test.tsx",
+        "src/tests/recommendationFeedbackProjection.test.ts"
+      ],
+      "evidence": [
+        "root-fix-verification-final.log"
+      ],
+      "observation": "慢提交先 pending，失败不宣称保存；同 commandId 重试及响应丢失重试只产生一个有效事件。"
+    },
+    {
+      "id": "A53",
+      "finding": "F15",
+      "topic": "reopen/config",
+      "given": "已读/难度已提交",
+      "when": "重开、换 provider/policy/排序",
+      "then": "长期状态保留，不依赖旧 feed key",
+      "level": "integration",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/recommendationFeedbackProjection.test.ts"
+      ],
+      "evidence": [
+        "root-fix-verification-final.log"
+      ],
+      "observation": "真实 CAS：更换 coordinator/provider 保留状态，多窗口提交不覆盖；精确撤销暂缓不清已读；稳定 facet 不受标题变化影响。"
+    },
+    {
+      "id": "A54",
+      "finding": "F15",
+      "topic": "targeted undo",
+      "given": "先暂缓再已读",
+      "when": "撤销暂缓事件",
+      "then": "已读不被误清；回执指向正确事件",
+      "level": "unit",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/recommendationFeedbackProjection.test.ts"
+      ],
+      "evidence": [
+        "root-fix-verification-final.log"
+      ],
+      "observation": "真实 CAS：更换 coordinator/provider 保留状态，多窗口提交不覆盖；精确撤销暂缓不清已读；稳定 facet 不受标题变化影响。"
+    },
+    {
+      "id": "A55",
+      "finding": "F15",
+      "topic": "snooze expiry",
+      "given": "已读加过期暂缓",
+      "when": "推进时钟",
+      "then": "只结束暂缓，已读仍隐藏",
+      "level": "unit",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/recommendationFeedbackProjection.test.ts"
+      ],
+      "evidence": [
+        "root-fix-verification-final.log"
+      ],
+      "observation": "真实 CAS：更换 coordinator/provider 保留状态，多窗口提交不覆盖；精确撤销暂缓不清已读；稳定 facet 不受标题变化影响。"
+    },
+    {
+      "id": "A56",
+      "finding": "F15",
+      "topic": "concurrent feedback",
+      "given": "两个窗口发不同维度命令",
+      "when": "竞争提交",
+      "then": "无覆盖丢失；每条有正确 receipt",
+      "level": "storage",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/recommendationFeedbackProjection.test.ts"
+      ],
+      "evidence": [
+        "root-fix-verification-final.log"
+      ],
+      "observation": "真实 CAS：更换 coordinator/provider 保留状态，多窗口提交不覆盖；精确撤销暂缓不清已读；稳定 facet 不受标题变化影响。"
+    },
+    {
+      "id": "A57",
+      "finding": "F16",
+      "topic": "all ranking paths",
+      "given": "legacy/balanced/frontier/当前快照",
+      "when": "提交难度后请求下次本地精选",
+      "then": "统一偏好投影被消费，无某分支忽略",
+      "level": "integration",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/recommendationResearchEnhancer.test.ts",
+        "src/tests/recommendationCoordinator.test.ts",
+        "src/tests/recommendationStability.test.tsx",
+        "src/tests/RecommendationList.test.tsx"
+      ],
+      "observation": "已验证显式调用机制、预算子集、证据一致性、撤权拒绝、偏好排序与 pending；尚缺真实 UI→coordinator→网关的全链专项和带持久反馈的浏览器 slate 验收。不以 mock 模型机制测试宣称实际模型质量。"
+    },
+    {
+      "id": "A58",
+      "finding": "F16",
+      "topic": "stable facet",
+      "given": "修改课题标题与切另一课题",
+      "when": "重新看推荐",
+      "then": "原 facet 反馈仍有效，不串到另一个 facet",
+      "level": "unit",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/recommendationFeedbackProjection.test.ts"
+      ],
+      "evidence": [
+        "root-fix-verification-final.log"
+      ],
+      "observation": "真实 CAS：更换 coordinator/provider 保留状态，多窗口提交不覆盖；精确撤销暂缓不清已读；稳定 facet 不受标题变化影响。"
+    },
+    {
+      "id": "A59",
+      "finding": "F16",
+      "topic": "stable active slate",
+      "given": "自动更新/难度反馈/已读",
+      "when": "阅读当前卡",
+      "then": "自动更新用 pending；显式移除有占位/撤销",
+      "level": "browser",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/recommendationResearchEnhancer.test.ts",
+        "src/tests/recommendationCoordinator.test.ts",
+        "src/tests/recommendationStability.test.tsx",
+        "src/tests/RecommendationList.test.tsx"
+      ],
+      "observation": "已验证显式调用机制、预算子集、证据一致性、撤权拒绝、偏好排序与 pending；尚缺真实 UI→coordinator→网关的全链专项和带持久反馈的浏览器 slate 验收。不以 mock 模型机制测试宣称实际模型质量。"
+    },
+    {
+      "id": "A60",
+      "finding": "F17",
+      "topic": "revision relabel",
+      "given": "context text 属 v1，stat 为 v2",
+      "when": "增强推荐",
+      "then": "重新取一致快照或拒绝；禁止旧文本贴 v2",
+      "level": "unit",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/recommendationResearchEnhancer.test.ts"
+      ],
+      "evidence": [
+        "root-fix-verification-final.log"
+      ],
+      "observation": "候选外 ID、无摘要却声称摘要、v1 文本配 v2 revision、错误 quote/hash 均拒绝；这是结构和绑定证明，不是理由语义正确性的证明。"
+    },
+    {
+      "id": "A61",
+      "finding": "F17",
+      "topic": "revoke in flight",
+      "given": "模型调用中撤销权限/切 scope",
+      "when": "模型返回",
+      "then": "不发布旧私有理由，取消/缓存失效正确",
+      "level": "integration",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/recommendationResearchEnhancer.test.ts",
+        "src/tests/recommendationCoordinator.test.ts",
+        "src/tests/recommendationStability.test.tsx",
+        "src/tests/RecommendationList.test.tsx"
+      ],
+      "observation": "已验证显式调用机制、预算子集、证据一致性、撤权拒绝、偏好排序与 pending；尚缺真实 UI→coordinator→网关的全链专项和带持久反馈的浏览器 slate 验收。不以 mock 模型机制测试宣称实际模型质量。"
+    },
+    {
+      "id": "A62",
+      "finding": "F17",
+      "topic": "evidence integrity",
+      "given": "模型引用未知证据/错误 quote/hash",
+      "when": "校验输出",
+      "then": "拒绝伪引用；不把结构校验叫语义证明",
+      "level": "unit",
+      "application_status": "PASS",
+      "tests": [
+        "src/tests/recommendationResearchEnhancer.test.ts"
+      ],
+      "evidence": [
+        "root-fix-verification-final.log"
+      ],
+      "observation": "候选外 ID、无摘要却声称摘要、v1 文本配 v2 revision、错误 quote/hash 均拒绝；这是结构和绑定证明，不是理由语义正确性的证明。"
+    },
+    {
+      "id": "A63",
+      "finding": "F15",
+      "topic": "migration idempotence",
+      "given": "旧 hidden/feedback 混合数据",
+      "when": "迁移两次并回滚演练",
+      "then": "无新重复；旧不明隐藏保守保留；新反馈不丢",
+      "level": "storage",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "src/tests/recommendationFeedbackProjection.test.ts"
+      ],
+      "observation": "迁移幂等、重开与压缩保留状态已过；旧版本二进制回滚/前进两次演练尚未执行。"
+    },
+    {
+      "id": "A64",
+      "finding": "F13",
+      "topic": "AI quality evaluation",
+      "given": "人工标注问题/候选与当前 baseline",
+      "when": "离线评估/人工审查",
+      "then": "分别报告相关性、理由事实性、成本；无模型自评独断",
+      "level": "evaluation",
+      "application_status": "NOT_RUN",
+      "partial_evidence": [
+        "development/test-data/personalized-recommendations/root-fix-research-questions.json",
+        "root-fix-evaluation.log"
+      ],
+      "observation": "15 个合成研究问题、6 篇真实题录、30 个日期快照只作工程回放；没有人工质量标注和对照审查，语义指标 NOT_RUN，AI 默认关闭。"
+    }
+  ]
+}

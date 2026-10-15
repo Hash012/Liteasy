@@ -25,8 +25,11 @@ export function createResourceReferenceService(input: { scope: string; assets: A
     async pdf(path: string, signal?: AbortSignal, intent?: PdfPreviewIntent, member?: PdfSourceMember): Promise<ReferencePdf | undefined> {
       check(signal);
       if (!input.loadPdf) return undefined;
+      const nativeAnnotationPath = /^liteasy:\/\/(paper-annotations|artifact-annotations)\//.test(path) ? splitReference(path).target : undefined;
+      const before = nativeAnnotationPath ? await input.assets.stat(nativeAnnotationPath, { signal }) : undefined;
       const result = await read(signal => input.loadPdf!(path, signal, intent, member), signal);
       check(signal);
+      if (before && (await input.assets.stat(nativeAnnotationPath!, { signal })).revision !== before.revision) throw new Error("来源在读取期间已修改，请重新打开预览。");
       return result;
     },
     async present(path: string, options: PresentationOptions = {}) {

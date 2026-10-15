@@ -18,22 +18,31 @@ export async function contextAttachments(repository: ObjectRepository, refs: Obj
   for (const ref of refs) {
     if (!active()) throw new Error("账号已切换。");
     const object = await repository.get(ref);
-    const members = object.kind === "workspace.board" ? await repository.listPlacements(object.objectId) : [];
-    const edges = object.kind === "workspace.board" ? await repository.listEdges(object.objectId) : [];
+    let members = object.kind === "workspace.board" ? await repository.listPlacements(object.objectId) : [];
+    let edges = object.kind === "workspace.board" ? await repository.listEdges(object.objectId) : [];
     if (object.kind === "workspace.board" && (await repository.resolveLatest(object.objectId)).revision !== ref.revision)
       throw new Error("白板已变化，请重新加入以固定最新内容。");
-    const contextRefs = [ref, ...members.map((member) => member.ref)];
+    const selection = ref.selectorId?.startsWith("placements:") ? new Set(ref.selectorId.slice("placements:".length).split(",")) : undefined;
+    if (selection) {
+      if ([...selection].some(id => !members.some(member => member.placementId === id))) throw new Error("所选白板元素已变化，请重新选择。");
+      members = members.filter(member => selection.has(member.placementId));
+      edges = edges.filter(edge => selection.has(edge.from) && selection.has(edge.to));
+    }
+    const boardRef = { objectId: ref.objectId, revision: ref.revision };
+    const contextRefs = [...(object.kind === "workspace.board" && selection ? [] : [ref]), ...members.map((member) => member.ref)];
+    let attachmentRef = ref;
     if (object.kind === "workspace.board") {
       if (!active()) throw new Error("账号已切换。");
-      const fixed = { snapshotId: crypto.randomUUID(), scopeId: repository.scopeId, boardRef: ref,
+      const fixed = { snapshotId: crypto.randomUUID(), scopeId: repository.scopeId, boardRef, placements: members, edges,
         text: `白板结构（固定于加入上下文时；坐标表示空间布局，连接表示用户组织关系，不等于已证实的因果关系）：\n${JSON.stringify({
           elements: members.map((member) => ({ id: member.placementId, ref: member.ref, position: member.position,
             size: member.size, collapsed: member.collapsed, view: member.viewId })), connections: edges,
         }, null, 2)}` };
       await repository.saveSnapshot(fixed);
-      contextRefs.push({ ...ref, selectorId: `board-context:${fixed.snapshotId}` });
+      attachmentRef = { ...boardRef, selectorId: `board-context:${fixed.snapshotId}` };
+      contextRefs.unshift(attachmentRef);
     }
-    attachments.push({ ref, refs: contextRefs, title: object.title, kind: object.kind,
+    attachments.push({ ref: attachmentRef, refs: contextRefs, title: selection ? `${object.title} · ${members.length} 个所选元素` : object.title, kind: object.kind,
       detail: object.kind === "workspace.board" ? `${members.length} 个元素 · 已固定版本`
         : isPaperMetadataReference(object) ? "题录已固定 · 正文按需读取" : "已固定版本" });
   }

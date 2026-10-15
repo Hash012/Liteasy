@@ -77,3 +77,59 @@ test("literal content retains profile, representation and exact ranges through r
   expect(presentation.kind === "content" && presentation.read.content).toBe(content);
   f.hook.unmount();
 });
+
+test("selected placements keep their exact versions, internal edges and frozen geometry across later board edits", async () => {
+  const f = fixture();
+  let board = await f.repository.create({ kind: "workspace.board", title: "Selected scene", content: { schema: "liteasy.board/v1", payload: { description: "" } } });
+  const note = await f.repository.create({ kind: "content.note", title: "Shared", content: { schema: "liteasy.note/v1", payload: { text: "old revision", origin: "user" } } });
+  const newer = await f.repository.editNote(refOf(note), "new revision");
+  const other = await f.repository.create({ kind: "content.note", title: "Outside", content: { schema: "liteasy.note/v1", payload: { text: "not selected", origin: "user" } } });
+  await f.repository.applyBoardPatch({ boardRef: refOf(board), operationId: crypto.randomUUID(), add: [refOf(note), refOf(newer), refOf(other)] });
+  board = await f.repository.resolveLatest(board.objectId);
+  const placements = await f.repository.listPlacements(board.objectId);
+  const members = placements.filter(row => row.ref.objectId === note.objectId);
+  await f.repository.connectPlacements({ boardRef: refOf(board), operationId: crypto.randomUUID(), from: { ...members[0], side: "right" }, to: { ...members[1], side: "left" } });
+  board = await f.repository.resolveLatest(board.objectId);
+  const path = liteasyPath(f.scopeId, { kind: "object", ref: { ...refOf(board), selectorId: `placements:${placements.filter(row => row.ref.objectId === note.objectId).map(row => row.placementId).join(",")}` } });
+  const [attachment] = await f.assets.context(path);
+  expect(attachment.refs).toHaveLength(3); expect(attachment.ref.selectorId).toMatch(/^board-context:/);
+  const fixedPath = liteasyPath(f.scopeId, { kind: "object", ref: attachment.ref });
+  const selected = await f.assets.present(fixedPath);
+  expect(selected.kind).toBe("board");
+  if (selected.kind !== "board") throw new Error("Expected board");
+  expect(selected.scene.members.map(row => row.placement.ref)).toEqual(expect.arrayContaining([refOf(note), refOf(newer)]));
+  expect(selected.scene.edges).toHaveLength(1);
+  await f.repository.applyBoardPatch({ boardRef: refOf(board), operationId: crypto.randomUUID(), add: [refOf(other)] });
+  const reopened = await f.assets.present(fixedPath);
+  expect(reopened).toEqual(selected);
+  f.hook.unmount();
+});
+
+test("empty boards and user-authored JSON code keep distinct registered presentations", async () => {
+  const f = fixture();
+  const board = await f.repository.create({ kind: "workspace.board", title: "Empty", content: { schema: "liteasy.board/v1", payload: { description: "" } } });
+  const note = await f.repository.create({ kind: "content.note", title: "Code", content: { schema: "liteasy.note/v1", payload: { text: '```json\n{"nodes":[],"edges":[]}\n```', origin: "user" } } });
+  const service = createResourceReferenceService({ scope: f.scopeId, assets: f.assets, active: () => true, catalog: () => [] });
+  render(<ResourceReferencesContext.Provider value={{ service, open: vi.fn(), capture: vi.fn(), suggestions: [] }}>
+    <ResourceReferenceView locator={liteasyPath(f.scopeId, { kind: "object", ref: refOf(board) })} />
+    <ResourceReferenceView locator={liteasyPath(f.scopeId, { kind: "object", ref: refOf(note) })} />
+  </ResourceReferencesContext.Provider>);
+  expect(await screen.findByText("空白白板")).toBeVisible();
+  expect(await screen.findByText('{"nodes":[],"edges":[]}')).toBeVisible();
+  expect(screen.getAllByLabelText("白板空间预览")).toHaveLength(1);
+  f.hook.unmount();
+});
+
+test("a concurrent layout edit rejects the complete scene instead of mixing heads", async () => {
+  const f = fixture();
+  const board = await f.repository.create({ kind: "workspace.board", title: "Concurrent", content: { schema: "liteasy.board/v1", payload: { description: "" } } });
+  const note = await f.repository.create({ kind: "content.note", title: "Later", content: { schema: "liteasy.note/v1", payload: { text: "later", origin: "user" } } });
+  const list = f.repository.listPlacements.bind(f.repository);
+  vi.spyOn(f.repository, "listPlacements").mockImplementationOnce(async id => {
+    const before = await list(id);
+    await f.repository.applyBoardPatch({ boardRef: refOf(board), operationId: crypto.randomUUID(), add: [refOf(note)] });
+    return before;
+  });
+  await expect(f.assets.present(liteasyPath(f.scopeId, { kind: "object", ref: refOf(board) }))).rejects.toMatchObject({ code: "revision_unavailable" });
+  f.hook.unmount();
+});

@@ -550,3 +550,13 @@ test("future annotation snapshots cannot be normalized into empty writable versi
   expect(() => recoverPdfAnnotationPrivateState({ version: 2, annotations: null })).toThrow("结构");
   expect(JSON.stringify(future)).toBe(before);
 });
+
+test("optional extraction receipt damage never discards a user's annotation", () => {
+  const current = normalizePdfAnnotations([legacyAnnotation()], fallbackIdentity)[0];
+  for (const receipt of ["broken", null, 42, undefined]) {
+    const [loaded] = normalizePdfAnnotations([{ ...current, textRepresentationRevision: receipt }]);
+    expect(loaded).toBeDefined(); expect(loaded.text).toBe(current.text); expect(loaded.excerpt).toBe(current.excerpt);
+    expect(loaded.textRepresentationRevision).toBeUndefined();
+  }
+  expect(normalizePdfAnnotations([{ ...current, textRepresentationRevision: `sha256:${"a".repeat(64)}` }])[0].textRepresentationRevision).toBe("a".repeat(64));
+});

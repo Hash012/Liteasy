@@ -159,6 +159,6 @@ export function buildPaperFulltextSnapshot(input: {
 }
 
 /** Must match the native archive identity; timestamps never create a new representation. */
-export function paperFulltextRevision(snapshot: PaperFulltextSnapshot): Promise<string> {
-  return resourceContentRevision(canonicalResourceJson({ pages: snapshot.pages, sourceHash: snapshot.sourceHash ?? null, parser: snapshot.parser ?? null, recipe: snapshot.recipe ?? null }));
+export async function paperFulltextRevision(snapshot: PaperFulltextSnapshot): Promise<string> {
+  return (await resourceContentRevision(canonicalResourceJson({ pages: snapshot.pages, sourceHash: snapshot.sourceHash ?? null, parser: snapshot.parser ?? null, recipe: snapshot.recipe ?? null }))).replace(/^sha256:/, "");
 }

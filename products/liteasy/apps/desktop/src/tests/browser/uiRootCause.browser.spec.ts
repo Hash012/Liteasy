@@ -34,7 +34,8 @@ for (const theme of ["深色主题", "浅色主题"]) test(`recommendations pres
     await row.focus();
     for (const detail of await panel.getByRole("button", { name: "推荐详情", exact: true }).all()) { if (await detail.getAttribute("aria-expanded") !== "true") await detail.click(); }
     await expect(panel.getByText("来源提供的理由：主题与并发控制有关")).toBeVisible();
-    await expect(panel.getByText("未提供个别推荐理由")).toBeVisible();
+    await expect(panel.getByText("暂无个别推荐理由")).toBeVisible();
+    await expect(panel.getByText("很长的推荐标题：Memory systems concurrency control and reproducible scientific results", { exact: true })).toHaveCount(1);
     expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     await page.screenshot({ path: info.outputPath(`recommendations-${width}.png`), fullPage: true });
     const save = panel.getByRole("button", { name: /^收藏/ }).first();

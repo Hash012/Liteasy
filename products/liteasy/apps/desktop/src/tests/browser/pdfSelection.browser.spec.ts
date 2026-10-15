@@ -103,9 +103,11 @@ test("a drag beginning in the right column does not absorb the preceding left co
   const editor = page.getByRole("complementary", { name: /高亮注释编辑器/u });
   await expect(editor).toBeVisible();
   await editor.getByRole("textbox", { name: "页内批注内容" }).fill("**核心结论**\n\n- 右栏内容");
-  const preview = editor.getByLabel("页内批注 Markdown 实时预览");
-  await expect(preview.locator("strong")).toHaveText("核心结论");
-  await expect(preview.getByRole("listitem")).toHaveText("右栏内容");
+  // The default live editor renders Markdown in place; the manual-mode preview is separate.
+  await editor.locator("header").click();
+  await expect(editor.locator("strong").filter({ hasText: /^核心结论$/u })).toBeVisible();
+  await expect(editor.getByRole("listitem")).toHaveText("右栏内容");
+  await editor.getByRole("button", { name: "保存注释", exact: true }).click();
 });
 
 test("dragging beyond a word right edge includes all of its trailing letters", async ({ page }) => {
