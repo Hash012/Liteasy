@@ -206,6 +206,8 @@ describe("useWorkspaceActions", () => {
       sourcePath: "/tmp/LiteasyLibrary/courses/retrieval.pdf",
       title: "retrieval"
     }]);
+    expect(importStore.getLatestJobByDocumentId("local-1")).toBeUndefined();
+    act(() => result.current.prepareOpenedPaper(workspaceStore.getState().papers[0]));
     expect(importStore.getLatestJobByDocumentId("local-1")?.status).toBe("queued");
   });
 

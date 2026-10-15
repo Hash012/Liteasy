@@ -11,6 +11,7 @@ export type LibraryPaperChildItem = {
   meta?: string;
 };
 export type LibraryInventory = {
+  capabilities?: import("../import/pdfCapabilities").PdfCapabilities;
   state: "unknown" | "loading" | "ready" | "error";
   items: LibraryPaperChildItem[];
   inventoryRevision?: string;

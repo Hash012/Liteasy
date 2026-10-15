@@ -57,6 +57,10 @@ export function PaperServicesSettingsPanel({ settings, onUpdateSetting }: {
       </RadioGroup>
     </Field>
     <p>快速模式直接生成讲解；严谨模式加强原文依据并补充核验提示。两种模式均不限固定字数，局部证据不足会注明，不阻止生成。进行中的任务继续使用原模式。</p>
+    <Field label="PDF 后台解析时机" hint="文件保存后即可阅读和选字；后台解析在本机进行。上传至解析服务需点击阅读器中的解析操作。">
+      <OptionPicker aria-label="PDF 后台解析时机" value={settings?.["import.processing_policy"] ?? "on-open"} onValueChange={value => update("import.processing_policy", value)}
+        options={[{ value: "on-open", label: "首次打开时解析" }, { value: "on-import", label: "导入时解析" }, { value: "manual", label: "仅手动解析" }]} />
+    </Field>
     <Field label="扫描 PDF OCR 语言" hint="用于没有文字层的 PDF，可离线识别；识别结果支持页级定位。">
       <OptionPicker aria-label="扫描 PDF OCR 语言" value={String(settings?.["import.ocr_language"] ?? "eng")} onValueChange={nextValue => update("import.ocr_language", nextValue)} options={[{ value: String("eng"), label: String("English") }, { value: String("chi_sim"), label: String("\u4E2D\u6587\uFF08\u7B80\u4F53\uFF09") }, { value: String("eng+chi_sim"), label: String("\u4E2D\u6587 + English") }]} />
     </Field>

@@ -123,6 +123,9 @@ export type LeftPaneProps = {
   libraryExpanded?: boolean;
   onCloseLibraryExpanded?: () => void;
   onCreatePaperChild?: (paper: Paper, kind: "note" | "board", title: string) => Promise<void>;
+  onCancelPaperProcessing?: (paper: Paper) => void;
+  onSetPaperProcessingPolicy?: (paper: Paper, policy: Paper["processingPolicy"]) => void;
+  onPreparePaper?: (paper: Paper) => void;
   onOpenPaperChild?: (item: LibraryPaperChildItem, paper: Paper) => void;
   onRenamePaperChild?: (item: LibraryPaperChildItem, paper: Paper, requestedName: string) => Promise<string>;
   onRefreshLocalLibrary?: () => Promise<void>;
@@ -267,6 +270,7 @@ export function LeftPane({
   onRetrievePaperMetadata,
   libraryExpanded,
   onCloseLibraryExpanded,
+  onPreparePaper, onCancelPaperProcessing, onSetPaperProcessingPolicy,
   onOpenPaperChild,
   onCreatePaperChild,
   onRenamePaperChild,
@@ -464,6 +468,8 @@ export function LeftPane({
             onOpenPaper={onOpenPaper}
             onResolvePaperIdentity={onResolvePaperIdentity}
             onRetrievePaperMetadata={onRetrievePaperMetadata}
+            onCancelPaperProcessing={onCancelPaperProcessing} onSetPaperProcessingPolicy={onSetPaperProcessingPolicy}
+            onPreparePaper={onPreparePaper}
             onOpenPaperChild={onOpenPaperChild}
             onCreatePaperChild={onCreatePaperChild}
             onRefreshLocalLibrary={onRefreshLocalLibrary}

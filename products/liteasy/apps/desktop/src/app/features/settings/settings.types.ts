@@ -26,6 +26,7 @@ export type SettingKey =
   | "assistant.default_output_mode"
   | "assistant.language"
   | "assistant.context_window"
+  | "import.processing_policy"
   | "import.ocr_language"
   | "thin_reading.intuecho_endpoint"
   | "models.default_provider"
@@ -73,6 +74,7 @@ export type SettingsState = Partial<Record<GenerationPromptSettingKey, string>> 
   "assistant.default_output_mode": string;
   "assistant.language": string;
   "assistant.context_window"?: string;
+  "import.processing_policy": "on-open" | "on-import" | "manual";
   "import.ocr_language": "chi_sim" | "eng" | "eng+chi_sim";
   "thin_reading.intuecho_endpoint": string;
   "models.default_provider": string;

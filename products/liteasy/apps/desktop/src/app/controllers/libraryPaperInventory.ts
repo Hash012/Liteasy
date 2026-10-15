@@ -1,3 +1,4 @@
+import { projectPdfCapabilities } from "../features/import/pdfCapabilities";
 import type { ArtifactTab, ArtifactCatalogLoadState } from "../features/artifacts/artifact.types";
 import type { Paper } from "../features/workspace/workspace.types";
 import type { ImportJob, MineruFigure } from "../features/import/import.types";
@@ -62,7 +63,7 @@ export function projectLibraryPaperInventory({ scopeId, papers, artifacts, proje
     const error = [projects.catalogStatus === "error" ? projects.catalogError || "项目目录读取失败" : "", artifactState.status === "error" ? artifactState.message || "产物目录读取失败" : "", extractionState.status === "error" ? extractionState.message || "提取目录读取失败" : ""].filter(Boolean).join("；");
     const ready = projects.catalogStatus === "ready" && artifactState.status === "ready" && extractionState.status === "ready";
     const items = deduplicateLibraryChildren([...extractedResources, ...attachments, ...savedArtifacts]);
-    entries[paper.id] = { state: error ? "error" : ready ? "ready" : "loading", items,
+    entries[paper.id] = { capabilities: projectPdfCapabilities(paper, job, resources), state: error ? "error" : ready ? "ready" : "loading", items,
       summary: error || undefined, inventoryRevision: ready ? JSON.stringify([scopeId, projects.inventoryRevision, items.map(item => [item.id, item.ref?.revision])]) : undefined,
       extraction: job?.status === "failed" ? "error" : job?.status === "parsing" || job?.status === "queued" ? "loading" : resources ? "ready" : extractionState.status === "ready" ? "not_extracted" : "unknown" };
     return entries;

@@ -33,6 +33,7 @@ export const settingsRegistry: Record<SettingKey, { label: string; help?: string
   "assistant.context_window": { get label() { return message("settings.label.assistant.context_window"); }, get help() { return message("settings.help.context"); }, restartRequirement: "next-run" },
   "assistant.default_output_mode": { get label() { return message("settings.label.assistant.default_output_mode"); } },
   "assistant.language": { get help() { return message("settings.help.responseLanguage"); }, dependencies: [], restartRequirement: "next-run", get label() { return message("settings.label.assistant.language"); } },
+  "import.processing_policy": { label: "PDF 后台解析时机", help: "原生阅读与选字无需等待全文解析。", restartRequirement: "next-run" },
   "import.ocr_language": { get label() { return message("settings.label.import.ocr_language"); } },
   "thin_reading.intuecho_endpoint": { get label() { return message("settings.label.thin_reading.intuecho_endpoint"); } },
   "models.default_provider": { get label() { return message("settings.label.models.default_provider"); } },
