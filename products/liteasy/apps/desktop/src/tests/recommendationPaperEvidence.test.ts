@@ -4,6 +4,7 @@ import { parsePaperReadingSections, parsePdfReadingSections } from "../app/featu
 import { savePaperServiceKey, deletePaperServiceKey } from "../app/features/paper-services/paperServiceTransport";
 import { hashText } from "../app/features/context/objectContext";
 import type { RecommendationItem } from "../app/features/recommendations/recommendation.types";
+import type { RecommendationTask } from "../app/features/recommendations/recommendationCoordinator";
 
 const config = { provider: "crossref" as const, endpoint: "https://api.crossref.org" };
 const abstract = "We investigate graph retrieval with structured filters and show improved search accuracy across several benchmark datasets.";
@@ -104,6 +105,30 @@ test("propagates user cancellation rather than returning an apparently successfu
   const controller = new AbortController();
   vi.stubGlobal("fetch", vi.fn(async () => { controller.abort(); throw new DOMException("cancelled", "AbortError"); }));
   await expect(enrichRecommendationCandidates(config, [item()], controller.signal)).rejects.toMatchObject({ name: "AbortError" });
+});
+
+test("does not start network work after the feed's expanded permission check is revoked", async () => {
+  let allowed = true;
+  const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+  const signal = new AbortController().signal;
+  const task: RecommendationTask = { signal, active: async () => allowed, upstreamUnknown: () => {},
+    request: async (_kind, request) => {
+      // Permissions may change while the coordinator is waiting for a provider slot.
+      allowed = false;
+      return request();
+    } };
+  await expect(enrichRecommendationCandidates(config, [item()], signal, task)).rejects.toMatchObject({ name: "AbortError" });
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+test("does not follow an already received metadata response with another request after evidence permission changes", async () => {
+  let allowed = true;
+  const fetch = vi.fn(async () => { allowed = false; return Response.json({ message: { DOI: "10.1234/graph", abstract } }); });
+  vi.stubGlobal("fetch", fetch);
+  const signal = new AbortController().signal;
+  const task: RecommendationTask = { signal, active: async () => allowed, upstreamUnknown: () => {}, request: async (_kind, request) => request() };
+  await expect(enrichRecommendationCandidates(config, [item()], signal, task)).rejects.toMatchObject({ name: "AbortError" });
+  expect(fetch).toHaveBeenCalledTimes(1);
 });
 
 test("keeps obtained abstracts when the soft reading deadline expires", async () => {

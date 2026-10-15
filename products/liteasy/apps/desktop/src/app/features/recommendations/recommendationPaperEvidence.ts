@@ -47,8 +47,9 @@ export async function enrichRecommendationCandidates(
   signal.throwIfAborted();
   const service = config && ["crossref", "openalex", "semantic-scholar"].includes(config.provider) ? config : crossref;
   const expiry = new AbortController();
+  const revoked = new AbortController();
   const timer = setTimeout(() => expiry.abort(), 55_000);
-  const workSignal = AbortSignal.any([signal, expiry.signal]);
+  const workSignal = AbortSignal.any([signal, expiry.signal, revoked.signal]);
   const output = items.map(item => ({ ...item, contentEvidence: item.contentEvidence ? [...item.contentEvidence] : undefined }));
   const candidates = output.slice(0, 24);
   const pmcRecords = new Map<string, Record<string, unknown> | undefined>();
@@ -57,8 +58,17 @@ export async function enrichRecommendationCandidates(
   let requests = 0;
   let pdfDownloads = 0;
 
-  async function request(url: string, sourceConfig = crossref, authenticate = false, pdf = false) {
+  async function assertActive() {
     workSignal.throwIfAborted();
+    if (task && !await task.active()) {
+      revoked.abort(new DOMException("推荐上下文或访问权限已变化，请重新发起。", "AbortError"));
+      revoked.signal.throwIfAborted();
+    }
+    workSignal.throwIfAborted();
+  }
+
+  async function request(url: string, sourceConfig = crossref, authenticate = false, pdf = false) {
+    await assertActive();
     if (requests >= 48) throw new Error("本次论文内容读取已达到请求上限。");
     requests += 1;
     const target = new URL(url);
@@ -68,6 +78,8 @@ export async function enrichRecommendationCandidates(
       workSignal.throwIfAborted();
       if (serialKey === "arxiv") { await pause(Math.max(0, 3000 - (Date.now() - lastArxivRequest)), workSignal); lastArxivRequest = Date.now(); }
       const fetch = async () => {
+        // Recheck the feed's expanded evidence/feedback permissions after any queue wait.
+        await assertActive();
         const response = await paperServiceRequest(sourceConfig, url, { authenticate, signal: workSignal,
           followPublicRedirects: !authenticate, timeoutMs: pdf ? 8_000 : 5_000, maxResponseBytes: (pdf ? 8 : 2) * 1024 * 1024 });
         if (!response.ok) throw Object.assign(new Error(`论文来源暂时无法读取（HTTP ${response.status}）。`), { status: response.status });
@@ -160,7 +172,10 @@ export async function enrichRecommendationCandidates(
     await acceptSections(item, parsePaperReadingSections(page), finalUrl.href, "arxiv");
   }
   async function attempt(run: () => Promise<unknown>) {
-    try { await run(); } catch { signal.throwIfAborted(); /* A missing/blocked source does not discard obtained content. */ }
+    try { await run(); } catch {
+      signal.throwIfAborted(); revoked.signal.throwIfAborted();
+      /* A missing/blocked source does not discard obtained content. */
+    }
   }
   async function parallel(run: (item: RecommendationItem) => Promise<void>) {
     let index = 0;
@@ -169,6 +184,7 @@ export async function enrichRecommendationCandidates(
     }));
   }
   try {
+    await assertActive();
     // Complete the inexpensive abstracts across the pool before spending time on introductions.
     await parallel(async item => {
       const sourceUrl = safeUrl(item.sourceUrl) ?? (identity(item).doi ? `https://doi.org/${identity(item).doi}` : undefined);
@@ -214,6 +230,8 @@ export async function enrichRecommendationCandidates(
       });
     });
     signal.throwIfAborted();
+    revoked.signal.throwIfAborted();
+    if (!expiry.signal.aborted) await assertActive();
     return output;
   } finally { clearTimeout(timer); }
 }
