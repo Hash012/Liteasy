@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { canvasOutput, pdfjs, type PDFDocumentProxy } from "./pdfEngine";
 
 export function PdfPage({ document, pageNumber, zoom, children, onText, onZoom, pinchEnabled = true }: {
@@ -8,8 +8,12 @@ export function PdfPage({ document, pageNumber, zoom, children, onText, onZoom, 
   const host = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(360);
   const [size, setSize] = useState({ width: 360, height: 480 });
-  const [error, setError] = useState("");
-  const [rendering, setRendering] = useState(true);
+  // Readiness belongs to a specific request, not to whichever page props are current.
+  // A page/zoom/viewport change must be busy in the same commit, before effects run.
+  const request = useMemo(() => ({ document, pageNumber, zoom, width, onText }), [document, pageNumber, zoom, width, onText]);
+  const [result, setResult] = useState<{ request: typeof request; error?: string }>();
+  const rendering = result?.request !== request;
+  const error = !rendering ? result?.error : undefined;
   useEffect(() => {
     const element = host.current;
     if (!element) return;
@@ -48,7 +52,7 @@ export function PdfPage({ document, pageNumber, zoom, children, onText, onZoom, 
     canvas.setAttribute("role", "img");
     const text = window.document.createElement("div"); text.className = "textLayer";
     parent.prepend(canvas, text);
-    setError(""); setRendering(true);
+    setResult(undefined);
     void (async () => {
       const page = await document.getPage(pageNumber);
       if (!active) return;
@@ -68,14 +72,14 @@ export function PdfPage({ document, pageNumber, zoom, children, onText, onZoom, 
       onText?.(content.items.map((item) => "str" in item ? item.str + (item.hasEOL ? "\n" : " ") : "").join(""));
       layer = new pdfjs.TextLayer({ container: text, textContentSource: content, viewport });
       await layer.render();
-      if (active) setRendering(false);
-    })().catch((reason) => { if (active) { setError(String(reason)); setRendering(false); } });
+      if (active) setResult({ request });
+    })().catch((reason) => { if (active) setResult({ request, error: String(reason) }); });
     return () => {
       active = false; task?.cancel(); layer?.cancel(); canvas.remove(); text.remove();
       const release = () => { canvas.width = 0; canvas.height = 0; renderedPage?.cleanup(); };
       if (task) void task.promise.catch(() => {}).then(release); else release();
     };
-  }, [document, pageNumber, zoom, width, onText]);
+  }, [request]);
   return <div className="pdf-page-host" ref={host}>
     {error ? <p role="alert" className="error-message">此页无法显示：{error}</p> : null}
     <div ref={scroll} className="pdf-scroll" style={{ touchAction: pinchEnabled ? "pan-x pan-y" : undefined }}><div ref={stage} className="pdf-page" data-page={pageNumber} style={size} aria-busy={rendering}>{children}</div></div>

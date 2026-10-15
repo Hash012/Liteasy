@@ -47,6 +47,17 @@ test("long PDFs render one bounded canvas while jumping and zooming", async ({ p
     await expect(page.locator(`.pdf-page[data-page="${number}"]`)).toHaveAttribute("aria-busy", "false");
     await expect(page.locator(".pdf-page canvas")).toHaveCount(1);
   }
+  // Switch requests without waiting for intermediate renders. The final ready page
+  // must contain its own text, even if earlier image-page or zoom jobs finish later.
+  for (const number of [3, 60, 120]) {
+    await page.getByRole("textbox", { name: "页码" }).fill(String(number));
+    await page.getByRole("textbox", { name: "页码" }).press("Enter");
+    await page.getByRole("button", { name: "放大", exact: true }).click();
+  }
+  await expect(page.locator('.pdf-page[data-page="120"]')).toHaveAttribute("aria-busy", "false");
+  await expect(page.locator(".textLayer")).toContainText("Mobile reading page 120");
+  await expect(page.locator(".pdf-page canvas")).toHaveCount(1);
+  await page.getByRole("button", { name: "适应宽度" }).click();
   for (let index = 0; index < 12; index++) await page.getByRole("button", { name: "放大", exact: true }).click();
   await expect(page.locator(".pdf-page")).toHaveAttribute("aria-busy", "false");
   expect(await page.locator(".pdf-page canvas").evaluate((canvas) => (canvas as HTMLCanvasElement).width * (canvas as HTMLCanvasElement).height)).toBeLessThanOrEqual(4_000_000);
