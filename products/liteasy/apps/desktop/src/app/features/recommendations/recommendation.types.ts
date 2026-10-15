@@ -2,13 +2,22 @@ export type RecommendationStyle = "balanced" | "frontier" | "classic" | "explora
 
 export type RecommendationDownloadOptions = { targetFolderPath?: string; newFolderName?: string; signal?: AbortSignal; onProgress?: (value: { received: number; total?: number }) => void };
 
+export type RecommendationContentEvidence = {
+  section: "abstract" | "introduction";
+  sourceUrl: string;
+  source: "metadata" | "arxiv" | "europe-pmc" | "open-access";
+  retrievedAt: string;
+  textHash: string;
+  truncated?: boolean;
+};
+
 export type RecommendationItem = {
   feedSnapshotId?: string;
   facetId?: string;
   feedbackState?: import("./recommendationFeedbackProjection").FeedbackProjection[];
   preferencePenalty?: number;
   reasonState?: "grounded" | "heuristic" | "legacy" | "unavailable" | "stale" | "generating" | "failed";
-  researchReason?: { candidateHash?: string; contextHash?: string; feedbackRevision?: number; candidateSnapshotId?: string; evaluatedCount?: number; poolCount?: number; basis?: string; limitation?: string; consentEpoch: number; candidateId: string; evidenceIds: string[]; text: string; role: string; model: string; recipe: string; generatedAt: string; evidence: { evidenceId: string; path?: string; revision: string; text: string }[] };
+  researchReason?: { score?: number; candidateEvidence?: Array<{ section: "abstract" | "introduction"; text: string; hash: string; sourceUrl?: string; source?: string; retrievedAt?: string }>; candidateHash?: string; contextHash?: string; feedbackRevision?: number; candidateSnapshotId?: string; evaluatedCount?: number; poolCount?: number; basis?: string; limitation?: string; consentEpoch: number; candidateId: string; evidenceIds: string[]; text: string; role: string; model: string; recipe: string; generatedAt: string; evidence: { evidenceId: string; path?: string; revision: string; text: string }[] };
   saved?: boolean;
   resourcePath?: string;
   resourceRevision?: string;
@@ -20,6 +29,8 @@ export type RecommendationItem = {
   rankingStyle?: RecommendationStyle;
   styleScore?: number;
   abstract?: string;
+  introduction?: string;
+  contentEvidence?: RecommendationContentEvidence[];
   keywords?: string[];
   subjects?: string[];
   venue?: string;
