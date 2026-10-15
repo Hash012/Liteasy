@@ -25,7 +25,7 @@
   gap: 3px;
   margin-top: 2px;
   color: var(--colorNeutralForeground3);
-  font-size: calc(11px * var(--app-font-ratio, 1));
+  font-size: var(--fontSizeBase200);
 }
 .pdf-annotation-summary-note > svg {
   flex: 0 0 calc(12px * var(--app-font-ratio, 1));
@@ -42,7 +42,7 @@
   overflow-wrap: anywhere;
   -webkit-line-clamp: 2;
   line-height: 1.45;
-  font-size: calc(12px * var(--app-font-ratio, 1));
+  font-size: var(--fontSizeBase300);
 }
 .pdf-annotation-item.expanded .pdf-annotation-excerpt {
   display: block;
@@ -52,7 +52,7 @@
   align-items: center;
   gap: 1px;
   color: var(--colorNeutralForeground3);
-  font-size: calc(10px * var(--app-font-ratio, 1));
+  font-size: var(--fontSizeBase200);
   white-space: nowrap;
   line-height: calc(18px * var(--app-font-ratio, 1));
 }
@@ -135,7 +135,7 @@
 }
 .pdf-entry-review > header > strong {
   flex: 1;
-  font-size: calc(12px * var(--app-font-ratio, 1));
+  font-size: var(--fontSizeBase300);
 }
 .pdf-entry-review > .fui-Textarea {
   width: 100%;
@@ -162,7 +162,7 @@
 .pdf-annotation-result-count {
   margin: 3px 6px 5px;
   color: var(--colorNeutralForeground3);
-  font-size: calc(11px * var(--app-font-ratio, 1));
+  font-size: var(--fontSizeBase200);
 }
 
 .pdf-annotation-facets {
@@ -173,16 +173,25 @@
   min-width: 0;
 }
 .pdf-sidebar-controls > .pdf-annotation-facets { padding: 4px 6px 0; }
-.pdf-annotation-facets > .product-option-picker-field { flex: 1 1 78px; }
-.pdf-annotation-facets .product-option-picker.fui-Dropdown { min-width: 0; }
-.pdf-annotation-facets .fui-Dropdown__button { min-width: 0; padding-inline: 6px; }
+.pdf-annotation-facets { font-size: var(--fontSizeBase200); }
+.pdf-annotation-facets > .product-option-picker-field { flex: 1 1 6.5em; }
+.pdf-annotation-facets .product-option-picker.fui-Dropdown { min-width: 0; font-size: var(--fontSizeBase200); }
+.pdf-annotation-facets .fui-Dropdown__button { min-width: 0; padding-inline: 6px; white-space: nowrap; }
 .pdf-annotation-facets .fui-Dropdown__button > span { overflow: hidden; text-overflow: ellipsis; }
 
-.pdf-annotation-list-options { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0 6px; min-width: 0; }
+.pdf-annotation-list-options { font-size: var(--fontSizeBase200); display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0 6px; min-width: 0; }
 .pdf-annotation-list-options > .notes-label-filters { flex: 1; min-width: 0; border-bottom: 0; }
-.pdf-annotation-list-options > .product-option-picker-field { min-width: 0; max-width: 100%; flex: 0 1 100px; }
-.pdf-annotation-list-options .product-option-picker.fui-Dropdown { min-width: 0; }
+.pdf-annotation-list-options > .product-option-picker-field { min-width: 0; max-width: 100%; flex: 1 1 6.5em; }
+.pdf-annotation-list-options .product-option-picker.fui-Dropdown { min-width: 0; font-size: var(--fontSizeBase200); }
+.pdf-annotation-list-options .fui-Dropdown__button { white-space: nowrap; }
 
 .pdf-annotation-delete-dialog { border-radius: 6px; }
 .pdf-annotation-delete-dialog p { overflow-wrap: anywhere; }
 .pdf-annotation-delete-dialog p:first-child { max-height: 9em; overflow: auto; }
+
+.pdf-sidebar-annotations .pdf-status,
+.pdf-sidebar-annotations .pdf-empty-note,
+.pdf-team-annotations .pdf-annotation-kind,
+.pdf-overview .pdf-annotation-card > header { font-size: var(--fontSizeBase200); }
+.pdf-team-annotations .pdf-annotation-excerpt,
+.pdf-team-annotations .annotation-note-preview { font-size: var(--fontSizeBase300); }
