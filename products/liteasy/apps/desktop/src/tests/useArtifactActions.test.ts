@@ -317,6 +317,15 @@ function renderArtifactActions(options: {
 }
 
 describe("useArtifactActions", () => {
+  test("skill documentation uses its readable name while keeping the exact tab identity", () => {
+    const actions = renderArtifactActions();
+    act(() => actions.result.current.openSkillDocument({ id: "internal-skill-key", label: "论文比较", description: "比较多篇文献。", risk: "low", status: "active" }));
+    const tab = actions.artifactStore.getOpenTabs().find(item => item.artifactId === "skill-doc-internal-skill-key")!;
+    expect(tab.title).toBe("论文比较 · 使用说明");
+    expect(tab.markdown).toBe("# 论文比较 · 使用说明\n\n比较多篇文献。");
+    expect(actions.onArtifactTabsChanged).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ artifactId: tab.artifactId, title: tab.title })]));
+  });
+
   test("A02-11 retries the already generated payload after a save failure without another model call", async () => {
     let fail = true;
     const actions = renderArtifactActions({ imported: true, saveArtifactResult: async () => {

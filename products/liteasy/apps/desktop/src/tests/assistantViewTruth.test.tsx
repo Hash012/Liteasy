@@ -114,7 +114,7 @@ test("A02-03 selecting either run of task A cannot project task B's events", asy
 });
 
 test("A02-05 a failed later run preserves the prior saved result and frozen reference", async () => {
-  const ref = { objectId: "saved-reading", revision: "r1" };
+  const ref = { objectId: "saved-reading", revision: "internal-result-digest" };
   const active = vi.fn();
   const resolve = vi.fn(async () => [{ refs: [ref], ref, title: "结果 r1", kind: "artifact.document" }]);
   const first = { id: "first", agentRunId: "run-1", artifactId: "reading", type: "thin_reading" as const, status: "completed" as const, stage: "completed" as const, progress: 100, message: "结果已保存" };
@@ -126,6 +126,8 @@ test("A02-05 a failed later run preserves the prior saved result and frozen refe
   await act(async () => {});
   rendered.rerender(wrap([{ ...first, id: "second", agentRunId: "run-2", status: "failed", stage: "failed", message: "新运行失败" }, first]));
   expect(await screen.findByText("本次失败 · 已保存结果可用")).toBeInTheDocument();
+  expect(screen.getByText("结果版本：已固定保存的结果")).toBeVisible();
+  expect(document.body).not.toHaveTextContent("internal-result-digest");
   await userEvent.click(screen.getByRole("combobox", { name: "选择运行记录" }));
   expect(screen.getAllByRole("option")).toHaveLength(2);
   await userEvent.keyboard("{Escape}");

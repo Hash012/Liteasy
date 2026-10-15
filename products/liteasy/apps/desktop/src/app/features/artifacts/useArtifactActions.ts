@@ -1329,10 +1329,11 @@ export function useArtifactActions({
 
   function openSkillDocument(entry: AgentCoreCatalogEntry) {
     const artifactId = `skill-doc-${entry.id}`;
+    const title = `${entry.label.trim() || "技能"} · 使用说明`;
     artifactStore.upsertTab({
       artifactId,
-      markdown: entry.docMarkdown ?? `# ${entry.id}\n\n${entry.description}`,
-      title: `${entry.id}.md`,
+      markdown: entry.docMarkdown ?? `# ${title}\n\n${entry.description}`,
+      title,
       type: "skill_doc"
     });
     syncArtifacts();

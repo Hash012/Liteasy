@@ -127,3 +127,18 @@ test("home recent conversations exclude generated tasks, which remain available 
   await userEvent.click(screen.getByRole("button", { name: "任务", exact: true }));
   expect(screen.getByRole("button", { name: "打开会话：生成：科研文档" })).toHaveTextContent("已完成");
 });
+
+
+test.each(["/internal/cache/object-digest.pdf", "org://tenant-uuid/shared-library/paper-uuid"])("paper suggestions do not present internal source locations: %s", async (sourcePath) => {
+  let saved = fixture();
+  render(<AssistantSessionController {...props} availablePapers={[{ id: "exact-paper-uuid", title: "缓存文献", sourcePath }]}
+    historyPersistence={createAssistantHistoryPersistence({ load: async () => saved, save: async snapshot => { saved = snapshot; } })} />);
+  await screen.findByText("区分采样偏差与测量误差。");
+  await userEvent.type(screen.getByPlaceholderText("输入你的问题或命令"), "@缓存");
+  const suggestion = screen.getByRole("button", { name: /缓存文献.*PDF 文献/ });
+  expect(suggestion).not.toHaveAttribute("title", expect.stringContaining(sourcePath));
+  expect(document.body).not.toHaveTextContent(sourcePath);
+  await userEvent.click(suggestion);
+  await screen.findByRole("button", { name: "预览上下文：缓存文献" });
+  await waitFor(() => expect(saved.draft.tokens[0]).toMatchObject({ id: "paper-exact-paper-uuid", detail: "PDF 文献", resourcePath: "liteasy://papers/exact-paper-uuid?scope=local" }));
+});

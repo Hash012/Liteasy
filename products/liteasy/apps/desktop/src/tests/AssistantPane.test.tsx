@@ -1721,7 +1721,7 @@ test.each(["mention", "path"] as const)("lazy paper %s forwards identity without
   const input = screen.getByPlaceholderText("输入你的问题或命令");
   if (source === "mention") {
     await user.type(input, "@Cic");
-    await user.click(screen.getByRole("button", { name: /Cicada.*整篇论文/ }));
+    await user.click(screen.getByRole("button", { name: /Cicada.*PDF 文献/ }));
   } else {
     fireEvent.paste(input, { clipboardData: { getData: () => "liteasy://papers/cicada?scope=local" } });
   }

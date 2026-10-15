@@ -995,7 +995,7 @@ export function AssistantSessionController({
 
     const paperSuggestions: AssistantComposerSuggestion[] = availablePapers.map((paper) => {
       const paperToken: AssistantContextToken = {
-        detail: paper.sourcePath ?? "整篇论文",
+        detail: "PDF 文献",
         id: `paper-${paper.id}`,
         kind: "paper",
         resourcePath: liteasyPath(objectWorkbench?.scopeId ?? "local", { kind: "paper", paperId: paper.id }),
@@ -1003,7 +1003,7 @@ export function AssistantSessionController({
         prompt: `用户指定论文上下文：${paper.title}（paperId=${paper.id}）`
       };
       return {
-        detail: paper.sourcePath ?? "整篇论文",
+        detail: "PDF 文献",
         searchMetadata: catalogSearchMetadata(searchEntries.find((entry) => entry.id === paper.id) ?? { id: paper.id, title: paper.title, format: "pdf", subjects: paper.literature?.subjects }),
         category: "论文",  readOnly: true,
         preview: contextPreviewText((importedChunksByPaperId[paper.id] ?? []).map((chunk) => `第 ${chunk.page} 页\n${chunk.snippet}`).join("\n\n")) ||
@@ -2639,6 +2639,7 @@ export function AssistantSessionController({
   const taskFailure = selectedTaskStatus === "failed" ? [...taskMessages].reverse().find(message => message.role === "assistant" && message.content.trim())?.content : undefined;
   const selectedFailureTask = artifactTasks.find(task => task.id === selectedTaskRun?.taskId || (!selectedTaskRun && task.id === activeSession?.artifactTaskId));
   const taskDiagnostic = selectedTaskRun?.diagnostic ?? (selectedFailureTask && (!selectedTaskRun || selectedFailureTask.agentRunId === selectedTaskRun.id) ? artifactDiagnostic(selectedFailureTask) : undefined);
+  const selectedTaskResultRefs = selectedTaskRun?.status === "completed" ? selectedTaskRun.resultRefs : activeSession?.taskBinding?.resultRefs;
   const taskHasSavedResult = !!activeSession && (!!activeSession.taskBinding?.resultRefs.length || activeSession.taskRuns?.some((run) => run.status === "completed" && run.artifactId) || activeSession.status === "completed");
   const activeSessionRunning = activeSession?.kind === "artifact_generation"
     ? activeSession.status === "running"
@@ -2737,7 +2738,8 @@ export function AssistantSessionController({
         <Button appearance="subtle" onClick={() => setView({ kind: "task-list" })}>返回任务列表</Button>
         <h3>{activeSession.title}</h3>
         <p>{({ idle: "可继续", running: "运行中", completed: "已完成", failed: "本次失败", cancelled: "已终止", interrupted: "运行已中断", unknown: "状态待核对" } as const)[selectedTaskStatus]}{taskHasSavedResult ? " · 已保存结果可用" : " · 尚无已保存结果"}</p>
-        {taskHasSavedResult ? <p>结果版本：{(selectedTaskRun?.status === "completed" ? selectedTaskRun.resultRefs : activeSession.taskBinding?.resultRefs)?.map((ref) => ref.revision).join(" · ") || "旧版结果，版本待核对"}</p> : null}
+        {taskHasSavedResult ? <p>结果版本：{selectedTaskResultRefs?.length ? "已固定保存的结果" : "旧版结果，版本待核对"}</p> : null}
+        {developerDiagnostics && selectedTaskResultRefs?.length ? <p>技术版本：<code>{selectedTaskResultRefs.map(ref => ref.revision).join(" · ")}</code></p> : null}
         {activeSession.artifactType === "research_document" && activeSession.artifactTaskId ? <div>
           {artifactTasks.find(task => task.id === activeSession.artifactTaskId)?.pendingResult && selectedTaskStatus === "failed" ? <Button onClick={() => void onResumeArtifactTask?.(activeSession.artifactTaskId!).catch(error => setContextDropMessage(String(error)))}>重试保存已有结果</Button> : null}
           {selectedTaskStatus === "running" ? <Button onClick={() => void onCancelArtifactTask?.(activeSession.artifactTaskId!)}>停止生成</Button> : null}
