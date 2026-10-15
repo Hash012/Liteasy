@@ -11,6 +11,7 @@ import { headingReference, referenceFragment, referenceHeadings, referenceLines 
 import { ReferenceContentPicker } from "../app/features/resource-links/ReferenceContentPicker";
 import { MarkdownSourceEditor } from "../app/features/markdown/MarkdownSourceEditor";
 import { MarkdownContent } from "../app/features/markdown/MarkdownContent";
+import { MineruMarkdown } from "../app/features/import/MineruMarkdown";
 import { ContextAssetBrowser } from "../app/features/assistant/ContextAssetBrowser";
 
 const text = "# CicN\nintroduction\n## Title1\nfirst explanation\n### Detail\nsecond explanation\n## Title2\nnot selected";
@@ -74,6 +75,27 @@ describe("reference sections and source lines", () => {
 });
 
 describe("shared reference UI", () => {
+  test("preserves a reading selection when resource renderer inputs refresh", () => {
+    const f = fixture();
+    const sentence = "We apply regularization to the model.";
+    const content = () => <ResourceReferencesContext.Provider value={{ ...f.refs }}>
+      <MineruMarkdown content={sentence} figures={[]} />
+    </ResourceReferencesContext.Provider>;
+    const view = render(content());
+    const paragraph = screen.getByText(sentence);
+    const range = document.createRange();
+    range.setStart(paragraph.firstChild!, 9);
+    range.setEnd(paragraph.firstChild!, 23);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    expect(selection.toString()).toBe("regularization");
+    view.rerender(content());
+    expect(selection.toString()).toBe("regularization");
+    expect(screen.getByText(sentence)).toBe(paragraph);
+    selection.removeAllRanges();
+  });
+
   test("auto-pairs brackets, edits a chapter link, keeps the text and undo in the source editor", async () => {
     const f = fixture();
     function Editor() { const [value, change] = useState(""); return <MarkdownSourceEditor documentKey="note" value={value} onChange={change} />; }
