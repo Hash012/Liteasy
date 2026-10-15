@@ -94,6 +94,7 @@ export type WorkbenchViewModel = {
   status: string;
   busy: boolean;
   setStatus(value: string): void;
+  focusPlacement?: { boardId: string; placementId: string; requestId: string };
   selectBoard(object: ObjectEnvelope): Promise<void>;
   createBoard(title: string): Promise<unknown>;
   createNote(text: string, position?: Placement["position"]): Promise<ObjectRef[] | undefined>;
@@ -176,6 +177,18 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
     const created = model.placements.find((p) => p.ref.objectId === createdRef.objectId);
     if (created) { setSelected([created.placementId]); setNewCard(created.placementId); setCreatedRef(undefined); }
   }, [createdRef, model.placements]);
+  useEffect(() => {
+    const focus = model.focusPlacement;
+    if (!focus || focus.boardId !== model.board?.objectId) return;
+    const placement = model.placements.find(item => item.placementId === focus.placementId);
+    if (!placement) return;
+    setSelected([placement.placementId]);
+    const frame = requestAnimationFrame(() => { const host = viewport.current; if (host) {
+      host.scrollTo({ left: Math.max(0, 56 + (placement.position.x + placement.size.width / 2) * zoom - host.clientWidth / 2), top: Math.max(0, 56 + (placement.position.y + placement.size.height / 2) * zoom - host.clientHeight / 2) });
+      host.querySelector<HTMLElement>(`[data-placement-id="${CSS.escape(placement.placementId)}"]`)?.focus({ preventScroll: true });
+    } });
+    return () => cancelAnimationFrame(frame);
+  }, [model.focusPlacement?.requestId, model.board?.objectId, model.placements]);
   const selection = useRef(selected); selection.current = selected;
   const visiblePlacements = useVisiblePlacements(model.placements, viewport, zoom, selected, model.visible);
   const navigation = useCanvasNavigation({ viewport, canvas, zoom, setZoom, visible: model.visible, boardId: model.board?.objectId,
