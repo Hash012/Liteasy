@@ -125,3 +125,16 @@ test("uses native webview zoom without a second CSS zoom and falls back if the h
   unmount();
   await waitFor(() => expect(native.setZoom).toHaveBeenLastCalledWith(1));
 });
+
+test("updates PDF preview size immediately and restores the previous style on unmount", () => {
+  const root = document.documentElement;
+  const { rerender, unmount } = renderHook(({ scale }) => useApplicationViewController({
+    settings: { "view.display_scale": "100", "view.font_size": "14", "view.pdf_preview_scale": scale },
+    onUpdateSetting: vi.fn(),
+  }), { initialProps: { scale: "150" } });
+  expect(root.style.getPropertyValue("--pdf-preview-scale")).toBe("1.5");
+  rerender({ scale: "175" });
+  expect(root.style.getPropertyValue("--pdf-preview-scale")).toBe("1.75");
+  unmount();
+  expect(root.style.getPropertyValue("--pdf-preview-scale")).toBe("");
+});

@@ -142,6 +142,8 @@ import { SelectionLookupCard } from "../selection-lookup/SelectionLookupCard";
 import { selectionLookupContext } from "../selection-lookup/selectionLookupText";
 import type { SelectionLookupPort } from "../selection-lookup/selectionLookup.types";
 import "./pdfAnnotationList.css";
+import { PdfInternalLinks } from "./PdfInternalLinks";
+import type { PdfBookmarkTarget } from "./pdfBookmarkDestination";
 import { PdfOutline } from "./PdfOutline";
 import { PdfThumbnail } from "./PdfThumbnail";
 import { PdfPagesOverview } from "./PdfPagesOverview";
@@ -1125,6 +1127,8 @@ type PdfPageViewProps = {
   readingBackground: string;
   preserveImages: boolean;
   pdfDocument: PDFDocumentProxy | null;
+  onInternalNavigate: (target: PdfBookmarkTarget) => void;
+  linksEnabled: boolean;
   searchMatches?: PdfReaderSearchMatch[];
   searchQuery?: string;
   selectionPreviewRects?: PdfAnnotationRect[];
@@ -1158,6 +1162,7 @@ function PdfPageView({
   defaultPageSize,
   pixelRatio, readingBackground, preserveImages,
   pdfDocument,
+  onInternalNavigate, linksEnabled,
   searchMatches = [],
   searchQuery = "",
   selectionPreviewRects = [],
@@ -1436,6 +1441,8 @@ function PdfPageView({
         ) : null}
         <div aria-hidden="true" className="pdf-page-shadow" />
         <div className="textLayer pdf-text-layer" ref={textLayerRef} />
+        {pdfDocument && renderActive && linksEnabled ? <PdfInternalLinks
+          document={pdfDocument} pageNumber={pageNumber} onNavigate={onInternalNavigate} /> : null}
         <div aria-label={pageNumber === 1 ? "PDF 批注覆盖层" : undefined} className="pdf-annotation-overlay">
         {onInkCreate && onTextAnnotationDelete ? <PdfInkLayer
           annotations={pageAnnotations.filter((annotation) => annotation.kind === "ink")}
@@ -4172,6 +4179,8 @@ export function PdfReader({
                     defaultPageSize={defaultPageSize}
                     pixelRatio={pixelRatio}
                     pdfDocument={pdfDocument}
+                    linksEnabled={!inkMode && !textBoxToolActive}
+                    onInternalNavigate={({ page, topRatio }) => navigateToPage(page, "auto", topRatio)}
                     searchMatches={searchOpen
                       ? searchMatches.filter((match) => match.page === pageNumber)
                       : undefined}

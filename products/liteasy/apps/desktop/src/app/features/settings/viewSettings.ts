@@ -22,6 +22,13 @@ export const viewDisplayScaleOptions = [75, 90, 100, 110, 125, 150, 175, 200].ma
   value: String(scale)
 }));
 
+export function normalizePdfPreviewScale(value: unknown): string {
+  const scale = typeof value === "string" || typeof value === "number" ? Number(value) : NaN;
+  return Number.isFinite(scale) && scale > 0
+    ? String(Math.min(200, Math.max(100, Math.round(scale))))
+    : "150";
+}
+
 export function normalizeDisplayScale(value: unknown): string {
   const scale = Number(value);
   return Number.isFinite(scale) && scale > 0

@@ -13,14 +13,20 @@ pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 const documents = createPreviewResourceCache<pdfjs.PDFDocumentProxy>(3, 3, () => 1, 30_000, document => { void document.destroy(); });
 
 /** Document lifetime, source navigation and raster painting are deliberately independent. */
-export default function PdfSourcePreview({ source, onPageChange, initialViewport, onViewportChange }: { source: ReferencePdf; onPageChange?(page: number): void; initialViewport?: PreviewViewport; onViewportChange?(viewport: PreviewViewport): void }) {
+type PdfSourcePreviewProps = {
+  onPageChange?(page: number): void;
+  initialViewport?: PreviewViewport;
+  onViewportChange?(viewport: PreviewViewport): void;
+} & ({ source: ReferencePdf; pdfDocument?: undefined } | { source: Omit<ReferencePdf, "bytes">; pdfDocument: pdfjs.PDFDocumentProxy });
+
+export default function PdfSourcePreview({ source, pdfDocument, onPageChange, initialViewport, onViewportChange }: PdfSourcePreviewProps) {
   const stage = useRef<HTMLDivElement>(null), canvas = useRef<HTMLCanvasElement>(null), textLayer = useRef<HTMLDivElement>(null);
   const latest = useRef(source); latest.current = source;
   const serial = useRef<Promise<unknown>>(Promise.resolve());
   const documentKey = source.documentKey ?? source.target?.documentKey ?? source.path;
   const navigationKey = JSON.stringify([documentKey, source.page, source.target]);
   const [loaded, setLoaded] = useState<{ key: string; value: pdfjs.PDFDocumentProxy }>();
-  const document = loaded?.key === documentKey ? loaded.value : undefined;
+  const document = pdfDocument ?? (loaded?.key === documentKey ? loaded.value : undefined);
   const [navigation, setNavigation] = useState({ key: navigationKey, page: initialViewport?.page ?? source.page });
   const page = navigation.key === navigationKey ? navigation.page : source.page;
   const [width, setWidth] = useState(0), [zoom, setZoom] = useState(initialViewport?.zoom ?? 1), [pageInput, setPageInput] = useState(String(page));
@@ -38,7 +44,7 @@ export default function PdfSourcePreview({ source, onPageChange, initialViewport
     if (source.target?.region?.rects.length && !regions.length) return;
     const region = node.querySelector<HTMLElement>(".source-pdf-region"), box = region?.getBoundingClientRect(), bounds = node.getBoundingClientRect();
     node.scrollLeft = box ? Math.max(0, node.scrollLeft + box.left - bounds.left + box.width / 2 - node.clientWidth / 2) : 0;
-    node.scrollTop = box ? Math.max(0, node.scrollTop + box.top - bounds.top + box.height / 2 - node.clientHeight / 2) : 0;
+    node.scrollTop = box ? Math.max(0, node.scrollTop + box.top - bounds.top + box.height / 2 - node.clientHeight / 2) : (source.target?.topRatio ?? 0) * (canvas.current?.getBoundingClientRect().height ?? 0);
     located.current = key;
   }, [visible, page, source.page, source.target, regions, navigationKey, originRequest]);
   const viewportCallback = useRef(onViewportChange); viewportCallback.current = onViewportChange;
@@ -61,10 +67,13 @@ export default function PdfSourcePreview({ source, onPageChange, initialViewport
     return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [documentKey]);
   useEffect(() => {
+    if (pdfDocument) return;
     const abort = new AbortController(); setError(undefined);
     const lease = documents.acquire(`${documentKey}:${attempt}`, async signal => {
       tracePreview("pdf.document.open", documentKey);
-      const task = pdfjs.getDocument({ data: latest.current.bytes.slice() });
+      const value = latest.current;
+      if (!("bytes" in value)) throw new Error("PDF source bytes unavailable");
+      const task = pdfjs.getDocument({ data: value.bytes.slice() });
       const cancel = () => { void task.destroy(); };
       signal.addEventListener("abort", cancel, { once: true });
       try { return await task.promise; } finally { signal.removeEventListener("abort", cancel); }
@@ -72,7 +81,7 @@ export default function PdfSourcePreview({ source, onPageChange, initialViewport
     void lease.promise.then(value => { if (!abort.signal.aborted) setLoaded({ key: documentKey, value }); })
       .catch(() => { if (!abort.signal.aborted) setError({ key: documentKey, message: "原始 PDF 读取失败，文件可能损坏或需要密码。可重试或打开原文件。" }); });
     return () => { abort.abort(); lease.release(); };
-  }, [documentKey, attempt]);
+  }, [documentKey, attempt, pdfDocument]);
   useEffect(() => {
     let active = true, render: pdfjs.RenderTask | undefined, layer: pdfjs.TextLayer | undefined;
     const queued = serial.current.catch(() => undefined).then(async () => {
@@ -121,7 +130,7 @@ export default function PdfSourcePreview({ source, onPageChange, initialViewport
     });
     serial.current = queued;
     return () => { active = false; render?.cancel(); layer?.cancel(); };
-  }, [document, documentKey, frameKey, navigationKey, page, width, zoom, valid, attempt]);
+  }, [document, pdfDocument, documentKey, frameKey, navigationKey, page, width, zoom, valid, attempt]);
   return <section className="source-pdf-preview" aria-label="原始 PDF 预览" aria-busy={!visible && !message}>
     <div className="source-pdf-toolbar">
       <IconAction label="上一页" density="compact" appearance="subtle" icon={<ChevronLeftRegular />} disabled={!document || !valid || page <= 1} onClick={() => go(page - 1)} />

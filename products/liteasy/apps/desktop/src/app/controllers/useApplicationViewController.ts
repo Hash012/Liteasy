@@ -7,13 +7,14 @@ import type {
 } from "../features/settings/settings.types";
 import {
   normalizeDisplayScale,
+  normalizePdfPreviewScale,
   normalizeViewFontSize,
   stepDisplayScale,
 } from "../features/settings/viewSettings";
 import "../features/settings/applicationView.css";
 
 type ApplicationViewOptions = {
-  settings: Pick<SettingsState, "view.display_scale" | "view.font_size">;
+  settings: Pick<SettingsState, "view.display_scale" | "view.font_size"> & Partial<Pick<SettingsState, "view.pdf_preview_scale">>;
   onUpdateSetting: (command: UpdateSettingCommand) => void;
 };
 
@@ -31,6 +32,13 @@ export function useApplicationViewController({
 }: ApplicationViewOptions) {
   const displayScale = normalizeDisplayScale(settings["view.display_scale"]);
   const fontSize = normalizeViewFontSize(settings["view.font_size"]);
+  const previewScale = normalizePdfPreviewScale(settings["view.pdf_preview_scale"]);
+  useEffect(() => {
+    const root = document.documentElement;
+    const previous = root.style.getPropertyValue("--pdf-preview-scale");
+    root.style.setProperty("--pdf-preview-scale", String(Number(previewScale) / 100));
+    return () => { root.style.setProperty("--pdf-preview-scale", previous); };
+  }, [previewScale]);
   const scaleRef = useRef(displayScale);
   const updateRef = useRef(onUpdateSetting);
   updateRef.current = onUpdateSetting;

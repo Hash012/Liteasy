@@ -11,6 +11,7 @@ export type PdfSourceMember = { scopeId: string; resourcePath: string; paperId: 
 export type PdfPreviewIntent = "asset" | "origin";
 export type PdfSourceTarget = {
   documentKey: string; page: number; precision: "document" | "page" | "region";
+  topRatio?: number;
   region?: { coordinateSpace: "normalized-viewport"; rects: Extract<ObjectAnchor, { type: "pdf" }>["rects"] };
 };
 export type ReferencePdf = { bytes: Uint8Array; path: string; page: number; documentKey?: string; target?: PdfSourceTarget };

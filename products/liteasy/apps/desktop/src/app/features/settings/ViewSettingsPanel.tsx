@@ -7,7 +7,7 @@ import { chineseFontOptions, englishFontOptions, normalizeLanguageFont, resolveT
 import { Field, Input, Option, Radio, RadioGroup, Dropdown, Switch } from "@fluentui/react-components";
 import { SettingRow } from "../workbench/WorkbenchPage";
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
-import { isHexColor, normalizeDisplayScale, pdfBackgroundPresets, viewDisplayScaleOptions, viewFontSizeOptions } from "./viewSettings";
+import { isHexColor, normalizeDisplayScale, normalizePdfPreviewScale, pdfBackgroundPresets, viewDisplayScaleOptions, viewFontSizeOptions } from "./viewSettings";
 import { normalizeAppearancePreference } from "../theme/appearancePreference";
 
 type ViewSettingsPanelProps = { onUpdateSetting?: (command: UpdateSettingCommand) => void; settings?: Partial<SettingsState> };
@@ -67,6 +67,11 @@ export function ViewSettingsPanel({ onUpdateSetting, settings }: ViewSettingsPan
       <Switch aria-label={message("view.autosave")} checked={settings?.["view.markdown_autosave"] !== false} disabled={settings?.["view.markdown_mode"] === "manual"} onChange={(_, data) => update("view.markdown_autosave", data.checked)} />
     </SettingRow>
     <h3 className="settings-group-title">{message("view.pdf.heading")}</h3>
+    <SettingRow title="PDF 链接预览大小" description="调整预览浮窗的宽高；较小窗口中会自动收缩。">
+      <OptionPicker aria-label="PDF 链接预览大小" value={normalizePdfPreviewScale(settings?.["view.pdf_preview_scale"])}
+        onValueChange={(value) => update("view.pdf_preview_scale", value)}
+        options={[100, 125, 150, 175, 200].map((value) => ({ value: String(value), label: value === 150 ? "150%（默认）" : `${value}%` }))} />
+    </SettingRow>
     <SettingRow title={message("view.pdf.background")} description={message("view.pdf.description")}>
       <RadioGroup aria-label={message("view.pdf.background")} className="view-settings-backgrounds" value={pdfBackground} onChange={(_, data) => update("view.pdf_background", data.value)}>
         {pdfBackgroundPresets.map((preset) => <Radio key={preset.value} value={preset.value} label={<span className="view-settings-color-label"><span aria-hidden className="view-settings-color-swatch" style={{ backgroundColor: preset.color }} />{preset.label}</span>} />)}

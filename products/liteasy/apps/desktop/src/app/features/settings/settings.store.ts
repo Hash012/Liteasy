@@ -6,7 +6,7 @@ import { getRecoveryRuntime } from "../local-recovery/runtimeProfile";
 import { agentContextLimit } from "../context/modelContextBudget";
 import { defaultReadingFontFamily, normalizeReadingFontFamily } from "./readingFonts";
 import type { SettingsState, UpdateSettingCommand } from "./settings.types";
-import { normalizeDisplayScale, normalizeViewFontSize } from "./viewSettings";
+import { normalizeDisplayScale, normalizePdfPreviewScale, normalizeViewFontSize } from "./viewSettings";
 import { isRecommendationStyle, normalizeRecommendationStyle } from "../recommendations/recommendationStyle";
 import { typographyChangeEvent, isAppearancePreference, normalizeAppearancePreference, notifyAppearancePreference, viewSettingsStorageKey } from "../theme/appearancePreference";
 
@@ -108,6 +108,7 @@ function loadPersistedViewSettings(): Partial<SettingsState> {
       "view.pdf_background": ["paper", "warm", "mint", "night", "custom"].includes(String(parsed["view.pdf_background"]))
         ? parsed["view.pdf_background"]
         : undefined,
+      "view.pdf_preview_scale": normalizePdfPreviewScale(parsed["view.pdf_preview_scale"]),
       "view.pdf_preserve_images": parsed["view.pdf_preserve_images"] !== false,
       "view.pdf_custom_background": typeof parsed["view.pdf_custom_background"] === "string"
         ? parsed["view.pdf_custom_background"]
@@ -134,6 +135,7 @@ function persistViewSettings(state: SettingsState) {
         ...Object.fromEntries(languageFontKeys.map((key) => [key, state[key] ?? ""])),
         "view.font_size": state["view.font_size"],
         "view.display_scale": state["view.display_scale"],
+        "view.pdf_preview_scale": state["view.pdf_preview_scale"],
         "view.pdf_preserve_images": state["view.pdf_preserve_images"],
         "view.pdf_background": state["view.pdf_background"],
         "view.pdf_custom_background": state["view.pdf_custom_background"]
@@ -196,6 +198,7 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
     "view.font_size": "14",
     "view.display_scale": "100",
     "view.pdf_background": "paper",
+    "view.pdf_preview_scale": "150",
     "view.pdf_preserve_images": true,
     "view.pdf_custom_background": "#ffffff",
     ...loadPersistedViewSettings()
@@ -239,6 +242,8 @@ export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.
         ? normalizeReadingFontFamily(command.value)
         : command.target === "view.display_scale"
         ? normalizeDisplayScale(command.value)
+        : command.target === "view.pdf_preview_scale"
+        ? normalizePdfPreviewScale(command.value)
         : command.target === "view.font_size"
           ? normalizeViewFontSize(command.value)
           : command.value) as never;

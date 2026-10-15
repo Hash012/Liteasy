@@ -135,3 +135,12 @@ test("outline separates arrow expansion, Enter navigation, page labels and curre
   expect(section).toHaveAttribute("aria-current", "location");
   expect(chapter).toHaveAttribute("aria-expanded", "true");
 });
+
+test("internal destinations retain FitH/FitR offsets and rotated CropBox coordinates", async () => {
+  const doc = documentMock();
+  expect(await resolvePdfBookmark(doc, [0, { name: "FitH" }, 300])).toEqual({ page: 1, topRatio: .5 });
+  expect(await resolvePdfBookmark(doc, [0, { name: "FitR" }, 20, 100, 200, 450])).toEqual({ page: 1, topRatio: .25 });
+  const rotated = documentMock({ getPage: vi.fn().mockResolvedValue({ view: [20, 30, 420, 630],
+    getViewport: () => ({ height: 400, convertToViewportPoint: (x: number, y: number) => [y - 30, x - 20] }) }) });
+  expect(await resolvePdfBookmark(rotated, [0, { name: "XYZ" }, 120, 330, null])).toEqual({ page: 1, topRatio: .25 });
+});

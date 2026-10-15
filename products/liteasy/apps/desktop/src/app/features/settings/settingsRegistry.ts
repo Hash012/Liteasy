@@ -57,6 +57,7 @@ export const settingsRegistry: Record<SettingKey, { label: string; help?: string
   "view.theme": { get label() { return message("settings.label.view.theme"); }, get help() { return message("settings.help.theme"); }, dependencies: [], restartRequirement: "none" },
   "view.font_size": { get help() { return message("settings.help.fontSize"); }, dependencies: [], restartRequirement: "none", get label() { return message("settings.label.view.font_size"); } },
   "view.display_scale": { get help() { return message("settings.help.scale"); }, dependencies: [], restartRequirement: "none", get label() { return message("settings.label.view.display_scale"); } },
+  "view.pdf_preview_scale": { label: "PDF 链接预览大小", help: "调整 PDF 链接浮窗的宽高，默认 150%。", dependencies: [], restartRequirement: "none" },
   "view.pdf_preserve_images": { get label() { return message("settings.label.view.pdf_preserve_images"); } },
   "view.pdf_background": { get help() { return message("settings.help.pdfBackground"); }, dependencies: [], restartRequirement: "none", get label() { return message("settings.label.view.pdf_background"); } },
   "view.pdf_custom_background": { get label() { return message("settings.label.view.pdf_custom_background"); } }

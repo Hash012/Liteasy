@@ -36,3 +36,11 @@
 .resource-reference-popover.is-picker-preview .source-pdf-stage { height: min(580px, calc(100dvh - 280px)); }
 .resource-reference-popover.is-expanded { position: fixed; inset: 24px !important; width: calc(100vw - 48px); height: calc(100dvh - 48px); max-height: none; transform: none !important; }
 .resource-reference-popover.is-expanded .source-pdf-stage { height: calc(100dvh - 230px); }
+
+.resource-reference-popover:has(.source-pdf-preview):not(.is-picker-preview):not(.is-expanded) {
+  width: min(calc(480px * var(--pdf-preview-scale, 1.5)), calc(100vw - 32px));
+  max-height: min(calc(60vh * var(--pdf-preview-scale, 1.5)), calc(100dvh - 32px));
+}
+.resource-reference-popover:not(.is-picker-preview):not(.is-expanded) .source-pdf-stage {
+  height: min(calc(420px * var(--pdf-preview-scale, 1.5)), calc(42vh * var(--pdf-preview-scale, 1.5)), calc(100dvh - 200px));
+}

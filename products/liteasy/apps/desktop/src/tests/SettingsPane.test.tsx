@@ -165,6 +165,12 @@ describe("SettingsPane", () => {
       intent: "update_setting", target: "view.display_scale", value: "125"
     });
 
+    await user.click(within(pane).getByRole("combobox", { name: "PDF 链接预览大小" }));
+    await user.click(screen.getByRole("option", { name: "175%", exact: true }));
+    expect(onUpdateSetting).toHaveBeenLastCalledWith({
+      intent: "update_setting", target: "view.pdf_preview_scale", value: "175"
+    });
+
     await user.click(within(pane).getByRole("combobox", { name: "界面字号" }));
     await user.click(screen.getByRole("option", { name: "舒适 · 16 px" }));
     expect(onUpdateSetting).toHaveBeenLastCalledWith({

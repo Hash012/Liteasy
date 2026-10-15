@@ -121,3 +121,17 @@ test("persists night reading and original image colors independently from the ap
   expect(restored["view.pdf_preserve_images"]).toBe(false);
   expect(resolvePdfReadingBackground(restored)).toBe("#20252a");
 });
+
+test("PDF link preview defaults to 150%, persists changes and constrains invalid values", () => {
+  localStorage.setItem("liteasy.view-settings.v1", JSON.stringify({ "view.font_size": "18" }));
+  const store = createSettingsStore();
+  expect(store.getState()["view.pdf_preview_scale"]).toBe("150");
+  store.apply({ intent: "update_setting", target: "view.pdf_preview_scale", value: "175" });
+  expect(createSettingsStore().getState()["view.pdf_preview_scale"]).toBe("175");
+  store.apply({ intent: "update_setting", target: "view.pdf_preview_scale", value: "Infinity" });
+  expect(store.getState()["view.pdf_preview_scale"]).toBe("150");
+  store.apply({ intent: "update_setting", target: "view.pdf_preview_scale", value: "999" });
+  expect(createSettingsStore().getState()["view.pdf_preview_scale"]).toBe("200");
+  store.apply({ intent: "update_setting", target: "view.pdf_preview_scale", value: "20" });
+  expect(createSettingsStore().getState()["view.pdf_preview_scale"]).toBe("100");
+});
