@@ -1,3 +1,5 @@
+import { useBoardFileController } from "../app/controllers/useBoardFileController";
+import * as noteFileServices from "../app/features/note-files/noteFileService";
 import "fake-indexeddb/auto";
 import { webcrypto } from "node:crypto";
 import { useState } from "react";
@@ -664,4 +666,28 @@ test("managed board names stay human-readable until storage details are explicit
   fireEvent.click(screen.getByRole("button", { name: "文件存储位置" }));
   expect(screen.getByText(filename)).toBeVisible();
   expect(screen.getByRole("button", { name: "复制文件位置" })).toBeVisible();
+});
+
+test("native managed-save failure reaches a readable board status with opt-in diagnostic detail", async () => {
+  const f = await fixture();
+  const rawFailure = "ENOENT /private/87f30c80-3f24-477e-a7f8-ec66efce64b4.canvas";
+  const service = vi.spyOn(noteFileServices, "createNoteFileService").mockReturnValue({
+    managedCanvas: vi.fn().mockRejectedValue(new Error(rawFailure)),
+    listMounts: vi.fn().mockResolvedValue([]),
+  } as unknown as noteFileServices.NoteFileService);
+  function Host() {
+    const [status, setStatus] = useState("");
+    const files = useBoardFileController({ repository: f.repository, board: f.board, active: () => true, select: vi.fn(), setStatus });
+    return <ObjectWorkbench model={{ ...f.model, ...files, status, setStatus }} />;
+  }
+  const view = render(<Host />);
+  try {
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("白板文件操作失败"), { timeout: 2500 });
+    expect(screen.getByRole("status")).not.toHaveTextContent("87f30c80");
+    expect(screen.getByRole("status")).toHaveTextContent("重试");
+    expect(screen.queryByText(/ENOENT/, { selector: "pre" })).not.toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "白板文件技术详情" }));
+    expect(screen.getByText(/ENOENT/, { selector: "pre" })).toBeVisible();
+    expect(screen.getByText(/ENOENT/, { selector: "pre" })).toHaveTextContent(rawFailure);
+  } finally { view.unmount(); service.mockRestore(); }
 });
