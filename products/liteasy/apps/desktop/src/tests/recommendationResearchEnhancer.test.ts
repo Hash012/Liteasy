@@ -150,3 +150,16 @@ test("multiple verified quotations may share one source but every quotation is c
   });
   await expect(curateRecommendationSnapshot(input)).rejects.toThrow("研究依据引用无法核对");
 });
+
+test("a complete English evidence sentence is accepted without relaxing its exact provenance", async () => {
+  const input = setup();
+  const sentence = "We study scaling laws and present findings that facilitate scaling of large language models in commonly used open-source configurations, while retaining an explicitly bounded training setup.";
+  expect(sentence.length).toBeGreaterThan(180);
+  input.items = [{ ...item, abstract: sentence }];
+  generate.mockImplementation(async ({ prompt }) => {
+    const candidate = JSON.parse(prompt.slice(prompt.indexOf("\n") + 1)).candidates[0];
+    return reply(prompt, { candidateQuotes: [{ section: "abstract", hash: candidate.sections[0].hash, text: sentence }] });
+  });
+  const result = await curateRecommendationSnapshot(input);
+  expect(result.items[0].researchReason?.candidateEvidence?.[0].text).toBe(sentence);
+});

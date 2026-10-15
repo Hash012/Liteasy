@@ -17,8 +17,8 @@ const decision = z.object({
   role: z.enum(["next_read", "alternative", "foundation", "bridge", "new_evidence"]),
   basis: z.enum(["abstract", "introduction", "abstract_and_introduction"]),
   limitation: z.string().min(1).max(240),
-  quotes: z.array(z.object({ evidenceId: z.string(), hash: z.string(), text: z.string().min(1).max(180) }).strict()).min(1).max(3),
-  candidateQuotes: z.array(z.object({ section, hash: z.string(), text: z.string().min(1).max(180) }).strict()).min(1).max(2)
+  quotes: z.array(z.object({ evidenceId: z.string(), hash: z.string(), text: z.string().min(1).max(350) }).strict()).min(1).max(3),
+  candidateQuotes: z.array(z.object({ section, hash: z.string(), text: z.string().min(1).max(350) }).strict()).min(1).max(2)
 }).strict();
 type Decision = z.infer<typeof decision>;
 type Input = { assets?: AgentAssetService; items: RecommendationItem[]; context: RecommendationContext; preferences: RecommendationPreferences; settings?: SettingsState; task: RecommendationTask; mode?: "curate" | "explain"; feedbackRevision?: number; snapshotId?: string };
