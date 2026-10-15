@@ -4,7 +4,7 @@ import { ExtensionMetadataSections } from "../extensions/ExtensionMetadata";
 import { useEffect, useState, type ReactNode } from "react";
 import { Field, Input, Tooltip } from "@fluentui/react-components";
 import { ArrowDownloadRegular, CopyRegular, DeleteRegular, EditRegular, FolderOpenRegular, OpenRegular } from "@fluentui/react-icons";
-import { bibliographicFields } from "./bibliographicFields";
+import { bibliographicFields, bibliographicFieldLabel } from "./bibliographicFields";
 import { assetTypeLabels } from "./libraryAssetMetadata";
 import { ContentView } from "../markdown/ContentView";
 import { legacyContent } from "../markdown/contentFragment";
@@ -103,12 +103,12 @@ export function ReadingCatalogDetails({ entry, ...actions }: { entry: ReadingCat
       {entry.assetType ? <div><dt>条目类型</dt><dd>{assetTypeLabels[entry.assetType] ?? entry.assetType}</dd></div> : null}
       <div><dt>发表年份</dt><dd>{entry.year ?? "未提供"}</dd></div>
       {entry.publishedAt ? <div><dt>发表日期</dt><dd>{entry.publishedAt}</dd></div> : null}
-      <div><dt>出版物</dt><dd>{entry.publication || "未提供"}</dd></div>
+      <div><dt>{bibliographicFieldLabel("publication", entry.assetType ?? "")}</dt><dd>{entry.publication || "未提供"}</dd></div>
       {entry.language ? <div><dt>语言</dt><dd>{entry.language}</dd></div> : null}
       <div><dt>文件大小</dt><dd>{formatCatalogFileSize(entry.fileSize)}</dd></div>
       {entry.fileName ? <div><dt>文件名</dt><dd>{entry.fileName}</dd></div> : null}
       {bibliographicFields.filter(({ key }) => !["title", "publishedAt", "publication", "doi", "isbn", "language", "abstract"].includes(key) && entry[key])
-        .map(({ key, label }) => <div key={key}><dt>{label}</dt><dd>{entry[key]}</dd></div>)}
+        .map(({ key }) => <div key={key}><dt>{bibliographicFieldLabel(key, entry.assetType ?? "")}</dt><dd>{entry[key]}</dd></div>)}
     </dl>
     {entry.doi ? <CopyValue label="DOI" value={entry.doi} onCopy={(value) => void copy(value)} /> : null}
     {entry.isbn || entry.identifier ? <CopyValue label={entry.isbn ? "ISBN" : "出版标识"} value={entry.isbn || entry.identifier!} onCopy={(value) => void copy(value)} /> : null}

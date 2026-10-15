@@ -5,7 +5,7 @@ import { legacyContent } from "../markdown/contentFragment";
 import { displayPath } from "../resource-filesystem/displayPath";
 import { Field, Input, Textarea, Tooltip } from "@fluentui/react-components";
 import { AddRegular, ArrowClockwiseRegular, CopyRegular, EditRegular, DeleteRegular, SaveRegular } from "@fluentui/react-icons";
-import { bibliographicFields, type BibliographicDraft } from "./bibliographicFields";
+import { bibliographicFields, bibliographicFieldLabel, bibliographicTypeFields, type BibliographicDraft } from "./bibliographicFields";
 import { assetTypeLabels } from "./libraryAssetMetadata";
 import { readingCatalogCitation } from "./readingCatalogSearch";
 import type { ReadingCatalogEntry } from "./readingCatalog.types";
@@ -30,19 +30,22 @@ export function BibliographicMetadataEditor({ model }: { model: BibliographicEdi
       <div className="bibliographic-summary-actions"><Button icon={<EditRegular />} onClick={model.edit}>编辑元信息</Button><Button icon={<CopyRegular />} onClick={async () => { try { await navigator.clipboard.writeText(readingCatalogCitation({ ...entry, ...draft })); setCopyStatus("引用已复制"); } catch { setCopyStatus("复制失败，请重试"); } }}>复制引用</Button></div>
       {copyStatus || model.message ? <p role="status">{copyStatus || model.message}</p> : null}
       <DisclosureSection className="bibliographic-summary-section" title="摘要">{draft.abstract ? <ContentView content={legacyContent(draft.abstract)}  /> : <p>暂无摘要。可以在编辑元信息中补充。</p>}</DisclosureSection>
-      <DisclosureSection className="bibliographic-summary-section" title="标识符与出版信息"><dl>{bibliographicFields.filter(({ key }) => !["title", "abstract", "publication", "publishedAt", "extra"].includes(key) && draft[key]).map(({ key, label }) => <div key={key}><dt>{label}</dt><dd>{draft[key]}</dd></div>)}</dl></DisclosureSection>
+      <DisclosureSection className="bibliographic-summary-section" title="标识符与出版信息"><dl>{bibliographicFields.filter(({ key }) => !["title", "abstract", "publication", "publishedAt", "extra"].includes(key) && draft[key]).map(({ key }) => <div key={key}><dt>{bibliographicFieldLabel(key, draft.assetType)}</dt><dd>{draft[key]}</dd></div>)}</dl></DisclosureSection>
       <DisclosureSection className="bibliographic-summary-section" title="附件与所在文库"><p>{entry.fileName || "未记录文件名"}</p><p>{entry.folderPath || entry.collection || "本地文献库"}</p>{entry.physicalPath ? <p>{displayPath(entry.physicalPath)}</p> : null}</DisclosureSection>
     </div>
   </section>;
   const field = (key: typeof bibliographicFields[number]["key"]) => {
     const definition = bibliographicFields.find((item) => item.key === key)!;
-    const props = { "aria-label": definition.label, value: draft[key], maxLength: definition.limit, disabled: pending };
-    return <Field key={key} label={definition.label} className={"multiline" in definition ? "bibliographic-field is-multiline" : "bibliographic-field"}>
+    const label = bibliographicFieldLabel(key, draft.assetType);
+    const props = { "aria-label": label, value: draft[key], maxLength: definition.limit, disabled: pending };
+    return <Field key={key} label={label} className={"multiline" in definition ? "bibliographic-field is-multiline" : "bibliographic-field"}>
       {"multiline" in definition
         ? <Textarea {...props} rows={key === "title" ? 3 : 5} resize="vertical" onChange={(_, data) => model.change({ [key]: data.value })} />
         : <Input {...props} placeholder={"placeholder" in definition ? definition.placeholder : undefined} onChange={(_, data) => model.change({ [key]: data.value })} />}
     </Field>;
   };
+  const primaryFields = bibliographicTypeFields(draft.assetType);
+  const additionalFields = bibliographicFields.filter(({ key }) => key !== "title" && key !== "abstract" && !primaryFields.includes(key));
   return <form className="bibliographic-editor" aria-label="编辑文献元信息" onSubmit={(event) => { event.preventDefault(); void model.save(); }}>
     {relation}
     <header><h2>{entry.title}</h2><span>{entry.fileName || entry.format.toUpperCase()}</span></header>
@@ -57,13 +60,9 @@ export function BibliographicMetadataEditor({ model }: { model: BibliographicEdi
         </div>)}
         {!draft.authors.length ? <small>尚未填写作者</small> : null}
       </section>
-      {field("publishedAt")}{field("publication")}
-      <DisclosureSection defaultOpen={draft.assetType === "book"} className="bibliographic-extra-fields" title="出版信息">
-        {(["publisher", "place", "volume", "issue", "pages", "edition", "series", "seriesNumber"] as const).map(field)}
-      </DisclosureSection>
-      {(["doi", "isbn", "issn", "url", "language"] as const).map(field)}
+      {primaryFields.map(field)}
       {field("abstract")}
-      <DisclosureSection className="bibliographic-extra-fields" title="更多信息">{(["shortTitle", "accessedAt", "extra"] as const).map(field)}</DisclosureSection>
+      <DisclosureSection key={draft.assetType} defaultOpen={additionalFields.some(({ key }) => Boolean(draft[key]))} className="bibliographic-extra-fields" title="更多信息">{additionalFields.map(({ key }) => field(key))}</DisclosureSection>
     </div>
     <footer>
       {model.error ? <p role="alert">{model.error}</p> : <p role="status">{model.dirty ? "有未保存的更改" : model.message}</p>}

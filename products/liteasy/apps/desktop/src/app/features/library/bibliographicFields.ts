@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ReadingCatalogEntry } from "./readingCatalog.types";
 import { bibliographicIdentifierError, normalizeBibliographicDoi } from "./bibliographicIdentifiers";
+import { inferAssetType } from "./libraryAssetMetadata";
 
 export const bibliographicFields = [
   { key: "title", label: "标题", limit: 2000, multiline: true },
@@ -27,6 +28,30 @@ export const bibliographicFields = [
 export type BibliographicField = typeof bibliographicFields[number]["key"];
 export type BibliographicDraft = Record<BibliographicField, string> & { authors: string[]; assetType: string };
 
+const typeFields: Record<string, BibliographicField[]> = {
+  book: ["publishedAt", "publisher", "place", "edition", "series", "isbn", "doi", "url", "language"],
+  "book-section": ["publication", "publishedAt", "publisher", "place", "pages", "edition", "isbn", "doi", "url", "language"],
+  webpage: ["publication", "url", "accessedAt", "publishedAt", "language"],
+  "journal-article": ["publication", "publishedAt", "volume", "issue", "pages", "doi", "issn", "url", "language"],
+  "conference-paper": ["publication", "publishedAt", "publisher", "place", "pages", "doi", "url", "language"],
+  thesis: ["publisher", "publishedAt", "place", "doi", "url", "language"],
+  report: ["publisher", "publishedAt", "seriesNumber", "doi", "url", "language"],
+};
+export function bibliographicTypeFields(type: string): readonly BibliographicField[] {
+  return typeFields[type] ?? ["publishedAt", "publication", "doi", "url", "language"];
+}
+export function bibliographicFieldLabel(key: BibliographicField, type: string) {
+  if (key === "publication") {
+    if (type === "webpage") return "网站名称";
+    if (type === "book-section") return "所属图书";
+    if (type === "conference-paper") return "会议名称";
+    if (type === "journal-article") return "期刊名称";
+  }
+  if (key === "publisher" && type === "thesis") return "学位授予机构";
+  if (key === "publisher" && type === "report") return "发布机构";
+  return bibliographicFields.find((field) => field.key === key)!.label;
+}
+
 const fields = Object.fromEntries(bibliographicFields.map((field) => [field.key, z.string().trim().max(field.limit)])) as Record<BibliographicField, z.ZodString>;
 export const bibliographicDraftSchema = z.object({ ...fields,
   title: fields.title.min(1, "请填写标题。"),
@@ -52,7 +77,7 @@ function isbnIdentifier(value?: string) {
 export function bibliographicDraft(entry: ReadingCatalogEntry): BibliographicDraft {
   return { ...Object.fromEntries(bibliographicFields.map(({ key }) => [key, entry[key] ?? ""])),
     title: entry.title, publishedAt: entry.publishedAt ?? String(entry.year ?? ""),
-    authors: [...(entry.authors ?? [])], assetType: entry.assetType ?? "", isbn: entry.isbn ?? (isbnIdentifier(entry.identifier) ? entry.identifier!.replace(/^urn:isbn:/i, "") : ""),
+    authors: [...(entry.authors ?? [])], assetType: entry.assetType ?? inferAssetType(entry.format), isbn: entry.isbn ?? (isbnIdentifier(entry.identifier) ? entry.identifier!.replace(/^urn:isbn:/i, "") : ""),
   } as BibliographicDraft;
 }
 
