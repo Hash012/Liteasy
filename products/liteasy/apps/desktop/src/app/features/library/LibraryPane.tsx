@@ -17,6 +17,7 @@ import { indexReadingCatalog, queryReadingCatalog, type ReadingCatalogFilters } 
 import { readingCatalogFormatLabels, readingCatalogStatusLabels } from "./readingCatalog.types";
 import { LibraryTagChips } from "./LibraryTagChips";
 import { LibraryMetadataEditor } from "./LibraryMetadataEditor";
+import { normalizeResourceTags, resourceTagKey } from "../resource-tags/resourceTagValues";
 import { LibraryFacetFilters } from "./LibraryFacetFilters";
 import { inferAssetType, type LibraryTag } from "./libraryAssetMetadata";
 import type { ReadingCatalogEntry, ReadingCatalogMetadataPatch } from "./readingCatalog.types";
@@ -686,7 +687,7 @@ function LibraryPaneContent({
     [fileIndex, hasFilters, search, selectedCategory, fileFilters]);
   function selectTag(tag: LibraryTag) {
     if (tag.kind === "collection") setSelectedCategory(tag.value);
-    else setFileFilters((value) => ({ ...value, ...(tag.kind === "tag" ? { tags: [...new Set([...(value.tags ?? []), tag.value])] }
+    else setFileFilters((value) => ({ ...value, ...(tag.kind === "tag" ? { tags: normalizeResourceTags([...(value.tags ?? []), tag.value]), excludeTags: value.excludeTags?.filter((item) => resourceTagKey(item) !== resourceTagKey(tag.value)) }
       : { [tag.kind === "type" ? "assetType" : tag.kind]: tag.value }) }));
   }
   function resetFilters() {

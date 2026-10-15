@@ -3,6 +3,7 @@ import { catalogSearchMetadata } from "../search/searchMetadata";
 import type { ReadingCatalogEntry, ReadingCatalogFormat, ReadingCatalogStatus } from "./readingCatalog.types";
 import { assetTypeLabels, inferAssetType } from "./libraryAssetMetadata";
 import { bibliographicDoiUrl } from "./bibliographicIdentifiers";
+import { resourceTagKey } from "../resource-tags/resourceTagValues";
 
 export type ReadingCatalogSort = "added" | "title" | "author" | "year-desc" | "year-asc";
 
@@ -31,6 +32,7 @@ function normalize(value: string) {
 export function indexReadingCatalog(entries: readonly ReadingCatalogEntry[]) {
   return entries.map((entry) => ({
     entry,
+    tagKeys: new Set((entry.tags ?? []).map(resourceTagKey)),
     metadata: catalogSearchMetadata(entry),
     nameSearch: [entry.title, entry.fileName].filter(Boolean).join(" "),
     search: [
@@ -46,7 +48,7 @@ export function indexReadingCatalog(entries: readonly ReadingCatalogEntry[]) {
 
 export function queryReadingCatalog(index: ReturnType<typeof indexReadingCatalog>, filters: ReadingCatalogFilters) {
   const compiled = compileSearchQuery(filters.query);
-  const rows = index.filter(({ entry, search, nameSearch, metadata }) => (
+  const rows = index.filter(({ entry, search, nameSearch, metadata, tagKeys }) => (
     (filters.format === "all" || entry.format === filters.format)
     && (filters.status === "all" || (entry.readingStatus ?? "unread") === filters.status)
     && (!filters.collection || entry.collection === filters.collection)
@@ -54,8 +56,8 @@ export function queryReadingCatalog(index: ReturnType<typeof indexReadingCatalog
     && (!filters.assetType || (entry.assetType || inferAssetType(entry.format)) === filters.assetType)
     && (!filters.author || (entry.authors ?? []).some((author) => normalize(author).includes(normalize(filters.author!))))
     && (!filters.subject || (entry.subjects ?? []).some((subject) => normalize(subject).includes(normalize(filters.subject!))))
-    && (filters.tags ?? []).every((tag) => (entry.tags ?? []).some((value) => normalize(value) === normalize(tag)))
-    && !(filters.excludeTags ?? []).some((tag) => (entry.tags ?? []).some((value) => normalize(value) === normalize(tag)))
+    && (filters.tags ?? []).every((tag) => tagKeys.has(resourceTagKey(tag)))
+    && !(filters.excludeTags ?? []).some((tag) => tagKeys.has(resourceTagKey(tag)))
     && compiled.matches(filters.scope === "name" ? nameSearch : search, metadata)
   ));
   rows.sort((left, right) => {

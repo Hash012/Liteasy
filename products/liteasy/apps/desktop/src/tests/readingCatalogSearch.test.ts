@@ -70,3 +70,10 @@ test("citations normalize DOI links, encode fragments and include webpage addres
   expect(readingCatalogCitation({ id: "doi", title: "Paper", format: "pdf", doi: "doi: https://doi.org/10.1234/manual#part" })).toBe("Paper. https://doi.org/10.1234/manual%23part");
   expect(readingCatalogCitation({ id: "web", title: "Research blog", format: "html", publishedAt: "2026-10", url: "https://example.test/blog" })).toBe("(2026-10). Research blog. https://example.test/blog");
 });
+
+test("tag inclusion and exclusion use the same Unicode identity as editing and facet counts", () => {
+  const entry: ReadingCatalogEntry = { id: "unicode", title: "Unicode tags", format: "pdf", tags: ["cafe\u0301", "ＲＡＧ", "向量   检索"] };
+  const index = indexReadingCatalog([entry]);
+  expect(queryReadingCatalog(index, { ...filters, tags: ["café", "rag", "向量 检索"] })).toEqual([entry]);
+  expect(queryReadingCatalog(index, { ...filters, excludeTags: ["CAFÉ"] })).toEqual([]);
+});
