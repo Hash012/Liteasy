@@ -135,9 +135,25 @@ test("wheel-only reading saves before a quick tab close without a page-number ac
   await open(page, 12, "#importable");
   await page.getByLabel("PDF 页面滚动区").hover(); await page.mouse.wheel(0, 5500);
   await expect(page.getByLabel("当前页码")).not.toHaveValue("1");
-  const savedPage = await page.getByLabel("当前页码").inputValue();
-  const savedOffset = await offset(page, Number(savedPage));
-  await page.getByRole("button", { name: "关闭 das24a.pdf", exact: true }).click();
+  const close = page.getByRole("button", { name: "关闭 das24a.pdf", exact: true });
+  // Capture the visible PDF point in the actual close event. Lazy page sizing and
+  // native scroll anchoring may still change geometry between Playwright commands.
+  await close.evaluate(button => button.addEventListener("click", () => {
+    const stage = document.querySelector<HTMLElement>('[aria-label="PDF 页面滚动区"]')!;
+    const top = stage.getBoundingClientRect().top + stage.clientTop;
+    const bottom = top + stage.clientHeight;
+    const pages = Array.from(stage.querySelectorAll<HTMLElement>(".pdf-page-shell"), element => {
+      const bounds = element.getBoundingClientRect();
+      return { page: Number(element.dataset.page), offset: (top - bounds.top) / bounds.height,
+        visible: Math.max(0, Math.min(bounds.bottom, bottom) - Math.max(bounds.top, top)) };
+    });
+    const position = pages.reduce((best, current) => current.visible > best.visible ? current : best);
+    (window as Window & { closingPdfPosition?: { page: number; offset: number } }).closingPdfPosition = position;
+  }, { capture: true, once: true }));
+  await close.click();
+  const saved = await page.evaluate(() => (window as Window & { closingPdfPosition?: { page: number; offset: number } }).closingPdfPosition!);
+  expect(saved.page).toBeGreaterThan(1);
+  const savedPage = String(saved.page), savedOffset = saved.offset;
   await page.getByRole("button", { name: "文献库", exact: true }).dblclick();
   await page.getByRole("button", { name: "das24a.pdf", exact: true }).dblclick();
   await expect(page.getByLabel("当前页码")).toHaveValue(savedPage, { timeout: 30_000 });

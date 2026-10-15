@@ -15,18 +15,22 @@ export function usePdfPageWindow(stage: RefObject<HTMLElement>, frame: RefObject
     let request = 0;
     let dirty = true;
     let scrolled = false;
+    let measuredScrollHeight = -1;
     let entries: { page: number; top: number; bottom: number }[] = [];
     const measure = () => {
       request = 0;
       const viewport = root.getBoundingClientRect();
-      if (dirty) {
-        // Document offsets stay valid while scrolling. Read page layout only when it changes.
+      const scrollHeight = root.scrollHeight;
+      if (dirty || scrollHeight !== measuredScrollHeight) {
+        // Native scroll anchoring may report a new scrollTop before ResizeObserver
+        // reports a late PDF page-size change. Never combine it with stale bounds.
         entries = Array.from(root.querySelectorAll<HTMLElement>(".pdf-page-shell"), (element) => {
           const rect = element.getBoundingClientRect();
           return { page: Number(element.dataset.page), top: rect.top - viewport.top + root.scrollTop,
             bottom: rect.bottom - viewport.top + root.scrollTop, width: rect.width };
         }).filter((entry) => Number.isSafeInteger(entry.page) && entry.page > 0 && entry.width > 0 && entry.bottom > entry.top);
         dirty = false;
+        measuredScrollHeight = scrollHeight;
       }
       const top = root.scrollTop + root.clientTop;
       const bottom = top + (root.clientHeight || viewport.height);
