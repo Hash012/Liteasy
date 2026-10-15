@@ -36,7 +36,10 @@ function promptFor(candidates: readonly Candidate[], evidence: readonly Evidence
 function parseResponse(answer: string, max: number) {
   if (answer.length > 24_000) throw new Error("AI 返回内容过长，原推荐已保留。请减少候选后重试。");
   const text = answer.trim().replace(/^```(?:json)?\s*\n([\s\S]*?)\n```$/i, "$1");
-  try { return z.object({ reasons: z.array(decision).max(max) }).strict().parse(JSON.parse(text)).reasons; }
+  try {
+    return z.object({ reasons: z.array(decision).max(max) }).strict().parse(JSON.parse(text)).reasons
+      .map(reason => ({ ...reason, evidenceIds: [...new Set(reason.evidenceIds)] }));
+  }
   catch { throw new Error("AI 未返回可核对的推荐内容，原推荐已保留。请重试，或在 AI 接入中检查模型的 JSON 输出设置。"); }
 }
 
@@ -50,10 +53,14 @@ function validateDecision(reason: Decision, candidates: readonly Candidate[], ev
     const source = candidate.sections.find(row => row.section === quote.section);
     if (!source || !quote.text.trim() || source.hash !== quote.hash || !source.text.includes(quote.text)) throw new Error("AI 对候选文献的引用与实际摘要或引言不符，原推荐已保留。");
   }
-  if (new Set(reason.evidenceIds).size !== reason.evidenceIds.length || new Set(reason.quotes.map(row => row.evidenceId)).size !== reason.quotes.length) throw new Error("AI 返回了重复的依据引用，请重试。原推荐已保留。");
   for (const id of reason.evidenceIds) {
-    const source = evidence.find(row => row.evidenceId === id), quote = reason.quotes.find(row => row.evidenceId === id);
-    if (!source || !quote || !quote.text.trim() || quote.hash !== source.hash || !source.text.includes(quote.text)) throw new Error("AI 的研究依据引用无法核对，原推荐已保留。");
+    if (!reason.quotes.some(row => row.evidenceId === id)) throw new Error("AI 的研究依据引用无法核对，原推荐已保留。");
+  }
+  // One source may support several statements. Validate every quotation, not
+  // only the first matching ID, so a valid quote cannot conceal a forged second.
+  for (const quote of reason.quotes) {
+    const source = evidence.find(row => row.evidenceId === quote.evidenceId);
+    if (!source || !quote.text.trim() || quote.hash !== source.hash || !source.text.includes(quote.text)) throw new Error("AI 的研究依据引用无法核对，原推荐已保留。");
   }
   if (reason.quotes.some(row => !reason.evidenceIds.includes(row.evidenceId))) throw new Error("AI 引用了本次范围外的研究依据，原推荐已保留。");
   return candidate;

@@ -40,13 +40,17 @@ test.skipIf(!envPath || !candidatesPath)("actual abstracts and introductions gui
     { name: "language-model-scaling", expected: "arxiv:2401.02954v1", question: "我研究开放语言模型的扩展规律，关注7B与67B规模的训练数据和模型架构，以及引言中LLaMA为何成为后续开放模型的架构与性能基准。请从候选中选择直接相关论文，理由需同时联系摘要中的研究方法与引言中的研究背景，不要把其他领域仅有宽泛词汇重合的论文当成相关工作。" },
     { name: "host-apoptosis", expected: "doi:10.1371/journal.pone.0029565", question: "我研究病原微生物与宿主细胞的相互作用，关注程序性细胞死亡作为防御机制、凋亡程序在不同动物类群的保守性，以及抗凋亡能力怎样影响细胞内感染。请选择直接相关论文，同时用摘要中的实验问题和引言中的机制背景说明阅读价值。" }
   ];
-  const results: Record<string, unknown>[] = [], usage: unknown[] = [];
+  const results: Record<string, unknown>[] = [], usage: unknown[] = [], modelResponses: string[] = [];
   let requests = 0;
   const actualFetch = globalThis.fetch;
   const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
     requests++;
     const response = await actualFetch(url, init);
-    if (response.ok) { const payload = await response.clone().json() as { usage?: unknown }; usage.push(payload.usage ?? null); }
+    if (response.ok) {
+      const payload = await response.clone().json() as { usage?: unknown; choices?: { message?: { content?: string } }[] };
+      usage.push(payload.usage ?? null);
+      modelResponses.push(payload.choices?.[0]?.message?.content ?? "");
+    }
     return response;
   });
   let status = "failed", failure = "";
@@ -82,7 +86,7 @@ test.skipIf(!envPath || !candidatesPath)("actual abstracts and introductions gui
     status = "passed";
   } catch (error) { failure = error instanceof Error ? error.message : "live_integration_failed"; }
   finally { fetchSpy.mockRestore(); await deleteDirectModelKey(config); }
-  const report = { status, failure, provider, requestedModel: model, protocol: "json_object", requests, usage,
+  const report = { status, failure, provider, requestedModel: model, protocol: "json_object", requests, usage, modelResponses,
     elapsedMs: Math.round(performance.now() - started), sourceInput: candidatesPath,
     sourceBoundary: "public live-enrichment artifact with exact content hashes; no private library content", cases: results,
     persistenceBoundary: "production coordinator and ObjectStorage backed by test IndexedDB; not Windows native SQLite" };

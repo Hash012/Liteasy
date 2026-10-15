@@ -129,3 +129,24 @@ test("validated batch scores determine final reading order and consent changes s
   generate.mockImplementation(async ({ prompt }) => { active = false; return reply(prompt); });
   await expect(curateRecommendationSnapshot(input)).rejects.toThrow("授权已变化");
 });
+
+test("multiple verified quotations may share one source but every quotation is checked", async () => {
+  const input = setup();
+  generate.mockImplementation(async ({ prompt }) => {
+    const source = JSON.parse(prompt.slice(prompt.indexOf("\n") + 1)).evidence[0];
+    return reply(prompt, { evidenceIds: [source.evidenceId, source.evidenceId], quotes: [
+      { evidenceId: source.evidenceId, hash: source.hash, text: source.text.slice(0, 10) },
+      { evidenceId: source.evidenceId, hash: source.hash, text: source.text.slice(6) }
+    ] });
+  });
+  const result = await curateRecommendationSnapshot(input);
+  expect(result.items[0].researchReason?.evidenceIds).toEqual(["e"]);
+  generate.mockImplementation(async ({ prompt }) => {
+    const source = JSON.parse(prompt.slice(prompt.indexOf("\n") + 1)).evidence[0];
+    return reply(prompt, { quotes: [
+      { evidenceId: source.evidenceId, hash: source.hash, text: source.text.slice(0, 10) },
+      { evidenceId: source.evidenceId, hash: source.hash, text: "forged second quotation" }
+    ] });
+  });
+  await expect(curateRecommendationSnapshot(input)).rejects.toThrow("研究依据引用无法核对");
+});
