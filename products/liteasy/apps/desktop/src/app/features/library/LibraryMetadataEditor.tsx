@@ -1,16 +1,16 @@
 import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { useState } from "react";
-import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Textarea } from "@fluentui/react-components";
+import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input } from "@fluentui/react-components";
 import type { ReadingCatalogEntry, ReadingCatalogMetadataPatch } from "./readingCatalog.types";
 import { assetTypeLabels, inferAssetType } from "./libraryAssetMetadata";
-import { parseResourceTags, splitResourceTags, MAX_RESOURCE_TAGS } from "../resource-tags/resourceTagValues";
+import { createResourceTagDraft, ResourceTagEditor, resourceTagDraftValues } from "../resource-tags/ResourceTagEditor";
 
-export function LibraryMetadataEditor({ entry, onSave, onClose }: { entry: ReadingCatalogEntry; onSave: (patch: ReadingCatalogMetadataPatch) => Promise<void>; onClose: () => void }) {
+export function LibraryMetadataEditor({ entry, tagSuggestions, onSave, onClose }: { entry: ReadingCatalogEntry; tagSuggestions?: readonly string[]; onSave: (patch: ReadingCatalogMetadataPatch) => Promise<void>; onClose: () => void }) {
   const [type, setType] = useState(entry.assetType || inferAssetType(entry.format));
   const [year, setYear] = useState(entry.year ? String(entry.year) : "");
   const [authors, setAuthors] = useState(entry.authors?.join("; ") ?? "");
   const [subjects, setSubjects] = useState(entry.subjects?.join(", ") ?? "");
-  const [tags, setTags] = useState(entry.tags?.join(", ") ?? "");
+  const [tags, setTags] = useState(() => createResourceTagDraft(entry.tags));
   const [collection, setCollection] = useState(entry.collection ?? "");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -21,7 +21,7 @@ export function LibraryMetadataEditor({ entry, onSave, onClose }: { entry: Readi
     setPending(true); setError("");
     try {
       await onSave({ assetType: type, year: publishedYear, authors: split(authors, /[;；\n]/),
-        subjects: split(subjects, /[,，;；\n]/).slice(0, 20), tags: parseResourceTags(splitResourceTags(tags)), collection: collection.trim() });
+        subjects: split(subjects, /[,，;；\n]/).slice(0, 20), tags: resourceTagDraftValues(tags), collection: collection.trim() });
       onClose();
     } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); }
     finally { setPending(false); }
@@ -37,7 +37,7 @@ export function LibraryMetadataEditor({ entry, onSave, onClose }: { entry: Readi
         <Field label="作者"><Input aria-label="资产作者" value={authors} disabled={pending} onChange={(_, data) => setAuthors(data.value)} placeholder="多位作者用分号分隔" maxLength={2000} /></Field>
         <Field label="学科"><Input aria-label="资产学科" value={subjects} disabled={pending} onChange={(_, data) => setSubjects(data.value)} placeholder="例如：计算机科学, 机器学习" maxLength={1200} /></Field>
         <Field label="分类"><Input aria-label="资产分类" value={collection} disabled={pending} onChange={(_, data) => setCollection(data.value)} placeholder="例如：待读 / 项目资料" maxLength={80} /></Field>
-        <Field label="标签"><Textarea aria-label="资产标签" value={tags} disabled={pending} onChange={(_, data) => setTags(data.value)} placeholder={`用逗号、分号或换行分隔，最多 ${MAX_RESOURCE_TAGS} 个标签`} resize="vertical" /></Field>
+        <Field label="标签"><ResourceTagEditor label="资产标签" value={tags} onChange={setTags} suggestions={tagSuggestions} disabled={pending} /></Field>
         <small>用于整理、显示和筛选；不会改变已经确认的正式题录。</small>
         {error ? <div role="alert">{error}</div> : null}
       </DialogContent><DialogActions><Button disabled={pending} onClick={onClose}>取消</Button><Button type="submit" appearance="primary" disabled={pending}>保存</Button></DialogActions></DialogBody>

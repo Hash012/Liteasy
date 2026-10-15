@@ -136,7 +136,7 @@ export function ReadingLibraryCatalog({ entries, loading = false, message, onImp
           <Button icon={<ArrowRightRegular />} iconPosition="after" aria-label="下一页文件" disabled={visiblePage >= pages - 1} onClick={() => setPage(visiblePage + 1)}>下一页</Button>
         </nav>
       </div>
-      {selected ? <ReadingCatalogDetails key={selected.id} entry={selected} {...actions} /> : <aside className="reading-catalog-details reading-catalog-details-empty" aria-label="文件元信息"><BookOpenRegular /><h3>查看元信息</h3><p>选择一个文件，查看作者、发表信息、摘要与实际位置，并整理标签和阅读状态。</p></aside>}
+      {selected ? <ReadingCatalogDetails key={selected.id} entry={selected} tagSuggestions={entries.flatMap((entry) => entry.tags ?? [])} {...actions} /> : <aside className="reading-catalog-details reading-catalog-details-empty" aria-label="文件元信息"><BookOpenRegular /><h3>查看元信息</h3><p>选择一个文件，查看作者、发表信息、摘要与实际位置，并整理标签和阅读状态。</p></aside>}
     </div>
   </section>;
 }

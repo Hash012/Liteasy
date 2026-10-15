@@ -1,0 +1,8 @@
+.resource-tag-editor { display: grid; gap: 6px; min-width: 0; }
+.resource-tag-editor .fui-TagGroup, .resource-tag-suggestions { display: flex; flex-wrap: wrap; gap: 4px; }
+.resource-tag-editor .fui-Tag { max-width: 100%; }
+.resource-tag-editor-input { display: flex; gap: 4px; min-width: 0; }
+.resource-tag-editor-input > .fui-Input { min-width: 0; flex: 1; }
+.resource-tag-editor small { font-size: var(--fontSizeBase200); line-height: var(--lineHeightBase200); color: var(--colorNeutralForeground3); }
+.resource-tag-suggestions { align-items: center; }
+.resource-tag-editor [role="alert"] { margin: 0; font-size: var(--fontSizeBase200); color: var(--colorStatusDangerForeground1); }

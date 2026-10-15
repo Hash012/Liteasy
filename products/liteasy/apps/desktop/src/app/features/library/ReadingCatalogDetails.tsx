@@ -5,7 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Field, Input, Tooltip } from "@fluentui/react-components";
 import { ArrowDownloadRegular, CopyRegular, DeleteRegular, EditRegular, FolderOpenRegular, OpenRegular } from "@fluentui/react-icons";
 import { bibliographicFields, bibliographicFieldLabel } from "./bibliographicFields";
-import { parseResourceTags, splitResourceTags, MAX_RESOURCE_TAGS } from "../resource-tags/resourceTagValues";
+import { createResourceTagDraft, ResourceTagEditor, resourceTagDraftValues } from "../resource-tags/ResourceTagEditor";
 import { assetTypeLabels } from "./libraryAssetMetadata";
 import { ContentView } from "../markdown/ContentView";
 import { legacyContent } from "../markdown/contentFragment";
@@ -39,19 +39,19 @@ function CopyValue({ label, value, onCopy }: { label: string; value: string; onC
   </Field>;
 }
 
-export function ReadingCatalogDetails({ entry, ...actions }: { entry: ReadingCatalogEntry } & ReadingCatalogActions) {
+export function ReadingCatalogDetails({ entry, tagSuggestions, ...actions }: { entry: ReadingCatalogEntry; tagSuggestions?: readonly string[] } & ReadingCatalogActions) {
   const [collection, setCollection] = useState(entry.collection ?? "");
-  const [tags, setTags] = useState(entry.tags?.join(", ") ?? "");
+  const [tags, setTags] = useState(() => createResourceTagDraft(entry.tags));
   const [status, setStatus] = useState<ReadingCatalogStatus>(entry.readingStatus ?? "unread");
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const savedTags = entry.tags?.join(", ") ?? "";
+  const savedTags = JSON.stringify(entry.tags ?? []);
   const { operations } = readingResourceCapabilities(entry, { canExport: Boolean(actions.onExport) });
   useEffect(() => {
     if (dirty) return;
     setCollection(entry.collection ?? "");
-    setTags(savedTags);
+    setTags(createResourceTagDraft(JSON.parse(savedTags)));
     setStatus(entry.readingStatus ?? "unread");
   }, [entry.collection, entry.readingStatus, savedTags, dirty]);
 
@@ -78,7 +78,7 @@ export function ReadingCatalogDetails({ entry, ...actions }: { entry: ReadingCat
     await invoke(async () => {
       await actions.onMetadataChange!(entry.id, {
         collection: collection.trim().slice(0, 80),
-        tags: parseResourceTags(splitResourceTags(tags)),
+        tags: resourceTagDraftValues(tags),
         readingStatus: status
       });
       setDirty(false);
@@ -118,8 +118,8 @@ export function ReadingCatalogDetails({ entry, ...actions }: { entry: ReadingCat
       <Field label="分类">
         <Input aria-label="文件分类" maxLength={80} value={collection} disabled={busy || !actions.onMetadataChange} onChange={(_, data) => { setCollection(data.value); setDirty(true); }} />
       </Field>
-      <Field label="标签" hint={`用逗号、分号或换行分隔，最多 ${MAX_RESOURCE_TAGS} 个标签。`}>
-        <Input aria-label="文件标签" value={tags} disabled={busy || !actions.onMetadataChange} onChange={(_, data) => { setTags(data.value); setDirty(true); }} />
+      <Field label="标签">
+        <ResourceTagEditor label="文件标签" value={tags} suggestions={tagSuggestions} disabled={busy || !actions.onMetadataChange} onChange={(value) => { setTags(value); setDirty(true); }} />
       </Field>
       <Field label="阅读状态">
         <OptionPicker aria-label="文件阅读状态" value={String(status ?? "")} disabled={busy || !actions.onMetadataChange} onValueChange={nextValue => { setStatus(nextValue as ReadingCatalogStatus); setDirty(true); }} options={[...(Object.entries(readingCatalogStatusLabels).map(([value, label]) => ({ value: String(value), label: String(label) })))]} />

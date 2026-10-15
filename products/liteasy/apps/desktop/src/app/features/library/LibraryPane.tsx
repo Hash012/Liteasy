@@ -1902,7 +1902,7 @@ function LibraryPaneContent({
           </form>
         </DialogSurface>
       </Dialog>
-      {metadataEditorEntry ? <LibraryMetadataEditor key={metadataEditorEntry.id} entry={metadataEditorEntry}
+      {metadataEditorEntry ? <LibraryMetadataEditor key={metadataEditorEntry.id} entry={metadataEditorEntry} tagSuggestions={catalogEntries.flatMap((entry) => entry.tags ?? [])}
         onSave={submitMetadataEditor} onClose={() => setMetadataEditorEntry(null)} /> : null}
     </div>
   );

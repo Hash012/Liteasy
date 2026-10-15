@@ -166,3 +166,18 @@ describe("ReadingLibraryCatalog", () => {
     await waitFor(() => expect(onAddToContext).toHaveBeenCalledWith(entries[0]));
   });
 });
+
+test("tag suggestions stay in the current library and a failed save keeps tag edits", async () => {
+  const onMetadataChange = vi.fn(async () => { throw new Error("标签保存失败"); });
+  render(<ReadingLibraryCatalog entries={entries} onOpen={vi.fn()} onMetadataChange={onMetadataChange} />);
+  fireEvent.click(fileRows()[0]);
+  const details = screen.getByRole("complementary", { name: "文件元信息" });
+  fireEvent.click(within(details).getByRole("button", { name: "移除标签 经典", exact: true }));
+  fireEvent.click(within(details).getByRole("button", { name: "添加标签 教材", exact: true }));
+  fireEvent.click(within(details).getByRole("button", { name: "保存整理信息" }));
+  expect(await within(details).findByText("标签保存失败")).toBeInTheDocument();
+  expect(onMetadataChange).toHaveBeenCalledWith("paper", expect.objectContaining({ tags: ["教材"] }));
+  expect(within(details).getByRole("button", { name: "移除标签 教材", exact: true })).toBeInTheDocument();
+  fireEvent.click(fileRows()[2]);
+  expect(screen.queryByRole("button", { name: "移除标签 教材", exact: true })).not.toBeInTheDocument();
+});
