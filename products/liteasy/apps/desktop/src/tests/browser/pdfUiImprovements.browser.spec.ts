@@ -70,6 +70,7 @@ test("commands, compact resizable annotations, context drag, and persistent quic
   await page.getByRole("button", { name: "关闭注释编辑器" }).click();
   await summary.click();
   await page.getByRole("button", { name: "删除", exact: true }).click();
+  await page.getByRole("dialog", { name: "删除批注确认" }).getByRole("button", { name: "确认删除" }).click();
 
   await selectWord();
   await page.getByLabel("选中文本批注菜单").getByRole("button", { name: "速问", exact: true }).click();

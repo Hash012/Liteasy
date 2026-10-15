@@ -4,6 +4,7 @@ import { SearchHighlight, SearchOptions } from "../search/SearchOptions";
 import { noteLabels } from "../notes/noteLabels";
 import { comparePdfAnnotations, type PdfAnnotationSort } from "./pdfAnnotationSort";
 import { navigatePdfAnnotationList } from "./pdfAnnotationNavigation";
+import { PdfAnnotationDeleteDialog } from "./PdfAnnotationDeleteDialog";
 import { PdfAnnotationSortPicker } from "./PdfAnnotationSortPicker";
 import { PdfAnnotationFilters, emptyPdfAnnotationFacets, matchesPdfAnnotationFacets } from "./PdfAnnotationFilters";
 import { compilePdfAnnotationQuery, teamPdfAnnotation } from "./pdfAnnotationQuery";
@@ -1769,6 +1770,23 @@ export function PdfReader({
   const annotationStorageKey = pdfAnnotationStorageKey(activePaper);
   const annotationScopeRef = useRef(annotationStorageKey);
   annotationScopeRef.current = annotationStorageKey;
+  const annotationMutationScope = useMemo(() => ({}), [annotationStorageKey, activePaper?.contentHash]);
+  const annotationMutationScopeRef = useRef<object | null>(annotationMutationScope);
+  annotationMutationScopeRef.current = annotationMutationScope;
+  const deletionRunsRef = useRef(new Map<string, Promise<void>>());
+  const [deletingAnnotationIds, setDeletingAnnotationIds] = useState<Set<string>>(() => new Set());
+  const [annotationToDelete, setAnnotationToDelete] = useState<{ annotation: PdfAnnotationV2; scope: object; returnFocus: HTMLElement | null } | null>(null);
+  const annotationMutationIsCurrent = () => annotationMutationScopeRef.current === annotationMutationScope;
+  useEffect(() => {
+    annotationMutationScopeRef.current = annotationMutationScope;
+    publicationIntentsRef.current.clear();
+    publicationTransportsRef.current.clear();
+    replayedPublicationKeysRef.current.clear();
+    deletionRunsRef.current.clear();
+    setDeletingAnnotationIds(new Set());
+    setAnnotationToDelete(null);
+    return () => { annotationMutationScopeRef.current = null; };
+  }, [annotationMutationScope]);
   const [readingAnnotationId, setReadingAnnotationId] = useState<string>();
   useEffect(() => {
     setReaderView("document");
@@ -2762,13 +2780,14 @@ export function PdfReader({
   }
 
   function setCurrentAnnotations(update: (current: PdfAnnotationV2[]) => PdfAnnotationV2[]) {
+    if (!annotationMutationIsCurrent()) return;
     const next = update(annotationsRef.current);
     annotationsRef.current = next;
     setAnnotations(next);
   }
 
   function replayRecoveredPublications(recovery: ReturnType<typeof recoverPdfAnnotationPrivateState>) {
-    if (!activePaper || !onChangeAnnotationPublication) return;
+    if (!annotationMutationIsCurrent() || !activePaper || !onChangeAnnotationPublication) return;
     for (const item of recovery.replayItems) {
       const annotation = recovery.annotations.find((candidate) => candidate.id === item.annotationId);
       if (!annotation || annotation.revision !== item.revision ||
@@ -2783,6 +2802,7 @@ export function PdfReader({
     queueKey = annotation.publication.pendingCreateOperation?.queueKey ??
       `${annotation.paperIdentity.paperId}:${annotation.id}`
   ) {
+    if (!annotationMutationIsCurrent()) return;
     const attemptKey = `${queueKey}:${annotation.revision}:${operation}`;
     if (replayedPublicationKeysRef.current.has(attemptKey)) return;
     replayedPublicationKeysRef.current.add(attemptKey);
@@ -2817,6 +2837,7 @@ export function PdfReader({
     restartAttemptKey?: string,
     explicitIntent?: { newPublication?: true; resumePublication?: true }
   ): Promise<PdfAnnotationPublication | undefined> {
+    if (!annotationMutationIsCurrent()) return;
     if (!activePaper || !onChangeAnnotationPublication) {
       const publication: PdfAnnotationPublication = {
         ...annotation.publication,
@@ -2833,6 +2854,7 @@ export function PdfReader({
     const hints = operation === "retract"
       ? undefined
       : await loadLiteratureHints(activePaper, pdfDocument, pageTexts[1]);
+    if (!annotationMutationIsCurrent()) return;
     const current = annotationsRef.current.find((item) => item.id === annotation.id);
     const currentOperation = current
       ? (restartReplay ? restartOperation(current) : pendingPublicationOperation(current))
@@ -2870,6 +2892,7 @@ export function PdfReader({
         paper: activePaper,
         ...explicitIntent,
         onPreparedPublication: async (publication) => {
+          if (!annotationMutationIsCurrent()) throw new Error("文献已切换，发布结果未写入当前文献。");
           assertReadingAnnotationsReady();
           const latest = annotationsRef.current.find((item) => item.id === annotation.id);
           if (!latest || latest.revision !== annotation.revision ||
@@ -2884,7 +2907,7 @@ export function PdfReader({
       transport = { operation, promise };
       publicationTransportsRef.current.set(annotation.id, transport);
       const publication = await promise;
-      if (publicationIntentsRef.current.get(annotation.id) !== expectedIntent) return publication;
+      if (!annotationMutationIsCurrent() || publicationIntentsRef.current.get(annotation.id) !== expectedIntent) return publication;
       setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id &&
         item.revision === annotation.revision
         ? { ...item, publication }
@@ -2898,7 +2921,7 @@ export function PdfReader({
         lastError: operation === "retract" ? `撤回结果待核实。${message}` : message,
         state: "failed"
       };
-      if (publicationIntentsRef.current.get(annotation.id) !== expectedIntent) return publication;
+      if (!annotationMutationIsCurrent() || publicationIntentsRef.current.get(annotation.id) !== expectedIntent) return publication;
       setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id
         ? { ...item, publication }
         : item));
@@ -3496,8 +3519,46 @@ export function PdfReader({
     );
   }
 
-  async function deleteAnnotation(annotation: PdfAnnotationV2) {
+  function requestAnnotationDeletion(annotation: PdfAnnotationV2) {
+    if (!annotationMutationIsCurrent() || deletionRunsRef.current.has(annotation.id)) return;
+    setAnnotationToDelete({ annotation, scope: annotationMutationScope, returnFocus: document.activeElement instanceof HTMLElement ? document.activeElement : null });
+  }
+
+  function confirmAnnotationDeletion() {
+    if (!annotationToDelete || annotationToDelete.scope !== annotationMutationScope) return;
+    const annotation = annotationToDelete.annotation;
+    setAnnotationToDelete(null);
+    void deleteAnnotation(annotation);
+  }
+
+  function deleteAnnotation(annotation: PdfAnnotationV2): Promise<void> {
+    if (!annotationMutationIsCurrent()) return Promise.resolve();
+    const existing = deletionRunsRef.current.get(annotation.id);
+    if (existing) return existing;
+    const operation = performAnnotationDeletion(annotation).finally(() => {
+      if (deletionRunsRef.current.get(annotation.id) !== operation) return;
+      deletionRunsRef.current.delete(annotation.id);
+      if (annotationMutationIsCurrent()) setDeletingAnnotationIds((current) => {
+        const next = new Set(current); next.delete(annotation.id); return next;
+      });
+    });
+    deletionRunsRef.current.set(annotation.id, operation);
+    setDeletingAnnotationIds((current) => new Set(current).add(annotation.id));
+    return operation;
+  }
+
+  async function performAnnotationDeletion(annotation: PdfAnnotationV2) {
+    let expectedRevision = annotation.revision;
+    const stillCurrent = () => {
+      if (!annotationMutationIsCurrent()) return false;
+      const current = annotationsRef.current.find((item) => item.id === annotation.id);
+      if (current?.revision === expectedRevision) return true;
+      if (current) setStatus("批注已更新，删除已取消。请核对后重试。");
+      return false;
+    };
+    if (!stillCurrent()) return;
     const remove = () => {
+      if (!stillCurrent()) return;
       setCurrentAnnotations((current) => current.filter((item) => item.id !== annotation.id));
       setActiveAnnotationId(null);
       setActiveTextAnnotationId(null);
@@ -3528,6 +3589,7 @@ export function PdfReader({
         };
       }
       await Promise.resolve();
+      if (!stillCurrent()) return;
       const queuedTransport = publicationTransportsRef.current.get(annotation.id);
       if (queuedTransport && queuedTransport !== transport && queuedTransport.operation === "retract") {
         transport = queuedTransport;
@@ -3542,6 +3604,7 @@ export function PdfReader({
           };
         }
       }
+      if (!stillCurrent()) return;
       const latest = annotationsRef.current.find((item) => item.id === annotation.id);
       if (settledPublication?.state === "not_published" || latest?.publication.state === "not_published") {
         remove();
@@ -3565,8 +3628,10 @@ export function PdfReader({
             },
         updatedAt: new Date().toISOString()
       });
+      expectedRevision = pending.revision;
       setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id ? pending : item));
       await Promise.resolve();
+      if (!stillCurrent()) return;
       const retracted = await applyPublication(pending, "retract");
       if (retracted?.state === "not_published") remove();
       return;
@@ -3583,10 +3648,12 @@ export function PdfReader({
       },
       updatedAt: new Date().toISOString()
     });
+    expectedRevision = pending.revision;
     setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id ? pending : item));
     setActiveAnnotationId(null);
     setAnnotationPopup(null);
     await Promise.resolve();
+    if (!stillCurrent()) return;
     const retracted = await applyPublication(pending, "retract");
     if (retracted?.state === "not_published") remove();
   }
@@ -3668,6 +3735,12 @@ export function PdfReader({
     >
       <span className="pdf-navigation-announcement" aria-live="polite" aria-atomic="true"><span key={announcement.sequence}>{announcement.text}</span></span>
       <PaperReviewShareStatus controller={reviewShare} />
+      {annotationToDelete?.scope === annotationMutationScope ? <PdfAnnotationDeleteDialog annotation={annotationToDelete.annotation}
+        onCancel={() => setAnnotationToDelete(null)} onConfirm={confirmAnnotationDeletion} restoreFocus={() => {
+          if (annotationToDelete.scope !== annotationMutationScopeRef.current) return;
+          if (annotationToDelete.returnFocus?.isConnected) annotationToDelete.returnFocus.focus();
+          else workspaceRef.current?.querySelector<HTMLButtonElement>(".pdf-sidebar-switcher button[aria-label='批注']")?.focus();
+        }} /> : null}
       {quickAskSelection && !quickAskTask.draft.open ? <Button className="quick-ask-reopen" onClick={() => quickAskTask.update({ open: true })}>返回速问{quickAskPending ? "（正在回答）" : ""}</Button> : null}
       {readingView?.({ scopeKey: annotationStorageKey ?? "", ready: Boolean(annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError),
         searchMetadata, lookup: selectionLookup, paperId: activePaper?.id, paperTitle: activePaper?.title,
@@ -3989,7 +4062,7 @@ export function PdfReader({
                               </Tooltip> : null}
                             </> : null}
                             <Tooltip content="删除批注" relationship="description">
-                              <Button aria-label="删除" appearance="subtle" size="small" icon={<DeleteRegular />} onClick={() => void deleteAnnotation(annotation)} />
+                              <Button aria-label="删除" appearance="subtle" size="small" icon={<DeleteRegular />} disabled={deletingAnnotationIds.has(annotation.id)} onClick={() => requestAnnotationDeletion(annotation)} />
                             </Tooltip>
                             <Tooltip content="收起批注操作" relationship="description">
                               <Button aria-label="收起批注操作" appearance="subtle" size="small" icon={<ChevronUpRegular />} onClick={cancelAnnotationEditing} />
@@ -4247,7 +4320,7 @@ export function PdfReader({
                     onPageTextRendered={handlePageTextRendered}
                     onTextAnnotationActivate={setActiveTextAnnotationId}
                     onTextAnnotationCommit={commitTextAnnotation}
-                    onTextAnnotationDelete={(annotation) => void deleteAnnotation(annotation)}
+                    onTextAnnotationDelete={(annotation) => { if (annotation.kind === "ink") void deleteAnnotation(annotation); else requestAnnotationDeletion(annotation); }}
                     onTextAnnotationMove={moveTextAnnotation}
                     onTextAnnotationOpacityChange={changeTextAnnotationOpacity}
                     pageNumber={pageNumber}

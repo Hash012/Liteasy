@@ -238,7 +238,7 @@ test("requeues a current publish revision when note editing races literature hin
 
   await userEvent.click(publicationToggle());
   await waitFor(() => expect(loadLiteratureHints).toHaveBeenCalledTimes(1));
-  await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
   fireEvent.change(screen.getByRole("textbox", { name: "补充批注笔记" }), {
     target: { value: "Edited during publish hint collection" }
   });
@@ -281,7 +281,7 @@ test("requeues the latest update revision when a second edit races hint collecti
   });
   await userEvent.click(screen.getByRole("button", { name: "保存笔记" }));
   await waitFor(() => expect(loadLiteratureHints).toHaveBeenCalledTimes(1));
-  await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
   fireEvent.change(screen.getByRole("textbox", { name: "补充批注笔记" }), {
     target: { value: "Second edit wins" }
   });
@@ -450,7 +450,7 @@ test("re-reads a restart replay revision after hint collection and sends only th
     />
   );
   await waitFor(() => expect(loadLiteratureHints).toHaveBeenCalledTimes(1));
-  fireEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  fireEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
   fireEvent.change(screen.getByRole("textbox", { name: "补充批注笔记" }), {
     target: { value: "Edited during restart hint collection" }
   });
@@ -485,8 +485,8 @@ test("gives same-excerpt publication checkboxes unique names and announces each 
 
   expect(publicationToggle()).not.toBeChecked();
   expect(publicationToggle("Publication evidence", "高亮")).not.toBeChecked();
-  expect(screen.getAllByRole("status")).toHaveLength(1);
-  expect(screen.getAllByRole("status")[0]).toHaveTextContent("未公开到论坛");
+  expect(screen.getAllByRole("status", { name: "未公开到论坛" })).toHaveLength(1);
+  expect(screen.getByLabelText("批注检索结果")).toHaveTextContent("2 / 2 条批注");
 });
 
 test("collects bounded bibliographic hints without reading or forwarding PDF bytes and full text", async () => {
@@ -535,7 +535,7 @@ test("keeps the prior forum copy visible when a published note update fails", as
   await userEvent.click(screen.getByRole("button", { name: "保存笔记" }));
 
   await waitFor(() => expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ operation: "update" })));
-  fireEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  fireEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
   expect(await screen.findByRole("status", { name: /更新失败，论坛仍保留上一版本.*network unavailable/u })).toBeInTheDocument();
 });
 
@@ -556,9 +556,10 @@ test("shows failed retract truth and refuses to delete the linked local annotati
 
   await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
   await userEvent.click(screen.getByRole("button", { name: "删除" }));
+  await userEvent.click(await screen.findByRole("button", { name: "确认删除" }));
 
   await waitFor(() => expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ operation: "retract" })));
-  fireEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  fireEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
   expect(await screen.findByRole("status", { name: /撤回失败，论坛仍公开/u })).toBeInTheDocument();
   expect(screen.getByText("Publication evidence")).toBeInTheDocument();
 });
@@ -579,6 +580,7 @@ test("deletes a published local annotation only after retract is confirmed", asy
 
   await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
   await userEvent.click(screen.getByRole("button", { name: "删除" }));
+  await userEvent.click(await screen.findByRole("button", { name: "确认删除" }));
 
   await waitFor(() => expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ operation: "retract" })));
   await waitFor(() => expect(screen.queryByText("Publication evidence")).not.toBeInTheDocument());
@@ -615,8 +617,9 @@ test("recovers an unknown failed create before deleting the local annotation", a
 
   await userEvent.click(publicationToggle());
   expect(await screen.findByRole("status", { name: /create receipt missing/u })).toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
   await userEvent.click(screen.getByRole("button", { name: "删除" }));
+  await userEvent.click(await screen.findByRole("button", { name: "确认删除" }));
 
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
   expect(onChange).toHaveBeenNthCalledWith(2, expect.objectContaining({
@@ -663,12 +666,13 @@ test("retains an unknown failed create when deletion recovery cannot confirm ret
 
   await userEvent.click(publicationToggle());
   expect(await screen.findByRole("status", { name: /create receipt missing/u })).toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
   await userEvent.click(screen.getByRole("button", { name: "删除" }));
+  await userEvent.click(await screen.findByRole("button", { name: "确认删除" }));
 
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
   expect(screen.getByText("Publication evidence")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  fireEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
   expect(await screen.findByRole("status", { name: /recovery unavailable/u })).toBeInTheDocument();
   expect(onChange).toHaveBeenNthCalledWith(2, expect.objectContaining({
     annotation: expect.objectContaining({
@@ -721,6 +725,7 @@ test("deletes a pending create before transport without publishing it", async ()
   fireEvent.click(toggle);
   fireEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
   fireEvent.click(screen.getByRole("button", { name: "删除" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
 
   await waitFor(() => expect(screen.queryByText("Publication evidence")).not.toBeInTheDocument());
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -742,8 +747,9 @@ test("waits for an in-flight create and retracts that exact annotation before de
   await userEvent.click(publicationToggle());
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
   const createInput = onChange.mock.calls[0][0];
-  await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
   await userEvent.click(screen.getByRole("button", { name: "删除" }));
+  await userEvent.click(await screen.findByRole("button", { name: "确认删除" }));
 
   expect(screen.getByText("Publication evidence")).toBeInTheDocument();
   expect(onChange).toHaveBeenCalledTimes(1);
@@ -782,8 +788,9 @@ test("retains local truth when create recovery cannot confirm the remote outcome
 
   await userEvent.click(publicationToggle());
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
-  await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
   await userEvent.click(screen.getByRole("button", { name: "删除" }));
+  await userEvent.click(await screen.findByRole("button", { name: "确认删除" }));
   finishCreate({
     desiredVisibility: "public",
     lastError: "create receipt missing",
@@ -791,7 +798,7 @@ test("retains local truth when create recovery cannot confirm the remote outcome
   });
 
   expect(await screen.findByText("Publication evidence")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  fireEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
   expect(await screen.findByRole("status", { name: /create recovery failed/u })).toBeInTheDocument();
   expect(onChange).toHaveBeenCalledTimes(2);
   expect(onChange).toHaveBeenNthCalledWith(2, expect.objectContaining({
@@ -813,8 +820,9 @@ test("reuses a queued retract and deletes only after it confirms not published",
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
   await userEvent.click(publicationToggle());
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
-  await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
   await userEvent.click(screen.getByRole("button", { name: "删除" }));
+  await userEvent.click(await screen.findByRole("button", { name: "确认删除" }));
 
   expect(screen.getByText("Publication evidence")).toBeInTheDocument();
   expect(onChange).toHaveBeenCalledTimes(2);
@@ -849,8 +857,9 @@ test("retains local truth when the queued retract outcome remains unknown", asyn
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
   await userEvent.click(publicationToggle());
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
-  await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
   await userEvent.click(screen.getByRole("button", { name: "删除" }));
+  await userEvent.click(await screen.findByRole("button", { name: "确认删除" }));
 
   expect(screen.getByText("Publication evidence")).toBeInTheDocument();
   finishCreate({
@@ -866,7 +875,7 @@ test("retains local truth when the queued retract outcome remains unknown", asyn
   });
 
   expect(await screen.findByText("Publication evidence")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  fireEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
   expect(await screen.findByRole("status", { name: /recovery unavailable/u })).toBeInTheDocument();
   expect(onChange).toHaveBeenCalledTimes(2);
 });
