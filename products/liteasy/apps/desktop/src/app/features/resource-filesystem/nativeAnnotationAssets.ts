@@ -4,7 +4,7 @@ import type { NotesItem } from "../notes/notes.types";
 import type { WorkspaceAgentAssetInput } from "./workspaceAgentAssetService";
 import { AgentAssetError, type AgentAsset, type AgentAssetAdapter } from "./agentAsset.types";
 import { readAgentAssetText } from "./agentAssetService";
-import { parseLiteasyPath } from "./liteasyPath";
+import { liteasyPath, parseLiteasyPath } from "./liteasyPath";
 import { canonicalResourceJson, resourceContentRevision } from "./resourceFileContent";
 
 /** Native annotations keep their original domain identity. Only explicit context capture creates a snapshot. */
@@ -42,13 +42,17 @@ export function nativeAnnotationAssets(input: WorkspaceAgentAssetInput): AgentAs
         check(options.signal); const item = await find(path), asset = await describe(path, item);
         const quote = item.annotation?.excerpt;
         const text = quote && item.annotation?.note?.trim() ? `${item.text}\n\n### 原文引述\n\n${quote}` : item.text;
-        check(options.signal); return readAgentAssetText(asset, text, options, { kind: "user", coverage: "partial" });
+        const annotation = item.annotation;
+        const userContext = annotation ? { text: [!annotation.aiGuide ? annotation.note?.trim() : "", !annotation.aiGuide && ["text", "note"].includes(annotation.kind) ? annotation.text?.trim() : "", annotation.quickAsk?.question?.trim(), `引用：${annotation.excerpt}`].filter(Boolean).join("\n"), representationId: "annotation-user-context/v1" } : undefined;
+        check(options.signal); return { ...readAgentAssetText(asset, text, options, { kind: "user", coverage: "partial" }), userContext };
       },
       async present(path, options) {
         const item = await find(path), asset = await describe(path, item);
         if (options.intent === "source") {
           if (item.annotation && item.paper) return { kind: "pdf", asset, path: `${path}#page=${item.annotation.page}`, intent: "source" };
-          return { kind: "unavailable", asset, code: "not_supported", message: "此批注的原文定位尚不可预览，请打开所属产物。", retryable: false };
+          const origins = [...new Map((item.paperAnchors ?? []).filter(anchor => anchor.locator.page).map(anchor => [`${anchor.source.paperId}:${anchor.locator.page}`, anchor])).values()];
+          if (origins.length === 1) return { kind: "pdf", asset, path: `${liteasyPath(scopeId, { kind: "paper", paperId: origins[0].source.paperId })}#page=${origins[0].locator.page}`, intent: "source" };
+          return { kind: "unavailable", asset, code: "not_supported", message: "此批注没有唯一的 PDF 来源位置，请打开所属产物选择具体引文。", retryable: false };
         }
         const read = await adapter.read(path, options);
         return { kind: "content", asset: read.asset, read: { ...read, content: read.content! } };

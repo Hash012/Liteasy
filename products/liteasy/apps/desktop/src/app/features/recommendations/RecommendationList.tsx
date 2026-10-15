@@ -22,8 +22,12 @@ import "./recommendationList.css";
 
 export { recommendationDateLabel } from "./recommendationPresentation";
 
-export function RecommendationList({ items, service, selectedId, pendingIds, canSave, onInspect, onOpen, onSave, onDismiss, onAdoptBrief, onFeedback }: {
+export function RecommendationList({ items, service, selectedId, pendingIds, canSave, onInspect, onOpen, onSave, onDismiss, onAdoptBrief, onFeedback, onCurate, onRestore, onApplyPreferences, busy }: {
   items: RecommendationItem[];
+  onCurate?: (item?: RecommendationItem) => Promise<void>;
+  onRestore?: () => Promise<void>;
+  onApplyPreferences?: () => Promise<void>;
+  busy?: boolean;
   onFeedback?: RecommendationFeedbackHandler;
   onAdoptBrief?: (item: RecommendationItem) => Promise<unknown>;
   service?: PaperServiceConfig;
@@ -89,6 +93,9 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
   return <div ref={root} className="recommendation-browser">
     {notice ? <p role="status">{notice}{lastFeedback && onFeedback ? <Button size="small" appearance="subtle" onClick={() => { void submitFeedback(lastFeedback.item, "undo"); }}>撤销反馈</Button> : null}</p> : null}
     <div className="recommendation-feed-actions">
+      {onCurate ? <Button size="small" disabled={busy || !items.length} onClick={() => void onCurate()}>AI 精选</Button> : null}
+      {items.some(item => item.researchReason?.recipe === "explicit-curation-v3") && onRestore ? <Button size="small" appearance="subtle" onClick={() => void onRestore()}>返回原组</Button> : null}
+      {onApplyPreferences ? <Button size="small" appearance="subtle" onClick={() => void onApplyPreferences()}>应用反馈</Button> : null}
       <Button appearance="subtle" size="small" onClick={() => { setExplore(!explore); setPage(0); }}>{explore ? "返回精选" : `查看更多候选 · ${items.length}`}</Button>
       {!explore ? <Button appearance="subtle" size="small" disabled={!filtered.length} onClick={() => { const next = [...seen, ...slate.map(canonicalCandidate)]; setSeen(composeSlate(filtered, { excluded: next }).length ? next : []); }}>换一组</Button> : <>
         <Button appearance="subtle" size="small" disabled={page === 0} onClick={() => setPage(value => value - 1)}>上一页</Button>
@@ -142,12 +149,13 @@ export function RecommendationList({ items, service, selectedId, pendingIds, can
             </span>
           </span>
         </Button>
-        <p className="recommendation-reason">{item.reason?.trim() || "暂无个别推荐理由"}</p><SourceDisclosure summary="推荐详情"><p>{item.researchReason ? "根据已授权的固定版本资料；研究关系仍需阅读核实。" : "仅根据题录与现有匹配信息"}</p><ResourceTagChips tags={tags.get(item.id) ?? []} label={`${displayTitle} 的关键词`} onSelect={tag => setQuery(tag.label)} />
+        <p className="recommendation-reason">{item.reason?.trim() || "暂无个别推荐理由"}</p><SourceDisclosure summary="推荐详情">{item.researchReason?.evaluatedCount ? <p>本次评估 {item.researchReason.evaluatedCount} / {item.researchReason.poolCount} 篇候选。</p> : null}<p>{item.researchReason ? "根据已授权的固定版本资料；研究关系仍需阅读核实。" : "仅根据题录与现有匹配信息"}</p><ResourceTagChips tags={tags.get(item.id) ?? []} label={`${displayTitle} 的关键词`} onSelect={tag => setQuery(tag.label)} />
         </SourceDisclosure>
         {feedbackRows[item.id] ? <p role="status">{feedbackRows[item.id].message}{feedbackRows[item.id].state === "failed" ? <Button size="small" onClick={() => void submitFeedback(item, feedbackRows[item.id].action, feedbackRows[item.id].command)}>重试保存反馈</Button> : null}</p> : null}
         {onFeedback ? <div className="recommendation-feed-actions">{([["read", "已读"], ["snoozed", "稍后看"], ["too_basic", "太基础"], ["too_advanced", "太难"]] as const).map(([action, label]) => <Button key={action} size="small" appearance="subtle" disabled={feedbackRows[item.id]?.state === "pending"} aria-pressed={item.feedbackState?.some(row => row.action === action) || feedbackRows[item.id]?.state === "committed" && feedbackRows[item.id]?.action === action} onClick={() => void submitFeedback(item, action)}>{label}</Button>)}</div> : null}
 
         <div className="recommendation-compact-actions">
+          {onCurate ? <Button size="small" appearance="subtle" disabled={busy} onClick={() => void onCurate(item)}>解释为什么推荐</Button> : null}
           {item.researchReason && onAdoptBrief ? <Button size="small" appearance="subtle" onClick={() => { void onAdoptBrief(item).then(() => setNotice("研究建议已保存为笔记。"), error => setNotice(String(error))); }}>采用为研究笔记</Button> : null}
           <IconAction density="compact" label={`打开详情 ${displayTitle}`} appearance="subtle" icon={<OpenRegular />} onClick={() => onOpen?.(item)} />
           <Tooltip content="收藏" relationship="label"><Button appearance="subtle" size="small" aria-label={`收藏 ${displayTitle}`} disabled={Boolean(item.resourcePath) || !canSave || pendingIds.includes(item.id)} icon={<BookmarkRegular />} onClick={() => onSave(item)} /></Tooltip>

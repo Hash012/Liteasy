@@ -19,6 +19,7 @@ export type AgentAsset = {
 export type AgentAssetSearch = { query: string; limit?: number; signal?: AbortSignal };
 export type AgentAssetReadOptions = { preparation?: "cached" | "allow"; offset?: number; maxCharacters?: number; signal?: AbortSignal };
 export type AgentAssetRead = {
+  userContext?: { text: string; representationId: string };
   source?: import("../resource-links/paperReferenceSource").PaperReferenceSource;
   asset: AgentAsset;
   content?: import("../markdown/contentFragment").ContentFragment;

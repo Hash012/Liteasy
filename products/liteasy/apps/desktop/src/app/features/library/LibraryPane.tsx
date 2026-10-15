@@ -171,6 +171,9 @@ type LibraryPaneProps = {
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onAddExternalPdf?: (item: ExternalPdfDragPayload) => void | Promise<void>;
   onClearRecommendations: () => void;
+  onCurateRecommendations?: (item?: RecommendationItem) => Promise<void>;
+  onRestoreRecommendations?: () => Promise<void>;
+  onApplyRecommendationPreferences?: () => Promise<void>;
   onRecommendationFeedback?: RecommendationFeedbackHandler;
   onAdoptRecommendationBrief?: (item: RecommendationItem) => Promise<unknown>;
   onRefreshRecommendations?: () => void;
@@ -488,6 +491,7 @@ function LibraryPaneContent({
   loadLegacyLibraryRoots,
   onAddDroppedPdfFiles,
   onClearRecommendations,
+  onCurateRecommendations, onRestoreRecommendations, onApplyRecommendationPreferences,
   onRecommendationFeedback,
   onAdoptRecommendationBrief,
   onRefreshRecommendations,
@@ -1801,7 +1805,7 @@ function LibraryPaneContent({
             ) : recommendationItems.length === 0 ? (
               !recommendationPending ? <div className="library-empty-collection">{recommendationMessage || "暂无关联推荐"}</div> : null
             ) : (
-              <RecommendationList onFeedback={onRecommendationFeedback} onAdoptBrief={onAdoptRecommendationBrief} service={recommendationService} items={recommendationItems} selectedId={selectedRecommendationId}
+              <RecommendationList onCurate={onCurateRecommendations} onRestore={onRestoreRecommendations} onApplyPreferences={onApplyRecommendationPreferences} busy={recommendationPending} onFeedback={onRecommendationFeedback} onAdoptBrief={onAdoptRecommendationBrief} service={recommendationService} items={recommendationItems} selectedId={selectedRecommendationId}
                 pendingIds={pendingNodeIds} canSave={localRecommendations || Boolean(collection.tree)}
                 onInspect={onInspectRecommendation}
                 onOpen={onOpenRecommendation}
