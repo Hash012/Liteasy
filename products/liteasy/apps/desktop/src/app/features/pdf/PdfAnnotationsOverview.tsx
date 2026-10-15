@@ -47,7 +47,7 @@ export function PdfAnnotationsOverview({ annotations, teamAnnotations, paperIden
       {error ? <p role="alert">{error}</p> : null}
       <p role="status">{filtered.length ? `${filtered.length} 条批注，按${pdfAnnotationSortLabels[order]}排列。` : entries.length ? "没有匹配的批注。" : "此文档还没有批注。"}</p>
       <ol className="pdf-annotations-grid">{filtered.slice(0, limit).map(({ id, annotation, author }) => <li key={id} className="pdf-annotation-card">
-        <header><strong>{labels[annotation.kind]} · 第 {annotation.page} 页</strong>{author ? <span>团队 · {author}</span> : null}
+        <header><strong>{labels[annotation.kind]} · 第 {annotation.page} 页</strong>{author ? <span>团队成员</span> : null}
           <Button appearance="subtle" icon={<LocationRegular />} aria-label={`定位第 ${annotation.page} 页${labels[annotation.kind]}：${annotation.excerpt}`}
             onClick={() => onNavigate(annotation)}>定位原文</Button></header>
         {annotation.kind !== "text" && annotation.kind !== "ink" && annotation.excerpt ? <blockquote><SearchHighlight text={annotation.excerpt} query={query} /></blockquote> : null}

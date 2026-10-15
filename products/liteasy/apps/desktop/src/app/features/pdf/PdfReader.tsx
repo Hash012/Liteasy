@@ -4114,7 +4114,7 @@ export function PdfReader({
                           {filteredTeamAnnotations.map((annotation) => (
                             <li className="pdf-annotation-item note" key={annotation.annotationId}>
                               <span className="pdf-annotation-kind">
-                                {annotation.uploadedBy} · 第 {annotation.body.page} 页
+                                {organizationAnnotationActorId === annotation.uploadedBy ? "我" : "团队成员"} · 第 {annotation.body.page} 页
                               </span>
                               <span className="pdf-annotation-excerpt"><SearchHighlight text={annotation.body.excerpt} query={annotationQuery} /></span>
                               {annotation.body.note ? (

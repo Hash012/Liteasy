@@ -32,7 +32,7 @@ test("annotation query searches questions, answers, reviews, pages, authors and 
 test("sidebar searches local and team entries and overview starts from the complete collection", async () => {
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [annotation("local", 3), annotation("other", 8)]);
   render(<PdfReader selectedPapers={[paper]} zoom={100} loadOrganizationAnnotations={async () => [team()]} />);
-  await screen.findByText("陈老师 · 第 12 页");
+  await screen.findByText("团队成员 · 第 12 页");
   const search = screen.getByRole("textbox", { name: "搜索批注内容" });
   fireEvent.change(search, { target: { value: "陈老师" } });
   expect(screen.queryByRole("button", { name: "编辑批注：Passage local" })).not.toBeInTheDocument();
@@ -42,7 +42,10 @@ test("sidebar searches local and team entries and overview starts from the compl
   expect(screen.getByRole("button", { name: "编辑批注：Passage local" })).toBeInTheDocument();
   expect(within(screen.getByRole("region", { name: "团队批注" })).queryByText("Passage shared")).not.toBeInTheDocument();
   fireEvent.doubleClick(screen.getByRole("button", { name: "批注", exact: true }));
-  expect(within(screen.getByRole("region", { name: "全部批注" })).getAllByRole("listitem")).toHaveLength(3);
+  const overview = within(screen.getByRole("region", { name: "全部批注" }));
+  expect(overview.getAllByRole("listitem")).toHaveLength(3);
+  expect(overview.getByText("团队成员")).toBeVisible();
+  expect(overview.queryByText(/陈老师/)).not.toBeInTheDocument();
 });
 
 test("overview includes quick-ask and review content in its query", () => {

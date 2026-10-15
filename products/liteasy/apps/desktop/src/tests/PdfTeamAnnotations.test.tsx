@@ -77,7 +77,8 @@ test("loads team annotations and explicitly shares a local annotation", async ()
   fireEvent.click(share);
 
   await waitFor(() => expect(onShareAnnotationToOrganization).toHaveBeenCalled());
-  expect(await screen.findByText("member-1 · 第 2 页")).toBeInTheDocument();
+  expect(await screen.findByText("团队成员 · 第 2 页")).toBeInTheDocument();
+  expect(screen.queryByText(/member-1/)).not.toBeInTheDocument();
   expect(screen.getByText("批注已共享到组织。")).toBeInTheDocument();
 });
 
@@ -114,6 +115,8 @@ test("lets an author edit and delete a shared organization annotation", async ()
   );
 
   fireEvent.click(await screen.findByRole("button", { name: "编辑组织批注：Evidence excerpt" }));
+  expect(screen.getByText("我 · 第 2 页")).toBeInTheDocument();
+  expect(screen.queryByText(/member-1/)).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole("textbox", { name: "编辑组织批注备注" }), {
     target: { value: "Reviewed by the team" }
   });
@@ -127,6 +130,6 @@ test("lets an author edit and delete a shared organization annotation", async ()
   await waitFor(() => expect(onDeleteOrganizationAnnotation).toHaveBeenCalled());
   expect(confirm).toHaveBeenCalled();
   expect(screen.getByText("组织批注已删除。")).toBeInTheDocument();
-  expect(screen.queryByText("member-1 · 第 2 页")).not.toBeInTheDocument();
+  expect(screen.queryByText("我 · 第 2 页")).not.toBeInTheDocument();
   confirm.mockRestore();
 });
