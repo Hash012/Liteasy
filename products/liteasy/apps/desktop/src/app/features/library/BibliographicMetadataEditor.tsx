@@ -1,10 +1,10 @@
 import { ActionButton as Button, DisclosureSection, OptionPicker } from "../../shared/ui/productPrimitives";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ContentView } from "../markdown/ContentView";
 import { legacyContent } from "../markdown/contentFragment";
 import { displayPath } from "../resource-filesystem/displayPath";
 import { Field, Input, Textarea, Tooltip } from "@fluentui/react-components";
-import { AddRegular, ArrowClockwiseRegular, CopyRegular, EditRegular, DeleteRegular, SaveRegular } from "@fluentui/react-icons";
+import { AddRegular, ArrowClockwiseRegular, ArrowUpRegular, ArrowDownRegular, CopyRegular, EditRegular, DeleteRegular, SaveRegular } from "@fluentui/react-icons";
 import { bibliographicFields, bibliographicFieldLabel, bibliographicTypeFields, type BibliographicDraft } from "./bibliographicFields";
 import { assetTypeLabels } from "./libraryAssetMetadata";
 import { readingCatalogCitation } from "./readingCatalogSearch";
@@ -19,6 +19,7 @@ export type BibliographicEditorModel = {
 export function BibliographicMetadataEditor({ model }: { model: BibliographicEditorModel }) {
   const { entry, draft, pending } = model;
   const [copyStatus, setCopyStatus] = useState("");
+  const authorInputs = useRef<Array<HTMLInputElement | null>>([]);
   if (!entry || !draft) return <section className="bibliographic-editor-empty"><p>选中文献后，使用右键菜单或底部信息栏的“编辑元信息”。</p></section>;
   const relation = <div className="bibliographic-relation"><span>文献信息</span>{model.setFollowSelection ? <OptionPicker aria-label="信息关联方式" density="compact" value={model.followSelection ? "follow" : "pinned"} disabled={pending} onValueChange={value => model.setFollowSelection?.(value === "follow")} options={[{ value: "follow", label: "跟随所选文献" }, { value: "pinned", label: "固定到此文献" }]} /> : <span>固定到此文献</span>}</div>;
   if (model.editing === false) return <section className="bibliographic-summary" aria-label="文献信息">
@@ -46,6 +47,13 @@ export function BibliographicMetadataEditor({ model }: { model: BibliographicEdi
   };
   const primaryFields = bibliographicTypeFields(draft.assetType);
   const additionalFields = bibliographicFields.filter(({ key }) => key !== "title" && key !== "abstract" && !primaryFields.includes(key));
+  function moveAuthor(index: number, direction: -1 | 1) {
+    if (!draft || pending || index + direction < 0 || index + direction >= draft.authors.length) return;
+    const authors = [...draft.authors];
+    [authors[index], authors[index + direction]] = [authors[index + direction], authors[index]];
+    model.change({ authors });
+    authorInputs.current[index + direction]?.focus();
+  }
   return <form className="bibliographic-editor" aria-label="编辑文献元信息" onSubmit={(event) => { event.preventDefault(); void model.save(); }}>
     {relation}
     <header><h2>{entry.title}</h2><span>{entry.fileName || entry.format.toUpperCase()}</span></header>
@@ -55,7 +63,9 @@ export function BibliographicMetadataEditor({ model }: { model: BibliographicEdi
       <section className="bibliographic-authors" aria-label="作者列表">
         <div className="bibliographic-section-heading"><strong>作者</strong><Tooltip content="添加作者" relationship="description"><Button type="button" appearance="subtle" size="small" icon={<AddRegular />} aria-label="添加作者" disabled={pending || draft.authors.length >= 200} onClick={() => model.change({ authors: [...draft.authors, ""] })} /></Tooltip></div>
         {draft.authors.map((author, index) => <div className="bibliographic-author" key={index}>
-          <Input aria-label={`作者 ${index + 1}`} value={author} disabled={pending} maxLength={300} placeholder="姓名（如 Kleppmann, Martin）" onChange={(_, data) => model.change({ authors: draft.authors.map((value, i) => i === index ? data.value : value) })} />
+          <Input ref={(element) => { authorInputs.current[index] = element; }} aria-label={`作者 ${index + 1}`} value={author} disabled={pending} maxLength={300} placeholder="姓名（如 Kleppmann, Martin）" onChange={(_, data) => model.change({ authors: draft.authors.map((value, i) => i === index ? data.value : value) })} />
+          <Tooltip content="上移作者" relationship="description"><Button type="button" aria-label={`上移作者 ${index + 1}`} disabled={pending || index === 0} size="small" appearance="subtle" icon={<ArrowUpRegular />} onClick={() => moveAuthor(index, -1)} /></Tooltip>
+          <Tooltip content="下移作者" relationship="description"><Button type="button" aria-label={`下移作者 ${index + 1}`} disabled={pending || index === draft.authors.length - 1} size="small" appearance="subtle" icon={<ArrowDownRegular />} onClick={() => moveAuthor(index, 1)} /></Tooltip>
           <Tooltip content="移除此作者" relationship="description"><Button type="button" aria-label={`移除作者 ${index + 1}`} disabled={pending} size="small" appearance="subtle" icon={<DeleteRegular />} onClick={() => model.change({ authors: draft.authors.filter((_, i) => i !== index) })} /></Tooltip>
         </div>)}
         {!draft.authors.length ? <small>尚未填写作者</small> : null}

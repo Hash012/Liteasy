@@ -36,3 +36,22 @@ test("classification editor retains an unknown imported type while changing tags
   fireEvent.click(screen.getByRole("button", { name: "保存", exact: true }));
   await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({ assetType: "dataset", tags: ["研究数据"] })));
 });
+
+test("reorders authors with boundary controls and saves the order used in citations", async () => {
+  const save = vi.fn(async () => {});
+  const writeText = vi.fn(async () => {});
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  render(<Editor save={save} />);
+  fireEvent.click(await screen.findByRole("button", { name: "编辑元信息" }));
+  expect(screen.getByRole("button", { name: "上移作者 1" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "下移作者 3" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "上移作者 3" }));
+  expect(screen.getByRole("textbox", { name: "作者 2", exact: true })).toHaveValue("Third");
+  expect(screen.getByRole("textbox", { name: "作者 2", exact: true })).toHaveFocus();
+  fireEvent.click(screen.getByRole("button", { name: "下移作者 1" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存元信息" }));
+  await waitFor(() => expect(save).toHaveBeenCalledWith("book", expect.objectContaining({ authors: ["Third", "First", "Second"] }), 0));
+  fireEvent.click(await screen.findByRole("button", { name: "复制引用" }));
+  expect(writeText).toHaveBeenCalledWith("Third, First, Second. A book");
+  expect(await screen.findByText("引用已复制")).toBeInTheDocument();
+});

@@ -106,3 +106,10 @@ test("invalid identifiers keep the editor draft and never reach persistence", as
   await act(async () => { await hook.result.current.save(); });
   expect(save).toHaveBeenCalledWith(entry.id, expect.objectContaining({ doi: "10.1234/revised", url: "" }), 0);
 });
+
+test("reordered authors retain their order when the bibliography is reopened", async () => {
+  const { scope, repository, storage } = fixture();
+  await repository.saveBibliography(entry.id, { ...bibliographicDraft(entry), authors: ["Third", "First", "Second"] }, 0);
+  const reopened = await createReadingLibraryRepository(storage, scope).metadata();
+  expect(applyBibliographicMetadata(entry, reopened[entry.id].bibliographic).authors).toEqual(["Third", "First", "Second"]);
+});
