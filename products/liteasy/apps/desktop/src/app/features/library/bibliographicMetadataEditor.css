@@ -23,7 +23,7 @@
 .bibliographic-editor [role="alert"] { color: var(--colorStatusDangerForeground1); }
 .bibliographic-editor-empty { padding: 16px; color: var(--colorNeutralForeground2); }
 
-@container bibliographic (max-width: 340px) {
+@container bibliographic (max-width: 24em) {
   .bibliographic-field { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .bibliographic-field > label { text-align: left; }
 }
@@ -44,3 +44,5 @@
 .bibliographic-summary-section dd { margin:0; }
 
 .bibliographic-field > .fui-Input, .bibliographic-author > .fui-Input { min-height: var(--control-size); }
+
+.bibliographic-author > .product-action { min-width: var(--control-size); flex-shrink: 0; padding-inline: 6px; }
