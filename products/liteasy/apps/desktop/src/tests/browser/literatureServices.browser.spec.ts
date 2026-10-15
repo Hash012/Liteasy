@@ -20,7 +20,7 @@ test("default public recommendations refresh without login or explicit local-mod
   await expect(recommendations.getByText("Public API Research", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("liteasy.local-literature.v1"))).toBeNull();
   const previous = requests;
-  await recommendations.getByRole("button", { name: "刷新推荐" }).click();
+  await recommendations.getByRole("button", { name: "检查新论文", exact: true }).click();
   await expect.poll(() => requests).toBeGreaterThan(previous);
   await expect(recommendations.getByText("Public API Research", { exact: true })).toBeVisible();
   await expect(recommendations.getByText(/云端服务当前不可用/)).toHaveCount(0);

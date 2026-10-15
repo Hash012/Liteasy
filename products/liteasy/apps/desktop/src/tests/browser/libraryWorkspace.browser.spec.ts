@@ -81,7 +81,7 @@ test("local recommendations work without login and profile data can be exported"
   await expect(recs.getByText(relatedTitle, { exact: true })).toBeVisible({ timeout: 20_000 });
   expect(recommendationQueries.some((query) => query.includes(larimarTitle))).toBe(true);
   await expect(recs.getByText("Graph neural networks for research", { exact: true })).toHaveCount(0);
-  await expect(recs.getByRole("button", { name: "刷新推荐" })).toBeEnabled();
+  await expect(recs.getByRole("button", { name: "检查新论文", exact: true })).toBeEnabled();
   await page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "设置", exact: true }).click();
   const settings = page.getByRole("region", { name: "应用设置" });
   await settings.getByRole("textbox", { name: "搜索设置" }).fill("本地文献");

@@ -31,18 +31,28 @@ for (const theme of ["深色主题", "浅色主题"]) test(`recommendations pres
   for (const width of [280, 360, 480]) {
     await page.getByRole("combobox", { name: "推荐区域宽度" }).selectOption(String(width));
     const row = panel.getByRole("button", { name: /^查看推荐 很长/ });
+    const recommendation = panel.getByRole("listitem").filter({ has: page.getByRole("button", { name: /^查看推荐 很长/ }) });
+    const missingReason = panel.getByRole("listitem").filter({ has: page.getByRole("button", { name: "查看推荐 没有个别理由的推荐", exact: true }) });
     await row.focus();
     for (const detail of await panel.getByRole("button", { name: "推荐详情", exact: true }).all()) { if (await detail.getAttribute("aria-expanded") !== "true") await detail.click(); }
-    await expect(panel.getByText("来源提供的理由：主题与并发控制有关")).toBeVisible();
-    await expect(panel.getByText("暂无个别推荐理由")).toBeVisible();
+    await expect(recommendation.getByText("来源提供的理由：主题与并发控制有关", { exact: true })).toBeVisible();
+    await expect(missingReason.getByText("尚无个别推荐理由。", { exact: true })).toBeVisible();
+    await expect(missingReason.getByText("当前匹配依据来自题录与已提供的信息。", { exact: true })).toBeVisible();
     await expect(panel.getByText("很长的推荐标题：Memory systems concurrency control and reproducible scientific results", { exact: true })).toHaveCount(1);
     expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     await page.screenshot({ path: info.outputPath(`recommendations-${width}.png`), fullPage: true });
-    const save = panel.getByRole("button", { name: /^收藏/ }).first();
+    const actions = recommendation.getByRole("button", { name: /^推荐操作 很长/ });
+    await actions.focus(); await actions.press("Enter");
+    const save = page.getByRole("menuitem", { name: "收藏论文", exact: true });
+    await expect(save).toBeVisible();
     await save.focus(); await save.press("Enter");
     await expect(page.getByText("已收藏：reason", { exact: true })).toBeVisible();
-    const dismiss = panel.getByRole("button", { name: /^忽略/ }).first();
+    await expect(actions).toBeFocused();
+    await actions.press("Enter");
+    const dismiss = page.getByRole("menuitem", { name: "不感兴趣", exact: true });
+    await expect(dismiss).toBeVisible();
     await dismiss.focus(); await dismiss.press("Enter");
     await expect(page.getByText("已忽略：reason", { exact: true })).toBeVisible();
+    await expect(actions).toBeFocused();
   }
 });

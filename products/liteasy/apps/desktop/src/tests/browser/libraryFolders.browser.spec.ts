@@ -1,4 +1,46 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function expectLibraryActionLayout(page: Page) {
+  const collectionHeader = page.getByRole("region", { name: "收藏", exact: true }).locator(".library-section-header-row");
+  await collectionHeader.hover();
+  const heading = await collectionHeader.locator(".library-section-header").boundingBox();
+  const collectionActions = await collectionHeader.getByRole("button", { name: "收藏更多操作", exact: true }).boundingBox();
+  expect(heading).not.toBeNull(); expect(collectionActions).not.toBeNull();
+  expect(Math.abs((heading!.y + heading!.height / 2) - (collectionActions!.y + collectionActions!.height / 2))).toBeLessThan(2);
+
+  const recommendations = page.getByRole("region", { name: "关联推荐", exact: true });
+  const disclosure = recommendations.getByRole("button", { name: /^(展开|收起)关联推荐$/ });
+  if (await disclosure.getAttribute("aria-expanded") !== "true") await disclosure.click();
+  await expect(recommendations.getByRole("button", { name: "关联推荐更多操作", exact: true })).toHaveCount(0);
+  const toolbar = recommendations.getByRole("group", { name: "推荐操作", exact: true });
+  await expect(toolbar).toHaveCount(1);
+  await expect(toolbar.getByRole("button", { name: "AI 精选", exact: true })).toBeVisible();
+  await expect(toolbar.getByRole("button", { name: "检查新论文", exact: true })).toBeVisible();
+  const more = toolbar.getByRole("button", { name: "更多推荐操作", exact: true });
+  await expect(more).toBeVisible();
+  const bounds = (await toolbar.boundingBox())!;
+  const buttons = await toolbar.getByRole("button").all();
+  let previousRight = bounds.x;
+  for (const button of buttons) {
+    const box = (await button.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(previousRight);
+    expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+    expect(Math.abs(box.y + box.height / 2 - (bounds.y + bounds.height / 2))).toBeLessThan(2);
+    previousRight = box.x + box.width;
+  }
+  expect(await recommendations.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  await more.focus(); await more.press("Enter");
+  await expect(page.getByRole("menuitem", { name: "推荐与文献服务设置", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(more).toBeFocused();
+}
+
+test("library action menus stay aligned with one recommendation toolbar", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1500, height: 950 });
+  await page.goto("/?pdf-highlight-fixture#library-folders");
+  await expectLibraryActionLayout(page);
+  await page.screenshot({ path: testInfo.outputPath("library-action-layout.png") });
+});
 
 test("folder drops highlight, persist imports, and move files back to root", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1500, height: 950 });
@@ -66,12 +108,6 @@ test("folder drops highlight, persist imports, and move files back to root", asy
   await page.getByRole("menuitem", { name: "更换图标" }).click();
   await page.getByRole("button", { name: "恢复默认图标" }).click();
   await expect(book.locator("[data-icon]")).toHaveAttribute("data-icon", "code");
-  for (const name of ["收藏", "关联推荐"]) {
-    const header = page.getByRole("region", { name, exact: true }).locator(".library-section-header-row");
-    const heading = await header.locator(".library-section-header").boundingBox();
-    const actions = await header.locator(".library-section-actions").boundingBox();
-    expect(heading).not.toBeNull(); expect(actions).not.toBeNull();
-    expect(Math.abs((heading!.y + heading!.height / 2) - (actions!.y + actions!.height / 2))).toBeLessThan(2);
-  }
+  await expectLibraryActionLayout(page);
   await page.screenshot({ path: testInfo.outputPath("library-icons-compact.png") });
 });

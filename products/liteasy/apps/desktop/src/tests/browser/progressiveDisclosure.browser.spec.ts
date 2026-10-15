@@ -65,7 +65,18 @@ test("touch, theme and font scaling preserve reachable controls", async ({ brows
     expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await button.tap(); await page.getByRole("menuitem", { name: "检查条目" }).tap();
     await expect(page.locator("output")).toHaveText("已执行条目操作");
-    await expect(page.getByRole("button", { name: /^打开详情 中文标题/ })).toBeInViewport();
+    const recommendation = page.getByRole("button", { name: /^查看推荐 中文标题/ });
+    await expect(recommendation).toBeInViewport();
+    await recommendation.tap();
+    await expect(recommendation).toHaveAttribute("aria-pressed", "true");
+    const recommendationActions = page.getByRole("button", { name: /^推荐操作 中文标题/ });
+    await expect(recommendationActions).toBeInViewport();
+    expect((await recommendationActions.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await recommendationActions.tap();
+    const openDetails = page.getByRole("menuitem", { name: "打开论文详情", exact: true });
+    await expect(openDetails).toBeInViewport();
+    await openDetails.tap();
+    await expect(page.locator("output")).toHaveText("打开 synthetic");
     await page.screenshot({ path: info.outputPath(`touch-${theme}-${ratio}.png`) });
   }
   await page.emulateMedia({ forcedColors: "active" });
