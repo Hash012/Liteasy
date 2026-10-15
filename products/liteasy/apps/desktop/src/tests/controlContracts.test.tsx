@@ -65,3 +65,38 @@ test("async failures notify only their owner on every attempt without exporting 
   expect(surfaceDiagnostics().filter(record => record.surface === "document")).toHaveLength(1);
   expect(JSON.stringify(surfaceDiagnostics())).not.toContain("synthetic-secret-token");
 });
+
+test("picker keeps exact unresolved identities in form data without exposing them as labels", () => {
+  for (const value of ["a03a12f0-99b3-4ee6-bbac-19e675a9a042", "a".repeat(64), JSON.stringify({ objectId: "private-object", revision: "private-revision" })]) {
+    const change = vi.fn();
+    const view = render(<form aria-label="选择配置"><OptionPicker name="target" aria-label="对象" required value={value} options={[]} onValueChange={change} /></form>);
+    const form = screen.getByRole("form", { name: "选择配置" }) as HTMLFormElement;
+    expect(screen.getByRole("combobox", { name: "对象" })).toHaveTextContent("正在加载所选项");
+    expect(form.textContent).not.toContain(value);
+    expect(form.checkValidity()).toBe(true);
+    expect(new FormData(form).get("target")).toBe(value);
+    view.rerender(<form aria-label="选择配置"><OptionPicker name="target" aria-label="对象" required value={value} options={[{ value, label: "论文讨论" }]} onValueChange={change} /></form>);
+    expect(screen.getByRole("combobox", { name: "对象" })).toHaveTextContent("论文讨论");
+    expect(change).not.toHaveBeenCalled();
+    view.unmount();
+  }
+});
+
+test("picker distinguishes filtered selections, unavailable objects, failed names, and scope changes", async () => {
+  const retry = vi.fn();
+  const shared = { value: "private-target", scopeKey: "account-a:org-a", options: [], onValueChange: vi.fn(), "aria-label": "所选对象" };
+  const view = render(<OptionPicker {...shared} selectedDisplay={{ value: shared.value, scopeKey: shared.scopeKey, state: "ready", label: "已筛选的论文" }} />);
+  expect(screen.getByRole("combobox")).toHaveTextContent("已筛选的论文");
+  view.rerender(<OptionPicker {...shared} scopeKey="account-b:org-b" selectedDisplay={{ value: shared.value, scopeKey: shared.scopeKey, state: "ready", label: "已筛选的论文" }} />);
+  expect(screen.getByRole("combobox")).not.toHaveTextContent("已筛选的论文");
+  expect(screen.getByRole("combobox")).toHaveTextContent("正在加载所选项");
+  view.rerender(<OptionPicker {...shared} selectedDisplay={{ value: shared.value, scopeKey: shared.scopeKey, state: "error", onRetry: retry }} />);
+  expect(screen.getByRole("combobox")).toHaveTextContent("名称加载失败");
+  await userEvent.click(screen.getByRole("button", { name: "重试加载名称" }));
+  expect(retry).toHaveBeenCalledOnce();
+  view.rerender(<OptionPicker {...shared} selectedDisplay={{ value: shared.value, scopeKey: shared.scopeKey, state: "unavailable" }} />);
+  expect(screen.getByRole("combobox")).toHaveTextContent("所选项已不可用");
+  view.rerender(<OptionPicker {...shared} selectedDisplay={{ value: shared.value, scopeKey: shared.scopeKey, state: "unnamed" }} />);
+  expect(screen.getByRole("combobox")).toHaveTextContent("未命名项目");
+  expect(shared.onValueChange).not.toHaveBeenCalled();
+});
