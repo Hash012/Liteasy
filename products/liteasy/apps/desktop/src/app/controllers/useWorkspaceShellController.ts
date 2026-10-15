@@ -24,6 +24,7 @@ export function paperFileStatus(paper: Paper, job?: ImportJob, metadata?: Pick<F
   return {
     name: paper.title,
     path: paper.sourcePath,
+    pathPresentation: paper.sourcePath && /^(org|liteasy):/i.test(paper.sourcePath) ? "technical" : "external",
     type: paper.sourcePath ? "PDF" : undefined,
     ...metadata,
     source: paper.sourcePath
@@ -41,6 +42,7 @@ export function readingFileStatus(entry?: ReadingCatalogEntry): FileStatus | und
     name: entry.title,
     entry,
     path: entry.physicalPath ? displayPath(entry.physicalPath) : entry.liteasyPath,
+    pathPresentation: entry.physicalPath ? "external" : "technical",
     type: entry.format === "other" ? entry.fileName?.split(".").pop()?.toUpperCase() || "文件"
       : entry.format === "markdown" ? "Markdown" : entry.format.toUpperCase(),
     size: entry.fileSize

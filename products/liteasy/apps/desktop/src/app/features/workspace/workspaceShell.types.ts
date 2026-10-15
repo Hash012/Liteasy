@@ -4,6 +4,8 @@ export interface FileStatus {
   entry?: ReadingCatalogEntry;
   name?: string;
   path?: string;
+  /** Internal locators belong to explicit file details, not passive title tooltips. */
+  pathPresentation?: "external" | "technical";
   type?: string;
   size?: number;
   pageCount?: number;

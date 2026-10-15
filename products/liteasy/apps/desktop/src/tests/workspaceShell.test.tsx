@@ -122,3 +122,22 @@ it("activates a hidden open page through its latest placement and callback witho
   expect(old.onActivate).not.toHaveBeenCalled();
   expect(input.restorePage).not.toHaveBeenCalled();
 });
+
+it("keeps internal locators out of passive file tooltips while retaining explicit location details", async () => {
+  const paper = { id: "paper", title: "同域论文", sourcePath: "org://organization-private/library/document-private.pdf" };
+  const status = paperFileStatus(paper);
+  expect(status.pathPresentation).toBe("technical");
+  expect(readingFileStatus({ id: "book", title: "Book", format: "epub", readingStatus: "reading", liteasyPath: "liteasy://private-book" })?.pathPresentation).toBe("technical");
+  const view = render(<FileStatusBar status={status} />);
+  fireEvent.focus(screen.getByText("同域论文", { selector: ".shell-file-name" }));
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("同域论文");
+  expect(screen.getByRole("tooltip")).not.toHaveTextContent("organization-private");
+  fireEvent.click(screen.getByRole("button", { name: "展开文件元信息" }));
+  expect(screen.getByText(paper.sourcePath)).toBeVisible();
+  view.unmount();
+  const external = paperFileStatus({ ...paper, sourcePath: "/research/user-selected.canvas" });
+  expect(external.pathPresentation).toBe("external");
+  render(<FileStatusBar status={external} />);
+  fireEvent.focus(screen.getByText("同域论文", { selector: ".shell-file-name" }));
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("/research/user-selected.canvas");
+});

@@ -45,7 +45,7 @@ export function FileStatusBar({ status, actions, onDownloadRecommendation, recom
   return (
     <footer aria-label="文件状态栏" className={`file-status-bar${status ? "" : " is-idle"}`}>
       <div className="shell-file-details" title={details}>
-        {status?.name ? <Tooltip content={status.path ? `${status.name}\n${displayPath(status.path)}` : status.name} relationship="description">
+        {status?.name ? <Tooltip content={status.path && status.pathPresentation !== "technical" ? `${status.name}\n${displayPath(status.path)}` : status.name} relationship="description">
           <span className="shell-file-name" tabIndex={0}>{status.name}</span>
         </Tooltip> : null}
         <span className="shell-file-metadata">{details || (!status?.name ? "Liteasy · 就绪" : "")}</span>
