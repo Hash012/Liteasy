@@ -21,6 +21,7 @@ test("compact conversation rows manage real titles, export and delete across res
     if (body.stream) await route.fulfill({ contentType: "text/event-stream", body: `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\ndata: [DONE]\n\n` });
     else await route.fulfill({ json: { choices: [{ message: { content } }] } });
   });
+  await page.setViewportSize({ width: 1800, height: 1000 });
   await page.goto("/");
   await expect(page.getByText("需要区分采样偏差与测量误差。", { exact: true })).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "设置", exact: true }).click();
@@ -39,9 +40,38 @@ test("compact conversation rows manage real titles, export and delete across res
   await expect(row.locator(".assistant-session-row-date")).toBeVisible();
   await expect(row).not.toContainText("条消息");
   for (const width of [320, 560]) {
-    await page.locator(".assistant-only-pane").evaluate((element, width) => { element.style.width = `${width}px`; element.style.maxWidth = `${width}px`; }, width);
+    // Resize the actual dock through its pointer control, keeping the whole pane inside the viewport.
+    const pane = page.locator(".assistant-only-pane");
+    const boundary = page.getByRole("separator", { name: "调整右栏宽度", exact: true });
+    const paneBefore = (await pane.boundingBox())!;
+    const handle = (await boundary.boundingBox())!;
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle.x + handle.width / 2 + paneBefore.width - width, handle.y + handle.height / 2, { steps: 8 });
+    await page.mouse.up();
+    await expect.poll(async () => Math.abs((await pane.boundingBox())!.width - width)).toBeLessThan(4);
+    const rowBox = (await row.boundingBox())!;
+    const viewport = page.viewportSize()!;
+    expect(rowBox.x).toBeGreaterThanOrEqual(0);
+    expect(rowBox.y).toBeGreaterThanOrEqual(0);
+    expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(viewport.width);
+    expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(viewport.height);
+    const menu = home.getByRole("button", { name: "管理 论文实验与误差分析" });
+    for (const control of [row.locator(".assistant-session-row-title"), row.locator(".assistant-session-row-date"), menu]) {
+      await expect(control).toBeVisible();
+      const box = (await control.boundingBox())!;
+      expect(box.width).toBeGreaterThan(0);
+      expect(box.x).toBeGreaterThanOrEqual(rowBox.x);
+      expect(box.y).toBeGreaterThanOrEqual(rowBox.y);
+      expect(box.x + box.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
+      expect(box.y + box.height).toBeLessThanOrEqual(rowBox.y + rowBox.height + 1);
+    }
     expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await menu.click();
+    await expect(page.getByRole("menuitem", { name: "AI 重命名对话" })).toBeVisible();
+    await page.keyboard.press("Escape");
     await row.screenshot({ path: testInfo.outputPath(`conversation-row-${width}.png`) });
+    await pane.screenshot({ path: testInfo.outputPath(`conversation-pane-${width}.png`) });
   }
   await home.getByRole("button", { name: "管理 论文实验与误差分析" }).click();
   await page.getByRole("menuitem", { name: "AI 重命名对话" }).click();
