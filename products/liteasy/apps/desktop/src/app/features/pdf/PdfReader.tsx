@@ -2,6 +2,8 @@ import type { QuickAskTransferInput, QuickAskTransferResult } from "./quickAskTr
 import { highlightSearchText } from "../search/searchDomHighlight";
 import { SearchHighlight, SearchOptions } from "../search/SearchOptions";
 import { noteLabels } from "../notes/noteLabels";
+import { comparePdfAnnotations, type PdfAnnotationSort } from "./pdfAnnotationSort";
+import { PdfAnnotationSortPicker } from "./PdfAnnotationSortPicker";
 import { PdfAnnotationFilters, emptyPdfAnnotationFacets, matchesPdfAnnotationFacets } from "./PdfAnnotationFilters";
 import { compilePdfAnnotationQuery, teamPdfAnnotation } from "./pdfAnnotationQuery";
 import { usePaperSearchMetadata } from "../search/usePaperSearchMetadata";
@@ -1711,6 +1713,7 @@ export function PdfReader({
   const [annotationFilter, setAnnotationFilter] = useState(emptyNoteFilter);
   const [annotationQuery, setAnnotationQuery] = useState("");
   const [annotationFacets, setAnnotationFacets] = useState(emptyPdfAnnotationFacets);
+  const [annotationSort, setAnnotationSort] = useState<PdfAnnotationSort>("reading");
   const [sidebarMode, setSidebarMode] = useState<PdfSidebarMode>("annotations");
   const [stageWidth, setStageWidth] = useState(960);
   const { status, setStatus, announcement, announceNavigation } = usePdfReaderFeedback();
@@ -1856,7 +1859,8 @@ export function PdfReader({
     [annotations]
   );
   const annotationSearch = useMemo(() => compilePdfAnnotationQuery(annotationQuery, searchMetadata), [annotationQuery, searchMetadata]);
-  const filteredAnnotations = annotationsInReadingOrder.filter((annotation) =>
+  const sortedAnnotations = useMemo(() => [...annotations].sort((left, right) => comparePdfAnnotations(left, right, annotationSort)), [annotations, annotationSort]);
+  const filteredAnnotations = sortedAnnotations.filter((annotation) =>
     matchesNoteFilter(annotationNoteLabels(annotation), annotationFilter) &&
     matchesPdfAnnotationFacets(annotation, annotationFacets) && annotationSearch.matches(annotation));
   const filteredTeamAnnotations = teamAnnotations.filter((team) => {
@@ -1864,7 +1868,7 @@ export function PdfReader({
     const annotation = teamPdfAnnotation(team, resolvePaperIdentity(activePaper));
     return matchesNoteFilter(annotationNoteLabels(annotation as PdfAnnotationV2), annotationFilter) &&
       matchesPdfAnnotationFacets(annotation, annotationFacets) && annotationSearch.matches(annotation, team.uploadedBy);
-  });
+  }).sort((left, right) => comparePdfAnnotations(teamPdfAnnotation(left, resolvePaperIdentity(activePaper!)), teamPdfAnnotation(right, resolvePaperIdentity(activePaper!)), annotationSort));
   const popupAnnotation = useMemo(
     () => annotations.find((annotation) => annotation.id === annotationPopup?.annotationId) ?? null,
     [annotationPopup?.annotationId, annotations]
@@ -3831,7 +3835,8 @@ export function PdfReader({
                     icon={<DismissRegular />} onClick={() => setAnnotationQuery("")} /></Tooltip> : null}
                 </div>
                 <PdfAnnotationFilters value={annotationFacets} onChange={setAnnotationFacets} />
-                <NoteLabelFilter compact value={annotationFilter} onChange={setAnnotationFilter} />
+                <div className="pdf-annotation-list-options"><NoteLabelFilter compact value={annotationFilter} onChange={setAnnotationFilter} />
+                  <PdfAnnotationSortPicker value={annotationSort} onChange={setAnnotationSort} /></div>
                 <p className="pdf-annotation-result-count" role="status" aria-label="批注检索结果">{filteredAnnotations.length + filteredTeamAnnotations.length} / {annotations.length + teamAnnotations.length} 条批注</p>
               </>}
               </div>

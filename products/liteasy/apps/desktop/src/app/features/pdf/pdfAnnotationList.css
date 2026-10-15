@@ -176,3 +176,7 @@
 .pdf-annotation-facets .fui-Dropdown { min-width: 0; flex: 1 1 78px; }
 .pdf-annotation-facets .fui-Dropdown__button { min-width: 0; padding-inline: 6px; }
 .pdf-annotation-facets .fui-Dropdown__button > span { overflow: hidden; text-overflow: ellipsis; }
+
+.pdf-annotation-list-options { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0 6px; min-width: 0; }
+.pdf-annotation-list-options > .notes-label-filters { flex: 1; min-width: 0; border-bottom: 0; }
+.pdf-annotation-list-options > .fui-Dropdown { min-width: 0; max-width: 100%; flex: 0 1 100px; }
