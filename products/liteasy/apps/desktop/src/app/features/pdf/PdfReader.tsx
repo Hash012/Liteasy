@@ -19,7 +19,6 @@ import { usePdfPageWindow } from "./usePdfPageWindow";
 import { pdfReaderContentRevision } from "./pdfReaderPosition";
 import { usePdfReaderFeedback } from "./usePdfReaderFeedback";
 import { usePdfReaderPosition } from "./usePdfReaderPosition";
-import { pdfVisiblePage } from "./pdfVisiblePage";
 import { getHighlightColor, getOverlayStyle } from "./pdfAnnotationAppearance";
 import { DrawShapeRegular, EraserRegular, ArrowUndoRegular } from "@fluentui/react-icons";
 import { PdfInkLayer } from "./PdfInkLayer";
@@ -1817,7 +1816,10 @@ export function PdfReader({
   );
   const renderedPages = usePdfPageWindow(stageRef, documentFrameRef, {
     enabled: !readingView && readerView === "document", document: pdfDocument,
-    focusedPage, pageCount, layout: layoutMode, zoom, width: stageWidth
+    focusedPage, pageCount, layout: layoutMode, zoom, width: stageWidth,
+    onVisiblePage: (page) => {
+      if (!readerPosition.isRestoring() && page !== focusedPage) { readerPosition.markNavigation(); setFocusedPage(page); }
+    }
   });
   const hasVisibleMarginComments = marginCommentsVisible && annotations.some((annotation) =>
     (annotation.kind === "highlight" || annotation.kind === "underline") &&
@@ -1949,18 +1951,6 @@ export function PdfReader({
       const stageElement = stageRef.current;
       if (stageElement) stageElement.scrollTop = 0;
     });
-  }
-
-  function handleStageScroll() {
-    if (layoutMode !== "continuous" || readerPosition.isRestoring()) return;
-    const stageElement = stageRef.current;
-    if (!stageElement) return;
-    const visiblePage = pdfVisiblePage(getElementContentRect(stageElement),
-      [...stageElement.querySelectorAll<HTMLElement>(".pdf-page-shell")].map((element) => {
-        const { top, bottom } = element.getBoundingClientRect();
-        return { page: Number(element.dataset.page), top, bottom };
-      }).filter((page) => Number.isSafeInteger(page.page) && page.page > 0), focusedPage);
-    if (visiblePage !== focusedPage) { readerPosition.markNavigation(); setFocusedPage(visiblePage); }
   }
 
   function handleStageKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
@@ -4156,7 +4146,6 @@ export function PdfReader({
             onPointerMove={readerView === "document" ? handleSelectionPointerMove : undefined}
             onPointerUp={readerView === "document" ? handleSelectionPointerUp : undefined}
             onKeyDown={readerView === "document" ? handleStageKeyDown : (event) => { if (event.key === "Escape") closeOverview(); }}
-            onScroll={readerView === "document" ? handleStageScroll : undefined}
             ref={stageRef}
             tabIndex={0}
           >
