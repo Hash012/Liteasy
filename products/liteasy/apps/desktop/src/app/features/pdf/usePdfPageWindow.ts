@@ -33,7 +33,7 @@ export function usePdfPageWindow(stage: RefObject<HTMLElement>, frame: RefObject
       const visible = bottom > top ? pdfPagesInViewport(entries, top, bottom) : [];
       // jsdom supplies no layout, but still exercises annotation UI on page placeholders.
       const next = new Set(visible);
-      setPages((previous) => previous.size === next.size && [...previous].every((page) => next.has(page)) ? previous : next);
+      setPages((previous) => previous.size === next.size && [...previous].every((page, index) => visible[index] === page) ? previous : next);
       if (scrolled && latest.current.layout === "continuous") {
         latest.current.onVisiblePage?.(pdfVisiblePage({ top, bottom }, entries, latest.current.focusedPage));
       }

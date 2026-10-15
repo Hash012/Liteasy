@@ -16,6 +16,7 @@ import { resolveReadingQuoteRects } from "./readingAnnotationGeometry";
 import type { ReadingMarkStyle } from "./pdfReadingAnnotations";
 import { pdfCanvasSize } from "./pdfRenderBudget";
 import { usePdfPageWindow } from "./usePdfPageWindow";
+import { schedulePdfPageRender } from "./pdfPageRenderQueue";
 import { pdfReaderContentRevision } from "./pdfReaderPosition";
 import { usePdfReaderFeedback } from "./usePdfReaderFeedback";
 import { usePdfReaderPosition } from "./usePdfReaderPosition";
@@ -1120,6 +1121,7 @@ type PdfPageViewProps = {
   onPageTextRendered?: (input: PdfPageText) => void;
   pageNumber: number;
   renderActive: boolean;
+  renderPriority: number;
   defaultPageSize: { width: number; height: number };
   pixelRatio: number;
   readingBackground: string;
@@ -1157,6 +1159,7 @@ export function PdfPageView({
   onTextAnnotationOpacityChange,
   pageNumber,
   renderActive,
+  renderPriority,
   defaultPageSize,
   pixelRatio, readingBackground, preserveImages,
   pdfDocument,
@@ -1247,6 +1250,9 @@ export function PdfPageView({
     });
     setSearchHighlightRects(rects);
   }
+
+  const renderJob = useRef<ReturnType<typeof schedulePdfPageRender>>();
+  useEffect(() => { renderJob.current?.setPriority(renderPriority); }, [renderPriority]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1381,10 +1387,14 @@ export function PdfPageView({
       }
     }
 
-    void renderPage();
+    const job = pdfDocument && renderActive ? schedulePdfPageRender(pdfDocument, renderPriority, renderPage) : undefined;
+    renderJob.current = job;
+    if (!job) void renderPage();
 
     return () => {
       cancelled = true;
+      job?.cancel();
+      if (renderJob.current === job) renderJob.current = undefined;
       pendingRefinement.current = undefined;
       renderTask?.cancel();
       layer?.cancel();
@@ -4195,6 +4205,7 @@ export function PdfReader({
                     onTextAnnotationOpacityChange={changeTextAnnotationOpacity}
                     pageNumber={pageNumber}
                     renderActive={renderedPages.has(pageNumber) && visiblePageNumbers.has(pageNumber)}
+                    renderPriority={pageNumber === focusedPage ? 0 : [...renderedPages].indexOf(pageNumber) + 1}
                     defaultPageSize={defaultPageSize}
                     pixelRatio={pixelRatio}
                     pdfDocument={pdfDocument}
