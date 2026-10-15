@@ -35,6 +35,7 @@ export type ThinReadingIntuechoAnnotationQueueItem = {
   createdAt: string;
   excerpt: string;
   hasConfirmedLiterature: boolean;
+  literatureTitles?: Readonly<Record<string, string>>;
   nodeId: string;
   paperId?: string;
   queueKey: string;
@@ -362,6 +363,8 @@ function queueItemForAnnotation(
     createdAt: annotation.createdAt,
     excerpt: annotation.excerpt,
     hasConfirmedLiterature,
+    literatureTitles: Object.freeze(Object.fromEntries(Object.values(document.literatureRecords ?? {})
+      .filter((record) => record.title.trim()).map((record) => [record.literatureId, record.title]))),
     nodeId: annotation.nodeId,
     paperId: scope.paperId,
     queueKey: `${document.artifactId}:${annotation.id}`,
@@ -461,13 +464,20 @@ export function createLocalPendingIntuechoSyncAdapter(): ThinReadingIntuechoSync
 
 export function thinReadingPublicationExcerpts(item: ThinReadingIntuechoAnnotationQueueItem) {
   const excerpts: { label: string; text: string }[] = [];
+  const sourceNumbers = new Map<string, number>();
+  function sourceLabel(literatureId: string) {
+    const title = item.literatureTitles?.[literatureId]?.trim();
+    if (title) return title;
+    if (!sourceNumbers.has(literatureId)) sourceNumbers.set(literatureId, sourceNumbers.size + 1);
+    return `来源 ${sourceNumbers.get(literatureId)}`;
+  }
   for (const [index, target] of wireAnnotation(item).targets.entries()) {
-    const prefix = `目标 ${index + 1} · 文献 ${target.literature.literatureId}`;
+    const prefix = `目标 ${index + 1} · ${sourceLabel(target.literature.literatureId)}`;
     if (target.kind === "source_passage") excerpts.push({ label: `${prefix}${target.page ? ` · 第 ${target.page} 页` : ""}`, text: target.excerpt });
     if (target.kind === "derived_passage") {
       excerpts.push({ label: `${prefix} · 生成内容`, text: target.derivedContent.excerpt });
       for (const [evidenceIndex, evidence] of target.evidence.entries()) excerpts.push({
-        label: `${prefix} · 证据 ${evidenceIndex + 1} · 文献 ${evidence.literature.literatureId}${evidence.page ? ` · 第 ${evidence.page} 页` : ""}`,
+        label: `目标 ${index + 1} · 证据 ${evidenceIndex + 1} · ${sourceLabel(evidence.literature.literatureId)}${evidence.page ? ` · 第 ${evidence.page} 页` : ""}`,
         text: evidence.excerpt
       });
     }

@@ -9,6 +9,8 @@ import {
   THIN_READING_INTUECHO_PENDING_LABEL,
   createHttpIntuechoSyncAdapter,
   createLocalPendingIntuechoSyncAdapter,
+  thinReadingPublicationExcerpts,
+  type ThinReadingIntuechoSyncTransport,
   listThinReadingPendingPublicAnnotations as listUnboundAnnotations
 } from "../app/features/thin-reading/thinReadingIntuechoSyncQueue";
 import type { PublicationActorBinding } from "../app/features/forum/publicationActorBinding";
@@ -43,6 +45,31 @@ function createSyncableFixture() {
 }
 
 describe("thinReadingIntuechoSyncQueue", () => {
+  test("publication previews use authorized source titles or source order without changing transport identities", async () => {
+    const root = createThinReadingDocument({ ...createSyncableFixture(), artifactId: "readable-preview" });
+    const document = addThinReadingAnnotation(root, { body: "Synthetic note", excerpt: "evidence", nodeId: root.rootNodeId, visibility: "pending_public" });
+    const [item] = listThinReadingPendingPublicAnnotations(document);
+    const literatureId = "lit_01J00000000000000000000000";
+    const pendingOperation = { annotationId: item.annotationId, queueKey: item.queueKey, body: item.body,
+      createdAt: item.createdAt, updatedAt: item.updatedAt, status: item.status, targets: [{
+        kind: "derived_passage" as const, literature: { literatureId },
+        derivedContent: { artifactId: "original-artifact", nodeId: "original-node", version: "1", excerpt: "Original generated passage" },
+        evidence: [{ literature: { literatureId: "unresolved-literature" }, anchorHash: "original-anchor", rects: [], page: 3, excerpt: "Original source evidence" }]
+      }] };
+    const frozenItem = { ...item, pendingOperation };
+    expect(thinReadingPublicationExcerpts(frozenItem)).toEqual([
+      { label: `目标 1 · ${createSyncableFixture().papers[0].title} · 生成内容`, text: "Original generated passage" },
+      { label: "目标 1 · 证据 1 · 来源 1 · 第 3 页", text: "Original source evidence" }
+    ]);
+    const legacyItem = { ...frozenItem, literatureTitles: undefined };
+    expect(thinReadingPublicationExcerpts(legacyItem)[0].label).toBe("目标 1 · 来源 1 · 生成内容");
+    expect(thinReadingPublicationExcerpts(legacyItem)[1].label).toBe("目标 1 · 证据 1 · 来源 2 · 第 3 页");
+    const transport = vi.fn<ThinReadingIntuechoSyncTransport>(async () => ({ ok: true, status: 200, json: async () => ({ results: [] }) }));
+    await createHttpIntuechoSyncAdapter({ endpoint: actor.endpoint, getActorBinding: () => actor, sessionId: "synthetic-token", transport }).syncPendingAnnotations([frozenItem]);
+    const body = JSON.parse(transport.mock.calls[0][0].body);
+    expect(body.annotations[0].targets).toEqual(pendingOperation.targets);
+    expect(transport.mock.calls[0][0].body).not.toContain("literatureTitles");
+  });
   test("persists the original operation across edits and only resumes a known actor explicitly", async () => {
     const { prepareThinReadingPublications } = await import("../app/features/thin-reading/thinReadingIntuechoSyncQueue");
     const root = createThinReadingDocument({ ...createSyncableFixture(), artifactId: "durable-thin-queue" });
