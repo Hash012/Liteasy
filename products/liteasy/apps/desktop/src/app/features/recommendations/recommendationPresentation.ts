@@ -21,7 +21,7 @@ export function recommendationSourceUrl(item: RecommendationItem) {
   catch { return undefined; }
 }
 
-function recommendationIdentifier(item: RecommendationItem) {
+export function recommendationIdentifier(item: RecommendationItem) {
   const raw = item.canonicalId ?? item.id;
   const doi = normalizeLiteratureIdentifier("doi", item.identityResolution?.doi ?? raw.replace(/^doi:/i, ""));
   if (/^10\.48550\/arxiv\./i.test(doi)) return [{ kind: "arxiv_id" as const, value: doi.replace(/^10\.48550\/arxiv\./i, "") }];

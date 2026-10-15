@@ -1,4 +1,5 @@
-import { OptionPicker } from "../../shared/ui/productPrimitives";
+import { redactDiagnostic } from "../context/objectContext";
+import { DisclosureSection, OptionPicker } from "../../shared/ui/productPrimitives";
 import { useExtensionWorkbench } from "../extensions/extensionWorkbenchContext";
 import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import { useEffect, useRef, useState } from "react";
@@ -18,15 +19,27 @@ export function BlockComposer({ model }: { model: WorkbenchViewModel }) {
   const type = types.find((item) => `${item.id}@${item.version}` === typeKey) ?? types[0];
   const [title, setTitle] = useState("新内容块");
   const [data, setData] = useState(JSON.stringify(type.defaults, null, 2));
-  const [installations, setInstallations] = useState<ExtensionInstallation[]>([]);
+  const [installations, setInstallations] = useState<Array<ExtensionInstallation & { displayName?: string }>>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const file = useRef<HTMLInputElement>(null);
   useEffect(() => { setData(JSON.stringify(type.defaults, null, 2)); }, [type.id, type.version]);
-  useEffect(() => { let alive = true; void extensions.store.list().then((items) => { if (alive) setInstallations(items); }); return () => { alive = false; }; }, [extensions.store, extensions.snapshot]);
+  const currentStore = useRef(extensions.store); currentStore.current = extensions.store;
+  async function loadInstallations() {
+    const store = extensions.store;
+    const items = await store.list();
+    const named = [];
+    for (const item of items) {
+      if (currentStore.current !== store) return [];
+      try { const pkg = await store.get(item.id, item.version); named.push({ ...item, displayName: pkg.manifest.name }); }
+      catch { named.push(item); }
+    }
+    return named;
+  }
+  useEffect(() => { let alive = true; setInstallations([]); void loadInstallations().then((items) => { if (alive) setInstallations(items); }).catch((cause: unknown) => { if (alive) setError(cause instanceof Error ? cause.message : String(cause)); }); return () => { alive = false; }; }, [extensions.store, extensions.snapshot]);
   async function run(operation: () => Promise<unknown>) {
     setBusy(true); setError("");
-    try { await operation(); setInstallations(await extensions.store.list()); await model.refresh(); }
+    try { await operation(); const items = await loadInstallations(); if (currentStore.current === extensions.store) setInstallations(items); await model.refresh(); }
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   }
@@ -60,11 +73,12 @@ export function BlockComposer({ model }: { model: WorkbenchViewModel }) {
       await extensions.store.install(raw, previous?.revision ?? null);
     }); }} />
     <div className="object-toolbar"><Button disabled={busy} onClick={() => file.current?.click()}>导入扩展包</Button><Button disabled={busy} onClick={() => void run(async () => { const previous = (await extensions.store.list()).find((item) => item.id === "plugin.paper-lens"); await extensions.store.install(await paperLensPackage(), previous?.revision ?? null); })}>安装论文比较板示例</Button></div>
-    {installations.map((item) => <section key={item.id} className="extension-package-card"><strong>{extensions.snapshot.packages.find((pkg) => pkg.manifest.id === item.id)?.manifest.name ?? item.id}</strong><span>{item.version} · {item.enabled ? "已启用" : "已停用"}</span>
-      <Button disabled={busy} onClick={() => void run(() => extensions.store.enable(item.id, !item.enabled, item.revision))}>{item.enabled ? "停用" : "启用"}</Button>
-      <Button disabled={busy} onClick={() => void run(() => extensions.store.uninstall(item.id, item.revision))}>卸载并保留内容</Button>
+    {installations.map((item) => <section key={item.id} className="extension-package-card"><strong>{item.displayName ?? "扩展名称无法读取"}</strong><span>{item.version} · {item.enabled ? "已启用" : "已停用"}</span>
+      <Button disabled={busy || !item.displayName} onClick={() => void run(() => extensions.store.enable(item.id, !item.enabled, item.revision))}>{item.enabled ? "停用" : "启用"}</Button>
+      <Button disabled={busy || !item.displayName} onClick={() => void run(() => extensions.store.uninstall(item.id, item.revision))}>卸载并保留内容</Button>
+      <DisclosureSection title="扩展技术信息"><p>{item.id} · {item.version}</p></DisclosureSection>
     </section>)}
-    {extensions.snapshot.failures.map((failure) => <p key={failure.id} role="status">{failure.id}：{failure.message}</p>)}
-    {error || extensions.error ? <p role="alert">{error || extensions.error}</p> : null}
+    {extensions.snapshot.failures.map((failure) => <div key={failure.id} role="status">扩展暂不可用。<DisclosureSection title="错误技术详情"><p>{failure.id}：{redactDiagnostic(failure.message)}</p></DisclosureSection></div>)}
+    {error || extensions.error ? <div role="alert">扩展操作未完成，请检查扩展后重试。<DisclosureSection title="错误技术详情"><pre>{redactDiagnostic(error || extensions.error)}</pre></DisclosureSection></div> : null}
   </div>;
 }

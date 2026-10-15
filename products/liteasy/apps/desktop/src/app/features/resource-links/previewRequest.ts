@@ -13,7 +13,19 @@ export function previewErrorMessage(error: unknown) {
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
   if (code === "timeout") return messageWithFallback("preview.timeout", "读取超时，请重试。");
   if (code === "cancelled" || (error instanceof Error && error.name === "AbortError")) return messageWithFallback("preview.cancelled", "已取消读取。");
-  return error instanceof Error ? error.message : messageWithFallback("preview.unavailable", "预览暂不可用，请重试。");
+  if (error instanceof PreviewRequestError) return error.message;
+  const messages: Record<string, string> = {
+    unsupported_type: "此类资料暂不支持预览，请打开原文件。",
+    ambiguous_provider: "此资料有多个读取入口，请重新选择来源。",
+    not_found: "来源已删除或当前不可用，请重新选择资料。",
+    permission_denied: "当前账号没有读取此资料的权限。",
+    revision_unavailable: "引用的来源版本已不可用，请重新选择资料。",
+    not_prepared: "正文尚未就绪，可以解析正文后重试。",
+    scope_changed: "账号或权限已变化，请重新打开资料。",
+    invalid_path: "资料地址无效，请重新选择来源。",
+    revision_conflict: "来源版本已变化，请重新打开资料。",
+  };
+  return messages[code] ?? messageWithFallback("preview.unavailable", "预览暂不可用，请重试。");
 }
 export function createPreviewRequest(options: { signal?: AbortSignal; timeoutMs?: number; generation?: string | number; revision?: string } = {}) {
   const controller = new AbortController(), id = ++requestId;

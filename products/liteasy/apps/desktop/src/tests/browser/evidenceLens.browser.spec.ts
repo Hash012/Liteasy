@@ -30,7 +30,8 @@ for (const width of [320, 360, 480, 1280]) {
       await page.keyboard.press("Escape");
       await expect(page.getByRole("button", { name: /查看论断 1：/ })).toBeFocused();
       await page.getByRole("button", { name: "查看全部证据" }).click();
-      await page.getByRole("combobox", { name: "筛选论断" }).selectOption("contested");
+      await page.getByRole("combobox", { name: "筛选论断" }).click();
+      await page.getByRole("option", { name: "有分歧", exact: true }).click();
       await expect(page.getByRole("region", { name: "证据详情" })).toContainText("有分歧");
       await noHorizontalOverflow(page);
       await page.screenshot({ path: testInfo.outputPath(`inspector-${width}-${theme}.png`), fullPage: true });
@@ -86,8 +87,8 @@ test("source-only answers expose excerpts immediately and keep checks secondary"
   await expect(trigger).toBeVisible();
   await trigger.click();
   await expect(page.locator(".evidence-lens .content-view .markdown-content")).toContainText("消息入口保存的真实测试摘录。");
-  await expect(page.locator("details.evidence-lens__checks")).not.toHaveAttribute("open", "");
-  await page.locator("details.evidence-lens__checks summary").focus();
+  await expect(page.locator(".evidence-lens__checks").getByRole("button")).toHaveAttribute("aria-expanded", "false");
+  await page.locator(".evidence-lens__checks").getByRole("button").focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("尚无独立核验记录。引用存在不代表结论成立。")).toBeVisible();
   await noHorizontalOverflow(page);

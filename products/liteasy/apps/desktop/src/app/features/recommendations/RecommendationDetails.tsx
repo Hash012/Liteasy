@@ -2,13 +2,13 @@ import { displayBibliographicTitle } from "../metadata/displayBibliographicTitle
 import { ResourceTagChips } from "../resource-tags/ResourceTagChips";
 import { recommendationKeywords } from "./recommendationKeywords";
 import { Button } from "@fluentui/react-components";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { ExternalNavigation } from "../navigation/externalNavigation";
 import { ArrowClockwiseRegular, ArrowUpRightRegular } from "@fluentui/react-icons";
 import { ContentView } from "../markdown/ContentView";
 import { legacyContent } from "../markdown/contentFragment";
 import type { RecommendationItem } from "./recommendation.types";
-import { recommendationDateLabel, recommendationSourceUrl } from "./recommendationPresentation";
+import { recommendationDateLabel, recommendationSourceUrl, recommendationIdentifier } from "./recommendationPresentation";
 import { RecommendationDownload, type DownloadRecommendation, type RecommendationLocations } from "./RecommendationDownload";
 import "./recommendationList.css";
 
@@ -18,6 +18,7 @@ export function RecommendationDetails({ item, onDownload, locations, page = fals
   page?: boolean; loading?: boolean; message?: string; onRefresh?: () => void;
 }) {
   const url = recommendationSourceUrl(item);
+  const identifiers = recommendationIdentifier(item);
   const [linkError, setLinkError] = useState("");
   const openPath = onOpenAsset ? async (path: string) => { await onOpenAsset(path); } : undefined;
   const topics = recommendationKeywords(item);
@@ -43,7 +44,7 @@ export function RecommendationDetails({ item, onDownload, locations, page = fals
         {item.venue ? <><dt>刊物 / 会议</dt><dd>{item.venue}</dd></> : null}
         {Number.isSafeInteger(item.citationCount) && item.citationCount! >= 0 ? <><dt>引用</dt><dd>{item.citationCount}</dd></> : null}
         <dt>信息来源</dt><dd>{item.source}</dd>
-        {item.canonicalId ? <><dt>标识</dt><dd>{item.canonicalId}</dd></> : null}
+        {identifiers?.map((identifier) => <Fragment key={identifier.kind}><dt>{identifier.kind === "doi" ? "DOI" : "arXiv"}</dt><dd>{identifier.value}</dd></Fragment>)}
       </dl>
       {topics.length ? <ResourceTagChips label="论文主题" tags={topics} limit={8} /> : null}
       <section className="recommendation-abstract" aria-label="论文摘要">

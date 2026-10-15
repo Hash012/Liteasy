@@ -112,7 +112,8 @@ function PassageCard({ report, passage, claim, onOpenPassage, canOpenPassage, st
     {edge?.explanation ? <p>{t("evidence.relationNote", "关系说明（待结合核验记录阅读）：")}{edge.explanation}</p> : null}
     <div className="evidence-lens__passage-footer"><Button size="small" appearance="subtle" icon={<Open20Regular />} disabled={!available || opening} onClick={() => { void open(); }}>
       {opening ? t("evidence.opening", "正在打开") : t("evidence.openOriginal", "打开原文")}
-    </Button>{source?.revision ? <span className="evidence-lens__version" title={source.revision}>{t("evidence.version", "版本：")}{source.revision}</span> : null}</div>
+    </Button>{source?.revision ? <span className="evidence-lens__version">{t("evidence.savedVersion", "已保存来源版本")}</span> : null}</div>
+    {source?.revision ? <DisclosureSection title={t("evidence.technicalSource", "来源技术信息")}><p>{t("evidence.version", "版本：")}{source.revision}</p></DisclosureSection> : null}
     {!available ? <small>{reason}</small> : null}
     {error ? <p role="status">{t("evidence.openFailed", "原文打开失败，请确认文件仍然存在或稍后重试。")}</p> : null}
   </article>;

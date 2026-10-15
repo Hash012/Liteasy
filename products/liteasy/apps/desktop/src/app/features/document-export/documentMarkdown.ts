@@ -61,12 +61,12 @@ export async function renderMarkdownPackage(document: ExportDocument) {
   const files: Record<string, Uint8Array> = { "document.md": strToU8(markdown), "manifest.json": strToU8(JSON.stringify({ version: "liteasy.export-package/v1", sourceDigest: document.sourceDigest, profileId: document.options.profileId, assets: document.assets.map(({ path, sha256, mediaType, bytes }) => ({ path, sha256, mediaType, byteLength: bytes.length })), diagnostics: document.diagnostics }, null, 2) + "\n"), "README.md": strToU8("请解压整个压缩包，保持 document.md 与 assets/ 的相对位置。数学、脚注和合并表格需要 research Markdown 兼容阅读器。\n") };
   for (const asset of document.assets) files[asset.path] = asset.bytes;
   for (const attachment of document.attachments ?? []) {
-    if (!/^assets\/research\/[a-z0-9-]+\.(json|txt)$/.test(attachment.path) || files[attachment.path]) throw new Error("研究附件路径无效。");
+    if (!/^assets\/(research|provenance)\/[a-z0-9-]+\.(json|txt)$/.test(attachment.path) || files[attachment.path]) throw new Error("研究附件路径无效。");
     if (await sha256(attachment.bytes) !== attachment.sha256) throw new Error("研究附件哈希核验失败。");
     files[attachment.path] = attachment.bytes;
   }
   if (document.attachments?.length) {
-    files["README.md"] = strToU8(new TextDecoder().decode(files["README.md"]) + "\n原始研究附件（请按 replay-instructions.txt 独立重放；测量与科学支持分开判断）：\n\n" + document.attachments.map(item => `- [${item.path}](${item.path})`).join("\n") + "\n");
+    files["README.md"] = strToU8(new TextDecoder().decode(files["README.md"]) + (document.attachments.some(item => item.path.startsWith("assets/research/")) ? "\n原始研究附件（请按 replay-instructions.txt 独立重放；测量与科学支持分开判断）：\n\n" : "\n来源元数据（用于核对与溯源）：\n\n") + document.attachments.map(item => `- [${item.path}](${item.path})`).join("\n") + "\n");
     const manifest = JSON.parse(new TextDecoder().decode(files["manifest.json"]));
     manifest.attachments = document.attachments.map(({ path, sha256, mediaType, bytes }) => ({ path, sha256, mediaType, byteLength: bytes.length }));
     files["manifest.json"] = strToU8(JSON.stringify(manifest, null, 2) + "\n");

@@ -107,9 +107,8 @@ export function LiteratureResolutionDialog({
                       const primaryIdentifier = candidate.record.identifiers[0];
                       const relation = candidate.relations?.[0];
                       const pmlrEvidence = candidate.provider === "pmlr" ? candidate.sourceEvidence : undefined;
-                      const pmlrDigest = pmlrEvidence?.artifactHash.slice("sha256:".length);
-                      const pmlrAuditLabel = pmlrEvidence && pmlrDigest
-                        ? ` · ${pmlrEvidence.sourceKind === "official_article_page" ? "官方论文题录" : "官方卷 BibTeX"} v${pmlrEvidence.volume} · SHA-256 ${pmlrDigest.slice(0, 8)}…${pmlrDigest.slice(-8)}`
+                      const pmlrAuditLabel = pmlrEvidence
+                        ? ` · ${pmlrEvidence.sourceKind === "official_article_page" ? "官方论文题录" : "官方卷 BibTeX"} · 第 ${pmlrEvidence.volume} 卷`
                         : "";
                       const byline = [
                         candidate.record.authors.join("、"),
@@ -127,7 +126,7 @@ export function LiteratureResolutionDialog({
                           ) : null}
                           <div
                             className="literature-candidate-source"
-                            title={pmlrEvidence ? `${pmlrEvidence.artifactUrl}\n${pmlrEvidence.artifactHash}` : undefined}
+                            title={pmlrEvidence ? pmlrEvidence.artifactUrl : undefined}
                           >
                             来源：{literatureProviderLabel(candidate.provider)}
                             {relation ? ` · 证据：${relationEvidenceLabel(relation.evidence)}` : ""}

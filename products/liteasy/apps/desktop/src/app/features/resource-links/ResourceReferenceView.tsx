@@ -1,13 +1,14 @@
+import { redactDiagnostic } from "../context/objectContext";
 import { BoardScenePreview } from "../boards/BoardScenePreview";
 import type { BoardViewSnapshot } from "../resource-filesystem/resourcePresentation";
 import { useUiTranslation } from "../../shared/i18n/useUiTranslation";
 import { lazy, Suspense, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
 import { ArrowExpandRegular, DismissRegular } from "@fluentui/react-icons";
-import { IconAction } from "../../shared/ui/productPrimitives";
+import { IconAction, SourceDisclosure } from "../../shared/ui/productPrimitives";
 import { ContentView } from "../markdown/ContentView";
 import { selectContentRange } from "../markdown/contentStructure";
-import { previewErrorMessage } from "./previewRequest";
+import { PreviewRequestError, previewErrorMessage } from "./previewRequest";
 import { AssetImage, VisualResourceContext } from "../visual-blocks/AssetImage";
 import { writeAssetContextTransfer } from "../object-transfer/assetContextTransfer";
 import { ReferenceDepthContext, ReferenceSourceContext, ResourceReferencesContext } from "./ResourceReferencesContext";
@@ -36,16 +37,17 @@ function ResourceReferenceContent({ locator, source, embed = false, onResolved, 
   const [retryable, setRetryable] = useState(true);
   const [pdf, setPdf] = useState<ReferencePdf>();
   const [pdfPage, setPdfPage] = useState(1);
+  const [errorDetails, setErrorDetails] = useState("");
   const [error, setError] = useState(""), [limit, setLimit] = useState(12000), [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!references) return;
     const preparation = prepare.current ? "allow" : "cached"; prepare.current = false;
-    const abort = new AbortController(); cancellation.current = abort; setError(""); setRetryable(true); setBoard(undefined); setImagePath(undefined); setDocument(undefined); setPdf(undefined); setCandidate(undefined);
+    const abort = new AbortController(); cancellation.current = abort; setError(""); setErrorDetails(""); setRetryable(true); setBoard(undefined); setImagePath(undefined); setDocument(undefined); setPdf(undefined); setCandidate(undefined);
     void references.service.resolve(locator, source, abort.signal).then(async (asset) => {
       if (abort.signal.aborted) return;
       setCandidate(asset); onResolved?.(asset);
       if (chain.length >= 2) return;
-      if (chain.includes(asset.path)) throw new Error("此处存在循环引用，点击打开原文件。");
+      if (chain.includes(asset.path)) throw new PreviewRequestError("unavailable", "此处存在循环引用，点击打开原文件。");
       const presentation = await references.service.present(asset.path, { intent: intent === "origin" ? "source" : "self", signal: abort.signal, maxCharacters: limit, preparation });
       if (abort.signal.aborted) return;
       if (presentation.kind === "board") { setBoard(presentation.scene); return; }
@@ -53,14 +55,14 @@ function ResourceReferenceContent({ locator, source, embed = false, onResolved, 
       if (presentation.kind === "unavailable") { setError(presentation.message); setRetryable(presentation.retryable); return; }
       if (presentation.kind === "pdf") {
         const original = await references.service.pdf(sourceLocator(presentation.path, locator), abort.signal, presentation.intent === "source" ? "origin" : "asset", membership.current);
-        if ((await references.service.present(asset.path, { intent: intent === "origin" ? "source" : "self", signal: abort.signal, maxCharacters: 1, preparation: "cached" })).asset.revision !== presentation.asset.revision) throw new Error("引用已修改或删除，请重新选择来源。");
+        if ((await references.service.present(asset.path, { intent: intent === "origin" ? "source" : "self", signal: abort.signal, maxCharacters: 1, preparation: "cached" })).asset.revision !== presentation.asset.revision) throw new PreviewRequestError("unavailable", "引用已修改或删除，请重新选择来源。");
         if (abort.signal.aborted) return;
         if (original) { setPdf(original); setPdfPage(original.page); return; }
-        throw new Error("此资源的原始 PDF 暂不可读取，请打开原文件。");
+        throw new PreviewRequestError("unavailable", "此资源的原始 PDF 暂不可读取，请打开原文件。");
       }
       const value = presentation.read;
       setDocument({ asset: value.asset, content: value.content, text: value.text, source: value.source, complete: !value.truncated, limit, totalCharacters: value.totalCharacters });
-    }).catch((e) => { if (!abort.signal.aborted) { setError(previewErrorMessage(e)); const code = e && typeof e === "object" && "code" in e ? e.code : ""; setRetryable(!["unsupported_type", "ambiguous_provider", "not_found", "permission_denied", "revision_unavailable", "scope_changed"].includes(String(code))); } });
+    }).catch((e) => { if (!abort.signal.aborted) { setError(previewErrorMessage(e)); setErrorDetails(redactDiagnostic(e instanceof Error ? e.message : String(e))); const code = e && typeof e === "object" && "code" in e ? e.code : ""; setRetryable(!["unsupported_type", "ambiguous_provider", "not_found", "permission_denied", "revision_unavailable", "scope_changed"].includes(String(code))); } });
     return () => abort.abort();
   }, [references?.service, locator, source, limit, attempt, intent, memberKey]);
   useEffect(() => candidate ? references?.service.subscribe(candidate.path, () => setAttempt((value) => value + 1)) : undefined, [references?.service, candidate?.path]);
@@ -76,8 +78,8 @@ function ResourceReferenceContent({ locator, source, embed = false, onResolved, 
     }
   } catch (e) { text = undefined; if (!error) fragment = e instanceof Error ? e.message : String(e); }
   return <span className={`resource-reference-view${embed ? " is-embed" : ""}`}>
-    <span className="resource-reference-heading"><strong>{candidate?.title || "引用内容"}</strong>{candidate && references ? <Tooltip content="打开原文件" relationship="label"><Button size="small" appearance="subtle" icon={<ArrowExpandRegular />} aria-label="打开原文件" onClick={() => { void Promise.resolve(references.open(pdf ? `${pdf.path}#page=${pdfPage}` : sourceLocator(candidate.path, locator))).catch((e) => setError(String(e))); }} /></Tooltip> : null}</span>
-    {chain.length >= 2 ? <span>嵌套引用已折叠，请打开原文件继续阅读。</span> : error ? <span role="alert">{error}{retryable ? <Button size="small" onClick={() => setAttempt((value) => value + 1)}>重试</Button> : null}{/正文尚未就绪/.test(error) ? <Button size="small" onClick={() => { prepare.current = true; setAttempt((value) => value + 1); }}>{tChinese("preview.prepareText", "解析正文")}</Button> : null}</span> : board ? <BoardScenePreview scene={board} /> : imagePath ? <AssetImage source={imagePath} alt={candidate?.title} /> : document ? <>
+    <span className="resource-reference-heading"><strong>{candidate?.title || "引用内容"}</strong>{candidate && references ? <Tooltip content="打开原文件" relationship="label"><Button size="small" appearance="subtle" icon={<ArrowExpandRegular />} aria-label="打开原文件" onClick={() => { void Promise.resolve(references.open(pdf ? `${pdf.path}#page=${pdfPage}` : sourceLocator(candidate.path, locator))).catch((e) => { setError(previewErrorMessage(e)); setErrorDetails(redactDiagnostic(e instanceof Error ? e.message : String(e))); }); }} /></Tooltip> : null}</span>
+    {chain.length >= 2 ? <span>嵌套引用已折叠，请打开原文件继续阅读。</span> : error ? <span role="alert">{error}{retryable ? <Button size="small" onClick={() => setAttempt((value) => value + 1)}>重试</Button> : null}{errorDetails ? <SourceDisclosure summary="技术错误详情"><pre>{errorDetails}</pre></SourceDisclosure> : null}{/正文尚未就绪/.test(error) ? <Button size="small" onClick={() => { prepare.current = true; setAttempt((value) => value + 1); }}>{tChinese("preview.prepareText", "解析正文")}</Button> : null}</span> : board ? <BoardScenePreview scene={board} /> : imagePath ? <AssetImage source={imagePath} alt={candidate?.title} /> : document ? <>
       {!text && fragment ? <span role="status">{fragment}</span> : <ReferenceDepthContext.Provider value={[...chain, candidate!.path]}><ReferenceSourceContext.Provider value={candidate!.path}>
         <ContentView content={content!} renderResourceImage={(url, alt) => <AssetImage source={url} basePath={candidate!.path} alt={alt} />} allowRelativeImages />
       </ReferenceSourceContext.Provider></ReferenceDepthContext.Provider>}
@@ -96,6 +98,8 @@ export function ResourceLink({ locator, children, source, previewOnClick = false
   const references = useContext(ResourceReferencesContext), inherited = useContext(ReferenceSourceContext), visual = useContext(VisualResourceContext);
   source ??= inherited ?? visual;
   const [open, setOpen] = useState(false), [error, setError] = useState("");
+  const [errorDetails, setErrorDetails] = useState("");
+  const showError = (cause: unknown) => { setError(previewErrorMessage(cause)); setErrorDetails(redactDiagnostic(cause instanceof Error ? cause.message : String(cause))); };
   const [expanded, setExpanded] = useState(false);
   const pinned = useRef(false), returningFocus = useRef(false), trigger = useRef<HTMLAnchorElement>(null);
   const candidate = useRef<ReferenceCandidate>();
@@ -103,7 +107,7 @@ export function ResourceLink({ locator, children, source, previewOnClick = false
   const id = useRef(`reference-${Math.random()}`);
   const timer = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => { const closeOther = (event: Event) => { if ((event as CustomEvent).detail !== id.current) { clearTimeout(timer.current); opening.current?.abort(); pinned.current = false; setExpanded(false); setOpen(false); } }; window.addEventListener("liteasy:reference-hover", closeOther); return () => { if (pinnedReference === id.current) pinnedReference = undefined; clearTimeout(timer.current); opening.current?.abort(); window.removeEventListener("liteasy:reference-hover", closeOther); }; }, []);
-  useEffect(() => { candidate.current = undefined; clearTimeout(timer.current); opening.current?.abort(); setOpen(false); }, [locator, source]);
+  useEffect(() => { candidate.current = undefined; setError(""); setErrorDetails(""); clearTimeout(timer.current); opening.current?.abort(); setOpen(false); }, [locator, source]);
   const close = () => { clearTimeout(timer.current); opening.current?.abort(); if (pinnedReference === id.current) pinnedReference = undefined; pinned.current = false; setExpanded(false); setOpen(false); returningFocus.current = true; trigger.current?.focus({ preventScroll: true }); };
   const hide = () => { if (pinned.current) return; clearTimeout(timer.current); timer.current = setTimeout(() => setOpen(false), 200); };
   const show = () => { if (pinnedReference || pinned.current) return; clearTimeout(timer.current); timer.current = setTimeout(() => { window.dispatchEvent(new CustomEvent("liteasy:reference-hover", { detail: id.current })); setOpen(true); }, 300); };
@@ -111,7 +115,7 @@ export function ResourceLink({ locator, children, source, previewOnClick = false
   return <><Popover open={open} onOpenChange={(_, data) => { if (data.open) setOpen(true); else close(); }} positioning={{ position: "below", align: "start", overflowBoundary: document.body }} trapFocus={expanded}>
     <PopoverTrigger disableButtonEnhancement><a ref={trigger} href="#" aria-label={ariaLabel} title={ariaLabel} className="resource-reference-link" onMouseEnter={() => { returningFocus.current = false; show(); }} onFocus={() => { if (returningFocus.current) returningFocus.current = false; else show(); }} onMouseLeave={hide} onBlur={hide}
       onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); } }} draggable onDragStart={(event) => { if (candidate.current && references) writeAssetContextTransfer(event.dataTransfer, references.service.scope, { kind: "path", path: candidate.current.path }, candidate.current.title); }}
-      onClick={(event) => { event.preventDefault(); clearTimeout(timer.current); if (previewOnClick) { pinned.current = true; pinnedReference = id.current; window.dispatchEvent(new CustomEvent("liteasy:reference-hover", { detail: id.current })); setOpen(true); return; } if (onOpen) { if (closeOnOpen) close(); void Promise.resolve().then(onOpen).catch((e) => setError(previewErrorMessage(e))); return; } if (!references) return; opening.current?.abort(); const abort = new AbortController(); opening.current = abort; void references.service.resolve(locator, source, abort.signal).then((asset) => { if (!abort.signal.aborted) return references.open(sourceLocator(asset.path, locator)); }).catch((e) => { if (!abort.signal.aborted) setError(previewErrorMessage(e)); }); }}>{children}</a></PopoverTrigger>
+      onClick={(event) => { event.preventDefault(); clearTimeout(timer.current); if (previewOnClick) { pinned.current = true; pinnedReference = id.current; window.dispatchEvent(new CustomEvent("liteasy:reference-hover", { detail: id.current })); setOpen(true); return; } if (onOpen) { if (closeOnOpen) close(); void Promise.resolve().then(onOpen).catch(showError); return; } if (!references) return; opening.current?.abort(); const abort = new AbortController(); opening.current = abort; void references.service.resolve(locator, source, abort.signal).then((asset) => { if (!abort.signal.aborted) return references.open(sourceLocator(asset.path, locator)); }).catch((e) => { if (!abort.signal.aborted) showError(e); }); }}>{children}</a></PopoverTrigger>
     <PopoverSurface className={`resource-reference-popover${presentation === "picker" ? " is-picker-preview" : ""}${expanded ? " is-expanded" : ""}`} aria-label="引用内容预览" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); if (expanded) setExpanded(false); else close(); } }} onMouseEnter={() => clearTimeout(timer.current)} onFocus={() => clearTimeout(timer.current)} onMouseLeave={hide}>
       <div className="reference-preview-actions">
         {presentation === "picker" ? <IconAction label={expanded ? "缩回预览" : "放大预览"} appearance="subtle" icon={<ArrowExpandRegular />} onClick={() => { pinned.current = true; pinnedReference = id.current; setExpanded(value => !value); }} /> : null}
@@ -120,7 +124,7 @@ export function ResourceLink({ locator, children, source, previewOnClick = false
       {open ? actions : null}
       {open ? preview ?? <ResourceReferenceView locator={locator} source={source} intent={intent} sourceMember={sourceMember} onResolved={(asset) => { candidate.current = asset; }} /> : null}
     </PopoverSurface>
-  </Popover>{error ? <span role="status">{error}</span> : null}</>;
+  </Popover>{error ? <span role="status">{error}{errorDetails ? <SourceDisclosure summary="技术错误详情"><pre>{errorDetails}</pre></SourceDisclosure> : null}</span> : null}</>;
 }
 
 export function ResourceEmbed({ locator, source }: { locator: string; source?: string }) {

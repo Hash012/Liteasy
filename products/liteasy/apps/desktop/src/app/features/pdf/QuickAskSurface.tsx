@@ -43,7 +43,8 @@ export function QuickAskSurface(props: {
       <ContextSummary>{props.context ? props.context.available.map((p, i) => <span key={i}>{p.roles.map((r) => names[r]).join("/")}：{statuses[p.status]} </span>) : "选段 · 本页 · 摘要 · 引言（提交时读取实际可用资料）"}</ContextSummary>
       {props.context ? <SourceDisclosure summary="查看来源与实际投递范围">
         <p>来源有记录；回答未经独立语义核验。图像未包含在文字资料中。</p>
-        <p>文献修订：{props.context.source.documentRevision}</p>
+        <p>来源：回答生成时的文献版本</p>
+        <SourceDisclosure summary="来源技术信息"><p>文献修订：{props.context.source.documentRevision}</p></SourceDisclosure>
         {props.context.delivered.map((p, i) => <div key={i}><strong>{p.roles.map((r) => names[r]).join("/")} · 页 {p.spans.map((s) => s.page).join("、")}</strong><p>{p.complete ? "完整" : "部分"}投递 · {p.text.length} 字符{p.reason ? ` · ${p.reason}` : ""}</p></div>)}
         {props.context.omitted.map((p, i) => <p key={i}>{names[p.role]}：{p.reason}</p>)}
       </SourceDisclosure> : null}

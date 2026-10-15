@@ -1,3 +1,6 @@
+import { DocumentExportDialog } from "../document-export/DocumentExportDialog";
+import { useDocumentExportPort } from "../document-export/documentExportPort";
+import { compileObjectDocument } from "../document-export/objectExportAdapter";
 import { DisclosureSection } from "../../shared/ui/productPrimitives";
 import { ReferenceSourceContext } from "../resource-links/ResourceReferencesContext";
 import { AssetImage } from "../visual-blocks/AssetImage";
@@ -207,6 +210,8 @@ export function ObjectDetails({
   onClose(): void;
   onError(message: string): void;
 }) {
+  const exportPort = useDocumentExportPort();
+  const [exportOpen, setExportOpen] = useState(false);
   const [run, setRun] = useState<{
     status: string;
     createdAt: string;
@@ -314,24 +319,11 @@ export function ObjectDetails({
           {new Date(version.updatedAt).toLocaleString()}
         </Button>
       ))}
-      <Button
-        onClick={() => {
-          const blob = new Blob(
-            [
-              `${object.title}\n\n${objectText(object)}\n\n来源：\n${object.provenance.sourceRefs.map(objectLink).join("\n")}\n版本：${object.revision}`,
-            ],
-            { type: "text/markdown" },
-          );
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = "research-note.md";
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-        }}
-      >
-        导出 Markdown
-      </Button>
+      <Button disabled={!exportPort} onClick={() => setExportOpen(true)}>导出 Markdown</Button>
+      {exportOpen && exportPort ? <DocumentExportDialog title="导出对象" open initialFormat="markdown"
+        jobScope={exportPort.jobScope} sourceIdentity={JSON.stringify([repository.scopeId, refOf(object)])}
+        compile={(options, signal) => compileObjectDocument(object, options, signal)} publish={exportPort.publish}
+        onClose={() => setExportOpen(false)} onOutcome={() => undefined} /> : null}
     </section>
   );
 }
