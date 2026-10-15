@@ -3,6 +3,7 @@ import { recallCitations } from "./recommendationCitationRecall";
 import { paperServiceRequest, type PaperServiceConfig } from "../paper-services/paperServiceTransport";
 import { readBibliographicMetadata } from "../paper-services/bibliographicMetadata";
 import { readableBibliographicTitle } from "../metadata/pdfRecognition";
+import { redactDiagnostic } from "../context/objectContext";
 import { hasRecommendationDescription, recommendationQuery, recommendationTopicalScore } from "./recommendationSeed";
 import type { RecommendationItem, RecommendationRequestDocument, RecommendationStyle } from "./recommendation.types";
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -21,10 +22,34 @@ function pdfUrl(item: Record<string, unknown>, provider: PaperServiceConfig["pro
   return undefined;
 }
 
-export async function fetchLocalRecommendations(config: PaperServiceConfig, queries: Array<string | RecommendationRequestDocument>, style: RecommendationStyle, signal: AbortSignal, options: { task?: RecommendationTask; citations?: boolean; onCandidates?: (items: RecommendationItem[]) => void } = {}): Promise<RecommendationItem[]> {
+export type RecommendationSourceFailure = { provider: PaperServiceConfig["provider"]; message: string; status?: number; fallback: "crossref" };
+type RecommendationFetchOptions = { task?: RecommendationTask; citations?: boolean; onCandidates?: (items: RecommendationItem[]) => void; onSourceFailure?: (failure: RecommendationSourceFailure) => void };
+
+export async function fetchLocalRecommendations(config: PaperServiceConfig, queries: Array<string | RecommendationRequestDocument>, style: RecommendationStyle, signal: AbortSignal, options: RecommendationFetchOptions = {}): Promise<RecommendationItem[]> {
+  try { return await fetchProviderRecommendations(config, queries, style, signal, options); }
+  catch (error) {
+    signal.throwIfAborted();
+    const fallback = { provider: "crossref" as const, endpoint: "https://api.crossref.org" };
+    if (config.provider === fallback.provider && config.endpoint.replace(/\/+$/, "") === fallback.endpoint) throw error;
+    const status = typeof (error as { status?: unknown })?.status === "number" ? (error as { status: number }).status : undefined;
+    const failure: RecommendationSourceFailure = { provider: config.provider, status, fallback: "crossref",
+      message: redactDiagnostic(error instanceof Error ? error.message : String(error)).slice(0, 1200) };
+    options.onSourceFailure?.(failure);
+    try { return await fetchProviderRecommendations(fallback, queries, style, signal, options); }
+    catch (fallbackError) {
+      signal.throwIfAborted();
+      throw Object.assign(new Error("配置的文献服务与公开备用来源暂时均无法连接，请稍后重试或检查文献服务设置。"), {
+        sourceFailures: [failure, { provider: "crossref", message: redactDiagnostic(fallbackError instanceof Error ? fallbackError.message : String(fallbackError)).slice(0, 1200) }]
+      });
+    }
+  }
+}
+
+async function fetchProviderRecommendations(config: PaperServiceConfig, queries: Array<string | RecommendationRequestDocument>, style: RecommendationStyle, signal: AbortSignal, options: RecommendationFetchOptions): Promise<RecommendationItem[]> {
   const found = new Map<string, RecommendationItem>();
   const seeds = queries.slice(0, 16);
   const failures: unknown[] = [];
+  let sourceUnavailable = false;
   const graphSeeds = new Set(seeds.filter((seed) => typeof seed !== "string" && seed.doi).slice(0, 3));
   const groups = new Map<string, string[]>();
   async function retrieve(seed: string | RecommendationRequestDocument) {
@@ -52,7 +77,8 @@ export async function fetchLocalRecommendations(config: PaperServiceConfig, quer
       if (!response.ok) { const retry = response.headers.get("Retry-After"); throw Object.assign(new Error(`文献 API 返回 HTTP ${response.status}`), { status: response.status, retryAfterMs: retry ? /^\d+$/.test(retry) ? Number(retry) * 1000 : Math.max(0, Date.parse(retry) - Date.now()) : undefined }); }
       return response;
     };
-    const response = options.task ? await options.task.request("provider", request) : await request();
+    const scheduled = options.task?.request as (<T>(kind: "provider", run: () => Promise<T>, units: number, serviceKey?: string) => Promise<T>) | undefined;
+    const response = scheduled ? await scheduled("provider", request, 0, `${config.provider}:${config.endpoint}`) : await request();
     signal.throwIfAborted();
     if (!response.ok) throw Object.assign(new Error(`文献 API 返回 HTTP ${response.status}，请检查文献服务地址、密钥或配额。`), { status: response.status });
     const payload = record(await response.json());
@@ -99,10 +125,13 @@ export async function fetchLocalRecommendations(config: PaperServiceConfig, quer
     if (found.size) options.onCandidates?.([...found.values()].slice(0, 200));
   }
   let cursor = 0;
-  await Promise.all(Array.from({ length: Math.min(2, seeds.length) }, async () => {
-    while (cursor < seeds.length && !signal.aborted) {
+  await Promise.all(Array.from({ length: Math.min(config.provider === "crossref" ? 1 : 2, seeds.length) }, async () => {
+    while (cursor < seeds.length && !signal.aborted && !sourceUnavailable) {
       const seed = seeds[cursor++];
-      try { await retrieve(seed); } catch (error) { signal.throwIfAborted(); failures.push(error); }
+      try { await retrieve(seed); } catch (error) {
+        signal.throwIfAborted(); failures.push(error);
+        if ([401, 403, 429].includes(Number((error as { status?: number })?.status))) sourceUnavailable = true;
+      }
     }
   }));
   signal.throwIfAborted();
