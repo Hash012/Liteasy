@@ -1,12 +1,16 @@
-import { forwardRef, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject, type ButtonHTMLAttributes, type KeyboardEvent } from "react";
+import { createContext, useContext, forwardRef, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject, type ButtonHTMLAttributes, type KeyboardEvent } from "react";
 import { Accordion, AccordionItem, AccordionHeader, AccordionPanel, Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Dropdown, Option, Popover, PopoverTrigger, PopoverSurface, Spinner, Textarea, Tooltip, type ButtonProps } from "@fluentui/react-components";
 import { DismissRegular, FilterRegular, InfoRegular, TextBulletListLtrRegular } from "@fluentui/react-icons";
 import "./productPrimitives.css";
 
 export type ControlDensity = "compact" | "default";
-export const ActionButton = forwardRef<HTMLButtonElement, ButtonProps & { density?: ControlDensity }>(({ density = "default", ...props }, ref) => <Button {...props} ref={ref} data-density={density} className={`product-action ${props.className ?? ""}`} />);
+const ControlDensityContext = createContext<ControlDensity>("default");
+export function ControlToolbar({ children, density = "compact", className = "", label }: { children: ReactNode; density?: ControlDensity; className?: string; label: string }) {
+  return <ControlDensityContext.Provider value={density}><div role="group" aria-label={label} data-density={density} className={`product-control-toolbar ${className}`}>{children}</div></ControlDensityContext.Provider>;
+}
+export const ActionButton = forwardRef<HTMLButtonElement, ButtonProps & { density?: ControlDensity }>(({ density, ...props }, ref) => { const inherited = useContext(ControlDensityContext); return <Button {...props} ref={ref} data-density={density ?? inherited} className={`product-action ${props.className ?? ""}`} />; });
 ActionButton.displayName = "ActionButton";
-export const IconAction = forwardRef<HTMLButtonElement, ButtonProps & { label: string; description?: string; density?: ControlDensity }>(({ label, description, density = "default", ...props }, ref) => <Tooltip content={description ?? label} relationship="description"><Button {...props} ref={ref} data-density={density} className={`product-icon-action ${props.className ?? ""}`} aria-label={label} /></Tooltip>);
+export const IconAction = forwardRef<HTMLButtonElement, ButtonProps & { label: string; description?: string; density?: ControlDensity }>(({ label, description, density, ...props }, ref) => { const inherited = useContext(ControlDensityContext); return <Tooltip content={description ?? label} relationship="description"><Button {...props} ref={ref} data-density={density ?? inherited} className={`product-icon-action ${props.className ?? ""}`} aria-label={label} /></Tooltip>; });
 IconAction.displayName = "IconAction";
 /** Place inside a product-contextual-owner. The slot keeps its space and keyboard entry. */
 export function ContextualActions({ children, selected = false, expanded = false, menuOpen = false, editing = false, label = "条目操作", className = "" }: { children: ReactNode; selected?: boolean; expanded?: boolean; menuOpen?: boolean; editing?: boolean; label?: string; className?: string }) {
@@ -61,7 +65,9 @@ export function FilterPopover({ label = "筛选", activeCount = 0, children }: {
 export type PickerOption = { value: string; label: string; description?: string; icon?: ReactNode; disabled?: boolean };
 export type OptionPickerProps = { value: string; onValueChange(value: string): void; options: readonly PickerOption[]; "aria-label"?: string; "aria-labelledby"?: string; "aria-describedby"?: string; id?: string; name?: string; form?: string; required?: boolean; disabled?: boolean; className?: string; density?: ControlDensity; placeholder?: string; autoFocus?: boolean; title?: string; onBlur?: () => void };
 /** Business values never depend on translated labels or Dropdown's event target. */
-export function OptionPicker({ value, onValueChange, options, "aria-label": label, "aria-labelledby": labelledBy, "aria-describedby": describedBy, id, name, form, required, disabled, className = "", density = "default", placeholder = "请选择", autoFocus, title, onBlur }: OptionPickerProps) {
+export function OptionPicker({ value, onValueChange, options, "aria-label": label, "aria-labelledby": labelledBy, "aria-describedby": describedBy, id, name, form, required, disabled, className = "", density, placeholder = "请选择", autoFocus, title, onBlur }: OptionPickerProps) {
+  const inheritedDensity = useContext(ControlDensityContext);
+  density ??= inheritedDensity;
   const trigger = useRef<HTMLButtonElement>(null);
   const [invalid, setInvalid] = useState(false);
   const errorId = useId();
