@@ -110,8 +110,12 @@ test("opening a lazily loaded renamed history item preserves its newer title", a
   await userEvent.click(screen.getByRole("menuitem", { name: "重命名对话", exact: true }));
   await userEvent.clear(screen.getByRole("textbox", { name: "会话名称" }));
   await userEvent.type(screen.getByRole("textbox", { name: "会话名称" }), "刚修改的标题");
+  // Exercise the real modal isolation before closing, including its deferred ARIA restoration.
+  await waitFor(() => expect(screen.queryByRole("button", { name: "打开会话：未载入的旧标题" })).not.toBeInTheDocument());
   await userEvent.click(screen.getByRole("button", { name: "保存名称" }));
-  await userEvent.click(screen.getByRole("button", { name: "打开会话：刚修改的标题" }));
+  const renamedRow = await screen.findByRole("button", { name: "打开会话：刚修改的标题" });
+  expect(renamedRow).toBeVisible();
+  await userEvent.click(renamedRow);
   await waitFor(() => expect(screen.getByLabelText("当前会话")).toHaveTextContent("刚修改的标题"));
   expect(persistence.loadSession).toHaveBeenCalledWith(old.id);
 });

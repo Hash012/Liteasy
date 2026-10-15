@@ -81,6 +81,11 @@ test("compact conversation rows manage real titles, export and delete across res
   await page.getByRole("menuitem", { name: "重命名对话", exact: true }).click();
   await page.getByRole("textbox", { name: "会话名称" }).fill("采样与测量误差");
   await page.getByRole("button", { name: "保存名称" }).click();
+  await expect(page.getByRole("dialog", { name: "重命名对话" })).toBeHidden();
+  await home.getByRole("button", { name: "打开会话：采样与测量误差" }).click();
+  await expect(page.getByLabel("当前会话", { exact: true })).toContainText("采样与测量误差");
+  await expect(page.getByText("需要区分采样偏差与测量误差。", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "首页", exact: true }).click();
   await home.getByRole("button", { name: "管理 采样与测量误差" }).click();
   const download = page.waitForEvent("download");
   await page.getByRole("menuitem", { name: "导出对话" }).click();
