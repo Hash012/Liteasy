@@ -87,7 +87,7 @@ export function AccountDataExportPanel({ session, createClient = createAccountDa
         <DialogTitle>确认导出本人云资料包</DialogTitle>
         <DialogContent>
           {plan ? <>
-            <p>云账号：{plan.subject} · 服务：{plan.endpoint}</p>
+            <p>云账号：{plan.accountDisplay.name.trim() || "当前已验证账号（姓名未提供）"}{plan.accountDisplay.email ? ` · ${plan.accountDisplay.email}` : ""} · 服务：{plan.endpoint}</p>
             <p>包含 {plan.documentCount} 条当前文献清单、云画像；按下方选择加入产物正文和版本出处。预览在 5 分钟后失效，下载前会重新核实身份与来源。</p>
             <p>不包含：{plan.exclusions.join("、")}。这不是全产品账号数据备份。</p>
             <div aria-label="可选云产物">

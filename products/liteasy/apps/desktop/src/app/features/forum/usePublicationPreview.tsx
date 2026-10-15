@@ -14,12 +14,15 @@ export type PublicationPreview = {
   authorProfiles?: readonly { label: string; profile: PublicationAuthorProfile }[];
 };
 
-type Pending = { preview: PublicationPreview; actor: PublicationActorBinding; resolve(value: boolean): void };
+export type PublicationIdentityDisplay = { actor: PublicationActorBinding; name: string; email?: string };
+type Pending = { preview: PublicationPreview; actor: PublicationActorBinding; identity: PublicationIdentityDisplay; resolve(value: boolean): void };
 
 /** A local preview only. No handoff, upload or publication is started by opening it. */
-export function usePublicationPreview(getActor: () => PublicationActorBinding | undefined) {
+export function usePublicationPreview(getActor: () => PublicationActorBinding | undefined, getIdentity: () => PublicationIdentityDisplay | undefined) {
   const actorGetter = useRef(getActor);
   actorGetter.current = getActor;
+  const identityGetter = useRef(getIdentity);
+  identityGetter.current = getIdentity;
   const pendingRef = useRef<Pending | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const actorKey = JSON.stringify(getActor());
@@ -34,9 +37,10 @@ export function usePublicationPreview(getActor: () => PublicationActorBinding | 
   function confirm(preview: PublicationPreview): Promise<boolean> {
     pendingRef.current?.resolve(false);
     const actor = normalizePublicationActorBinding(actorGetter.current());
-    if (!actor) return Promise.resolve(false);
+    const identity = identityGetter.current();
+    if (!actor || !identity || !samePublicationActor(actor, identity.actor)) return Promise.resolve(false);
     return new Promise((resolve) => {
-      const request = { actor, preview: structuredClone(preview), resolve };
+      const request = { actor, identity: structuredClone(identity), preview: structuredClone(preview), resolve };
       pendingRef.current = request;
       setPending(request);
     });
@@ -57,7 +61,7 @@ export function usePublicationPreview(getActor: () => PublicationActorBinding | 
             {profile.profile.institutions.length > 0 && <p>机构：{profile.profile.institutions.map((item) => item.name).join("、")}</p>}
             <small>这些是作者自行填写的资料，不代表身份或研究结论已获认证。</small>
           </section>)}
-          <p>发送身份：当前登录账号 · {pending?.actor.subject}</p>
+          <p>发送身份：{pending?.identity.name.trim() || "当前已验证账号（姓名未提供）"}{pending?.identity.email ? ` · ${pending.identity.email}` : ""}</p>
         </DialogContent>
         <DialogActions><Button onClick={() => finish(false)}>取消</Button><Button appearance="primary" onClick={() => finish(true)}>{pending?.preview.action ?? "确认发送"}</Button></DialogActions>
       </DialogBody></DialogSurface>

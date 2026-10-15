@@ -8,7 +8,7 @@ import { defaultAcademicProfile } from "../app/features/profile/profile.types";
 
 const session = { endpoint: "https://cloud.example.invalid", issuer: "https://id.example.invalid", userId: "verified-a",
   sessionId: "a-token", email: "a@example.invalid", name: "A", expiresAt: "2030-01-01T00:00:00Z" };
-const plan: AccountDataExportPlan = { subject: session.userId, endpoint: session.endpoint,
+const plan: AccountDataExportPlan = { accountDisplay: { name: session.name, email: session.email }, subject: session.userId, endpoint: session.endpoint,
   expiresAt: "2030-01-01T00:00:00Z", documentCount: 2,
   artifacts: [{ artifactId: "own", title: "My artifact" }, { artifactId: "org", title: "Organization artifact", excludedReason: "含组织来源" }],
   exclusions: ["本机笔记", "组织资产", "登录凭据"] };
@@ -46,7 +46,8 @@ describe("AccountDataExportPanel", () => {
     render(<AccountDataExportPanel session={session} createClient={f.createClient} />);
     fireEvent.click(screen.getByRole("button", { name: "预览本人云资料包" }));
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText(/verified-a/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/云账号：A · a@example.invalid/)).toBeInTheDocument();
+    expect(dialog).not.toHaveTextContent("verified-a");
     expect(within(dialog).getByText(/不是全产品账号数据备份/)).toBeInTheDocument();
     expect(within(dialog).getByRole("checkbox", { name: "My artifact" })).not.toBeChecked();
     expect(within(dialog).getByRole("checkbox", { name: "Organization artifact" })).toBeDisabled();

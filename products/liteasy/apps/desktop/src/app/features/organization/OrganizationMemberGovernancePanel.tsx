@@ -1,3 +1,4 @@
+import { organizationMemberIdentifiable, organizationMemberLabel } from "./organizationIdentityPresentation";
 import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { useEffect, useRef, useState } from "react";
 import { Tooltip } from "@fluentui/react-components";
@@ -39,7 +40,7 @@ function actionLabel(action: MemberAction) {
     suspend: "暂停成员",
     transfer: "转移所有权"
   };
-  return `${labels[action.kind]}：${action.member.name}`;
+  return `${labels[action.kind]}：${organizationMemberLabel(action.member)}`;
 }
 
 function canManageMember(summary: OrganizationSummary, member: OrganizationMember) {
@@ -73,6 +74,9 @@ function MemberGovernance({
     if (!mounted.current || binding !== organizationActorBinding(accountSession, endpoint)) return;
     if (!organizationSessionMatchesEndpoint(accountSession, endpoint)) {
       setPendingAction(null); setMessage("账号或服务地址已变化，请重新登录后管理组织。"); return;
+    }
+    if (!organizationMemberIdentifiable(action.member, summary.members)) {
+      setPendingAction(null); setMessage("请先刷新成员资料，确认姓名或邮箱后再操作。"); return;
     }
     const request = ++epoch.current;
     const current = () => mounted.current && request === epoch.current && binding === organizationActorBinding(accountSession, endpoint);
@@ -135,19 +139,22 @@ function MemberGovernance({
         <div className="sidebar-section-content">
           {governedMembers.map((member) => {
             const manageable = canManageMember(summary, member);
+            const identified = organizationMemberIdentifiable(member, summary.members);
+            const label = organizationMemberLabel(member);
             return (
               <div className="organization-member-governance-row" key={member.subject}>
                 <div className="model-policy-summary">
-                  {member.name} · {member.role === "admin" ? "管理员" : "成员"} · {member.status === "suspended" ? "已暂停" : "正常"}
+                  {label} · {member.role === "admin" ? "管理员" : "成员"} · {member.status === "suspended" ? "已暂停" : "正常"}
                 </div>
+                {manageable && !identified ? <p className="model-policy-footnote">姓名或邮箱不足以辨认此成员，请刷新成员资料后再操作。</p> : null}
                 {manageable ? (
                   <div className="organization-member-governance-actions">
                     {summary.myRole === "owner" ? (
                       <Tooltip content={member.role === "admin" ? "撤销管理员" : "设为管理员"} relationship="label">
                         <Button appearance="subtle"
-                          aria-label={`${member.role === "admin" ? "撤销管理员" : "设为管理员"} ${member.name}`}
+                          aria-label={`${member.role === "admin" ? "撤销管理员" : "设为管理员"} ${label}`}
                           className="organization-member-action"
-                          disabled={submitting || member.status === "suspended"}
+                          disabled={submitting || !identified || member.status === "suspended"}
                           onClick={() => setPendingAction({
                             kind: member.role === "admin" ? "demote" : "promote",
                             member
@@ -160,9 +167,9 @@ function MemberGovernance({
                     ) : null}
                     <Tooltip content={member.status === "suspended" ? "恢复成员" : "暂停成员"} relationship="label">
                       <Button appearance="subtle"
-                        aria-label={`${member.status === "suspended" ? "恢复成员" : "暂停成员"} ${member.name}`}
+                        aria-label={`${member.status === "suspended" ? "恢复成员" : "暂停成员"} ${label}`}
                         className="organization-member-action"
-                        disabled={submitting}
+                        disabled={submitting || !identified}
                         onClick={() => setPendingAction({
                           kind: member.status === "suspended" ? "activate" : "suspend",
                           member
@@ -174,9 +181,9 @@ function MemberGovernance({
                     </Tooltip>
                     <Tooltip content="移除成员" relationship="label">
                       <Button appearance="subtle"
-                        aria-label={`移除成员 ${member.name}`}
+                        aria-label={`移除成员 ${label}`}
                         className="organization-member-action"
-                        disabled={submitting}
+                        disabled={submitting || !identified}
                         onClick={() => setPendingAction({ kind: "remove", member })}
                         type="button"
                       >
@@ -186,9 +193,9 @@ function MemberGovernance({
                     {summary.myRole === "owner" && member.status === "active" ? (
                       <Tooltip content="转移所有权" relationship="label">
                         <Button appearance="subtle"
-                          aria-label={`转移所有权给 ${member.name}`}
+                          aria-label={`转移所有权给 ${label}`}
                           className="organization-member-action"
-                          disabled={submitting}
+                          disabled={submitting || !identified}
                           onClick={() => setPendingAction({ kind: "transfer", member })}
                           type="button"
                         >
@@ -201,6 +208,7 @@ function MemberGovernance({
               </div>
             );
           })}
+          {governedMembers.some((member) => !organizationMemberIdentifiable(member, summary.members)) ? <Button onClick={() => void onChanged()} disabled={submitting}>刷新成员资料</Button> : null}
           {governedMembers.length === 0 ? (
             <div className="model-policy-footnote">当前没有可管理的组织成员。</div>
           ) : null}

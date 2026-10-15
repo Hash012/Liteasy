@@ -135,7 +135,8 @@ test("normalizes formal organization revisions, member state, bytes, and shared 
   expect(summary.revision).toBe(11);
   expect(summary.myMemberRevision).toBe(4);
   expect(summary.members[0]).toEqual(expect.objectContaining({
-    name: "member-1",
+    name: "",
+    nameState: "unresolved",
     revision: 4,
     status: "suspended",
     subject: "member-1"
@@ -147,6 +148,7 @@ test("normalizes formal organization revisions, member state, bytes, and shared 
   }));
   expect(summary.sharedLibrary.documents[0].id).toBe("document-1");
   expect(summary.taskSummary).toBeUndefined();
+  expect(summary.auditEvents[0]).toMatchObject({ actor: "成员姓名尚未提供", description: "转移了组织所有权", actorSubject: "owner-1", actionCode: "transfer_organization_ownership" });
 });
 
 test("posts a selected organization id when loading organization summary", async () => {
@@ -245,4 +247,17 @@ test("normalizes legacy organization summary roles into the formal role model", 
 
   expect(summary.myRole).toBe("member");
   expect(summary.members[0].role).toBe("member");
+});
+
+test("resolves audit authors only from the same organization snapshot and preserves raw codes separately", async () => {
+  const client = createOrganizationSummaryClient({ endpoint: "https://cloud.example", transport: async () => ({ ok: true, status: 200, json: async () => ({ summary: {
+    organizationId: "org-a", name: "研究组", myRole: "member", memberCount: 2,
+    quota: {}, sharedLibrary: { name: "资料", documents: [] },
+    members: [{ subject: "user:known", name: "同域研究员", email: "visible@example.test", role: "member" }, { subject: "user:missing", role: "member" }],
+    auditEvents: [{ auditId: "audit:one", actorSubject: "user:known", action: "new_internal_action", occurredAt: "2026-10-15T01:00:00Z" }, { auditId: "audit:two", actorSubject: "user:elsewhere", action: "change_organization_member_role", occurredAt: "2026-10-15T02:00:00Z" }],
+  } }) }) });
+  const result = await client({ sessionId: "session", organizationId: "org-a" });
+  expect(result.auditEvents[0]).toMatchObject({ actor: "同域研究员 · visible@example.test", description: "完成了一项组织操作", actionCode: "new_internal_action", actorSubject: "user:known" });
+  expect(result.auditEvents[1]).toMatchObject({ actor: "成员姓名尚未提供", description: "调整了成员角色", actorSubject: "user:elsewhere" });
+  expect(result.members[1]).toMatchObject({ name: "", nameState: "unresolved", subject: "user:missing" });
 });

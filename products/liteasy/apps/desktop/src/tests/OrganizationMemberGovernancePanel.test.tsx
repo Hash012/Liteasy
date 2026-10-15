@@ -113,3 +113,35 @@ test("a late ownership transfer cannot update another account's organization pan
   expect(screen.queryByRole("alertdialog", { name: "确认成员治理操作" })).not.toBeInTheDocument();
   expect(screen.queryByText("转移所有权：Member已完成。")).not.toBeInTheDocument();
 });
+
+test("missing and ambiguous member names cannot initiate destructive actions or expose subjects", async () => {
+  const transport = vi.fn<OrganizationActionTransport>(async () => response());
+  const onChanged = vi.fn();
+  const members = [
+    { ...summary.members[1], name: "", nameState: "unresolved" as const, subject: "user:private-subject" },
+    { ...summary.members[2], name: "同名成员", subject: "user:first" },
+    { ...summary.members[2], id: "another", name: "同名成员", subject: "user:second" },
+  ];
+  render(<OrganizationMemberGovernancePanel accountSession={accountSession} endpoint="https://cloud.example" onChanged={onChanged} summary={{ ...summary, members }} transport={transport} />);
+  await userEvent.click(screen.getByRole("button", { name: "展开成员治理" }));
+  expect(screen.getByText(/成员姓名尚未提供 ·/)).toBeVisible();
+  expect(document.body.textContent).not.toContain("private-subject");
+  for (const button of screen.getAllByRole("button", { name: /^移除成员|^转移所有权给/ })) expect(button).toBeDisabled();
+  await userEvent.click(screen.getByRole("button", { name: "刷新成员资料" }));
+  expect(onChanged).toHaveBeenCalledOnce();
+  expect(transport).not.toHaveBeenCalled();
+});
+
+test("same-name members with visible email keep the confirmed target's exact subject", async () => {
+  const transport = vi.fn<OrganizationActionTransport>(async () => response());
+  const members = [
+    { ...summary.members[2], name: "研究员", email: "one@example.test", subject: "user:first" },
+    { ...summary.members[2], id: "another", name: "研究员", email: "two@example.test", subject: "user:second" },
+  ];
+  render(<OrganizationMemberGovernancePanel accountSession={accountSession} endpoint="https://cloud.example" onChanged={vi.fn()} summary={{ ...summary, members }} transport={transport} />);
+  await userEvent.click(screen.getByRole("button", { name: "展开成员治理" }));
+  await userEvent.click(screen.getByRole("button", { name: "移除成员 研究员 · two@example.test" }));
+  expect(screen.getByRole("alertdialog")).toHaveTextContent("研究员 · two@example.test");
+  await userEvent.click(screen.getByRole("button", { name: "确认", exact: true }));
+  expect(JSON.parse(transport.mock.calls[0][0].body)).toMatchObject({ targetSubject: "user:second", status: "removed" });
+});

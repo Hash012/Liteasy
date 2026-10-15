@@ -1,3 +1,4 @@
+import { organizationMemberLabel } from "./organizationIdentityPresentation";
 import { ActionButton as Button, DisclosureSection } from "../../shared/ui/productPrimitives";
 import { Avatar, Badge, ProgressBar } from "@fluentui/react-components";
 import { BookOpenRegular, PeopleRegular, AlertRegular, StorageRegular } from "@fluentui/react-icons";
@@ -35,7 +36,7 @@ export function OrganizationOverview({ summary, onOpenSharedLibrary, onMarkNotif
     <DisclosureSection className="organization-surface organization-disclosure" icon={<PeopleRegular />} title={<>成员<span className="organization-count">{summary.memberCount}</span></>}>
       <ul className="organization-member-list">
         {summary.members.map((member) => <li key={member.id}>
-          <Avatar name={member.name} size={28} /><span>{member.name}</span>
+          <Avatar name={member.name || undefined} size={28} /><span>{organizationMemberLabel(member)}</span>
           <small>{organizationRoleLabel(member.role)}{member.status === "suspended" ? " · 已暂停" : ""}</small>
         </li>)}
       </ul>
@@ -65,7 +66,9 @@ export function OrganizationOverview({ summary, onOpenSharedLibrary, onMarkNotif
     </section>
     {summary.taskSummary || summary.auditEvents.length ? <DisclosureSection className="organization-surface organization-disclosure" title="近期活动">
       {summary.taskSummary ? <p>运行任务 {summary.taskSummary.running} 个 · 失败任务 {summary.taskSummary.failed} 个</p> : null}
-      {summary.auditEvents.slice(0, 5).map((event) => <p key={event.id}>{event.actor} {event.description}</p>)}
+      {summary.auditEvents.slice(0, 5).map((event) => <div key={event.id}><p>{event.actor} {event.description}</p>
+        <DisclosureSection title="活动技术详情"><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify(event, null, 2)}</pre></DisclosureSection>
+      </div>)}
     </DisclosureSection> : null}
   </div>;
 }

@@ -52,6 +52,9 @@ describe("personal cloud data export", () => {
     const f = fixture();
     const plan = await f.client.prepare();
     expect(plan.documentCount).toBe(1);
+    expect(plan.accountDisplay).toEqual({ name: "A", email: "a@example.invalid" });
+    storeAccountSession({ ...session, name: "Renamed after preview", email: "renamed@example.invalid" });
+    expect(plan.accountDisplay).toEqual({ name: "A", email: "a@example.invalid" });
     expect(plan.artifacts[0].excludedReason).toBeUndefined();
     await expect(f.client.export(plan, ["artifact-1"])).resolves.toEqual({ artifactCount: 1, documentCount: 1 });
     const archive = unzipSync(f.download.mock.calls[0][0].bytes);

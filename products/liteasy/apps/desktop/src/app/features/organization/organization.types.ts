@@ -9,6 +9,8 @@ export type OrganizationNotification = {
 };
 
 export type OrganizationAuditEvent = {
+  actorSubject?: string;
+  actionCode?: string;
   actor: string;
   description: string;
   id: string;
@@ -33,7 +35,10 @@ export type OrganizationAccessSnapshot = {
 
 export type OrganizationMember = {
   id: string;
+  /** Empty when the service did not supply a display name; subject remains identity only. */
   name: string;
+  nameState?: "resolved" | "unresolved";
+  email?: string;
   revision: number;
   role: OrganizationRole;
   status: "active" | "suspended";

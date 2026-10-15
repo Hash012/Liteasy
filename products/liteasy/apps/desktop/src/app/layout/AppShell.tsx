@@ -405,7 +405,11 @@ export function AppShell({
       scopeType: "user", scopeId: session.userId, sessionGeneration: getAccountSessionGeneration()
     } : undefined);
   };
-  const publicationPreview = usePublicationPreview(getPublicationActorBinding);
+  const publicationPreview = usePublicationPreview(getPublicationActorBinding, () => {
+    const session = loadStoredAccountSession();
+    const actor = getPublicationActorBinding();
+    return session && actor ? { actor, name: session.name, email: session.email } : undefined;
+  });
   const forum = useForumController({
     apiBaseUrl: resolveIntuechoEndpoint(),
     getSessionId: () => cloudAccessTokenRef.current,

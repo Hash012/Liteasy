@@ -127,6 +127,8 @@ function artifactProjection(artifact: AgentArtifactResult, artifactRevision: num
 }
 
 export type AccountDataExportPlan = {
+  /** Display snapshot captured with the same verified request binding as subject. */
+  readonly accountDisplay: Readonly<{ name: string; email: string }>;
   readonly subject: string;
   readonly endpoint: string;
   readonly expiresAt: string;
@@ -219,6 +221,7 @@ export function createAccountDataExportClient(input: {
         excludedReason: artifactExclusion(artifact, manifest) }));
       if (new Set(entries.map((entry) => entry.artifactId)).size !== entries.length) throw new Error("云产物包含重复标识。");
       const plan = Object.freeze({ subject: binding.subject, endpoint: binding.endpoint,
+        accountDisplay: Object.freeze({ name: session.name, email: session.email }),
         expiresAt: new Date(context.expires).toISOString(), documentCount: manifest.entries.length,
         artifacts: entries, exclusions: [...exclusions] });
       plans.set(plan, { ...context, issuer: session.issuer, manifest, profile,

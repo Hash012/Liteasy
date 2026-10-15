@@ -1,3 +1,4 @@
+import { organizationAuditActionLabel, organizationMemberLabel } from "./organizationIdentityPresentation";
 import type { ModelTransportResponse } from "../models/modelHttpClient";
 import { readCloudServiceError } from "../network/cloudErrorMessage";
 import { normalizeOrganizationAccessSnapshot } from "./organizationAccessSnapshot";
@@ -54,7 +55,9 @@ function members(value: unknown): OrganizationMember[] {
     if (!memberRole || !subject) throw new Error("组织空间返回格式无效");
     return {
       id: string(item.id) ?? subject,
-      name: string(item.name) ?? subject,
+      name: string(item.name) ?? "",
+      nameState: string(item.name) ? "resolved" : "unresolved",
+      ...(string(item.email) ? { email: string(item.email) } : {}),
       revision: number(item.revision),
       role: memberRole,
       status: item.status === "suspended" ? "suspended" : "active",
@@ -63,15 +66,18 @@ function members(value: unknown): OrganizationMember[] {
   });
 }
 
-function auditEvents(value: unknown): OrganizationAuditEvent[] {
+function auditEvents(value: unknown, memberSnapshot: OrganizationMember[]): OrganizationAuditEvent[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item) => {
     if (!isRecord(item)) return [];
     const id = string(item.id) ?? string(item.auditId);
-    const actor = string(item.actor) ?? string(item.actorSubject);
-    const description = string(item.description) ?? string(item.action);
+    const actorSubject = string(item.actorSubject);
+    const actionCode = string(item.action);
+    const member = memberSnapshot.find((entry) => entry.subject === actorSubject);
+    const actor = string(item.actor) ?? (member ? organizationMemberLabel(member) : "成员姓名尚未提供");
+    const description = string(item.description) ?? organizationAuditActionLabel(actionCode);
     const occurredAt = string(item.occurredAt);
-    return id && actor && description && occurredAt ? [{ actor, description, id, occurredAt }] : [];
+    return id && actor && description && occurredAt ? [{ actor, description, id, occurredAt, actorSubject, actionCode }] : [];
   });
 }
 
@@ -128,14 +134,15 @@ function normalizeSummary(value: unknown): OrganizationSummary {
       uploadPolicy: value.policy.uploadPolicy
     }
     : undefined;
+  const memberSnapshot = members(value.members);
   return {
     accessSnapshot: normalizeOrganizationAccessSnapshot(value),
-    auditEvents: auditEvents(value.auditEvents),
+    auditEvents: auditEvents(value.auditEvents, memberSnapshot),
     ...(typeof value.canCreateOrganization === "boolean"
       ? { canCreateOrganization: value.canCreateOrganization }
       : {}),
     memberCount: number(value.memberCount),
-    members: members(value.members),
+    members: memberSnapshot,
     myMemberRevision: typeof value.myMemberRevision === "number" ? value.myMemberRevision : null,
     myRole,
     name,
