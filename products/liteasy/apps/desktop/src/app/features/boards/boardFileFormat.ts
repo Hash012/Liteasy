@@ -71,6 +71,8 @@ export function canvasColor(value?: string) {
   return value && /^(#[0-9a-f]{6}|[1-6])$/i.test(value) ? palette[value] ?? value : undefined;
 }
 export type BoardFileBinding = {
+  /** Resolved from the scoped mount grant, never inferred from the filename. */
+  locationKind?: "managed" | "external" | "unresolved";
   mountId: string;
   path: string;
   name: string;

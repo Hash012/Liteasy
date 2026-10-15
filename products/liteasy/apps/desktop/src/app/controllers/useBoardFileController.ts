@@ -1,3 +1,4 @@
+import { boardFileDisplayName, boardFileFailure } from "../features/boards/boardFilePresentation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createNoteFileService, subscribeNoteFiles } from "../features/note-files/noteFileService";
 import type { ObjectRepository } from "../features/objects/objectRepository";
@@ -37,16 +38,23 @@ export function useBoardFileController(input: {
   const [binding, setBinding] = useState<BoardFileBinding>();
   const [loadedBoardId, setLoadedBoardId] = useState("");
   const [fileBusy, setFileBusy] = useState(false);
+  const [fileError, setFileError] = useState<{ summary: string; details: string }>();
+  async function locationKind(file: Pick<BoardFileSnapshot, "mountId">): Promise<NonNullable<BoardFileBinding["locationKind"]>> {
+    const mount = (await service.listMounts()).find((item) => item.id === file.mountId);
+    return mount ? mount.managed ? "managed" : "external" : "unresolved";
+  }
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   useEffect(() => {
     queue.current = Promise.resolve();
     setFileBusy(false);
   }, [input.repository]);
+  useEffect(() => { setFileError(undefined); }, [input.repository, input.board?.objectId]);
   const report = (error: unknown) => {
-    if (input.active())
-      input.setStatus(
-        error instanceof Error ? error.message : "白板文件保存失败。",
-      );
+    if (input.active()) {
+      const failure = boardFileFailure(error);
+      setFileError(failure);
+      input.setStatus(failure.summary);
+    }
   };
   useEffect(() => {
     let alive = true;
@@ -55,8 +63,9 @@ export function useBoardFileController(input: {
     if (input.board)
       void input.repository
         .getBoardFileBinding<BoardFileBinding>(input.board.objectId)
-        .then((value) => {
-          if (alive) { setBinding(value); setLoadedBoardId(input.board!.objectId); }
+        .then(async (value) => {
+          const resolved = value ? { ...value, locationKind: await locationKind(value) } : undefined;
+          if (alive) { setBinding(resolved); setLoadedBoardId(input.board!.objectId); }
         })
         .catch(report);
     return () => {
@@ -99,10 +108,12 @@ export function useBoardFileController(input: {
   }
   async function resolveBoardFile(file: BoardFileSnapshot): Promise<ObjectRef> {
     const document = parseCanvasFile(file.text);
+    const origin = await locationKind(file);
     // Reopening an unchanged file selects its existing board, including local
     // edits pending a failed save. External conflicts require explicit save-as.
     let cursor: string | undefined;
     let replaceRef: ObjectRef | undefined;
+    let existingTitle: string | undefined;
     do {
       const page = await input.repository.search("", cursor);
       for (const object of page.objects.filter(
@@ -120,6 +131,7 @@ export function useBoardFileController(input: {
             "白板和外部文件都有修改。请先将当前白板另存为文件，再打开外部版本。",
           );
         replaceRef = refOf(object);
+        existingTitle = object.title;
       }
       cursor = page.cursor;
     } while (cursor);
@@ -132,7 +144,9 @@ export function useBoardFileController(input: {
     const board = await input.repository.importBoardFile({
       ...prepared,
       replaceRef,
-      title: file.name.replace(/\.canvas$/i, ""),
+      title: origin === "external" ? file.name.replace(/\.canvas$/i, "")
+        : existingTitle ?? (typeof canvasExtension(document.liteasy).title === "string" && String(canvasExtension(document.liteasy).title).trim()
+          ? String(canvasExtension(document.liteasy).title) : "白板（名称待恢复）"),
       operationId: crypto.randomUUID(),
     });
     // Mark imported references in the preserved document so editing one in
@@ -143,6 +157,7 @@ export function useBoardFileController(input: {
       liteasy: { ...canvasExtension(node.liteasy), ref: placements.find((item) => item.placementId === node.id)?.ref },
     }));
     const next: BoardFileBinding = {
+      locationKind: origin,
       mountId: file.mountId,
       path: file.path,
       name: file.name,
@@ -159,12 +174,12 @@ export function useBoardFileController(input: {
     const board = await input.repository.get(ref);
     if (!input.active()) return;
     await input.select(board);
-    setBinding(
-      await input.repository.getBoardFileBinding<BoardFileBinding>(
-        board.objectId,
-      ),
-    );
-    input.setStatus(`已打开 ${file.name}`);
+    const saved = await input.repository.getBoardFileBinding<BoardFileBinding>(board.objectId);
+    const resolved = saved ? { ...saved, locationKind: await locationKind(file) } : undefined;
+    if (!input.active()) return;
+    setBinding(resolved);
+    setFileError(undefined);
+    input.setStatus(`已打开 ${boardFileDisplayName(board, resolved)}`);
   }
   async function chooseBoardFile() {
     setFileBusy(true);
@@ -214,7 +229,9 @@ export function useBoardFileController(input: {
           text,
           expectedVersion: target.version,
         });
+        const origin = !current && !choose && service.managedCanvas ? "managed" : await locationKind(saved);
         const next: BoardFileBinding = {
+          locationKind: origin,
           mountId: saved.mountId,
           path: saved.path,
           name: saved.name,
@@ -228,12 +245,17 @@ export function useBoardFileController(input: {
           latest.current.board?.objectId === board.objectId
         ) {
           setBinding(next);
-          input.setStatus(`已保存 ${saved.name}`);
+          setFileError(undefined);
+          input.setStatus(`已保存 ${boardFileDisplayName(board, next)}`);
         }
       });
     queue.current = operation;
     try {
       await operation;
+    } catch (error) {
+      if (error instanceof BoardSnapshotChanged) throw error;
+      report(error);
+      throw new Error(boardFileFailure(error).summary, { cause: error });
     } finally {
       if (input.active()) setFileBusy(false);
     }
@@ -268,9 +290,12 @@ export function useBoardFileController(input: {
     if (!file || file.version === saved.version || !input.active() || latest.current.board?.objectId !== boardId) return;
     const ref = await resolveBoardFile(file);
     if (input.active() && latest.current.board?.objectId === boardId) {
-      await input.select(await input.repository.get(ref));
-      setBinding(await input.repository.getBoardFileBinding<BoardFileBinding>(boardId));
-      input.setStatus(`已更新 ${file.name}`);
+      const updated = await input.repository.get(ref);
+      await input.select(updated);
+      const next = await input.repository.getBoardFileBinding<BoardFileBinding>(boardId);
+      setBinding(next);
+      setFileError(undefined);
+      input.setStatus(`已更新 ${boardFileDisplayName(updated, next)}`);
     }
   };
   useEffect(() => {
@@ -290,6 +315,7 @@ export function useBoardFileController(input: {
   }, [input.repository, input.board?.objectId, binding?.mountId, binding?.path]);
   return {
     boardFile: binding,
+    fileError,
     fileBusy,
     openBoardFile,
     resolveBoardFile,

@@ -104,3 +104,35 @@ test("uses the granted absolute location for individually mounted files", async 
   expect(changed.mock.calls.at(-1)?.[0][0].location).toBe("D:/Research/note.md");
   index.dispose();
 });
+
+test("managed boards never enter external file results through scans or incremental events", async () => {
+  const managed = { ...mount("managed"), managed: true };
+  const externalHashName = `${"b".repeat(64)}.canvas`;
+  const files = { listMounts: vi.fn(async () => [managed, mount("external")]), listEntries: vi.fn(async (id: string) => [file(id, externalHashName)]) };
+  let catalog: CatalogFile[] = [];
+  const index = createNoteFileCatalogIndex({ files, onChange: (next) => { catalog = next; } });
+  await index.refresh();
+  expect(files.listEntries.mock.calls).toEqual([["external"]]);
+  expect(catalog.map((item) => item.mountId)).toEqual(["external"]);
+  expect(catalog[0].name).toBe(externalHashName); // A user-owned hash filename is legitimate.
+  index.change({ kind: "file", entry: file("managed", "private-hash.canvas") });
+  index.change({ kind: "mount", mount: managed });
+  await Promise.resolve();
+  expect(catalog).toHaveLength(1);
+  expect(files.listEntries.mock.calls).toEqual([["external"]]);
+  index.dispose();
+});
+
+test("an obsolete external scan cannot republish a mount after its managed grant arrives", async () => {
+  let finish!: (entries: NoteFileEntry[]) => void;
+  const files = { listMounts: async () => [mount("upgraded")], listEntries: vi.fn(() => new Promise<NoteFileEntry[]>((resolve) => { finish = resolve; })) };
+  const changed = vi.fn();
+  const index = createNoteFileCatalogIndex({ files, onChange: changed });
+  const refresh = index.refresh();
+  await vi.waitFor(() => expect(files.listEntries).toHaveBeenCalledOnce());
+  index.change({ kind: "mount", mount: { ...mount("upgraded"), managed: true } });
+  finish([file("upgraded", "private-hash.canvas")]);
+  await refresh;
+  expect(changed.mock.calls.flat(2)).toEqual([]);
+  index.dispose();
+});

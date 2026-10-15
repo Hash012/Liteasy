@@ -39,13 +39,21 @@ export function createNoteFileCatalogIndex(input: {
   }
 
   async function scanMount(mount: NoteFileMount): Promise<void> {
+    // Managed Canvas files are represented by titled board objects, not duplicate
+    // external-file rows named after their private storage addresses.
+    if (mount.managed) {
+      entries.delete(mount.id);
+      for (const [key, change] of pendingChanges) if (change.entry.mountId === mount.id) pendingChanges.delete(key);
+      publish();
+      return;
+    }
     const running = scanning.get(mount.id);
     if (running) return running;
     const started = sequence;
     const run = (async () => {
       try {
         const listed = await input.files.listEntries(mount.id);
-        if (!active || !mounts.has(mount.id)) return;
+        if (!active || !mounts.has(mount.id) || mounts.get(mount.id)?.managed) return;
         const previous = entries.get(mount.id);
         const next = new Map<string, CatalogFile>();
         for (const entry of listed) {
@@ -114,8 +122,9 @@ export function createNoteFileCatalogIndex(input: {
     }
     const entry = change.entry;
     if (!/\.(md|markdown|canvas)$/i.test(entry.name)) return;
-    pendingChanges.set(`${entry.mountId}\0${entry.path}`, { entry, sequence: ++sequence });
     const mount = mounts.get(entry.mountId);
+    if (mount?.managed) return;
+    pendingChanges.set(`${entry.mountId}\0${entry.path}`, { entry, sequence: ++sequence });
     if (!mount) { requestRefresh(); return; }
     const group = entries.get(mount.id) ?? new Map<string, CatalogFile>();
     const previous = group.get(entry.path);

@@ -648,3 +648,20 @@ test("a card refresh cannot replace the base revision of an active Markdown draf
   expect(screen.getByRole("textbox", { name: "编辑卡片正文" })).toHaveValue("my unsaved text");
   expect(edit).not.toHaveBeenCalled();
 });
+
+test("managed board names stay human-readable until storage details are explicitly expanded", async () => {
+  const f = await fixture();
+  const filename = `${"a".repeat(64)}.canvas`;
+  f.model.boardFile = { mountId: "managed", path: filename, name: filename, locationKind: "managed", version: "v1", savedRevision: f.board.revision, document: { nodes: [], edges: [] } };
+  f.model.saveBoardFile = vi.fn().mockResolvedValue(undefined);
+  render(<ObjectWorkbench model={f.model} />);
+  fireEvent.click(screen.getByRole("button", { name: "切换或新建白板" }));
+  expect(screen.getByText("白板 · 保存在本机")).toBeVisible();
+  expect(screen.getByRole("combobox", { name: "选择白板" })).toHaveTextContent("白板");
+  const rawPath = screen.queryByText(filename);
+  if (rawPath) expect(rawPath).not.toBeVisible();
+  expect(screen.getByText("白板 · 保存在本机").parentElement).toHaveAttribute("title", "保存在本机");
+  fireEvent.click(screen.getByRole("button", { name: "文件存储位置" }));
+  expect(screen.getByText(filename)).toBeVisible();
+  expect(screen.getByRole("button", { name: "复制文件位置" })).toBeVisible();
+});

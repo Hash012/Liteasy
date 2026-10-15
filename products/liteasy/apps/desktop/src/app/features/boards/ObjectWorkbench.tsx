@@ -1,3 +1,4 @@
+import { boardFileDisplayName, boardFileLocationLabel } from "./boardFilePresentation";
 import { DisclosureSection } from "../../shared/ui/productPrimitives";
 import { OptionPicker } from "../../shared/ui/productPrimitives";
 import { ActionButton as Button } from "../../shared/ui/productPrimitives";
@@ -116,6 +117,7 @@ export type WorkbenchViewModel = {
   openSource(object: ObjectEnvelope): Promise<ObjectEnvelope | undefined>;
   refresh(): Promise<void>;
   boardFile?: BoardFileBinding;
+  fileError?: { summary: string; details: string };
   fileBusy?: boolean;
   chooseBoardFile?(): Promise<void>;
   saveBoardFile?(choose?: boolean): Promise<void>;
@@ -432,7 +434,7 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
             <Tooltip
               content={
                 model.boardFile
-                  ? `保存 ${model.boardFile.name}`
+                  ? `保存 ${boardFileDisplayName(model.board, model.boardFile)}`
                   : "选择白板存储文件"
               }
               relationship="description"
@@ -807,9 +809,9 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
           {model.boardFile ? (
             <div
               className="object-board-file-location"
-              title={model.boardFile.path}
+              title={boardFileLocationLabel(model.boardFile)}
             >
-              <span>{model.boardFile.name}</span>
+              <span>{boardFileDisplayName(model.board, model.boardFile)} · {boardFileLocationLabel(model.boardFile)}</span>
               <Tooltip content="另存为白板文件" relationship="description">
                 <Button
                   size="small"
@@ -822,8 +824,12 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
               </Tooltip>
             </div>
           ) : null}
+          {model.boardFile ? <DisclosureSection title="文件存储位置">
+            <p>{model.boardFile.path}</p>
+            <Button appearance="subtle" onClick={() => void navigator.clipboard.writeText(model.boardFile!.path).catch(() => model.setStatus("复制位置失败，请手动选择路径复制。"))}>复制文件位置</Button>
+          </DisclosureSection> : null}
           <div className="object-toolbar">
-            <OptionPicker aria-label="选择白板" value={String(model.board?.objectId ?? "")} onValueChange={nextValue => {
+            <OptionPicker aria-label="选择白板" scopeKey={model.repository.scopeId} selectedDisplay={model.board ? { value: model.board.objectId, scopeKey: model.repository.scopeId, state: "ready", label: model.board.title } : undefined} value={String(model.board?.objectId ?? "")} onValueChange={nextValue => {
                 const object = model.objects.find(
                   (o) => o.objectId === nextValue,
                 );
@@ -1148,6 +1154,10 @@ export function ObjectWorkbench({ model }: { model: WorkbenchViewModel }) {
           }}>{cards[p.placementId]?.title || `卡片 ${model.placements.indexOf(p) + 1}`}</Button>)}</div>
         </div>
       ) : null}{" "}
+      {model.fileError ? <DisclosureSection title="白板文件技术详情">
+        <p>文件操作未完成；可重试保存或另存为。以下内容供排查使用。</p>
+        <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{model.fileError.details}</pre>
+      </DisclosureSection> : null}
       <footer
         role="status"
         className={

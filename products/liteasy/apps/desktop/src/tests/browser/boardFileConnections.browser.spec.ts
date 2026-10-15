@@ -138,3 +138,36 @@ test("a chosen Canvas file keeps real browser filesystem data and continues auto
     fullPage: true,
   });
 });
+
+test("managed board storage uses its logical title across reload and reveals paths only on request", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "研究白板", exact: true }).click();
+  const board = page.locator("section.object-workbench");
+  await board.getByRole("button", { name: "切换或新建白板", exact: true }).click();
+  await expect(board.getByRole("combobox", { name: "选择白板" })).toHaveText("研究白板");
+  await expect(board.getByText("研究白板 · 保存在本机", { exact: true })).toBeVisible();
+  await board.getByLabel("新白板名称", { exact: true }).fill("方法与证据的整理");
+  await board.getByRole("button", { name: "新建白板", exact: true }).click();
+  await expect(board.getByText("方法与证据的整理 · 保存在本机", { exact: true })).toBeVisible();
+  await expect(board.getByRole("combobox", { name: "选择白板" })).toHaveText("方法与证据的整理");
+  expect(await board.locator(".object-board-file-location").getAttribute("title")).toBe("保存在本机");
+  await board.getByRole("button", { name: "保存白板文件", exact: true }).hover();
+  await expect(page.getByRole("tooltip", { name: "保存 方法与证据的整理", exact: true })).toBeVisible();
+  await expect(board.getByRole("status")).toContainText("已保存 方法与证据的整理");
+  await page.reload();
+  await expect(board).toBeVisible();
+  await board.getByRole("button", { name: "切换或新建白板", exact: true }).click();
+  // The workspace opens its default board; selecting this saved board restores
+  // its existing logical name and original file binding.
+  await board.getByRole("combobox", { name: "选择白板" }).click();
+  await page.getByRole("option", { name: "方法与证据的整理", exact: true }).click();
+  await expect(board.getByText("方法与证据的整理 · 保存在本机", { exact: true })).toBeVisible();
+  await expect(board.getByRole("combobox", { name: "选择白板" })).toHaveText("方法与证据的整理");
+  const path = board.locator("p").filter({ hasText: /^[a-f0-9]{64}\.canvas$/ });
+  await expect(path).not.toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("managed-board-title.png") });
+  await board.getByRole("button", { name: "文件存储位置", exact: true }).click();
+  await expect(path).toBeVisible();
+  await expect(board.getByRole("button", { name: "复制文件位置", exact: true })).toBeVisible();
+});

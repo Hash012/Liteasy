@@ -8,6 +8,7 @@ import { createObjectRepository } from "../app/features/objects/objectRepository
 import { refOf, objectText } from "../app/features/objects/object.types";
 import type { BoardFileBinding } from "../app/features/boards/boardFileFormat";
 const files = vi.hoisted(() => ({
+  listMounts: vi.fn(),
   chooseFile: vi.fn(),
   writeFile: vi.fn(),
   readFile: vi.fn(),
@@ -21,6 +22,7 @@ beforeEach(() => {
   vi.stubGlobal("crypto", webcrypto);
   vi.clearAllMocks();
   files.managedCanvas = undefined;
+  files.listMounts.mockResolvedValue([{ id: "vault", managed: false }, { id: "managed", managed: true }]);
 });
 
 test("autosave retries a board changed during serialization without reporting a file conflict", async () => {
@@ -243,4 +245,55 @@ test("a recovered managed file is never silently overwritten when its binding is
   await waitFor(() => expect(status).toHaveBeenCalledWith(expect.stringContaining("原文件未覆盖")), { timeout: 2500 });
   expect(files.writeFile).not.toHaveBeenCalled();
   unmount();
+});
+
+test("managed Canvas reopening and external edits preserve the logical title and physical binding", async () => {
+  const f = await fixture();
+  const filename = `${"a".repeat(64)}.canvas`;
+  const target = { mountId: "managed", path: filename, name: filename, text: "", version: null };
+  files.managedCanvas = vi.fn().mockResolvedValue(target);
+  files.writeFile.mockImplementation(async (input) => ({ ...target, text: input.text, version: "managed-v1" }));
+  const status = vi.fn();
+  const hook = renderHook(() => useBoardFileController({ repository: f.repository, board: f.board, active: () => true, select: vi.fn(), setStatus: status }));
+  await waitFor(() => expect(hook.result.current.boardFile?.version).toBe("managed-v1"), { timeout: 2500 });
+  expect(hook.result.current.boardFile?.locationKind).toBe("managed");
+  expect(status).toHaveBeenCalledWith("已保存 白板");
+  const saved = { ...target, text: files.writeFile.mock.calls[0][0].text, version: "managed-v1" };
+  await act(async () => { await hook.result.current.openBoardFile(saved); });
+  expect(status).toHaveBeenLastCalledWith("已打开 白板");
+  expect(await hook.result.current.resolveBoardFile(saved)).toEqual(refOf(f.board));
+  let changed!: ReturnType<typeof refOf>;
+  await act(async () => { changed = await hook.result.current.resolveBoardFile({ ...saved, version: "managed-v2", text: saved.text.replace("持久化内容", "外部更新正文") }); });
+  expect((await f.repository.get(changed)).title).toBe("白板");
+  expect(changed.objectId).toBe(f.board.objectId);
+  expect(await f.repository.getBoardFileBinding(changed.objectId)).toMatchObject({ path: filename, mountId: "managed", locationKind: "managed" });
+  expect(status.mock.calls.flat().join(" ")).not.toContain(filename);
+  hook.unmount();
+  const restored = renderHook(() => useBoardFileController({ repository: f.repository, board: { ...f.board, ...changed }, active: () => true, select: vi.fn(), setStatus: vi.fn() }));
+  await waitFor(() => expect(restored.result.current.boardFile?.locationKind).toBe("managed"));
+  restored.unmount();
+});
+
+test("imports a recovered managed Canvas title from explicit metadata and preserves user hash titles", async () => {
+  const f = await fixture();
+  const hook = renderHook(() => useBoardFileController({ repository: f.repository, active: () => true, select: vi.fn(), setStatus: vi.fn() }));
+  const userTitle = "b".repeat(64);
+  for (const [mountId, title, fileName] of [["managed", userTitle, `${"a".repeat(64)}.canvas`], ["vault", userTitle, `${userTitle}.canvas`]]) {
+    let ref!: ReturnType<typeof refOf>;
+    await act(async () => { ref = await hook.result.current.resolveBoardFile({ mountId, path: fileName, name: fileName, version: "v1", text: JSON.stringify({ nodes: [], liteasy: { title } }) }); });
+    expect((await f.repository.get(ref)).title).toBe(userTitle);
+  }
+  hook.unmount();
+});
+
+test("a native file error exposes a readable recovery message and preserves technical detail separately", async () => {
+  const f = await fixture();
+  files.managedCanvas = vi.fn().mockRejectedValue(new Error("ENOENT /private/9b650e17-1f85-4be9-bf11-ec88d5dd16e4.canvas"));
+  const status = vi.fn();
+  const hook = renderHook(() => useBoardFileController({ repository: f.repository, board: f.board, active: () => true, select: vi.fn(), setStatus: status }));
+  await waitFor(() => expect(hook.result.current.fileError).toBeDefined(), { timeout: 2500 });
+  expect(status.mock.calls.at(-1)?.[0]).toContain("请检查文件是否仍可访问");
+  expect(status.mock.calls.flat().join(" ")).not.toContain("9b650e17");
+  expect(hook.result.current.fileError?.details).toContain("ENOENT /private/9b650e17");
+  hook.unmount();
 });
