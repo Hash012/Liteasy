@@ -4,7 +4,7 @@ import { ContextAssetThumbnail } from "./ContextAssetThumbnail";
 import "../models/assistantModelPicker.css";
 import { displayPath } from "../resource-filesystem/displayPath";
 import { useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { Popover, PopoverSurface, PopoverTrigger, Slider, Tooltip, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Link, Popover, PopoverSurface, PopoverTrigger, Slider, Tooltip, useRestoreFocusTarget } from "@fluentui/react-components";
 import { thinkingDepths, thinkingDepthLabels, type ThinkingDepth } from "./thinkingDepth";
 import { DismissRegular, AddRegular, BrainCircuitRegular, EyeRegular, FlashRegular, GridRegular, MicRegular, SendRegular } from "@fluentui/react-icons";
 import type { AgentContextUsage, AssistantComposerSuggestion, AssistantContextToken } from "./assistant.types";
@@ -137,17 +137,20 @@ export function AssistantComposer({
   function removeToken(token: AssistantContextToken) {
     return <Tooltip content={tChinese("context.composer.remove", "移除上下文：{{label}}", { label: token.label })} relationship="label"><Button appearance="subtle" size="small" icon={<DismissRegular />} aria-label={tChinese("context.composer.remove", "移除上下文：{{label}}", { label: token.label })} onClick={() => onRemoveContextToken?.(token.id)} /></Tooltip>;
   }
-  function tokenPreview(token: AssistantContextToken, label: string) {
+  function tokenPreview(token: AssistantContextToken, label: string, inline = false) {
     const locator = tokenLocator(token);
     const diagnostic = token.contextRefs?.find(ref => "type" in ref && ref.type === "diagnostic");
     return locator && references ? <ResourceLink locator={locator} ariaLabel={token.label} previewOnClick actions={removeToken(token)}><span title={token.label}>{label}</span></ResourceLink>
-      : <Popover positioning="above" trapFocus={false}><PopoverTrigger disableButtonEnhancement><Button appearance="transparent" className="assistant-context-preview-trigger" aria-label={tChinese("context.composer.preview", "预览上下文：{{label}}", { label: token.label })}>{label}</Button></PopoverTrigger><PopoverSurface aria-label={tChinese("context.composer.previewTitle", "上下文预览")}><strong>{token.label}</strong><p>{displayPath(token.detail ?? tChinese("context.composer.unavailable", "来源预览不可用"))}</p>{diagnostic && "message" in diagnostic ? <pre style={{ maxHeight: "min(50vh, 320px)", maxWidth: "min(80vw, 600px)", overflow: "auto", whiteSpace: "pre-wrap", overflowWrap: "anywhere", font: "inherit" }}>{diagnostic.message}</pre> : null}{removeToken(token)}</PopoverSurface></Popover>;
+      : <Popover positioning="above" trapFocus={false}><PopoverTrigger disableButtonEnhancement>{inline
+        ? <Link as="span" inline className="assistant-context-preview-trigger" aria-label={tChinese("context.composer.preview", "预览上下文：{{label}}", { label: token.label })}>{label}</Link>
+        : <Button appearance="transparent" className="assistant-context-preview-trigger" aria-label={tChinese("context.composer.preview", "预览上下文：{{label}}", { label: token.label })}>{label}</Button>}
+      </PopoverTrigger><PopoverSurface aria-label={tChinese("context.composer.previewTitle", "上下文预览")}><strong>{token.label}</strong><p>{displayPath(token.detail ?? tChinese("context.composer.unavailable", "来源预览不可用"))}</p>{diagnostic && "message" in diagnostic ? <pre style={{ maxHeight: "min(50vh, 320px)", maxWidth: "min(80vw, 600px)", overflow: "auto", whiteSpace: "pre-wrap", overflowWrap: "anywhere", font: "inherit" }}>{diagnostic.message}</pre> : null}{removeToken(token)}</PopoverSurface></Popover>;
   }
   const inputParts = inlineContextParts(input, contextTokens);
   const mentionedIds = new Set(inputParts.flatMap(part => part.token ? [part.token.id] : []));
   const highlightedInput = useMemo(() => {
     return inlineContextParts(input, contextTokens).map((part, index) => {
-      if (part.token) return <mark className="assistant-command-chip assistant-inline-context" key={index}>{tokenPreview(part.token, part.text)}</mark>;
+      if (part.token) return <mark className="assistant-command-chip assistant-inline-context" key={index}>{tokenPreview(part.token, part.text, true)}</mark>;
       if (!part.text.includes("/")) return part.text;
       const highlighted = [];
       let offset = 0;

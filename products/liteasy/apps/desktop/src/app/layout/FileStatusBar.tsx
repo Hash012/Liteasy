@@ -1,9 +1,9 @@
-import { ActionButton as Button, IconAction } from "../shared/ui/productPrimitives";
+import { IconAction } from "../shared/ui/productPrimitives";
 import { ReadingCatalogDetails, type ReadingCatalogActions } from "../features/library/ReadingCatalogDetails";
 import "../features/library/readingCatalog.css";
 import { displayPath } from "../features/resource-filesystem/displayPath";
 import { Popover, PopoverSurface, PopoverTrigger, Tooltip } from "@fluentui/react-components";
-import { EditRegular, InfoRegular } from "@fluentui/react-icons";
+import { InfoRegular } from "@fluentui/react-icons";
 import type { FileStatus } from "../features/workspace/workspaceShell.types";
 import "../styles/workspaceShell.css";
 import { RecommendationDetails } from "../features/recommendations/RecommendationDetails";
@@ -56,7 +56,7 @@ export function FileStatusBar({ status, actions, onDownloadRecommendation, recom
       </Popover> : null}
       {status?.entry && actions ? <Popover key={status.entry.id} positioning="above-end">
         <PopoverTrigger disableButtonEnhancement><IconAction appearance="subtle" density="compact" label="展开文件元信息" icon={<InfoRegular />} /></PopoverTrigger>
-        <PopoverSurface className="shell-file-inspector"><p>{inspectionDetails}</p>{actions.onEditBibliography ? <Button icon={<EditRegular />} onClick={() => actions.onEditBibliography!(status.entry!)}>编辑元信息</Button> : null}<ReadingCatalogDetails key={status.entry.id} entry={status.entry} {...actions} /></PopoverSurface>
+        <PopoverSurface className="shell-file-inspector"><p>{inspectionDetails}</p><ReadingCatalogDetails key={status.entry.id} entry={status.entry} {...actions} /></PopoverSurface>
       </Popover> : null}
       {status && !(status.entry && actions) && !status.recommendation ? <Popover positioning="above-end"><PopoverTrigger disableButtonEnhancement><IconAction label="展开文件元信息" density="compact" icon={<InfoRegular />} appearance="subtle" /></PopoverTrigger><PopoverSurface><p>{inspectionDetails}</p><p>{status.path ? displayPath(status.path) : ""}</p></PopoverSurface></Popover> : null}
       <span role="status" aria-live="polite" className={`shell-file-progress${error ? " has-error" : ""}`} title={progress}>{progress}</span>

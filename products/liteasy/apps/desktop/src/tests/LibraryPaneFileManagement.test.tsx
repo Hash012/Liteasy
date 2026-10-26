@@ -1,6 +1,6 @@
 import { selectPickerValue } from "./helpers/selectPickerValue";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { mockFocusLayout } from "./fixtures/mockFocusLayout";
@@ -8,6 +8,7 @@ import { LibraryPane, personalLibraryScopeId } from "../app/features/library/Lib
 import { savePaperFileMetadata } from "../app/features/library/paperFileMetadata";
 import * as fileSystem from "../app/features/library/libraryFileSystemClient";
 import * as cloudTree from "../app/features/library/useCloudLibraryTree";
+import * as cloudStorage from "../app/features/library/cloudLibraryStorageClient";
 
 const paper = {
   id: "paper-file-management",
@@ -510,4 +511,55 @@ test("clears local trash only through its named menu and explicit confirmation",
   expect(confirm).toHaveBeenCalledWith(expect.stringContaining("无法恢复"));
   await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
   expect(empty).toHaveBeenCalledOnce();
+});
+
+test("local trash disables repeat actions while pending and keeps a restore failure visible for retry", async () => {
+  let reject!: (error: Error) => void;
+  const restore = vi.spyOn(fileSystem, "restoreLocalLibraryTrashItem").mockImplementationOnce(() => new Promise<void>((_, fail) => { reject = fail; })).mockResolvedValue(undefined);
+  const refresh = vi.fn(async () => {});
+  renderLibraryPane({ onRefreshLocalLibrary: refresh, localLibrarySnapshot: {
+    entries: [], folders: [], libraryId: "pending-trash", revision: 1, rootPath: "/library", trashEntries: [{ trashId: "deleted", name: "Pending.pdf", nodeType: "document", byteLength: 100, documentCount: 1, originalRelativePath: "Pending.pdf", trashedAt: 1, purgeAfter: 2000000000 }]
+  } });
+  await userEvent.click(screen.getByRole("button", { name: "回收站", exact: true }));
+  const restoreButton = screen.getByRole("button", { name: "恢复 Pending.pdf" });
+  fireEvent.click(restoreButton);
+  fireEvent.click(restoreButton);
+  expect(restore).toHaveBeenCalledOnce();
+  expect(restoreButton).toBeDisabled();
+  expect(screen.getByRole("button", { name: "永久删除 Pending.pdf" })).toBeDisabled();
+  expect(screen.getByText("正在恢复“Pending.pdf”…")).toBeInTheDocument();
+  await act(async () => reject(new Error("恢复失败：目标文件已存在。")));
+  expect(screen.getByText("恢复失败：目标文件已存在。")).toBeInTheDocument();
+  expect(refresh).not.toHaveBeenCalled();
+  expect(restoreButton).toBeEnabled();
+  await userEvent.click(restoreButton);
+  await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  expect(restore).toHaveBeenCalledTimes(2);
+  expect(screen.getByText("操作已完成。")).toBeInTheDocument();
+});
+
+test("cloud trash keeps the scope and revision and reports delayed restore errors", async () => {
+  const entry = { ...mockPersonalCollection(), status: "trashed" as const };
+  const refresh = vi.fn(async () => {});
+  vi.mocked(cloudTree.useCloudLibraryTree).mockImplementation((input) => ({
+    message: "", quota: null, refresh, status: "ready", tree: null,
+    trashTree: input.scopeType === "user" ? { scopeId: "user_1", scopeType: "user", entries: [entry], folders: [], revision: 7 } : null,
+  }));
+  let reject!: (error: Error) => void;
+  const restore = vi.fn(() => new Promise<cloudStorage.CloudLibraryTree>((_, fail) => { reject = fail; }));
+  const createClient = cloudStorage.createCloudLibraryStorageClient;
+  vi.spyOn(cloudStorage, "createCloudLibraryStorageClient").mockImplementation((input) => ({ ...createClient(input), restoreDocument: restore }));
+  renderLibraryPane({ accountSessionAvailable: true, accountScopeId: "user_1" });
+  await userEvent.click(screen.getByRole("button", { name: "回收站", exact: true }));
+  const button = screen.getByRole("button", { name: "恢复 Cloud paper" });
+  fireEvent.click(button);
+  fireEvent.click(button);
+  expect(restore).toHaveBeenCalledOnce();
+  expect(restore).toHaveBeenCalledWith({ scopeId: "user_1", scopeType: "user" }, "cloud_pdf", 7);
+  expect(button).toBeDisabled();
+  expect(screen.getByText("正在恢复“Cloud paper”…")).toBeInTheDocument();
+  await act(async () => reject(new Error("云端版本已变化，请刷新后重试。")));
+  expect(screen.getByText("云端版本已变化，请刷新后重试。")).toBeInTheDocument();
+  expect(button).toBeEnabled();
+  expect(refresh).not.toHaveBeenCalled();
 });

@@ -11,7 +11,7 @@ import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
 import { NotesInlineEditor } from "./NotesInlineEditor";
 import { PaperAnchorReferences } from "../paper-anchors/PaperAnchorReferences";
 import { ResourceLocationButton } from "../resource-filesystem/ResourceLocationButton";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MenuItemCheckbox, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip,  } from "@fluentui/react-components";
 import {
   AddRegular,
@@ -113,18 +113,28 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
   const [visibleCount, setVisibleCount] = useState(100);
   useEffect(() => setVisibleCount(100), [model.folderId, model.query, filter]);
   const [folderName, setFolderName] = useState<string>();
-  const [drafts, setDrafts] = useState<Record<string, { text?: string; item?: NotesItem }>>({});
-  const draft = drafts[model.folderId]?.text;
-  const editingItem = drafts[model.folderId]?.item;
-  const setDraft = (text: string | undefined) => setDrafts(previous => ({ ...previous, [model.folderId]: { ...previous[model.folderId], text } }));
-  const setEditingItem = (item: NotesItem | undefined) => setDrafts(previous => ({ ...previous, [model.folderId]: { ...previous[model.folderId], item } }));
+  const [drafts, setDrafts] = useState<Record<string, { id: number; revision: number; text: string; item?: NotesItem } | undefined>>({});
+  const nextDraftId = useRef(0);
+  const savePending = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const currentDraft = drafts[model.folderId];
+  const draft = currentDraft?.text;
+  const editingItem = currentDraft?.item;
+  const beginDraft = (text: string, item?: NotesItem) => {
+    const next = { id: ++nextDraftId.current, revision: 0, text, item };
+    setDrafts(previous => ({ ...previous, [model.folderId]: next }));
+  };
+  const setDraft = (text: string | undefined) => setDrafts(previous => {
+    const current = previous[model.folderId];
+    return { ...previous, [model.folderId]: current && text !== undefined ? { ...current, revision: current.revision + 1, text } : undefined };
+  });
   const [destination, setDestination] = useState(NOTES_ROOT);
   const [collecting, setCollecting] = useState<NotesItem>();
   const [inlineEditing, setInlineEditing] = useState<string>();
   const startEditing = (item: NotesItem) => {
     if (item.target.kind === "external-file") model.openSource(item);
     else if (preference.mode === "live" && item.object?.kind === "content.note") { model.selectItem(item); setInlineEditing(item.key); }
-    else { setDraft(item.text); setEditingItem(item); }
+    else beginDraft(item.text, item);
   };
   useEffect(() => {
     setCollecting(undefined);
@@ -227,10 +237,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
         <IconButton
           label="新建笔记"
           icon={<AddRegular />}
-          onClick={() => {
-            setDraft("");
-            setEditingItem(undefined);
-          }}
+          onClick={() => beginDraft("")}
         />
         <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="更多笔记操作" icon={<MoreHorizontalRegular />} /></MenuTrigger><MenuPopover><MenuList>
           <MenuItem icon={<FolderAddRegular />} onClick={() => setFolderName("")}>新建目录</MenuItem>
@@ -338,32 +345,39 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
               className="notes-editor"
               onSubmit={(event) => {
                 event.preventDefault();
-                const item = editingItem;
-                const save = item
-                  ? model.editNote(item, draft)
-                  : model.createNote(draft);
+                if (savePending.current || !currentDraft) return;
+                savePending.current = true;
+                setSaving(true);
+                const folderId = model.folderId;
+                const snapshot = currentDraft;
+                const save = snapshot.item
+                  ? model.editNote(snapshot.item, snapshot.text)
+                  : model.createNote(snapshot.text);
                 void save
-                  .then(() => {
-                    setDraft(undefined);
-                    setEditingItem(undefined);
-                  })
-                  .catch(() => undefined);
+                  .then((saved) => setDrafts(previous => {
+                    const current = previous[folderId];
+                    if (current?.id !== snapshot.id) return previous;
+                    // A completed save owns only its snapshot. Keep later typing,
+                    // and use the saved identity for its next revision.
+                    return { ...previous, [folderId]: current.revision === snapshot.revision
+                      ? undefined
+                      : { ...current, item: saved ?? current.item } };
+                  }))
+                  .catch(() => undefined)
+                  .finally(() => { savePending.current = false; setSaving(false); });
               }}
             >
               <ReferenceSourceContext.Provider value={editingItem ? liteasyPath(model.scopeId ?? "local", editingItem.target) : undefined}>
-                <MarkdownEditor documentKey={editingItem?.key ?? `new:${model.folderId}`} label="笔记正文" value={draft} onChange={setDraft} />
+                <MarkdownEditor documentKey={`draft:${model.folderId}:${currentDraft?.id}`} label="笔记正文" value={draft} onChange={setDraft} />
               </ReferenceSourceContext.Provider>
               <div>
-                <Button size="small" type="submit" icon={<SaveRegular />}>
-                  保存
+                <Button size="small" type="submit" icon={<SaveRegular />} disabled={saving}>
+                  {saving ? "保存中…" : "保存"}
                 </Button>
                 <IconButton
                   label="取消编辑笔记"
                   icon={<DismissRegular />}
-                  onClick={() => {
-                    setDraft(undefined);
-                    setEditingItem(undefined);
-                  }}
+                  onClick={() => setDraft(undefined)}
                 />
               </div>
             </form>

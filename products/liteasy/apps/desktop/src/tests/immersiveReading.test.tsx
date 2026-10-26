@@ -2,6 +2,7 @@ import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-li
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { useImmersiveReadingController } from "../app/controllers/useImmersiveReadingController";
 import { PhysicalSize } from "@tauri-apps/api/dpi";
+import { useState } from "react";
 
 const host = vi.hoisted(() => ({ native: false, fullscreen: false, setFullscreen: vi.fn(), setFocus: vi.fn(), isFullscreen: vi.fn(), onResized: vi.fn(), resized: () => {}, unlisten: vi.fn(), innerSize: vi.fn(), setSize: vi.fn(), setAutoResize: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => host.native }));
@@ -35,6 +36,65 @@ function Workspace() {
     <aside data-region="left"><button>Library</button></aside>
   </div>;
 }
+
+function MovableReadingWorkspace({ destination, initiallyHidden = false }: { destination: string; initiallyHidden?: boolean }) {
+  const focus = useImmersiveReadingController();
+  const [hidden, setHidden] = useState(initiallyHidden);
+  const regions = [...new Set(["main", destination])];
+  return <div ref={focus.root} data-testid="movable-frame" data-mode={focus.mode} data-target={focus.regionId} onClickCapture={focus.onClickCapture}>
+    <button onClick={focus.toggleFullscreen}>Fullscreen control</button>
+    <button onClick={() => setHidden(true)}>Hide moved reader</button>
+    {regions.map((region) => <section key={region} data-region={region} tabIndex={-1}>
+      {region === destination ? <button role="tab" aria-selected={!hidden} data-reading-entry="true" onClick={() => setHidden(false)}>Moved document</button> : null}
+      <div className="dock-item-host" hidden={region === destination && hidden}>
+        <div className="reading-document"><p>Text in {region}</p><textarea aria-label={`Draft in ${region}`} defaultValue={`Unsaved ${region}`} /></div>
+      </div>
+    </section>)}
+  </div>;
+}
+
+test.each(["main", "left", "right", "bar-split", "bottom"])("fullscreen keeps the active reader in %s and restores its mounted draft and focus", async (destination) => {
+  render(<MovableReadingWorkspace destination={destination} />);
+  const draft = screen.getByRole("textbox", { name: `Draft in ${destination}` });
+  draft.focus();
+  await act(async () => { fireEvent.keyDown(window, { key: "F11" }); });
+  const frame = screen.getByTestId("movable-frame");
+  expect(frame).toHaveAttribute("data-mode", "fullscreen");
+  expect(frame).toHaveAttribute("data-target", destination);
+  expect(draft.closest("[data-region]")).toHaveFocus();
+  await act(async () => { fireEvent.keyDown(window, { key: "Escape" }); });
+  expect(frame).toHaveAttribute("data-mode", "off");
+  expect(screen.getByRole("textbox", { name: `Draft in ${destination}` })).toBe(draft);
+  expect(draft).toHaveValue(`Unsaved ${destination}`);
+  expect(draft).toHaveFocus();
+});
+
+test("a pointer selection of another reader wins over stale input focus, including toolbar entry", async () => {
+  render(<MovableReadingWorkspace destination="right" />);
+  screen.getByRole("textbox", { name: "Draft in main" }).focus();
+  fireEvent.pointerDown(screen.getByText("Text in right"));
+  const toolbar = screen.getByRole("button", { name: "Fullscreen control" });
+  toolbar.focus();
+  await act(async () => { fireEvent.click(toolbar); });
+  expect(screen.getByTestId("movable-frame")).toHaveAttribute("data-target", "right");
+});
+
+test("a hidden remembered reader is not chosen when another reader remains visible", async () => {
+  render(<MovableReadingWorkspace destination="right" />);
+  screen.getByRole("textbox", { name: "Draft in right" }).focus();
+  fireEvent.click(screen.getByRole("button", { name: "Hide moved reader" }));
+  await act(async () => { fireEvent.keyDown(window, { key: "F11" }); });
+  expect(screen.getByTestId("movable-frame")).toHaveAttribute("data-target", "main");
+});
+
+test("activating an inactive reader tab remembers its region before React selects it", async () => {
+  render(<MovableReadingWorkspace destination="right" initiallyHidden />);
+  screen.getByRole("textbox", { name: "Draft in main" }).focus();
+  const tab = screen.getByRole("tab", { name: "Moved document" });
+  fireEvent.pointerDown(tab); tab.focus(); fireEvent.click(tab);
+  await act(async () => { fireEvent.keyDown(window, { key: "F11" }); });
+  expect(screen.getByTestId("movable-frame")).toHaveAttribute("data-target", "right");
+});
 
 test("only a plain triple click on a reading entry enters immersion and Escape restores focus without remounting drafts", () => {
   render(<Workspace />);

@@ -81,6 +81,7 @@ import {
   resolveAssistantPublicAgentClientSessionId,
   snapshotAssistantSession,
   upsertAssistantSession,
+  type AssistantSessionDraft,
   type AssistantSessionHistoryItem,
   type ArtifactSessionOpenRequest
 } from "../../features/assistant/assistantSessionHistory";
@@ -146,6 +147,9 @@ type QueuedAssistantTurn = {
   userContent: string;
   userMessageId: string;
 };
+
+type SubmittedComposerDraft = { sessionId: string; revision: number; value: AssistantSessionDraft };
+const emptyComposerDraft = (): AssistantSessionDraft => ({ input: "", tokens: [], readerContexts: [] });
 
 export function hasPaperGroundedAuditScope(run: AgentRun) {
   return Boolean(
@@ -375,6 +379,7 @@ export function AssistantSessionController({
   const owner = useRef(createAssistantSessionService(initialSessionRef.current.id)).current;
   const assistantStoreRef = { get current() { return owner.store(); } };
   const activeSessionIdRef = useRef(initialSessionRef.current.id);
+  const navigationRevisionRef = useRef(0);
   const sessionRegistryRef = useRef<AssistantSessionHistoryItem[]>([
     initialSessionRef.current
   ]);
@@ -447,6 +452,8 @@ export function AssistantSessionController({
   const hydratingTasksRef = useRef(new Set<string>());
   const draftRef = useRef<import("../../features/assistant/assistantSessionHistory").AssistantSessionDraft>({ input, tokens: composerContextTokens, readerContexts, selectedResearchSkill });
   draftRef.current = { input, tokens: composerContextTokens, readerContexts, selectedResearchSkill };
+  const draftRevisionsRef = useRef(new Map<string, number>());
+  const pendingSubmittedDraftsRef = useRef(new Map<string, SubmittedComposerDraft>());
   const contextCaretRef = useRef<{ input: string; caret: number; sessionId: string }>();
   const renameSessionWithAI = useAssistantSessionTitles({
     scope: objectWorkbench?.scopeId ?? "local", ready: historyReady, sessions: sessionHistory,
@@ -462,12 +469,29 @@ export function AssistantSessionController({
     }
   }, [input, activeSessionId, composerContextTokens]);
 
-  function persistConversation(): Promise<void> {
+  function captureSubmittedDraft(): SubmittedComposerDraft {
+    const sessionId = activeSessionIdRef.current;
+    return { sessionId, revision: draftRevisionsRef.current.get(sessionId) ?? 0, value: structuredClone(draftRef.current) };
+  }
+
+  function matchesSubmittedDraft(submitted: SubmittedComposerDraft, value: AssistantSessionDraft | undefined) {
+    return (draftRevisionsRef.current.get(submitted.sessionId) ?? 0) === submitted.revision &&
+      JSON.stringify(value) === JSON.stringify(submitted.value);
+  }
+
+  function persistConversation(consumedDraft?: SubmittedComposerDraft): Promise<void> {
     if (!historyPersistence || !historyReadyRef.current) return Promise.resolve();
+    // Consume the submitted version in this transaction without mutating the live editor.
+    // Later typing (including its undo history and references) belongs to the next draft.
+    const persistedDraft = (sessionId: string, value: AssistantSessionDraft | undefined) => {
+      const submitted = consumedDraft?.sessionId === sessionId ? consumedDraft : pendingSubmittedDraftsRef.current.get(sessionId);
+      return submitted && matchesSubmittedDraft(submitted, value) ? emptyComposerDraft() : value;
+    };
     const snapshot: AssistantHistorySnapshot = {
       version: "liteasy.assistant-history/v1", activeSessionId: activeSessionIdRef.current,
-      sessions: sessionRegistryRef.current.map((session) => session.id === activeSessionIdRef.current
-        ? { ...session, draft: draftRef.current } : session).filter(hasAssistantContent), draft: draftRef.current
+      sessions: sessionRegistryRef.current.map((session) => ({ ...session,
+        draft: persistedDraft(session.id, session.id === activeSessionIdRef.current ? draftRef.current : session.draft)
+      })).filter(hasAssistantContent), draft: persistedDraft(activeSessionIdRef.current, draftRef.current)!
     };
     const scope = objectWorkbench?.scopeId ?? "local";
     const revisions = snapshot.sessions.filter(hasAssistantContent).map((session) => ({
@@ -850,6 +874,7 @@ export function AssistantSessionController({
       history.entries = history.entries.slice(-100);
       history.position = history.entries.length - 1;
     }
+    draftRevisionsRef.current.set(activeSessionIdRef.current, (draftRevisionsRef.current.get(activeSessionIdRef.current) ?? 0) + 1);
     draftRef.current = { ...draftRef.current, ...next };
     if ("selectedResearchSkill" in update) setSelectedResearchSkill(next.selectedResearchSkill);
     setComposerContextTokens(next.tokens);
@@ -862,6 +887,22 @@ export function AssistantSessionController({
     history.entries = [next];
     history.position = 0;
     applyComposerDraft({ ...next, selectedResearchSkill: next.selectedResearchSkill }, false);
+  }
+  function consumeSubmittedDraft(submitted: SubmittedComposerDraft) {
+    if (activeSessionIdRef.current === submitted.sessionId) {
+      if (!matchesSubmittedDraft(submitted, draftRef.current)) return;
+      resetComposerDraft(emptyComposerDraft());
+      lastReaderContextKeyRef.current = null;
+    } else {
+      sessionRegistryRef.current = sessionRegistryRef.current.map(session => session.id === submitted.sessionId && matchesSubmittedDraft(submitted, session.draft)
+        ? { ...session, draft: emptyComposerDraft() } : session);
+      setSessionHistory([...sessionRegistryRef.current]);
+    }
+  }
+
+  function navigateView(next: AssistantView) {
+    navigationRevisionRef.current += 1;
+    setView(next);
   }
   function changeComposerInput(value: string) {
     applyComposerDraft({ input: value, tokens: mapContextMentions(draftRef.current.input, value, draftRef.current.tokens) });
@@ -1098,6 +1139,7 @@ export function AssistantSessionController({
   function startNewSession(mode: AssistantMode = "qa") {
     if (!historyReadyRef.current) return;
     if (assistantStoreRef.current.getState().pending && !agentClient) return;
+    navigationRevisionRef.current += 1;
     saveActiveConversation();
     const session = createAssistantSession({ mode });
     const nextSessions = upsertAssistantSession(sessionRegistryRef.current, session);
@@ -1121,25 +1163,29 @@ export function AssistantSessionController({
 
   async function openSession(sessionId: string, checkCurrent?: () => void) {
     checkCurrent?.();
-    if (!historyReadyRef.current) return;
-    if (assistantStoreRef.current.getState().pending && !agentClient) return;
+    if (!historyReadyRef.current) return false;
+    if (assistantStoreRef.current.getState().pending && !agentClient) return false;
+    const navigationRevision = ++navigationRevisionRef.current;
     saveActiveConversation();
     let session = sessionRegistryRef.current.find((candidate) => candidate.id === sessionId);
     if (session?.messagesLoaded === false && historyPersistence?.loadSession) {
       try {
         const generation = getAccountSessionGeneration();
         const loaded = await historyPersistence.loadSession(sessionId);
+        if (navigationRevisionRef.current !== navigationRevision) return false;
         checkCurrent?.();
-        if (!mountedRef.current || !loaded || generation !== getAccountSessionGeneration()) return;
+        if (!mountedRef.current || !loaded || generation !== getAccountSessionGeneration()) return false;
         const current = sessionRegistryRef.current.find(item => item.id === sessionId);
-        if (!current || current.lifecycle === "tombstoned") return;
+        if (!current || current.lifecycle === "tombstoned") return false;
         // Loading old message bodies must not roll back a title just edited in this window.
         session = current.messagesLoaded === false ? { ...loaded, ...current, messages: loaded.messages, draft: loaded.draft, outbox: loaded.outbox, taskInput: loaded.taskInput, messagesLoaded: true } : current;
         sessionRegistryRef.current = upsertAssistantSession(sessionRegistryRef.current, session);
-      } catch (error) { showHistoryFailure("读取", error); return; }
+      } catch (error) { if (navigationRevisionRef.current === navigationRevision && mountedRef.current) showHistoryFailure("读取", error); return false; }
     }
-    if (!session || session.lifecycle === "tombstoned" || owner.disposed) return;
+    if (!session || session.lifecycle === "tombstoned" || owner.disposed || navigationRevisionRef.current !== navigationRevision) return false;
 
+    // Retain edits made to the current conversation while the destination was loading.
+    saveActiveConversation();
     clearReaderConversationContexts();
     activeSessionIdRef.current = session.id;
     owner.select(session.id);
@@ -1156,6 +1202,7 @@ export function AssistantSessionController({
     setEditingMessageId(null);
     connectPublicAgentSession(session);
     syncAssistant();
+    return true;
   }
 
   useEffect(() => {
@@ -1183,7 +1230,7 @@ export function AssistantSessionController({
         sessionRegistryRef.current = upsertAssistantSession(sessionRegistryRef.current, session);
         setSessionHistory([...sessionRegistryRef.current]);
       }
-      await openSession(session.id, checkCurrent);
+      if (!await openSession(session.id, checkCurrent)) throw new Error("已切换到其他位置，速问对话已保留，可从历史中打开。");
       checkCurrent();
       draftRef.current = session.draft ?? { input: "", tokens: [], readerContexts: [] };
       await persistConversation();
@@ -1775,9 +1822,6 @@ export function AssistantSessionController({
         assistantMessage.uiDsl = answer.uiDsl;
         assistantStoreRef.current.addMessage(assistantMessage);
       }
-      setInput("");
-    setSelectedResearchSkill(undefined);
-      setEditingMessageId(null);
     } catch (error) {
       assistantStoreRef.current.addMessage(
         createMessage("assistant", getAssistantErrorMessage(error, { developerDiagnostics }))
@@ -2252,7 +2296,7 @@ export function AssistantSessionController({
       related = sessionRegistryRef.current.find((item) => item.id === activeSessionIdRef.current)!;
       related = { ...related, sourceTaskId: taskId, resultRefs: refs };
       sessionRegistryRef.current = upsertAssistantSession(sessionRegistryRef.current, related);
-    } else await openSession(related.id);
+    } else if (!await openSession(related.id)) return;
     if (owner.disposed) return;
     sessionRegistryRef.current = sessionRegistryRef.current.map((item) => item.id === taskId ? { ...item,
       taskBinding: item.taskBinding ? { ...item.taskBinding, resultRefs: refs, relatedConversationId: related!.id } : undefined } : item);
@@ -2327,6 +2371,7 @@ export function AssistantSessionController({
     if (!historyReadyRef.current || contextDropCount > 0 || researchStarting) return;
     const researchTarget = owner.target();
     if (sendLockRef.current.has(researchTarget)) return;
+    const submittedDraft = captureSubmittedDraft();
     try {
       if (composerContextTokens.some(token => token.requireCompleteContext)) {
         sendLockRef.current.add(researchTarget);
@@ -2351,8 +2396,8 @@ export function AssistantSessionController({
         if (owner.disposed) return;
         owner.store(researchTarget).addMessage(message);
         owner.withTarget(researchTarget, syncAssistant);
+        consumeSubmittedDraft(submittedDraft);
         if (activeSessionIdRef.current === researchTarget) {
-          resetComposerDraft({ input: "", tokens: [], readerContexts: [] });
           setContextDropMessage(result.message);
         }
         return;
@@ -2399,6 +2444,8 @@ export function AssistantSessionController({
       );
       if (messageIndex >= 0) {
         branchConversation(messageIndex);
+        // The edited question remains recoverable until the new branch is committed.
+        resetComposerDraft(submittedDraft.value);
         currentState = assistantStoreRef.current.getState();
       }
     }
@@ -2415,7 +2462,6 @@ export function AssistantSessionController({
     const sendTarget = owner.target();
     if (sendLockRef.current.has(sendTarget)) return;
     sendLockRef.current.add(sendTarget);
-    const previousMessages = [...assistantStoreRef.current.getState().messages];
     userMessage.kind = "user_message";
     userMessage.requestId = createConversationIdempotencyKey(activeMode);
     userMessage.contextSnapshotRefs = selectedContextRefs(contextTokensForTurn);
@@ -2436,22 +2482,26 @@ export function AssistantSessionController({
       userMessageId: userMessage.id
     };
     syncAssistant();
-    const previousSessions = sessionRegistryRef.current;
-    const previousDraft = draftRef.current;
+    const sentDraft = { ...submittedDraft, sessionId: sendTarget,
+      revision: sendTarget === submittedDraft.sessionId ? submittedDraft.revision : draftRevisionsRef.current.get(sendTarget) ?? 0 };
     sessionRegistryRef.current = sessionRegistryRef.current.map((session) => session.id === sendTarget ? { ...session,
-      draft: { input: "", tokens: [], readerContexts: [] }, outbox: [...(session.outbox ?? []), {
+      outbox: [...(session.outbox ?? []), {
         requestId: userMessage.requestId!, userMessageId: userMessage.id, state: "pending", input: structuredClone(preparedTurn)
       }] } : session);
-    draftRef.current = { input: "", tokens: [], readerContexts: [] };
-    try { await persistConversation(); }
+    pendingSubmittedDraftsRef.current.set(sendTarget, sentDraft);
+    try { await persistConversation(sentDraft); }
     catch {
-      owner.store(sendTarget).replaceMessages(previousMessages);
-      sessionRegistryRef.current = previousSessions.map((session) => session.id === sendTarget ? { ...session, messages: previousMessages } : session);
-      draftRef.current = previousDraft;
+      pendingSubmittedDraftsRef.current.delete(sendTarget);
+      // Roll back only this send. Another conversation and newer drafts may have changed.
+      const remaining = owner.store(sendTarget).getState().messages.filter(message => message.id !== userMessage.id);
+      owner.store(sendTarget).replaceMessages(remaining);
+      sessionRegistryRef.current = sessionRegistryRef.current.map(session => session.id === sendTarget ? { ...session,
+        messages: remaining, outbox: session.outbox?.filter(entry => entry.requestId !== userMessage.requestId) } : session);
       owner.withTarget(sendTarget, syncAssistant);
       sendLockRef.current.delete(sendTarget);
       return;
     }
+    pendingSubmittedDraftsRef.current.delete(sendTarget);
     sendLockRef.current.delete(sendTarget);
     if (owner.disposed) return;
     if (historyPersistence && objectWorkbench?.scopeId) {
@@ -2459,12 +2509,11 @@ export function AssistantSessionController({
         sourceId: `chat:${sendTarget}`, type: "user_question_committed", revision: userMessage.id,
         at: Date.now(), epoch: recommendationConsentEpoch, text: input.slice(0, 8000) }).catch(() => {});
     }
+    consumeSubmittedDraft(sentDraft);
     if (activeSessionIdRef.current === sendTarget) {
-      resetComposerDraft({ input: "", tokens: [], readerContexts: [] });
-      lastReaderContextKeyRef.current = null;
-      setEditingMessageId(null); setVoiceInputMessage(undefined);
+      setEditingMessageId(current => current === editingMessageId ? null : current); setVoiceInputMessage(undefined);
     }
-    setGenerationPrompts((drafts) => ({ ...drafts, [turnPromptTask]: undefined }));
+    if (activeSessionIdRef.current === sendTarget) setGenerationPrompts(drafts => drafts[turnPromptTask] === generationPrompts[turnPromptTask] ? { ...drafts, [turnPromptTask]: undefined } : drafts);
     if (currentState.pending) {
       owner.queue<QueuedAssistantTurn>(sendTarget).push(preparedTurn);
       owner.withTarget(sendTarget, syncAssistant);
@@ -2501,22 +2550,21 @@ export function AssistantSessionController({
   async function commitRetryTurn(message: AssistantMessage, turn: QueuedAssistantTurn) {
     const targetId = owner.target();
     const targetStore = owner.store(targetId);
-    const before = [...targetStore.getState().messages];
     message.requestId = createConversationIdempotencyKey(turn.mode);
     message.kind = "user_message"; message.contextSnapshotRefs = selectedContextRefs(turn.contextTokens);
     targetStore.addMessage(message); syncAssistant();
-    const beforeSessions = sessionRegistryRef.current;
     sessionRegistryRef.current = sessionRegistryRef.current.map((item) => item.id === targetId ? { ...item,
       outbox: [...(item.outbox ?? []), { requestId: message.requestId!, userMessageId: message.id, state: "pending", input: structuredClone(turn) }] } : item);
     try { await persistConversation(); }
     catch {
-      targetStore.replaceMessages(before);
-      sessionRegistryRef.current = beforeSessions.map((item) => item.id === targetId ? { ...item, messages: before } : item);
-      if (activeSessionIdRef.current === targetId) { setInput(message.content); setComposerContextTokens(turn.contextTokens); }
+      const remaining = targetStore.getState().messages.filter(item => item.id !== message.id);
+      targetStore.replaceMessages(remaining);
+      sessionRegistryRef.current = sessionRegistryRef.current.map(item => item.id === targetId ? { ...item,
+        messages: remaining, outbox: item.outbox?.filter(entry => entry.requestId !== message.requestId) } : item);
       owner.withTarget(targetId, syncAssistant); return;
     }
     if (owner.disposed) return;
-    if (activeSessionIdRef.current === targetId) { resetComposerDraft({ input: "", tokens: [], readerContexts: [] }); setEditingMessageId(null); }
+    // A retry consumes a historical question, never the unrelated composer draft.
     await owner.withTarget(targetId, () => executePreparedTurn(turn));
   }
 
@@ -2684,7 +2732,7 @@ export function AssistantSessionController({
         running={!historyOpen && activeSessionRunning}
         cancelling={cancellingSession}
         newSessionDisabled={!historyReady || (assistantState.pending && !agentClient)}
-        onToggleHistory={() => setView(historyOpen ? activeSession?.kind === "artifact_generation" ? { kind: "task-detail", taskId: activeSessionId } : assistantState.messages.length ? { kind: "conversation", conversationId: activeSessionId } : { kind: "home" } : { kind: "history", filter: "conversations" })}
+        onToggleHistory={() => navigateView(historyOpen ? activeSession?.kind === "artifact_generation" ? { kind: "task-detail", taskId: activeSessionId } : assistantState.messages.length ? { kind: "conversation", conversationId: activeSessionId } : { kind: "home" } : { kind: "history", filter: "conversations" })}
         onNewSession={() => startNewSession()}
         onCancel={() => void cancelActiveSession()}
         onOpenArtifact={view.kind === "task-detail" && activeSession?.artifactId && onOpenArtifact ? () => onOpenArtifact(activeSession.artifactId!) : undefined}
@@ -2698,14 +2746,14 @@ export function AssistantSessionController({
 
       <div className="assistant-target-tabs" role="group" aria-label="对话与任务导航">
         <Button size="small" appearance={view.kind === "home" ? "primary" : "subtle"} onClick={() => startNewSession()}>首页</Button>
-        <Button size="small" appearance={view.kind === "conversation" || view.kind === "history" ? "primary" : "subtle"} onClick={() => setView({ kind: "history", filter: "conversations" })}>对话</Button>
-        <Button size="small" appearance={view.kind === "task-list" || view.kind === "task-detail" ? "primary" : "subtle"} onClick={() => setView({ kind: "task-list" })}>任务{sessionHistory.some((session) => session.kind === "artifact_generation" && session.status === "running") ? ` ${sessionHistory.filter((session) => session.kind === "artifact_generation" && session.status === "running").length}` : ""}</Button>
+        <Button size="small" appearance={view.kind === "conversation" || view.kind === "history" ? "primary" : "subtle"} onClick={() => navigateView({ kind: "history", filter: "conversations" })}>对话</Button>
+        <Button size="small" appearance={view.kind === "task-list" || view.kind === "task-detail" ? "primary" : "subtle"} onClick={() => navigateView({ kind: "task-list" })}>任务{sessionHistory.some((session) => session.kind === "artifact_generation" && session.status === "running") ? ` ${sessionHistory.filter((session) => session.kind === "artifact_generation" && session.status === "running").length}` : ""}</Button>
       </div>
       {historyOpen ? (
         <AssistantHistoryPanel
           kind={historyKind}
           archived={view.kind === "history" ? view.filter === "archived" : undefined}
-          onArchivedChange={view.kind === "history" ? (archived) => setView({ kind: "history", filter: archived ? "archived" : "conversations" }) : undefined}
+          onArchivedChange={view.kind === "history" ? (archived) => navigateView({ kind: "history", filter: archived ? "archived" : "conversations" }) : undefined}
           onUpdateSession={updateSessionMetadata}
           onExportSession={exportSession}
           onDeleteSession={deleteSession}
@@ -2723,7 +2771,7 @@ export function AssistantSessionController({
         </> : <p>{tChinese("context.composer.noMaterials", "尚未添加资料")}</p>}
         <h4 className="assistant-recent-heading">最近对话</h4>
         <ul className="assistant-recent-conversations" aria-label={tChinese("context.composer.recentConversations", "最近对话")}>{sessionHistory.filter((session) => session.kind !== "artifact_generation" && session.id !== activeSessionId && session.lifecycle !== "archived" && session.lifecycle !== "tombstoned" && hasAssistantContent(session)).sort((a, b) => (b.updatedAt ?? b.createdAt ?? "").localeCompare(a.updatedAt ?? a.createdAt ?? "")).slice(0, 3).map(session => <AssistantSessionRow key={session.id} session={session} onOpenSession={id => { void openSession(id); }} onUpdateSession={updateSessionMetadata} onExportSession={exportSession} onDeleteSession={deleteSession} onRenameWithAI={renameSessionWithAI} />)}</ul>
-        <Button appearance="subtle" onClick={() => setView({ kind: "history", filter: "conversations" })}>查看全部</Button>
+        <Button appearance="subtle" onClick={() => navigateView({ kind: "history", filter: "conversations" })}>查看全部</Button>
       </section> : null}
       {!historyReady && !historyError ? <p role="status">正在恢复对话…</p> : null}
       {contextDropCount > 0 ? <p role="status">正在添加所选内容…</p> : null}
@@ -2735,7 +2783,7 @@ export function AssistantSessionController({
       {developerDiagnostics ? <AssistantContextPanel context={runtimeContext} /> : null}
 
       {view.kind === "task-detail" && activeSession ? <section aria-label="任务详情">
-        <Button appearance="subtle" onClick={() => setView({ kind: "task-list" })}>返回任务列表</Button>
+        <Button appearance="subtle" onClick={() => navigateView({ kind: "task-list" })}>返回任务列表</Button>
         <h3>{activeSession.title}</h3>
         <p>{({ idle: "可继续", running: "运行中", completed: "已完成", failed: "本次失败", cancelled: "已终止", interrupted: "运行已中断", unknown: "状态待核对" } as const)[selectedTaskStatus]}{taskHasSavedResult ? " · 已保存结果可用" : " · 尚无已保存结果"}</p>
         {taskHasSavedResult ? <p>结果版本：{selectedTaskResultRefs?.length ? "已固定保存的结果" : "旧版结果，版本待核对"}</p> : null}
@@ -2744,7 +2792,7 @@ export function AssistantSessionController({
           {artifactTasks.find(task => task.id === activeSession.artifactTaskId)?.pendingResult && selectedTaskStatus === "failed" ? <Button onClick={() => void onResumeArtifactTask?.(activeSession.artifactTaskId!).catch(error => setContextDropMessage(String(error)))}>重试保存已有结果</Button> : null}
           {selectedTaskStatus === "running" ? <Button onClick={() => void onCancelArtifactTask?.(activeSession.artifactTaskId!)}>停止生成</Button> : null}
         </div> : null}
-        {activeSession.taskRuns?.length ? <div><span>运行记录</span><OptionPicker aria-label="选择运行记录" density="compact" value={selectedTaskRun?.id ?? ""} onValueChange={(runId) => setView({ kind: "task-detail", taskId: activeSession.id, runId })} options={activeSession.taskRuns.map((run, index) => ({ value: run.id, label: `第 ${index + 1} 次 · ${({ idle: "可继续", running: "运行中", completed: "已完成", failed: "失败", cancelled: "已终止", interrupted: "已中断", unknown: "待核对" } as const)[run.status]}` }))} /></div> : null}
+        {activeSession.taskRuns?.length ? <div><span>运行记录</span><OptionPicker aria-label="选择运行记录" density="compact" value={selectedTaskRun?.id ?? ""} onValueChange={(runId) => navigateView({ kind: "task-detail", taskId: activeSession.id, runId })} options={activeSession.taskRuns.map((run, index) => ({ value: run.id, label: `第 ${index + 1} 次 · ${({ idle: "可继续", running: "运行中", completed: "已完成", failed: "失败", cancelled: "已终止", interrupted: "已中断", unknown: "待核对" } as const)[run.status]}` }))} /></div> : null}
         {selectedTaskStatus === "failed" ? taskDiagnostic ? <ArtifactFailurePanel diagnostic={taskDiagnostic} onAnalyze={() => analyzeTaskFailure(taskDiagnostic)} /> : <p role="alert">{taskFailure?.split("\n")[0].replace(/^薄读未完成：/, "") || "这次运行未完成。旧记录未保留具体原因，请重新运行以获取诊断日志。"}</p> : null}
       </section> : null}
       {view.kind === "conversation" || view.kind === "task-detail" && !taskDiagnostic ? <AssistantTranscript task={view.kind === "task-detail"} details={view.kind === "task-detail" && activeSession ? <div className="assistant-run-origin"><p>来源：{activeSession.origin?.kind === "conversation_action" ? "从对话发起" : activeSession.origin?.kind === "workflow_entry" ? "AI 工作台" : "旧版来源未记录"}</p>{developerDiagnostics && selectedTaskRun ? <p>技术关联：<code>{selectedTaskRun.id}</code></p> : null}<h4>运行日志</h4></div> : undefined}>

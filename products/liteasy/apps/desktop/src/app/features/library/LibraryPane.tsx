@@ -620,7 +620,9 @@ function LibraryPaneContent({
     scope: CloudLibraryScope;
   } | null>(null);
   const [pendingNodeIds, setPendingNodeIds] = useState<string[]>([]);
+  const nodeActionLocks = useRef(new Map<string, symbol>());
   useEffect(() => {
+    nodeActionLocks.current.clear();
     setPendingNodeIds([]);
     setMessage("");
     dragSourceRef.current = null;
@@ -863,7 +865,9 @@ function LibraryPaneContent({
 
   async function runNodeAction(nodeId: string, pendingMessage: string, action: () => Promise<void | string>) {
     const generation = getAccountSessionGeneration();
-    if (pendingNodeIds.includes(nodeId)) return;
+    if (pendingNodeIds.includes(nodeId) || nodeActionLocks.current.has(nodeId)) return;
+    const operation = Symbol(nodeId);
+    nodeActionLocks.current.set(nodeId, operation);
     setPendingNodeIds((current) => [...current, nodeId]);
     setMessage(pendingMessage);
     try {
@@ -872,6 +876,7 @@ function LibraryPaneContent({
     } catch (error) {
       if (generation === getAccountSessionGeneration() && cloudEndpoint === transferContext.current.cloudEndpoint) setMessage(error instanceof Error ? error.message : "资源操作失败，请检查目标位置后重试。");
     } finally {
+      if (nodeActionLocks.current.get(nodeId) === operation) nodeActionLocks.current.delete(nodeId);
       if (generation === getAccountSessionGeneration() && cloudEndpoint === transferContext.current.cloudEndpoint) setPendingNodeIds((current) => current.filter((id) => id !== nodeId));
     }
   }
@@ -1716,6 +1721,8 @@ function LibraryPaneContent({
                 {renderTree("local", localTree, fileLibrary?.entries.some((entry) => entry.format !== "pdf" && (!filteredIds || filteredIds.has(entry.id))) ? "" : query ? "没有匹配的本地文件" : "本地文献库为空")}
                 <TrashGroup
                   entries={localLibrarySnapshot?.trashEntries ?? []}
+                  pending={pendingNodeIds.includes("local-trash")}
+                  onAction={(message, action) => runNodeAction("local-trash", message, action)}
                   onEmpty={async () => {
                     await emptyLocalLibraryTrash();
                     await onRefreshLocalLibrary?.();
@@ -1762,6 +1769,8 @@ function LibraryPaneContent({
             {accountSessionAvailable && collection.trashTree ? (
               <CloudTrashGroup
                 endpoint={cloudEndpoint}
+                pending={pendingNodeIds.includes("collection-trash")}
+                onAction={(message, action) => runNodeAction("collection-trash", message, action)}
                 onRefresh={collection.refresh}
                 scope={collectionScope}
                 tree={collection.trashTree}
@@ -1846,6 +1855,8 @@ function LibraryPaneContent({
               canManageOrganizationLibrary(organizationStorageAccess.role) ? (
               <CloudTrashGroup
                 endpoint={cloudEndpoint}
+                pending={pendingNodeIds.includes("organization-trash")}
+                onAction={(message, action) => runNodeAction("organization-trash", message, action)}
                 onRefresh={organization.refresh}
                 scope={organizationScope}
                 tree={organization.trashTree}
@@ -1911,7 +1922,12 @@ function ErrorState(props: { message: string; onRetry?: () => void }) {
   );
 }
 
-function TrashGroup(props: {
+type TrashActionState = {
+  pending: boolean;
+  onAction: (message: string, action: () => Promise<void>) => Promise<void>;
+};
+
+function TrashGroup(props: TrashActionState & {
   entries: LocalLibraryTrashEntry[];
   onEmpty: () => Promise<void>;
   onPurge: (entry: LocalLibraryTrashEntry) => Promise<void>;
@@ -1920,11 +1936,11 @@ function TrashGroup(props: {
   const [expanded, setExpanded] = useState(false);
   if (props.entries.length === 0) return null;
   return (
-    <div className="library-trash-group">
+    <div className="library-trash-group" aria-busy={props.pending}>
       <div className="library-folder-row">
         <button aria-expanded={expanded} className="library-disclosure" onClick={() => setExpanded(!expanded)} type="button">{expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</button>
         <button className="library-folder-name" onClick={() => setExpanded(!expanded)} type="button"><DeleteRegular /><span>回收站</span></button>
-        <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="本地回收站更多操作" icon={<MoreHorizontalRegular />} appearance="subtle" /></MenuTrigger><MenuPopover><MenuList><MenuItem icon={<DeleteDismissRegular />} onClick={() => { if (window.confirm("永久清空本地回收站？其中的文件将无法恢复。")) void props.onEmpty(); }}>清空本地回收站</MenuItem></MenuList></MenuPopover></Menu>
+        <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="本地回收站更多操作" icon={<MoreHorizontalRegular />} appearance="subtle" disabled={props.pending} /></MenuTrigger><MenuPopover><MenuList><MenuItem disabled={props.pending} icon={<DeleteDismissRegular />} onClick={() => { if (window.confirm("永久清空本地回收站？其中的文件将无法恢复。")) void props.onAction("正在清空本地回收站…", props.onEmpty); }}>清空本地回收站</MenuItem></MenuList></MenuPopover></Menu>
       </div>
       {expanded ? <ul className="library-resource-tree">{props.entries.map((entry) => (
         <li className="library-paper-row" key={entry.trashId}>
@@ -1933,8 +1949,8 @@ function TrashGroup(props: {
           <span className="library-entry-status">
             {formatByteLength(entry.byteLength)} · {formatPurgeTime(entry.purgeAfter)}到期
           </span>
-          <Tooltip content="恢复" relationship="label"><Button appearance="subtle" aria-label={`恢复 ${entry.name}`} icon={<ArrowResetRegular />} onClick={() => void props.onRestore(entry)} size="small" /></Tooltip>
-          <Tooltip content="永久删除" relationship="label"><Button appearance="subtle" aria-label={`永久删除 ${entry.name}`} icon={<DeleteDismissRegular />} onClick={() => { if (window.confirm(`永久删除“${entry.name}”？此操作无法恢复。`)) void props.onPurge(entry); }} size="small" /></Tooltip>
+          <Tooltip content="恢复" relationship="label"><Button appearance="subtle" aria-label={`恢复 ${entry.name}`} disabled={props.pending} icon={<ArrowResetRegular />} onClick={() => void props.onAction(`正在恢复“${entry.name}”…`, () => props.onRestore(entry))} size="small" /></Tooltip>
+          <Tooltip content="永久删除" relationship="label"><Button appearance="subtle" aria-label={`永久删除 ${entry.name}`} disabled={props.pending} icon={<DeleteDismissRegular />} onClick={() => { if (window.confirm(`永久删除“${entry.name}”？此操作无法恢复。`)) void props.onAction(`正在永久删除“${entry.name}”…`, () => props.onPurge(entry)); }} size="small" /></Tooltip>
         </li>
       ))}</ul> : null}
     </div>
@@ -1953,7 +1969,7 @@ function formatPurgeTime(timestamp: number) {
     .format(new Date(timestamp * 1000));
 }
 
-function CloudTrashGroup(props: {
+function CloudTrashGroup(props: TrashActionState & {
   endpoint: string;
   onRefresh: () => Promise<void>;
   scope: CloudLibraryScope;
@@ -1972,18 +1988,18 @@ function CloudTrashGroup(props: {
     await props.onRefresh();
   };
   return (
-    <div className="library-trash-group">
+    <div className="library-trash-group" aria-busy={props.pending}>
       <div className="library-folder-row">
         <button aria-expanded={expanded} className="library-disclosure" onClick={() => setExpanded(!expanded)} type="button">{expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</button>
         <button className="library-folder-name" onClick={() => setExpanded(!expanded)} type="button"><DeleteRegular /><span>回收站</span></button>
-        <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="云端回收站更多操作" icon={<MoreHorizontalRegular />} appearance="subtle" /></MenuTrigger><MenuPopover><MenuList><MenuItem icon={<DeleteDismissRegular />} onClick={() => { if (window.confirm("永久清空此云端回收站？其中的文件和目录将无法恢复。")) void client.emptyTrash(props.scope, props.tree.revision).then(props.onRefresh); }}>清空云端回收站</MenuItem></MenuList></MenuPopover></Menu>
+        <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="云端回收站更多操作" icon={<MoreHorizontalRegular />} appearance="subtle" disabled={props.pending} /></MenuTrigger><MenuPopover><MenuList><MenuItem disabled={props.pending} icon={<DeleteDismissRegular />} onClick={() => { if (window.confirm("永久清空此云端回收站？其中的文件和目录将无法恢复。")) void props.onAction("正在清空云端回收站…", () => client.emptyTrash(props.scope, props.tree.revision).then(props.onRefresh)); }}>清空云端回收站</MenuItem></MenuList></MenuPopover></Menu>
       </div>
       {expanded ? <ul className="library-resource-tree">
         {props.tree.folders.filter((folder) => !folder.parentFolderId).map((folder) => (
-          <li className="library-paper-row" key={folder.folderId}><FolderRegular /><span className="library-paper-title">{folder.name}</span><Button appearance="subtle" aria-label={`恢复 ${folder.name}`} icon={<ArrowResetRegular />} onClick={() => void restoreFolder(folder)} size="small" /><Button appearance="subtle" aria-label={`永久删除 ${folder.name}`} icon={<DeleteDismissRegular />} onClick={() => { if (window.confirm(`永久删除云端目录“${folder.name}”？此操作无法恢复。`)) void purgeFolder(folder); }} size="small" /></li>
+          <li className="library-paper-row" key={folder.folderId}><FolderRegular /><span className="library-paper-title">{folder.name}</span><Button appearance="subtle" aria-label={`恢复 ${folder.name}`} disabled={props.pending} icon={<ArrowResetRegular />} onClick={() => void props.onAction(`正在恢复“${folder.name}”…`, () => restoreFolder(folder))} size="small" /><Button appearance="subtle" aria-label={`永久删除 ${folder.name}`} disabled={props.pending} icon={<DeleteDismissRegular />} onClick={() => { if (window.confirm(`永久删除云端目录“${folder.name}”？此操作无法恢复。`)) void props.onAction(`正在永久删除“${folder.name}”…`, () => purgeFolder(folder)); }} size="small" /></li>
         ))}
         {props.tree.entries.map((entry) => (
-          <li className="library-paper-row" key={entry.documentId}><DocumentTextRegular /><span className="library-paper-title">{entry.title}</span><Button appearance="subtle" aria-label={`恢复 ${entry.title}`} icon={<ArrowResetRegular />} onClick={() => void client.restoreDocument(props.scope, entry.documentId, props.tree.revision).then(props.onRefresh)} size="small" /><Button appearance="subtle" aria-label={`永久删除 ${entry.title}`} icon={<DeleteDismissRegular />} onClick={() => { if (window.confirm(`永久删除云端文件“${entry.title}”？此操作无法恢复。`)) void client.purgeEntry(props.scope, entry.documentId, props.tree.revision).then(props.onRefresh); }} size="small" /></li>
+          <li className="library-paper-row" key={entry.documentId}><DocumentTextRegular /><span className="library-paper-title">{entry.title}</span><Button appearance="subtle" aria-label={`恢复 ${entry.title}`} disabled={props.pending} icon={<ArrowResetRegular />} onClick={() => void props.onAction(`正在恢复“${entry.title}”…`, () => client.restoreDocument(props.scope, entry.documentId, props.tree.revision).then(props.onRefresh))} size="small" /><Button appearance="subtle" aria-label={`永久删除 ${entry.title}`} disabled={props.pending} icon={<DeleteDismissRegular />} onClick={() => { if (window.confirm(`永久删除云端文件“${entry.title}”？此操作无法恢复。`)) void props.onAction(`正在永久删除“${entry.title}”…`, () => client.purgeEntry(props.scope, entry.documentId, props.tree.revision).then(props.onRefresh)); }} size="small" /></li>
         ))}
       </ul> : null}
     </div>

@@ -339,7 +339,7 @@ export function useNotesController(input: {
       path = `${prefix}${name.slice(0, -(extension.length + 1))} (${suffix}).${extension}`;
     // A create-only write protects existing Vault files, even if another
     // application creates the same filename after the directory was listed.
-    await files.writeFile({
+    return files.writeFile({
       mountId: destination.mountId,
       path,
       text,
@@ -688,12 +688,13 @@ export function useNotesController(input: {
       window.removeEventListener("focus", changed);
     };
   }, [input.visible, input.scopeId]);
-  async function perform(action: () => Promise<void>) {
+  async function perform<T>(action: () => Promise<T>): Promise<T> {
     if (!active()) throw new Error("账号已切换。");
     setError("");
     try {
-      await action();
+      const result = await action();
       await refresh();
+      return result;
     } catch (e) {
       if (active()) setError((e as Error).message);
       throw e;
@@ -872,12 +873,12 @@ export function useNotesController(input: {
           (folder) => folder.folderId === folderId,
         )?.external;
         if (external) {
-          await writeExternal(
+          const file = await writeExternal(
             { title: text.trim().split("\n")[0], text },
             external,
           );
           await refreshFiles();
-          return;
+          return fromFile(file);
         }
         const object = await repository.create({
           kind: "content.note",
@@ -899,12 +900,13 @@ export function useNotesController(input: {
             followLatest: true,
           }),
         );
+        return fromObject(object);
       }),
     editNote: (item, text) =>
       perform(async () => {
         if (!item.editable) throw new Error("请在来源页面编辑此内容。");
         if (item.file) {
-          await files.writeFile({
+          const file = await files.writeFile({
             mountId: item.file.mountId,
             path: item.file.path,
             text,
@@ -912,16 +914,17 @@ export function useNotesController(input: {
           });
           if (text !== item.file.text) await notes.setLabel(item.target, "user-edited", true);
           await refreshFiles();
-          return;
+          return fromFile(file);
         }
         if (!item.object) throw new Error("请在来源页面编辑此内容。");
-        await repository.editNote(
+        const object = await repository.editNote(
           refOf(item.object),
           text,
           /\.(md|markdown)$/i.test(item.object.title)
             ? item.object.title
             : text.trim().split("\n")[0].slice(0, 100) || "笔记",
         );
+        return { ...item, ...fromObject(object, item.defaultFolderId) };
       }),
     collect: (item, destination) => collect(item.target, destination),
     removeReference: (item) =>

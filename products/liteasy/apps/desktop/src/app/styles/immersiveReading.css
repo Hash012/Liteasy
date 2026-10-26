@@ -1,22 +1,23 @@
 /* Triple click: collapse surrounding panels, retain normal window and reader tools. */
 .workspace-frame[data-reading-focus="reading"] > .app-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
-[data-reading-focus="reading"] .dock-workspace-columns { grid-area: 1 / 1; grid-template-columns: minmax(0, 1fr) !important; }
-[data-reading-focus="reading"] .dock-workspace-columns > [data-region="main"] { grid-area: 1 / 1; }
-[data-reading-focus="reading"] :is(.activity-bar, .dock-bottom-columns, .pane-utility-row, .dock-workspace-columns > .pane-resizer, .dock-workspace-columns > .dock-region:not([data-region="main"])) { display: none; }
-[data-reading-focus="reading"] [data-region="main"] :is(.pdf-left-sidebar, .pdf-whiteboard-pane, .paper-reading-comments, .paper-reading-navigation, .reading-document__sidebar) { display: none; }
-[data-reading-focus="reading"] [data-region="main"] :is(.pdf-workspace, .paper-reading-body) { grid-template-columns: minmax(0, 1fr) !important; }
+[data-reading-focus="reading"] :is(.dock-workspace-columns, .dock-bottom-columns):has(> [data-reading-focus-target]) { grid-area: 1 / 1; grid-template-columns: minmax(0, 1fr) !important; }
+[data-reading-focus="reading"] .dock-region[data-reading-focus-target] { grid-area: 1 / 1; }
+[data-reading-focus="reading"] :is(.activity-bar, .pane-utility-row, .pane-resizer, .dock-region:not([data-reading-focus-target]), .dock-workspace-columns:not(:has(> [data-reading-focus-target])), .dock-bottom-columns:not(:has(> [data-reading-focus-target]))) { display: none; }
+[data-reading-focus="reading"] [data-reading-focus-target] :is(.pdf-left-sidebar, .pdf-whiteboard-pane, .paper-reading-comments, .paper-reading-navigation, .reading-document__sidebar) { display: none; }
+[data-reading-focus="reading"] [data-reading-focus-target] :is(.pdf-workspace, .paper-reading-body) { grid-template-columns: minmax(0, 1fr) !important; }
+[data-reading-focus="reading"] [data-reading-focus-target] .paper-reading-body { grid-template-rows: minmax(0, 1fr) !important; }
 /* Keep reader DOM, drafts and layout preferences intact while hiding chrome. */
 .app-frame.workspace-frame[data-reading-focus="fullscreen"] { position: fixed; inset: 0; width: 100%; height: 100dvh; min-height: 0; max-height: none; grid-template-rows: minmax(0, 1fr); }
 .workspace-frame[data-reading-focus="fullscreen"] > .app-shell { grid-area: 1 / 1; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); padding: 0; gap: 0; }
-[data-reading-focus="fullscreen"] .dock-workspace-columns { grid-area: 1 / 1; grid-template-columns: minmax(0, 1fr) !important; }
-.app-frame.workspace-frame[data-reading-focus="fullscreen"] .dock-workspace-columns > [data-region="main"] { grid-area: 1 / 1; border: 0; border-radius: 0; }
-[data-reading-focus="fullscreen"] :is(.dock-workspace-columns > .pane-resizer, .pane-utility-row) { display: none; }
-[data-reading-focus="fullscreen"] .dock-workspace-columns > .dock-region:not([data-region="main"]) {
+[data-reading-focus="fullscreen"] .dock-workspace-columns { grid-area: 1 / 1; grid-template-columns: minmax(0, 1fr) !important; pointer-events: none; }
+.app-frame.workspace-frame[data-reading-focus="fullscreen"] .dock-region[data-reading-focus-target] { grid-area: 1 / 1; border: 0; border-radius: 0; pointer-events: auto; }
+[data-reading-focus="fullscreen"] :is(.dock-workspace-columns > .pane-resizer, .dock-bottom-columns > .pane-resizer, .pane-utility-row) { display: none; }
+[data-reading-focus="fullscreen"] .dock-workspace-columns > .dock-region:not([data-reading-focus-target]) {
   position: absolute; visibility: hidden; pointer-events: none; z-index: 65;
   top: 8px; bottom: 8px; width: min(420px, calc(100% - 80px)); box-shadow: var(--shadow16);
 }
-[data-reading-focus="fullscreen"] [data-region="left"] { left: 64px; }
-[data-reading-focus="fullscreen"] [data-region="right"] { right: 8px; }
+[data-reading-focus="fullscreen"] [data-region="left"]:not([data-reading-focus-target]) { left: 64px; }
+[data-reading-focus="fullscreen"] [data-region="right"]:not([data-reading-focus-target]) { right: 8px; }
 .workspace-frame[data-reading-focus="fullscreen"] > .workspace-command-bar {
   position: absolute; z-index: 70; inset: 0 0 auto; visibility: hidden; pointer-events: none;
 }
@@ -27,40 +28,44 @@
   position: absolute; z-index: 65; inset: 0 auto 0 0; width: 60px; visibility: hidden; pointer-events: none;
   background: var(--colorNeutralBackground2);
 }
-[data-reading-focus="fullscreen"] .dock-bottom-columns {
+[data-reading-focus="fullscreen"] .dock-bottom-columns:not(:has(> [data-reading-focus-target])) {
   position: absolute; z-index: 65; left: 8px; right: 8px; bottom: 26px; height: min(36vh, 360px);
   visibility: hidden; pointer-events: none; box-shadow: var(--shadow16);
 }
-[data-reading-focus="fullscreen"][data-focus-edge="left"] :is(.activity-bar, .dock-workspace-columns > [data-region="left"]),
-[data-reading-focus="fullscreen"][data-focus-edge="right"] .dock-workspace-columns > [data-region="right"],
-[data-reading-focus="fullscreen"][data-focus-edge="bottom"] :is(.dock-bottom-columns, .file-status-bar),
+[data-reading-focus="fullscreen"] .dock-bottom-columns:has(> [data-reading-focus-target]) {
+  grid-area: 1 / 1; grid-template-columns: minmax(0, 1fr) !important;
+}
+[data-reading-focus="fullscreen"] .dock-bottom-columns:has(> [data-reading-focus-target]) > .dock-region:not([data-reading-focus-target]) { display: none; }
+[data-reading-focus="fullscreen"][data-focus-edge="left"] :is(.activity-bar, .dock-workspace-columns > [data-region="left"]:not([data-reading-focus-target])),
+[data-reading-focus="fullscreen"][data-focus-edge="right"] .dock-workspace-columns > [data-region="right"]:not([data-reading-focus-target]),
+[data-reading-focus="fullscreen"][data-focus-edge="bottom"] :is(.dock-bottom-columns:not(:has(> [data-reading-focus-target])), .file-status-bar),
 [data-reading-focus="fullscreen"][data-focus-edge="top"] > .workspace-command-bar { visibility: visible; pointer-events: auto; }
-[data-reading-focus="fullscreen"] [data-region="main"] { grid-template-rows: minmax(0, 1fr); }
-[data-reading-focus="fullscreen"] [data-region="main"] > .dock-region-tab-row {
+[data-reading-focus="fullscreen"] [data-reading-focus-target] { grid-template-rows: minmax(0, 1fr); }
+[data-reading-focus="fullscreen"] [data-reading-focus-target] > .dock-region-tab-row {
   position: absolute; inset: var(--shell-top-height) 0 auto; z-index: 68;
   display: flex; visibility: hidden; pointer-events: none;
 }
 
-[data-reading-focus="fullscreen"][data-focus-edge="top"] [data-region="main"] > .dock-region-tab-row { visibility: visible; pointer-events: auto; padding-right: 250px; }
+[data-reading-focus="fullscreen"][data-focus-edge="top"] [data-reading-focus-target] > .dock-region-tab-row { visibility: visible; pointer-events: auto; padding-right: 250px; }
 /* Reveal controls as overlays: the reader viewport never changes on hover. */
-[data-reading-focus="fullscreen"] [data-region="main"] { position: relative; }
-[data-reading-focus="fullscreen"] [data-region="main"] :is(.pdf-main-stage, .paper-reading-workspace, .paper-resource-tab, .reading-document, .external-note-editor, .reader-reading-surface) { position: relative; }
-[data-reading-focus="fullscreen"] [data-region="main"] :is(.pdf-reader-top, .paper-reading-toolbar, .paper-resource-tab__header, .reading-document__toolbar, .external-note-editor > header, .reading-library-toolbar) {
+[data-reading-focus="fullscreen"] [data-reading-focus-target] { position: relative; }
+[data-reading-focus="fullscreen"] [data-reading-focus-target] :is(.pdf-main-stage, .paper-reading-workspace, .paper-resource-tab, .reading-document, .external-note-editor, .reader-reading-surface) { position: relative; }
+[data-reading-focus="fullscreen"] [data-reading-focus-target] :is(.pdf-reader-top, .paper-reading-toolbar, .paper-resource-tab__header, .reading-document__toolbar, .external-note-editor > header, .reading-library-toolbar) {
   position: absolute; inset: calc(var(--shell-top-height) + 52px) 0 auto; z-index: 60;
   visibility: hidden; pointer-events: none; background: var(--colorNeutralBackground1); box-shadow: var(--shadow8);
 }
-[data-reading-focus="fullscreen"][data-focus-edge="top"] [data-region="main"] :is(.pdf-reader-top, .paper-reading-toolbar, .paper-resource-tab__header, .reading-document__toolbar, .external-note-editor > header, .reading-library-toolbar) { visibility: visible; pointer-events: auto; }
-[data-reading-focus="fullscreen"] [data-region="main"] :is(.reader-reading-actions, .reader-reading-surface > button, .reader-reading-surface > .reader-ai-feedback) { display: none !important; }
-[data-reading-focus="fullscreen"] [data-region="main"] :is(.paper-reading-progress, .reading-document__footer) {
+[data-reading-focus="fullscreen"][data-focus-edge="top"] [data-reading-focus-target] :is(.pdf-reader-top, .paper-reading-toolbar, .paper-resource-tab__header, .reading-document__toolbar, .external-note-editor > header, .reading-library-toolbar) { visibility: visible; pointer-events: auto; }
+[data-reading-focus="fullscreen"] [data-reading-focus-target] :is(.reader-reading-actions, .reader-reading-surface > button, .reader-reading-surface > .reader-ai-feedback) { display: none !important; }
+[data-reading-focus="fullscreen"] [data-reading-focus-target] :is(.paper-reading-progress, .reading-document__footer) {
   position: absolute; inset: auto 0 24px; z-index: 60; visibility: hidden; pointer-events: none; background: var(--colorNeutralBackground1);
 }
-[data-reading-focus="fullscreen"][data-focus-edge="bottom"] [data-region="main"] :is(.paper-reading-progress, .reading-document__footer) { visibility: visible; pointer-events: auto; }
-[data-reading-focus="fullscreen"] [data-region="main"] :is(.pdf-left-sidebar, .pdf-whiteboard-pane, .paper-reading-comments, .paper-reading-navigation, .reading-document__sidebar) { display: none; }
-[data-reading-focus="fullscreen"] [data-region="main"] :is(.pdf-workspace, .paper-reading-body) { grid-template-columns: minmax(0, 1fr) !important; }
-[data-reading-focus="fullscreen"] [data-region="main"] .paper-reading-body { grid-template-rows: minmax(0, 1fr) !important; }
-[data-reading-focus="fullscreen"] [data-region="main"] .pdf-reader { border: 0; border-radius: 0; }
-[data-reading-focus="fullscreen"] [data-region="main"] .pdf-main-stage { grid-template-rows: minmax(0, 1fr); }
-[data-reading-focus="fullscreen"] [data-region="main"] .paper-reading-workspace.is-focused { position: relative; inset: auto; z-index: auto; }
+[data-reading-focus="fullscreen"][data-focus-edge="bottom"] [data-reading-focus-target] :is(.paper-reading-progress, .reading-document__footer) { visibility: visible; pointer-events: auto; }
+[data-reading-focus="fullscreen"] [data-reading-focus-target] :is(.pdf-left-sidebar, .pdf-whiteboard-pane, .paper-reading-comments, .paper-reading-navigation, .reading-document__sidebar) { display: none; }
+[data-reading-focus="fullscreen"] [data-reading-focus-target] :is(.pdf-workspace, .paper-reading-body) { grid-template-columns: minmax(0, 1fr) !important; }
+[data-reading-focus="fullscreen"] [data-reading-focus-target] .paper-reading-body { grid-template-rows: minmax(0, 1fr) !important; }
+[data-reading-focus="fullscreen"] [data-reading-focus-target] .pdf-reader { border: 0; border-radius: 0; }
+[data-reading-focus="fullscreen"] [data-reading-focus-target] .pdf-main-stage { grid-template-rows: minmax(0, 1fr); }
+[data-reading-focus="fullscreen"] [data-reading-focus-target] .paper-reading-workspace.is-focused { position: relative; inset: auto; z-index: auto; }
 
 .immersive-edge { position: absolute; z-index: 80; border: 0; padding: 0; opacity: 0; background: transparent; }
 .immersive-edge-top { top: 0; left: 6px; right: 6px; height: 5px; }
@@ -76,6 +81,6 @@
 }
 [data-focus-edge="top"] .immersive-controls, .immersive-controls:focus-within { visibility: visible; pointer-events: auto; }
 .immersive-error { position: absolute; z-index: 90; top: 88px; right: 12px; max-width: min(400px, 90vw); padding: 10px; border-radius: 6px; background: var(--colorNeutralBackground1); box-shadow: var(--shadow16); }
-@media (max-width: 700px) { .immersive-controls > span { display: none; } [data-reading-focus="fullscreen"][data-focus-edge="top"] [data-region="main"] > .dock-region-tab-row { padding-right: 86px; } }
+@media (max-width: 700px) { .immersive-controls > span { display: none; } [data-reading-focus="fullscreen"][data-focus-edge="top"] [data-reading-focus-target] > .dock-region-tab-row { padding-right: 86px; } }
 
 [data-reading-focus="reading"] .immersive-controls { top: auto; bottom: 32px; visibility: visible; pointer-events: auto; }

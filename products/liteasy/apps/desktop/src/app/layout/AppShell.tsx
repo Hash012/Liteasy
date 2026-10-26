@@ -1286,6 +1286,12 @@ export function AppShell({
     onOpenReader: () => { workbenchNavigation.open("document-reader"); workspaceShell.focusRegion(dock.findItemRegion("document-reader") ?? "main"); },
     openPaper: openPaperInReader
   });
+  const recordPdfOpened = readingLibrary.recordPdfOpened;
+  const recordPdfDocumentInfo = pdfFileStatus.onDocumentInfo;
+  const onPdfDocumentInfo = useCallback((info: Parameters<typeof recordPdfDocumentInfo>[0]) => {
+    recordPdfDocumentInfo(info);
+    void recordPdfOpened(info);
+  }, [recordPdfDocumentInfo, recordPdfOpened]);
   const assistantContextSuggestions = useAssistantContextCatalog({
     entries: readingLibrary.entries,
     artifacts: artifactCatalog,
@@ -1863,7 +1869,7 @@ export function AppShell({
       pending: readingLibrary.pending, message: readingLibrary.message,
       onMoveFile: readingLibrary.moveFile, onRelocateFolder: readingLibrary.relocateFolder,
       onImport: readingLibrary.importFiles,
-      onInspect: (entry) => { recommendationLibrary.clear(); readingLibrary.inspect(entry); },
+      onInspect: (entry, open) => { recommendationLibrary.clear(); readingLibrary.inspect(entry, open); },
       onOpen: (entry) => { recommendationLibrary.clear(); return readingLibrary.open(entry); },
       onMetadataChange: readingLibrary.updateMetadata,
       onEditBibliography: openBibliographicEditor
@@ -2397,7 +2403,7 @@ export function AppShell({
           setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
         }}
         selectionLookup={selectionLookup}
-        onDocumentInfo={pdfFileStatus.onDocumentInfo}
+        onDocumentInfo={onPdfDocumentInfo}
         onQuickAsk={askPdfQuestion}
         onQuickAskTransfer={transferQuickAskToConversation}
         onGenerateGuide={generateLiteratureGuide}
@@ -2603,6 +2609,7 @@ export function AppShell({
     return (
       <DockRegion
         dynamicTabs={dynamicTabs}
+        readingFocusTarget={immersive.active && immersive.regionId === regionId}
         itemTitles={{ "note-file-reader": externalNote.session ? `${externalNote.session.snapshot.name} · 笔记` : undefined,
           "paper-note": paperAttachments.session ? `${paperAttachments.session.object.title} · 笔记` : undefined,
           "document-reader": readingLibrary.active?.document.title, "board": objectWorkbench.board?.title,
@@ -2765,7 +2772,7 @@ export function AppShell({
     <MarkdownEditingContext.Provider value={{ mode: settingsState["view.markdown_mode"] ?? "live", autosave: settingsState["view.markdown_autosave"] !== false }}>
     <WorkflowInvocation model={extensionWorkflows} />
     <div ref={immersive.root} className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}
-      data-list-density={settingsState["view.list_density"] ?? "comfortable"} data-reading-focus={immersive.mode} data-focus-edge={immersive.edge} onClickCapture={immersive.onClickCapture}>
+      data-list-density={settingsState["view.list_density"] ?? "comfortable"} data-reading-focus={immersive.mode} data-reading-focus-region={immersive.regionId} data-focus-edge={immersive.edge} onClickCapture={immersive.onClickCapture}>
       <ImmersiveReadingControls {...immersive} />
       <OnboardingTour model={onboarding} />
       {workspaceShell.pageSwitcher.mode ? <WorkspacePageSwitcher mode={workspaceShell.pageSwitcher.mode}

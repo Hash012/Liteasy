@@ -69,8 +69,8 @@ export type NotesViewModel = {
   importFiles(files?: File[]): Promise<void>;
   createFolder(name: string): Promise<void>;
   removeFolder(): Promise<void>;
-  createNote(text: string): Promise<void>;
-  editNote(item: NotesItem, text: string): Promise<void>;
+  createNote(text: string): Promise<NotesItem | void>;
+  editNote(item: NotesItem, text: string): Promise<NotesItem | void>;
   collect(item: NotesItem, folderId: string): Promise<void>;
   removeReference(item: NotesItem): Promise<void>;
   openSource(item: NotesItem): void;

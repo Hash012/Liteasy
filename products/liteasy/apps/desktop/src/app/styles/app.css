@@ -6237,6 +6237,8 @@ button.pdf-overlay-mark:focus-visible {
 .assistant-input-highlight .assistant-inline-context { pointer-events: auto; }
 .assistant-context-preview-trigger,
 .assistant-input-highlight .resource-reference-link { font: inherit; line-height: inherit; letter-spacing: inherit; color: inherit; padding: 0; margin: 0; border: 0; background: transparent; text-decoration: none; }
+/* A mention mirrors plain textarea characters, not a standalone control box. */
+.assistant-input-highlight .assistant-context-preview-trigger { display: inline; min-width: 0; min-height: 0; width: auto; height: auto; font: inherit; line-height: inherit; letter-spacing: inherit; padding: 0; margin: 0; border: 0; vertical-align: baseline; white-space: inherit; }
 .assistant-context-token { display: inline-flex; align-items: center; }
 .assistant-context-token > button { flex: 0 0 auto; }
 

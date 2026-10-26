@@ -119,3 +119,32 @@ test("a PDF tab enters immersion without remounting the document and restores it
   await expect(page.locator(".pdf-reader-top")).toBeVisible();
   expect(await handle!.evaluate((element) => element.isConnected)).toBe(true);
 });
+
+for (const [region, arrow] of [["right", "ArrowRight"], ["bottom", "ArrowDown"]]) test(`a document moved to ${region} remains visible in fullscreen and returns to its saved dock`, async ({ page }) => {
+  await page.goto("/");
+  const library = page.getByRole("region", { name: "本地文献库", exact: true });
+  await library.getByLabel("选择文献库文件").setInputFiles({ name: "moved-reader.md", mimeType: "text/markdown", buffer: Buffer.from("# Moved Reader\n\n" + "The same document stays open when its dock changes.\n\n".repeat(50)) });
+  await library.getByRole("button", { name: "选择文件 Moved Reader", exact: true }).dblclick();
+  const tab = page.getByRole("tab", { name: /Moved Reader|moved-reader/ }).first();
+  await tab.press(`Alt+Shift+${arrow}`);
+  const target = page.locator(`[data-region="${region}"]`);
+  const reader = target.getByRole("region", { name: "文件阅读器", exact: true });
+  await expect(reader.getByRole("heading", { name: "Moved Reader", exact: true })).toBeVisible();
+  await reader.getByRole("heading", { name: "Moved Reader", exact: true }).click();
+  const handle = await reader.elementHandle();
+  const before = await target.boundingBox();
+  const preferences = await page.evaluate(() => JSON.stringify(Object.entries(localStorage).filter(([key]) => /dock|pane/.test(key))));
+  await page.keyboard.press("F11");
+  const frame = page.locator(".workspace-frame");
+  await expect(frame).toHaveAttribute("data-reading-focus", "fullscreen");
+  await expect(frame).toHaveAttribute("data-reading-focus-region", region);
+  await expect(reader).toBeVisible();
+  await expect.poll(async () => (await target.boundingBox())!.width).toBeGreaterThan(1590);
+  await expect.poll(async () => (await target.boundingBox())!.height).toBeGreaterThan(990);
+  await page.keyboard.press("Escape");
+  await expect(frame).toHaveAttribute("data-reading-focus", "off");
+  await expect(reader).toBeVisible();
+  expect(await handle!.evaluate(element => element.isConnected)).toBe(true);
+  expect(await target.boundingBox()).toEqual(before);
+  expect(await page.evaluate(() => JSON.stringify(Object.entries(localStorage).filter(([key]) => /dock|pane/.test(key))))).toBe(preferences);
+});

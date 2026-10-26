@@ -1,7 +1,7 @@
 import { readingMediaTypes } from "./readingFormats";
 import { z } from "zod";
 import { createObjectRepository } from "../objects/objectRepository";
-import { objectRefSchema, refOf } from "../objects/object.types";
+import { ObjectStoreError, objectRefSchema, refOf } from "../objects/object.types";
 import type { ObjectStorage, StorageRow } from "../objects/objectStorage";
 import type { StagedObjectAsset } from "../objects/objectAssets";
 import type { ParsedReadingDocument } from "./readingDocument.types";
@@ -66,6 +66,24 @@ export function createReadingLibraryRepository(storage: ObjectStorage, scopeId: 
       return Object.fromEntries((await listRows("reading-library/metadata/")).map((row) => [
         row.key.slice("reading-library/metadata/".length), metadataSchema.parse(row.value)
       ]));
+    },
+    async markReading(id: string, fallbackStatus?: ReadingMetadata["readingStatus"]): Promise<ReadingMetadata> {
+      const key = `reading-library/metadata/${id}`;
+      for (let attempt = 0; ; attempt++) {
+        const previous = await storage.get(key);
+        const value = metadataSchema.parse(previous?.value ?? {});
+        const status = value.readingStatus ?? fallbackStatus;
+        if (status === "reading" || status === "finished") return { ...value, readingStatus: status };
+        const next = { ...value, readingStatus: "reading" as const };
+        try {
+          await storage.commit([change(key, next, previous)]);
+          return next;
+        } catch (error) {
+          // A concurrent user status change wins. Re-read before retrying instead
+          // of overwriting a newer "finished" value with the loaded PDF status.
+          if (!(error instanceof ObjectStoreError) || error.code !== "revision_conflict" || attempt >= 2) throw error;
+        }
+      }
     },
     async updateMetadata(id: string, patch: ReadingMetadata) {
       const key = `reading-library/metadata/${id}`;

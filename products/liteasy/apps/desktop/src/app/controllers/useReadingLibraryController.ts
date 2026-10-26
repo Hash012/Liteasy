@@ -1,6 +1,6 @@
 import { isReadableFileName, readingFormatForName } from "../features/reading-library/readingFormats";
 import { libraryFolderKey, relativeLibraryFolder } from "../features/library/libraryFolderMembership";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createObjectStorage, subscribeObjectStorage } from "../features/objects/objectStorage";
 import { createReadingLibraryRepository, MAX_LIBRARY_FILE_BYTES, type ReadingLibraryFile, type ReadingMetadata } from "../features/reading-library/readingLibraryRepository";
 import type { ParsedReadingDocument } from "../features/reading-library/readingDocument.types";
@@ -15,6 +15,7 @@ import { originalFileContentHash, type OriginalFileDescriptor } from "../feature
 import { describeResourceIdentity } from "../features/resource-filesystem/resourceIdentity";
 import { readingResourceCapabilities } from "../features/reading-library/readingResourceCapabilities";
 import { readingImportSourceForFile } from "../features/reading-library/readingImportIdentity";
+import type { PdfDocumentInfo } from "../features/pdf/pdfDocumentInfo";
 
 export function useReadingLibraryController(input: {
   scopeId: string; papers: Paper[]; enabled: boolean; localLibraryRootPath?: string;
@@ -37,6 +38,7 @@ export function useReadingLibraryController(input: {
   const [message, setMessage] = useState("");
   const request = useRef(0);
   const importing = useRef(false);
+  const openedPdfs = useRef(new Map<string, Promise<void>>());
   const current = () => latest.current.scopeId === input.scopeId;
   useEffect(() => {
     setStateScope(input.scopeId);
@@ -125,6 +127,30 @@ export function useReadingLibraryController(input: {
     }
     if (current()) setMetadata((previous) => ({ ...previous, [id]: value }));
   }
+  const recordPdfOpened = useCallback((info: PdfDocumentInfo): Promise<void> => {
+    const isCurrentLocalPaper = () => {
+      const paper = latest.current.papers.find((candidate) => candidate.id === info.paperId);
+      return latest.current.scopeId === input.scopeId && paper && !paper.libraryReference
+        && Boolean(paper.sourcePath) && !/^org:\/\//i.test(paper.sourcePath!)
+        && paper.sourcePath === info.sourcePath;
+    };
+    if (!isCurrentLocalPaper() || !Number.isInteger(info.pageCount) || info.pageCount <= 0) return Promise.resolve();
+    const key = JSON.stringify([input.scopeId, info.paperId, info.sourcePath]);
+    const pending = openedPdfs.current.get(key);
+    if (pending) return pending;
+    const operation = (async () => {
+      try {
+        const legacy = await loadPaperFileMetadata(info.paperId) as ReadingMetadata;
+        if (!isCurrentLocalPaper()) return;
+        const value = await repository.markReading(info.paperId, legacy.readingStatus);
+        if (isCurrentLocalPaper()) setMetadata(previous => ({ ...previous, [info.paperId]: value }));
+      } catch (error) {
+        if (isCurrentLocalPaper()) setMessage(String(error));
+      }
+    })().finally(() => openedPdfs.current.delete(key));
+    openedPdfs.current.set(key, operation);
+    return operation;
+  }, [input.scopeId, repository]);
   async function importFiles(selected: File[], targetFolderPath?: string) {
     if (importing.current) throw new Error("文件正在导入，请完成后再添加。");
     importing.current = true; setPending(true); setMessage("");
@@ -181,10 +207,6 @@ export function useReadingLibraryController(input: {
     if (entry.format === "pdf") {
       request.current += 1; setPending(false);
       input.openPaper(entry.id);
-      if (metadata[entry.id]?.readingStatus !== "finished") {
-        try { await updateMetadata(entry.id, { readingStatus: "reading" }); }
-        catch (error) { if (current()) setMessage(String(error)); }
-      }
       return;
     }
     const id = ++request.current; setPending(true); setMessage("");
@@ -221,6 +243,7 @@ export function useReadingLibraryController(input: {
     } finally { if (id === request.current && current()) setPending(false); }
   }
   return {
+    recordPdfOpened,
     openOriginalFile,
     entries,
     selected: selection?.scope === input.scopeId ? entries.find((entry) => entry.id === selection.entry.id) ?? selection.entry : undefined,

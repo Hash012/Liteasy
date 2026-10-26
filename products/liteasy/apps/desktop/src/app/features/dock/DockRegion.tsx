@@ -110,6 +110,7 @@ type DockRegionProps = {
   onMoveItem: (itemId: DockItemId, targetRegionId: DockRegionId) => void;
   overlay?: ReactNode;
   regionId: DockRegionId;
+  readingFocusTarget?: boolean;
   regionActions?: ReactNode;
   renderItem: (itemId: DockItemId, regionId: DockRegionId) => ReactNode;
 };
@@ -161,6 +162,7 @@ export function DockRegion({
   onMoveItem,
   overlay,
   regionId,
+  readingFocusTarget = false,
   regionActions,
   renderItem,
 }: DockRegionProps) {
@@ -367,6 +369,7 @@ export function DockRegion({
       aria-label={`${regionLabel} Dock 区域`}
       className={`dock-region dock-region-${regionId} ${dropActive ? "drop-active" : ""}`}
       data-region={regionId}
+      data-reading-focus-target={readingFocusTarget ? "true" : undefined}
       tabIndex={-1}
       ref={regionElement}
       onDragLeave={(event) => {
@@ -416,7 +419,7 @@ export function DockRegion({
                         draggable={descriptor.allowedRegions.length > 1}
                         id={`dock-tab-${regionId}-${itemId}`}
                         onClick={() => onActivateItem(itemId)}
-                        data-reading-entry={regionId === "main" && ["reader", "paper-note", "note-file-reader", "document-reader", "recommendation-reader", "board"].includes(itemId) ? "true" : undefined}
+                        data-reading-entry={["reader", "paper-note", "note-file-reader", "document-reader", "recommendation-reader", "board"].includes(itemId) ? "true" : undefined}
                         onDragEnd={() => setDropActive(false)}
                         onDragStart={(event) => {
                           event.dataTransfer.effectAllowed = "move";
@@ -458,7 +461,7 @@ export function DockRegion({
                     draggable={tab.draggable && Boolean(onMoveDynamicTab)}
                     id={`dock-tab-${regionId}-${tab.id}`}
                     onClick={tab.onActivate}
-                    data-reading-entry={regionId === "main" ? "true" : undefined}
+                    data-reading-entry="true"
                     onDragEnd={() => setDropActive(false)}
                     onDragStart={(event) => {
                       event.dataTransfer.effectAllowed = "move";

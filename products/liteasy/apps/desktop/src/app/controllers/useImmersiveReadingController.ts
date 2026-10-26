@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -7,10 +7,18 @@ import { createFullscreenViewportSync } from "../features/workbench/fullscreenVi
 export type ReadingFocusMode = "off" | "reading" | "fullscreen";
 export type ReadingFocusEdge = "top" | "left" | "right" | "bottom";
 
+const readingSurfaceSelector = ".pdf-reader, .paper-reading-workspace, .reading-document, .external-note-editor, .object-workbench";
+function hasActiveReadingSurface(region: HTMLElement) {
+  return !region.closest("[hidden]") && (Boolean(region.querySelector('[role="tab"][data-reading-entry="true"][aria-selected="true"]')) ||
+    Array.from(region.querySelectorAll<HTMLElement>(readingSurfaceSelector)).some((surface) => !surface.closest("[hidden]")));
+}
+
 /** A temporary presentation layer: never rewrites the user's saved dock layout. */
 export function useImmersiveReadingController() {
   const root = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<ReadingFocusMode>("off");
+  const [regionId, setRegionId] = useState("main");
+  const lastReadingRegion = useRef<string>();
   const [edge, setEdge] = useState<ReadingFocusEdge>();
   const [error, setError] = useState("");
   const current = useRef(mode);
@@ -34,15 +42,43 @@ export function useImmersiveReadingController() {
     revealed.current = next;
     setEdge(next);
   }, []);
+  const rememberReadingRegion = useCallback((target: EventTarget | null) => {
+    const region = target instanceof Element ? target.closest<HTMLElement>("[data-region]") : null;
+    // Capture runs before a tab's activation handler updates aria-selected.
+    const entry = target instanceof Element && target.closest('[data-reading-entry="true"]');
+    if (current.current === "off" && region && root.current?.contains(region) && (entry || hasActiveReadingSurface(region)))
+      lastReadingRegion.current = region.dataset.region;
+  }, []);
+  useEffect(() => {
+    const remember = (event: Event) => rememberReadingRegion(event.target);
+    document.addEventListener("pointerdown", remember, true);
+    document.addEventListener("focusin", remember, true);
+    return () => {
+      document.removeEventListener("pointerdown", remember, true);
+      document.removeEventListener("focusin", remember, true);
+    };
+  }, [rememberReadingRegion]);
   const update = useCallback((next: ReadingFocusMode) => {
-    if (current.current === "off" && next !== "off") previousFocus.current = document.activeElement as HTMLElement | null;
+    if (current.current === "off" && next !== "off") {
+      previousFocus.current = document.activeElement as HTMLElement | null;
+      const regions = Array.from(root.current?.querySelectorAll<HTMLElement>("[data-region]") ?? []);
+      const focused = document.activeElement?.closest<HTMLElement>("[data-region]");
+      const target = regions.find((region) => region.dataset.region === lastReadingRegion.current && hasActiveReadingSurface(region))
+        ?? regions.find((region) => region === focused && hasActiveReadingSurface(region))
+        ?? regions.find(hasActiveReadingSurface)
+        ?? regions.find((region) => region.dataset.region === "main");
+      setRegionId(target?.dataset.region ?? "main");
+    }
     current.current = next;
     setMode(next);
     reveal();
     if (next !== "off") window.dispatchEvent(new Event("liteasy:immersive-reading-enter"));
-    if (next === "off") previousFocus.current?.focus({ preventScroll: true });
-    else root.current?.querySelector<HTMLElement>('[data-region="main"]')?.focus({ preventScroll: true });
   }, [reveal]);
+  useLayoutEffect(() => {
+    if (mode === "off") previousFocus.current?.focus({ preventScroll: true });
+    else Array.from(root.current?.querySelectorAll<HTMLElement>("[data-region]") ?? [])
+      .find((region) => region.dataset.region === regionId)?.focus({ preventScroll: true });
+  }, [mode, regionId]);
 
   const setFullscreen = useCallback(async (value: boolean) => {
     if (isTauri()) {
@@ -148,10 +184,10 @@ export function useImmersiveReadingController() {
         : event.clientX <= box.left + 6 ? "left" : event.clientX >= box.right - 6 ? "right" : undefined;
       if (next) { reveal(next); return; }
       const target = event.target instanceof Element ? event.target : undefined;
-      const overPanel = revealed.current === "top" ? target?.closest(".workspace-command-bar, .immersive-controls, [data-region=main] .dock-region-tab-row, .pdf-reader-top, .paper-reading-toolbar, .paper-resource-tab__header, .reading-document__toolbar, .reading-library-toolbar, .external-note-editor > header, .pdf-left-sidebar, .reading-document__sidebar, .paper-reading-comments, .paper-reading-navigation")
-        : revealed.current === "left" ? target?.closest(".activity-bar, [data-region=left]")
-        : revealed.current === "right" ? target?.closest("[data-region=right]")
-        : revealed.current === "bottom" ? target?.closest(".dock-bottom-columns, .file-status-bar") : undefined;
+      const overPanel = revealed.current === "top" ? target?.closest(".workspace-command-bar, .immersive-controls, [data-reading-focus-target] .dock-region-tab-row, .pdf-reader-top, .paper-reading-toolbar, .paper-resource-tab__header, .reading-document__toolbar, .reading-library-toolbar, .external-note-editor > header, .pdf-left-sidebar, .reading-document__sidebar, .paper-reading-comments, .paper-reading-navigation")
+        : revealed.current === "left" ? target?.closest(".activity-bar, [data-region=left]:not([data-reading-focus-target])")
+        : revealed.current === "right" ? target?.closest("[data-region=right]:not([data-reading-focus-target])")
+        : revealed.current === "bottom" ? target?.closest(".dock-bottom-columns:not(:has([data-reading-focus-target])), .file-status-bar") : undefined;
       if (overPanel || target?.closest('[role="menu"], [role="dialog"], [role="listbox"]')) clearTimeout(timer.current);
       else hideLater();
     };
@@ -161,6 +197,7 @@ export function useImmersiveReadingController() {
   }, [mode, reveal]);
 
   const onClickCapture = (event: ReactMouseEvent) => {
+    rememberReadingRegion(event.target);
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) { openingClick.current = undefined; return; }
     const entry = event.target instanceof Element && event.target.closest('[data-reading-entry="true"]');
     if (event.detail === 2 && entry) {
@@ -174,5 +211,5 @@ export function useImmersiveReadingController() {
     if (event.detail === 3 && (entry || (previous && event.timeStamp - previous.time < 650 &&
       Math.hypot(event.clientX - previous.x, event.clientY - previous.y) <= 12))) enter();
   };
-  return { root, mode, active: mode !== "off", edge, error, enter, exit, toggleFullscreen, reveal, onClickCapture };
+  return { root, mode, regionId, active: mode !== "off", edge, error, enter, exit, toggleFullscreen, reveal, onClickCapture };
 }

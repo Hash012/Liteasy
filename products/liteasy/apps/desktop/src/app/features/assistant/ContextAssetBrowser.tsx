@@ -10,7 +10,7 @@ import { contextUiKinds } from "./contextAssetMetadata";
 import { usePickerState } from "../context-picker/usePickerState";
 import { createContextCatalogPort, type ContextCatalogPort, type PickerNode } from "../context-picker/catalogPort";
 import { routeKey, type PickerPurpose } from "../context-picker/pickerState";
-import { undoSelectionIntent, resolveSelectionBatch, type PlannedMember } from "../context-picker/selectionPlan";
+import { resolveSelectionBatch, type PlannedMember } from "../context-picker/selectionPlan";
 import { PickerNavigation } from "../context-picker/PickerNavigation";
 import { readPickerActivity, readRecommendationSettings, recommendContextAssets, type Recommendation } from "../context-picker/recommendations";
 import { IconAction, OptionPicker } from "../../shared/ui/productPrimitives";
@@ -128,8 +128,8 @@ function ContextAssetBrowserContent({ suggestions, contextTokens = [], initialQu
   const visibleNodes = hierarchyResult.nodes.slice(viewport.start, viewport.end);
   const visible = visibleNodes.flatMap(node => node.asset ? [node.asset] : []);
   const selectionOrder = visible;
-  const containers = visibleNodes.filter(node => !node.asset);
-  const containerSelection = useMemo(() => new Map(hierarchyResult.allNodes.filter(node => !node.asset).map(node => { try { return [node.id, port.plan(route, [node], "filtered").members.map(member => member.id)] as const; } catch { return [node.id, [] as string[]] as const; } })), [hierarchyResult, port]);
+  const containers = hierarchyResult.allNodes.filter(node => !node.asset);
+  const containerSelection = useMemo(() => new Map(containers.map(node => { try { return [node.id, port.plan(route, [node], policy === "related" ? "related" : "filtered").members.map(member => member.id)] as const; } catch { return [node.id, [] as string[]] as const; } })), [hierarchyResult, port, policy]);
   const filteredIds = [...new Set([...containerSelection.values()].flat().concat(hierarchyResult.allNodes.flatMap(node => node.asset && available(node.asset) ? [node.id] : [])))];
   const acceptedTokens = useRef<AssistantContextToken[]>([]);
   const resolvedIdentities = useRef(new Map<string, string>());
@@ -279,10 +279,11 @@ function ContextAssetBrowserContent({ suggestions, contextTokens = [], initialQu
   function selectMany(ids: readonly string[], checked: boolean, intentId = `filtered:${routeKey(route)}:${query}:${groupBy}`) {
     for (const id of ids) { const asset = catalog.find(item => item.id === id); if (asset) selectedAssets.current.set(id, asset); }
     if (checked) picker.select({ id: intentId, catalogRevision: port.revision, policy: "filtered", members: ids.flatMap(id => { const asset = catalog.find(item => item.id === id); return asset ? [port.member(asset)] : []; }), exclusions: [] });
-    else picker.setDraft(state => undoSelectionIntent(state, intentId));
+    // Checkboxes describe effective membership, regardless of which selection added it.
+    else picker.exclude(ids);
   }
   function selectNodes(nodes: PickerNode[], checked: boolean, id: string) {
-    if (!checked) { picker.setDraft(state => undoSelectionIntent(state, id)); return; }
+    if (!checked) { picker.exclude(nodes.flatMap(node => node.asset ? [node.asset.id] : containerMembers(node))); return; }
     try { const intent = port.plan(route, nodes, policy === "related" ? "related" : "filtered"); picker.select({ ...intent, id }); setErrors([]); }
     catch (error) { setErrors([error instanceof Error ? error.message : String(error)]); }
   }
