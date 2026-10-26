@@ -834,11 +834,11 @@
     {
       "file": "src/app/features/dock/DockRegion.tsx",
       "rule": "native-interaction",
-      "detail": "<button aria-label={descriptor.title} aria-selected={active} className={`dock-tab ${active ? \"active\" : \"\"}`} draggable={descriptor.allowedRegions.length > 1} id={`dock-tab-${regionId}-${itemId}`} onClick={() => onActivateItem(itemId)} data-reading-entry={regionId === \"main\" && [\"reader\", \"paper-note\", \"note-file-reader\", \"document-reader\", \"recommendation-reader\", \"board\"].includes(itemId) ? \"true\" : undefined} onDragEnd={() => setDropActive(false)} onDragStart={(event) => { event.dataTransfer.effectAllowed = \"move\"; event.dataTransfer.setData(dockItemMimeType, itemId); onItemDragStart?.(itemId, event); }} onKeyDown={(event) => handleTabKeyDown(event, itemId)} role=\"tab\" tabIndex={active ? 0 : -1} type=\"button\" >",
+      "detail": "<button aria-label={descriptor.title} aria-selected={active} className={`dock-tab ${active ? \"active\" : \"\"}`} draggable={descriptor.allowedRegions.length > 1} id={`dock-tab-${regionId}-${itemId}`} onClick={() => onActivateItem(itemId)} data-reading-entry={[\"reader\", \"paper-note\", \"note-file-reader\", \"document-reader\", \"recommendation-reader\", \"board\"].includes(itemId) ? \"true\" : undefined} onDragEnd={() => setDropActive(false)} onDragStart={(event) => { event.dataTransfer.effectAllowed = \"move\"; event.dataTransfer.setData(dockItemMimeType, itemId); onItemDragStart?.(itemId, event); }} onKeyDown={(event) => handleTabKeyDown(event, itemId)} role=\"tab\" tabIndex={active ? 0 : -1} type=\"button\" >",
       "count": 1,
       "surface": "features/dock/DockRegion.tsx",
       "owner": "Shell UI (M2)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
+      "reason": "Reviewed reader-entry markers for every Dock region; existing native tab activation, keyboard navigation and drag contracts are preserved. Covered by DockRegion.test.tsx, immersiveReading.test.tsx and layoutRegression.browser.spec.ts.",
       "reviewBy": "QAU-10"
     },
     {
@@ -854,11 +854,11 @@
     {
       "file": "src/app/features/dock/DockRegion.tsx",
       "rule": "native-interaction",
-      "detail": "<button aria-selected={tab.selected} className={`dock-tab ${tab.kind === \"document\" ? \"dock-document-tab\" : \"\"} ${tab.selected ? \"active\" : \"\"}`} draggable={tab.draggable && Boolean(onMoveDynamicTab)} id={`dock-tab-${regionId}-${tab.id}`} onClick={tab.onActivate} data-reading-entry={regionId === \"main\" ? \"true\" : undefined} onDragEnd={() => setDropActive(false)} onDragStart={(event) => { event.dataTransfer.effectAllowed = \"move\"; event.dataTransfer.setData( dockDynamicTabMimeType, tab.id, ); tab.onDragStart?.(event); }} onKeyDown={(event) => handleDynamicTabKeyDown(event, tab.id) } role=\"tab\" tabIndex={tab.selected ? 0 : -1} title={ tab.draggable ? `拖动“${tab.title}”到其他区域；Alt+Shift+方向键也可移动` : tab.title } type=\"button\" >",
+      "detail": "<button aria-selected={tab.selected} className={`dock-tab ${tab.kind === \"document\" ? \"dock-document-tab\" : \"\"} ${tab.selected ? \"active\" : \"\"}`} draggable={tab.draggable && Boolean(onMoveDynamicTab)} id={`dock-tab-${regionId}-${tab.id}`} onClick={tab.onActivate} data-reading-entry=\"true\" onDragEnd={() => setDropActive(false)} onDragStart={(event) => { event.dataTransfer.effectAllowed = \"move\"; event.dataTransfer.setData( dockDynamicTabMimeType, tab.id, ); tab.onDragStart?.(event); }} onKeyDown={(event) => handleDynamicTabKeyDown(event, tab.id) } role=\"tab\" tabIndex={tab.selected ? 0 : -1} title={ tab.draggable ? `拖动“${tab.title}”到其他区域；Alt+Shift+方向键也可移动` : tab.title } type=\"button\" >",
       "count": 1,
       "surface": "features/dock/DockRegion.tsx",
       "owner": "Shell UI (M2)",
-      "reason": "Existing controlled/native interaction contract; exact AST locked while product adapters migrate.",
+      "reason": "Reviewed reader-entry markers for every Dock region; existing native tab activation, keyboard navigation and drag contracts are preserved. Covered by DockRegion.test.tsx, immersiveReading.test.tsx and layoutRegression.browser.spec.ts.",
       "reviewBy": "QAU-10"
     },
     {
@@ -6794,11 +6794,11 @@
     {
       "file": "src/app/styles/immersiveReading.css",
       "rule": "layer-literal",
-      "detail": "[data-reading-focus=\"fullscreen\"] .dock-workspace-columns > .dock-region:not([data-region=\"main\"]) { z-index: 65 }",
+      "detail": "[data-reading-focus=\"fullscreen\"] .dock-workspace-columns > .dock-region:not([data-reading-focus-target]) { z-index: 65 }",
       "count": 1,
       "surface": "styles/immersiveReading.css",
       "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing legacy declaration outside migrated semantic control roles; exact declaration locked, not whole-file exemption.",
+      "reason": "Reviewed selectors following the active reader across Dock regions; existing overlay layer values and ordering are unchanged. Covered by layoutRegression.browser.spec.ts and immersiveReading.browser.spec.ts.",
       "reviewBy": "QAU-10"
     },
     {
@@ -6834,41 +6834,41 @@
     {
       "file": "src/app/styles/immersiveReading.css",
       "rule": "layer-literal",
-      "detail": "[data-reading-focus=\"fullscreen\"] .dock-bottom-columns { z-index: 65 }",
+      "detail": "[data-reading-focus=\"fullscreen\"] .dock-bottom-columns:not(:has(> [data-reading-focus-target])) { z-index: 65 }",
       "count": 1,
       "surface": "styles/immersiveReading.css",
       "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing legacy declaration outside migrated semantic control roles; exact declaration locked, not whole-file exemption.",
+      "reason": "Reviewed selectors following the active reader across Dock regions; existing overlay layer values and ordering are unchanged. Covered by layoutRegression.browser.spec.ts and immersiveReading.browser.spec.ts.",
       "reviewBy": "QAU-10"
     },
     {
       "file": "src/app/styles/immersiveReading.css",
       "rule": "layer-literal",
-      "detail": "[data-reading-focus=\"fullscreen\"] [data-region=\"main\"] > .dock-region-tab-row { z-index: 68 }",
+      "detail": "[data-reading-focus=\"fullscreen\"] [data-reading-focus-target] > .dock-region-tab-row { z-index: 68 }",
       "count": 1,
       "surface": "styles/immersiveReading.css",
       "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing legacy declaration outside migrated semantic control roles; exact declaration locked, not whole-file exemption.",
+      "reason": "Reviewed selectors following the active reader across Dock regions; existing overlay layer values and ordering are unchanged. Covered by layoutRegression.browser.spec.ts and immersiveReading.browser.spec.ts.",
       "reviewBy": "QAU-10"
     },
     {
       "file": "src/app/styles/immersiveReading.css",
       "rule": "layer-literal",
-      "detail": "[data-reading-focus=\"fullscreen\"] [data-region=\"main\"] :is(.pdf-reader-top, .paper-reading-toolbar, .paper-resource-tab__header, .reading-document__toolbar, .external-note-editor > header, .reading-library-toolbar) { z-index: 60 }",
+      "detail": "[data-reading-focus=\"fullscreen\"] [data-reading-focus-target] :is(.pdf-reader-top, .paper-reading-toolbar, .paper-resource-tab__header, .reading-document__toolbar, .external-note-editor > header, .reading-library-toolbar) { z-index: 60 }",
       "count": 1,
       "surface": "styles/immersiveReading.css",
       "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing legacy declaration outside migrated semantic control roles; exact declaration locked, not whole-file exemption.",
+      "reason": "Reviewed selectors following the active reader across Dock regions; existing overlay layer values and ordering are unchanged. Covered by layoutRegression.browser.spec.ts and immersiveReading.browser.spec.ts.",
       "reviewBy": "QAU-10"
     },
     {
       "file": "src/app/styles/immersiveReading.css",
       "rule": "layer-literal",
-      "detail": "[data-reading-focus=\"fullscreen\"] [data-region=\"main\"] :is(.paper-reading-progress, .reading-document__footer) { z-index: 60 }",
+      "detail": "[data-reading-focus=\"fullscreen\"] [data-reading-focus-target] :is(.paper-reading-progress, .reading-document__footer) { z-index: 60 }",
       "count": 1,
       "surface": "styles/immersiveReading.css",
       "owner": "Settings and extensions UI (M6)",
-      "reason": "Existing legacy declaration outside migrated semantic control roles; exact declaration locked, not whole-file exemption.",
+      "reason": "Reviewed selectors following the active reader across Dock regions; existing overlay layer values and ordering are unchanged. Covered by layoutRegression.browser.spec.ts and immersiveReading.browser.spec.ts.",
       "reviewBy": "QAU-10"
     },
     {

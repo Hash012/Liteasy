@@ -188,23 +188,23 @@
       "fingerprint": "b6759fc80d029c89dc790d38",
       "file": "products/liteasy/apps/desktop/src/app/controllers/useNotesController.ts",
       "rule": "embedded-details",
-      "reviewedGitBlob": "4818060fd3c1cb504bb0b2fb61b03337a71039d6",
+      "reviewedGitBlob": "36497573e240fc52fb0aa1a6f51194c7138b871a",
       "decision": "keep-content",
       "owner": "notes-and-boards",
       "renderedSurface": "导出的 Markdown 原文引用",
-      "reason": "已复核白板聚合与自动标题改动；导出原文引用的 details/summary 继续保留引用正文和来源块，属于用户文档内容；聚合只改变列表投影，不改写源对象。",
-      "acceptanceTest": "src/tests/boardNotesProjection.test.tsx; src/tests/boardFiles.test.ts; src/tests/notesPersistenceAndFiles.test.tsx"
+      "reason": "已复核保存快照改动：写入和编辑返回已保存条目的身份，供后续草稿修订使用；导出原文引用的 details/summary 及引用正文、来源块保持不变，属于用户文档内容。",
+      "acceptanceTest": "src/tests/boardNotesProjection.test.tsx; src/tests/boardFiles.test.ts; src/tests/notesPersistenceAndFiles.test.tsx; src/tests/notesPendingSave.test.tsx"
     },
     {
       "fingerprint": "64dcf947a1d42d9f897dd4d6",
       "file": "products/liteasy/apps/desktop/src/app/controllers/useNotesController.ts",
       "rule": "embedded-summary",
-      "reviewedGitBlob": "4818060fd3c1cb504bb0b2fb61b03337a71039d6",
+      "reviewedGitBlob": "36497573e240fc52fb0aa1a6f51194c7138b871a",
       "decision": "keep-content",
       "owner": "notes-and-boards",
       "renderedSurface": "导出的 Markdown 原文引用",
-      "reason": "已复核白板聚合与自动标题改动；导出原文引用的 details/summary 继续保留引用正文和来源块，属于用户文档内容；聚合只改变列表投影，不改写源对象。",
-      "acceptanceTest": "src/tests/boardNotesProjection.test.tsx; src/tests/boardFiles.test.ts; src/tests/notesPersistenceAndFiles.test.tsx"
+      "reason": "已复核保存快照改动：写入和编辑返回已保存条目的身份，供后续草稿修订使用；导出原文引用的 details/summary 及引用正文、来源块保持不变，属于用户文档内容。",
+      "acceptanceTest": "src/tests/boardNotesProjection.test.tsx; src/tests/boardFiles.test.ts; src/tests/notesPersistenceAndFiles.test.tsx; src/tests/notesPendingSave.test.tsx"
     },
     {
       "fingerprint": "37c3eea6b188d6831d741e9e",
