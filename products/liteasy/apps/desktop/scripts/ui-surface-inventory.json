@@ -50,6 +50,8 @@
         "AssistantSessionController",
         "setHistoryError",
         "showHistoryFailure",
+        "captureSubmittedDraft",
+        "matchesSubmittedDraft",
         "persistConversation",
         "addReaderContext",
         "syncAssistant",
@@ -63,6 +65,8 @@
         "composerHistory",
         "applyComposerDraft",
         "resetComposerDraft",
+        "consumeSubmittedDraft",
+        "navigateView",
         "changeComposerInput",
         "moveComposerHistory",
         "addComposerContextTokens",
@@ -125,8 +129,7 @@
         "handleToggleFavoriteMessage"
       ],
       "interactions": [
-        "AssistantComposer",
-        "button"
+        "AssistantComposer"
       ],
       "styles": [
         "../../features/assistant/assistantView.css"
@@ -677,6 +680,31 @@
         "AssistantSessionSummary",
         "AssistantSessionRow",
         "AssistantHistoryPanel"
+      ],
+      "interactions": [],
+      "styles": [],
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
+      "path": "src/app/features/assistant/AssistantHomePanel.tsx",
+      "batch": "M3",
+      "owner": "M3 surface owner / shared UI review",
+      "symbols": [
+        "AssistantHomePanel"
       ],
       "interactions": [],
       "styles": [],
@@ -5836,6 +5864,7 @@
       ],
       "interactions": [],
       "styles": [
+        "./surfaceTokens.css",
         "../../shared/ui/productPrimitives.css"
       ],
       "migration": "product-primitives",

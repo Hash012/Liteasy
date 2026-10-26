@@ -8,6 +8,9 @@ export type ResearchWorkbenchModel = {
   connections: ChatgptPlanAccounts; models: ChatgptPlanModel[]; model: string; setModel(value: string): void;
   goal: string; setGoal(value: string): void; sources: Array<{ ref: ObjectRef; title: string }>; source?: ObjectRef; setSource(value?: ObjectRef): void;
   busy: boolean; notice: string; answer: string; backend: { configured: boolean; requiredVersion: string };
+  pendingAction?: "research" | "connection" | "login";
+  noticeIntent?: "info" | "error";
+  connectionStatus?: { intent: "error" | "success"; message: string };
   candidate: "sequential" | "last_delta"; setCandidate(value: "sequential" | "last_delta"): void;
   hypothesis: ResearchHypothesisInput; setHypothesis(value: ResearchHypothesisInput): void;
   modelRun?: { sessionId: string; runId: string };

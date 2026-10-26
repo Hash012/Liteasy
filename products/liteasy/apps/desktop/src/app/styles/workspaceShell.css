@@ -4,7 +4,7 @@
   --shell-horizontal-gap: 8px;
   --shell-padding-x: 10px;
   --shell-icon-size: 16px;
-  --shell-icon-button: 30px;
+  --shell-icon-button: 28px;
   --shell-status-font-size: 12px;
   grid-template-rows: var(--shell-top-height) minmax(0, 1fr) auto;
   padding: 0;
@@ -31,6 +31,7 @@
   -webkit-user-select: none;
   user-select: none;
 }
+.workspace-command-bar.fui-Toolbar { padding: 0 var(--shell-padding-x); }
 
 .shell-navigation,
 .shell-commands {
@@ -41,13 +42,14 @@
 }
 
 .shell-navigation { gap: 2px; }
-.workspace-command-bar .shell-ai-button { min-width: 48px; height: 28px; padding: 0 12px; border-radius: 4px; font-size: 13px; font-weight: 600; background: var(--ai-accent-gradient); color: var(--text-on-accent); border-color: transparent; box-shadow: var(--shadow-xs); }
+.workspace-command-bar .shell-ai-button { flex: 0 0 auto; min-width: 40px; min-height: 26px; height: 26px; padding: 0 10px; border-radius: 6px; font-size: 12px; line-height: 1; font-weight: 500; background: var(--ai-accent-gradient); color: var(--text-on-accent); border-color: transparent; box-shadow: var(--shadow-xs); }
 .reader-ai-feedback { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--colorNeutralForeground2); font-size: 12px; }
 
 .workspace-command-bar .shell-icon-button {
   width: var(--shell-icon-button);
   min-width: var(--shell-icon-button);
   height: var(--shell-icon-button);
+  min-height: var(--shell-icon-button);
   padding: 0;
   border-radius: var(--borderRadiusMedium);
   color: var(--colorNeutralForeground2);
@@ -120,9 +122,10 @@
   border-bottom-color: var(--colorNeutralStroke2);
 }
 
-.shell-workspace-title[data-tauri-drag-region] { align-self: stretch; line-height: var(--shell-top-height); }
-.shell-window-controls { display: flex; flex: 0 0 auto; align-self: stretch; }
-.shell-window-controls > button { width: 46px; min-width: 46px; height: var(--shell-top-height); border: 0; border-radius: 0; }
+.shell-workspace-title[data-tauri-drag-region] { align-self: stretch; line-height: calc(var(--shell-top-height) - 1px); }
+.shell-window-controls { display: flex; align-items: center; flex: 0 0 auto; height: 100%; padding-inline-start: 6px; position: relative; }
+.shell-window-controls::before { content: ""; position: absolute; inset-inline-start: 0; top: calc(50% - 7px); height: 14px; border-inline-start: 1px solid var(--border-default); pointer-events: none; }
+.shell-window-controls > button { width: 46px; min-width: 46px; min-height: 0; height: 100%; padding: 0; border: 0; border-radius: 0; }
 .shell-window-controls .shell-window-close:hover { background: var(--surface-hover); color: var(--text-primary); }
 .shell-window-controls .shell-window-close:active { background: var(--surface-base); color: var(--text-primary); }
 .shell-window-error { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
@@ -134,16 +137,18 @@
 
 /* Equal wings keep the search field centered in the whole application title bar. */
 .shell-command-wing { display: contents; }
-.workspace-command-bar.has-global-search { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 30%) minmax(0, 1fr); }
+.workspace-command-bar.has-global-search { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 30%) minmax(max-content, 1fr); grid-template-rows: minmax(0, 1fr); }
 .has-global-search .shell-command-wing { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.has-global-search .shell-command-wing-end { justify-content: flex-end; }
-.has-global-search .shell-global-search { width: 100%; min-width: 0; min-height: 28px; height: 28px; border-radius: 6px; justify-content: flex-start; color: var(--colorNeutralForeground3); background: var(--bg-hover); border-color: transparent; }
+.shell-command-wing-end { display: flex; align-items: center; justify-content: flex-end; height: 100%; gap: 6px; padding-right: 4px; }
+.shell-command-wing-end .shell-commands { height: 100%; gap: 6px; }
+.has-global-search .shell-command-wing-end { gap: 6px; }
+.has-global-search .shell-global-search { width: 100%; min-width: 0; min-height: 28px; height: 28px; padding-block: 0; border-radius: 6px; justify-content: flex-start; font-size: clamp(12px, var(--fontSizeBase200), 16px); line-height: 20px; color: var(--colorNeutralForeground3); background: var(--bg-hover); border-color: transparent; }
 .has-global-search .shell-global-search:hover { background: var(--bg-active); border-color: var(--border-default); }
 .shell-global-search-label { white-space: nowrap; }
 .shell-global-search kbd { margin-left: auto; padding: 0 4px; border: 1px solid var(--border-subtle); border-radius: 4px; background: var(--bg-sidebar); color: var(--text-muted); font: inherit; font-size: 10px; line-height: 18px; white-space: nowrap; }
 @media (max-width: 900px) { .shell-global-search kbd { display: none; } }
 @media (max-width: 600px) {
-  .workspace-command-bar.has-global-search { grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr); }
+  .workspace-command-bar.has-global-search { grid-template-columns: minmax(0, 1fr) 36px minmax(max-content, 1fr); }
   .has-global-search .shell-global-search { padding: 4px; }
   .shell-global-search .shell-global-search-label { display: none; }
 }
@@ -159,7 +164,7 @@
 .workspace-frame .assistant-only-pane { background: var(--bg-panel-secondary); }
 .workspace-frame .activity-button { color: var(--text-secondary); border-radius: 6px; }
 .workspace-frame .activity-button.active { background: var(--bg-selected-accent); color: var(--accent-primary); }
-.workspace-frame .activity-button.active::before { content: ""; position: absolute; left: -6px; top: 11px; bottom: 11px; width: 3px; border-radius: 4px; background: var(--accent-primary); }
+.workspace-frame .activity-button.active::before { content: ""; position: absolute; left: -6px; top: 11px; bottom: 11px; width: 3px; border-radius: 4px; background: var(--accent-primary); pointer-events: none; }
 .workspace-frame .shell-ai-button:hover:not(:disabled) { box-shadow: 0 0 0 3px var(--ai-focus-ring); }
 .reader-ai-action.fui-Button { color: var(--ai-accent); background: var(--ai-surface-subtle); border: 1px solid var(--ai-border-subtle); border-radius: 6px; font-weight: 600; }
 .reader-ai-action.fui-Button:hover:not(:disabled) { color: var(--ai-accent); background: var(--ai-surface-subtle); box-shadow: 0 0 0 3px var(--ai-focus-ring); }

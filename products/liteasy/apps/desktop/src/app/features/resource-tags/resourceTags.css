@@ -1,10 +1,8 @@
 .resource-tag-chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 0; max-width: 100%; margin-top: 3px; }
-.resource-tag-chip { display: inline-block; min-width: 0; max-width: 180px; padding: 1px 6px; border: 1px solid transparent; border-radius: 5px; font: inherit; font-size: var(--fontSizeBase200); line-height: var(--lineHeightBase200); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--colorPaletteTealBackground2); color: var(--colorPaletteTealForeground2); }
+.resource-tag-chip { display: inline-block; min-width: 0; max-width: 180px; padding: 1px 6px; border: 1px solid var(--badge-border); border-radius: 4px; font: inherit; font-size: var(--fontSizeBase200); line-height: var(--lineHeightBase200); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--badge-accent); color: var(--accent-primary); }
 button.resource-tag-chip { cursor: pointer; }
 button.resource-tag-chip:hover, button.resource-tag-chip:focus-visible { border-color: currentColor; }
-.resource-tag-type { background: var(--colorPaletteBlueBackground2); color: var(--colorPaletteBlueForeground2); }
-.resource-tag-year, .resource-tag-method { background: var(--colorPalettePurpleBackground2); color: var(--colorPalettePurpleForeground2); }
-.resource-tag-author { background: var(--colorNeutralBackground4); color: var(--colorNeutralForeground2); }
-.resource-tag-tag, .resource-tag-object { background: var(--colorPaletteMarigoldBackground2); color: var(--colorPaletteMarigoldForeground2); }
-.resource-tag-collection { background: var(--colorPalettePinkBackground2); color: var(--colorPalettePinkForeground2); }
+.resource-tag-year, .resource-tag-author, .resource-tag-tag, .resource-tag-object, .resource-tag-collection { background: var(--badge-neutral); color: var(--text-secondary); border-color: var(--border-subtle); }
+.resource-tag-year { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-variant-numeric: tabular-nums; }
+.resource-tag-method { background: var(--ai-surface-subtle); color: var(--ai-accent); border-color: var(--ai-border-subtle); }
 .resource-tags-overflow { border: 0; background: transparent; padding: 1px 3px; color: var(--colorNeutralForeground3); font: inherit; font-size: var(--fontSizeBase200); cursor: pointer; }

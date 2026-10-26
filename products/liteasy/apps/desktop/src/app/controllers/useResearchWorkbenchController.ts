@@ -33,6 +33,9 @@ export function useResearchWorkbenchController(input: { repository: ObjectReposi
   const [source, setSource] = useState<ObjectRef>();
   const [sources, setSources] = useState<Array<{ ref: ObjectRef; title: string }>>([]);
   const [busy, setBusy] = useState(false), [notice, setNotice] = useState(""), [answer, setAnswer] = useState("");
+  const [pendingAction, setPendingAction] = useState<"research" | "connection" | "login">();
+  const [noticeIntent, setNoticeIntent] = useState<"info" | "error">("info");
+  const [connectionStatus, setConnectionStatus] = useState<{ intent: "error" | "success"; message: string }>();
   const [backend, setBackend] = useState<{ configured: boolean; requiredVersion: string }>({ configured: false, requiredVersion: "0.154.0" });
   const [candidate, setCandidate] = useState<"sequential" | "last_delta">("sequential");
   const [harnessReceipt, setHarnessReceipt] = useState("");
@@ -43,15 +46,26 @@ export function useResearchWorkbenchController(input: { repository: ObjectReposi
   const refreshRevision = useRef(0);
   const [hypothesis, setHypothesis] = useState({ question: "", proposedMechanism: "", changedAssumption: "",
     prediction: "等待时间减少且样本与顺序完全一致", falsification: "独立工作负载不改善，或样本、顺序、跨模态对齐发生变化" });
-  const perform = useCallback(async (work: () => Promise<void>) => {
+  const reportResearchError = useCallback((error: unknown) => {
+    if (active()) { setNotice(error instanceof Error ? error.message : String(error)); setNoticeIntent("error"); }
+  }, [active]);
+  const perform = useCallback(async (work: () => Promise<void>, action: "research" | "connection" | "login" = "research") => {
     if (!active() || performing.current) return;
     const operation = Symbol("research-operation");
     performing.current = operation;
-    setBusy(true); setNotice("");
+    setBusy(true); setPendingAction(action);
+    if (action === "research") { setNotice(""); setNoticeIntent("info"); }
+    else setConnectionStatus(undefined);
     try { await work(); }
-    catch (error) { if (active()) setNotice(error instanceof Error ? error.message : String(error)); }
+    catch (error) {
+      if (active()) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (action === "research") { setNotice(message); setNoticeIntent("error"); }
+        else setConnectionStatus({ intent: "error", message });
+      }
+    }
     finally {
-      if (performing.current === operation) { performing.current = null; if (active()) setBusy(false); }
+      if (performing.current === operation) { performing.current = null; if (active()) { setBusy(false); setPendingAction(undefined); } }
     }
   }, [active]);
   const refresh = useCallback(async (taskId = detailRef.current?.task.taskId) => {
@@ -67,33 +81,38 @@ export function useResearchWorkbenchController(input: { repository: ObjectReposi
   const refreshConnections = useCallback(async () => {
     const value = await plan.accounts(); if (!active()) return; setConnections(value);
     if (value.activeAccount) {
-      const catalog = await plan.models(value.activeAccount); if (!active()) return; setModels(catalog);
-      setModel(previous => catalog.some(item => item.slug === previous) ? previous : catalog[0]?.slug ?? "");
+      try {
+        const catalog = await plan.models(value.activeAccount); if (!active()) return; setModels(catalog);
+        setModel(previous => catalog.some(item => item.slug === previous) ? previous : catalog[0]?.slug ?? "");
+      } catch (error) {
+        if (active()) { setModels([]); setModel(""); }
+        throw error;
+      }
     } else { setModels([]); setModel(""); }
   }, [plan, active]);
   useEffect(() => {
-    performing.current = null; setBusy(false);
+    performing.current = null; setBusy(false); setPendingAction(undefined); setConnectionStatus(undefined); setNoticeIntent("info");
     setConnections({ activeAccount: null, accounts: [] }); setModels([]); setModel(""); setNotice("");
     grants.current.clear(); intents.current.clear(); setTasks([]); setDetail(undefined); setAnswer(""); setModelRun(undefined);
     setHypothesisId(""); setRunId(""); setSources([]); setSource(undefined); setHarnessReceipt("");
     if (!isTauri()) return;
-    void refresh().catch(error => { if (active()) setNotice(String(error)); });
-    void refreshConnections().catch(() => undefined);
+    void refresh().catch(reportResearchError);
+    void refreshConnections().catch(error => { if (active()) setConnectionStatus({ intent: "error", message: error instanceof Error ? error.message : String(error) }); });
     void invoke<typeof backend>("codex_backend_capability").then(value => { if (active()) setBackend(value); })
-      .catch(error => { if (active()) setNotice(String(error)); });
+      .catch(reportResearchError);
     void input.repository.searchTitles("", 100).then(async rows => {
       const notes = rows.filter(row => row.kind === "content.note" && row.revision).map(row => ({
         ref: { objectId: row.objectId, revision: row.revision! }, title: row.title,
       }));
       if (active()) { setSources(notes); setSource(undefined); }
-    }).catch(error => { if (active()) setNotice(String(error)); });
-  }, [scope, generation, refresh, refreshConnections]);
+    }).catch(reportResearchError);
+  }, [scope, generation, refresh, refreshConnections, reportResearchError]);
   useEffect(() => { setHypothesisId(""); setRunId(""); setAnswer(""); }, [detail?.task.taskId]);
   useEffect(() => {
     if (detail?.task.state !== "running" && !detail?.runs.some(run => ["submitting", "running"].includes(run.status))) return;
-    const timer = setInterval(() => { void refresh().catch(error => { if (active()) setNotice(String(error)); }); }, 1000);
+    const timer = setInterval(() => { void refresh().catch(reportResearchError); }, 1000);
     return () => clearInterval(timer);
-  }, [detail?.task.taskId, detail?.task.state, detail?.runs, refresh, active]);
+  }, [detail?.task.taskId, detail?.task.state, detail?.runs, refresh, reportResearchError]);
   const apiInput = useRef(input); apiInput.current = input;
   const executeResearchTurn = useCallback(async (request: AgentCommandExecutionInput) => {
     const taskId = request.request.input.researchTaskId!;
@@ -208,13 +227,14 @@ export function useResearchWorkbenchController(input: { repository: ObjectReposi
     harnessReceipt,
     configureHarness: (python: string, kitRoot: string, workspace: string) => perform(async () => {
       await invoke("research_harness_configure", { scope, config: { python, kitRoot, workspace, fingerprint: null } });
-      setNotice("研究校验服务已连接；项目资料仍由原资源系统管理。");
-    }),
+      if (active()) setConnectionStatus({ intent: "success", message: "研究校验服务已连接；项目资料仍由原资源系统管理。" });
+    }, "connection"),
     checkHarness: (operation: string, recordId: string, packet?: string) => perform(async () => {
       const receipt = await invoke("research_harness_check", { scope, operation, recordId: recordId || null, packet: packet ? JSON.parse(packet) : null, taskId: detail?.task.taskId ?? null });
+      if (!active()) return;
       setHarnessReceipt(JSON.stringify(receipt, null, 2));
       if (detail) await refresh();
-    }),
+    }, "connection"),
     compileReport: (options: import("../features/document-export/documentExport.types").ExportOptions, signal: AbortSignal) => {
       if (!detailRef.current) throw new Error("请选择研究任务。");
       return compileResearchDocument({ taskId: detailRef.current.task.taskId, scope, sessionGeneration: generation, active, host, options, signal });
@@ -224,7 +244,7 @@ export function useResearchWorkbenchController(input: { repository: ObjectReposi
       if (!claim || !detail) throw new Error("请先查看条件化主张与原始结果。");
       await host.call("confirm_claim", { taskId: detail.task.taskId, claimId: claim.id, expectedClaimHash: claim.hash }); await refresh();
     }),
-    busy, notice, answer, backend, candidate, setCandidate, hypothesis, setHypothesis, modelRun,
+    busy, pendingAction, notice, noticeIntent, connectionStatus, answer, backend, candidate, setCandidate, hypothesis, setHypothesis, modelRun,
     hypothesisId, setHypothesisId, runId, setRunId,
     readEvidence: (reference: ObjectRef) => perform(async () => {
       if (!detail) throw new Error("请先选择研究任务。");
@@ -234,15 +254,20 @@ export function useResearchWorkbenchController(input: { repository: ObjectReposi
     createTask, createSyntheticSource, readSource, saveHypothesis, prepareSpec, approveAndRun, recordDecision, approveModel, askResearch, cancelModel,
     saveReport, executeResearchTurn, open: (taskId: string) => perform(() => refresh(taskId)), refresh: () => perform(() => refresh()),
     cancelRun: (runId: string) => perform(async () => { await host.call("cancel", { runId }); await refresh(); }),
-    login: () => perform(async () => { await plan.login(); await refreshConnections(); }),
-    cancelLogin: plan.cancel,
-    selectAccount: (accountId: string) => perform(async () => { await plan.select(accountId); grants.current.clear(); await refreshConnections(); }),
-    logout: () => perform(async () => { if (connections.activeAccount) await plan.logout(connections.activeAccount); grants.current.clear(); await refreshConnections(); }),
+    login: () => perform(async () => { await plan.login(); await refreshConnections(); }, "login"),
+    cancelLogin: async () => {
+      try { await plan.cancel(); }
+      catch (error) { if (active()) setConnectionStatus({ intent: "error", message: error instanceof Error ? error.message : String(error) }); }
+    },
+    selectAccount: (accountId: string) => perform(async () => { await plan.select(accountId); grants.current.clear(); await refreshConnections(); }, "connection"),
+    logout: () => perform(async () => { if (connections.activeAccount) await plan.logout(connections.activeAccount); grants.current.clear(); await refreshConnections(); }, "connection"),
     verifyModel: () => perform(async () => { if (!connections.activeAccount || !model) throw new Error("请选择账号与模型。");
       await plan.provider(connections.activeAccount).infer({ model, messages: [{ role: "user", content: "Say exactly: Hello, world!" }] }); await refreshConnections();
-      setNotice("本次推理已 completed，所选模型此次可访问。"); }),
+      if (active()) setConnectionStatus({ intent: "success", message: "本次推理已完成，所选模型此次可访问。" }); }, "connection"),
     configureBackend: (executable: string) => perform(async () => { await invoke("codex_backend_configure", { executable });
-      setBackend(await invoke("codex_backend_capability")); }),
+      const capability = await invoke<typeof backend>("codex_backend_capability");
+      if (active()) { setBackend(capability); setConnectionStatus({ intent: "success", message: "研究引擎已连接。" }); }
+    }, "connection"),
   };
 }
 export type ResearchWorkbenchModel = ReturnType<typeof useResearchWorkbenchController>;

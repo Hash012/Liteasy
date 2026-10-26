@@ -53,8 +53,8 @@ test("assistant home, task list and selected run logs are exclusive with real pr
   await expect(recent).not.toContainText("条消息");
   await expect(recent).toHaveCSS("cursor", "pointer");
   await expect(recent).toHaveCSS("border-top-width", "0px");
-  await expect(recent.locator(".assistant-session-row-title")).toHaveCSS("font-size", "14px");
-  await expect(recent.locator(".assistant-session-row-date")).toHaveCSS("font-size", "12px");
+  await expect(recent.locator(".assistant-session-row-title")).toHaveCSS("font-size", "12px");
+  await expect(recent.locator(".assistant-session-row-date")).toHaveCSS("font-size", "11px");
   await page.screenshot({ path: info.outputPath("home-dark.png") });
   await page.getByRole("button", { name: "浅色", exact: true }).click();
   await expect(recent).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");

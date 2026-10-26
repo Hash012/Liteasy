@@ -29,6 +29,9 @@
   --ai-border-subtle: #ddd6fe;
   --ai-focus-border: #6366f1;
   --ai-focus-ring: rgba(99, 102, 241, 0.12);
+  --notice-error-bg: #fef2f2;
+  --notice-error-border: #fecaca;
+  --notice-error-text: #b91c1c;
   --text-on-accent: #ffffff;
   --badge-neutral: #f1f5f9;
   --badge-accent: #eff6ff;
@@ -74,6 +77,9 @@
   --ai-border-subtle: #514572;
   --ai-focus-border: #a5a4fc;
   --ai-focus-ring: rgba(165, 164, 252, 0.18);
+  --notice-error-bg: #3b252b;
+  --notice-error-border: #75404d;
+  --notice-error-text: #fca5a5;
   --badge-neutral: #2b3544;
   --badge-accent: #263952;
   --badge-border: rgba(147, 180, 255, 0.22);

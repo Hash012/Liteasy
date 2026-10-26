@@ -360,6 +360,7 @@ body {
 .dock-dynamic-tab.is-active > .dock-tab.active { background: transparent; color: var(--text-primary); font-weight: 500; }
 .dock-tab.active::after {
   content: none;
+  pointer-events: none;
 }
 
 .dock-tab-close {
@@ -617,6 +618,7 @@ body {
   content: "";
   background: currentColor;
   opacity: 0.72;
+  pointer-events: none;
 }
 
 .reader-layout-icon.left::before {
@@ -1602,6 +1604,7 @@ body {
   bottom: 18px;
   left: 6px;
   border-left: 1px solid rgba(63, 116, 137, 0.3);
+  pointer-events: none;
 }
 
 .genui-outline-node {
@@ -1619,6 +1622,7 @@ body {
   left: -19px;
   width: 28px;
   border-top: 1px solid rgba(63, 116, 137, 0.3);
+  pointer-events: none;
 }
 
 .genui-outline-label {
@@ -1860,6 +1864,7 @@ body {
   width: 1px;
   background: rgba(63, 116, 137, 0.3);
   content: "";
+  pointer-events: none;
 }
 
 .genui-mindmap-children.is-next-column > .genui-mindmap-branch::before {
@@ -1870,6 +1875,7 @@ body {
   height: 1px;
   background: rgba(63, 116, 137, 0.3);
   content: "";
+  pointer-events: none;
 }
 
 .genui-mindmap-children.is-below {
@@ -1888,6 +1894,7 @@ body {
   height: 18px;
   background: rgba(63, 116, 137, 0.3);
   content: "";
+  pointer-events: none;
 }
 
 .genui-mindmap-children.is-below > .genui-mindmap-branch {
@@ -1903,6 +1910,7 @@ body {
   height: 1px;
   background: rgba(63, 116, 137, 0.3);
   content: "";
+  pointer-events: none;
 }
 
 .genui-mindmap-children.is-below > .genui-mindmap-branch > .genui-mindmap-node {
@@ -4663,6 +4671,7 @@ button.pdf-overlay-mark:focus-visible {
   border-radius: 999px;
   background: #ffffff;
   content: "";
+  pointer-events: none;
 }
 
 .pdf-margin-comment > header {
@@ -5973,6 +5982,7 @@ button.pdf-overlay-mark:focus-visible {
 .assistant-command-chip::before {
   content: attr(data-prefix);
   visibility: hidden;
+  pointer-events: none;
 }
 .assistant-pane.accepting-reader-context .assistant-input-wrap {
   outline: 2px solid var(--accent-1);

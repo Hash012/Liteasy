@@ -45,6 +45,7 @@ import { AssistantSessionActions } from "../../features/assistant/AssistantSessi
 import { AssistantSessionToolbar } from "../../features/assistant/AssistantSessionToolbar";
 import { AssistantComposer } from "../../features/assistant/AssistantComposer";
 import { AssistantHistoryPanel, AssistantSessionRow } from "../../features/assistant/AssistantHistoryPanel";
+import { AssistantHomePanel } from "../../features/assistant/AssistantHomePanel";
 import { AssistantMessageList } from "../../features/assistant/AssistantMessageList";
 import type {
   AssistantConfirmationRequest,
@@ -2764,19 +2765,16 @@ export function AssistantSessionController({
         />
       ) : null}
 
-      {view.kind === "home" ? <section aria-label="助手首页">
-        <h3>开始新对话</h3>
-        {selectedPapers.length ? <><p>可使用的已选资料：{selectedPapers.map((paper) => paper.title).join("、")}</p>
-          <Button onClick={() => { setInput(selectedPapers.length > 1 ? "比较这些论文的方法与证据" : "概述这篇论文的方法与证据"); setComposerContextTokens(selectedPapers.map((paper) => ({ id: `paper-${paper.id}`, kind: "paper", label: paper.title, resourcePath: liteasyPath(objectWorkbench?.scopeId ?? "local", { kind: "paper", paperId: paper.id }), prompt: `论文：${paper.title}` }))); }}>根据已选资料提问</Button>
-        </> : <p>{tChinese("context.composer.noMaterials", "尚未添加资料")}</p>}
-        <h4 className="assistant-recent-heading">最近对话</h4>
-        <ul className="assistant-recent-conversations" aria-label={tChinese("context.composer.recentConversations", "最近对话")}>{sessionHistory.filter((session) => session.kind !== "artifact_generation" && session.id !== activeSessionId && session.lifecycle !== "archived" && session.lifecycle !== "tombstoned" && hasAssistantContent(session)).sort((a, b) => (b.updatedAt ?? b.createdAt ?? "").localeCompare(a.updatedAt ?? a.createdAt ?? "")).slice(0, 3).map(session => <AssistantSessionRow key={session.id} session={session} onOpenSession={id => { void openSession(id); }} onUpdateSession={updateSessionMetadata} onExportSession={exportSession} onDeleteSession={deleteSession} onRenameWithAI={renameSessionWithAI} />)}</ul>
-        <Button appearance="subtle" onClick={() => navigateView({ kind: "history", filter: "conversations" })}>查看全部</Button>
-      </section> : null}
+      {view.kind === "home" ? <AssistantHomePanel papers={selectedPapers} emptyMaterialsMessage={tChinese("context.composer.noMaterials", "尚未添加资料")}
+        recentConversationsLabel={tChinese("context.composer.recentConversations", "最近对话")}
+        onAskSelected={() => { setInput(selectedPapers.length > 1 ? "比较这些论文的方法与证据" : "概述这篇论文的方法与证据"); setComposerContextTokens(selectedPapers.map((paper) => ({ id: `paper-${paper.id}`, kind: "paper", label: paper.title, resourcePath: liteasyPath(objectWorkbench?.scopeId ?? "local", { kind: "paper", paperId: paper.id }), prompt: `论文：${paper.title}` }))); }}
+        onViewAll={() => navigateView({ kind: "history", filter: "conversations" })}>
+        {sessionHistory.filter((session) => session.kind !== "artifact_generation" && session.id !== activeSessionId && session.lifecycle !== "archived" && session.lifecycle !== "tombstoned" && hasAssistantContent(session)).sort((a, b) => (b.updatedAt ?? b.createdAt ?? "").localeCompare(a.updatedAt ?? a.createdAt ?? "")).slice(0, 3).map(session => <AssistantSessionRow key={session.id} session={session} onOpenSession={id => { void openSession(id); }} onUpdateSession={updateSessionMetadata} onExportSession={exportSession} onDeleteSession={deleteSession} onRenameWithAI={renameSessionWithAI} />)}
+      </AssistantHomePanel> : null}
       {!historyReady && !historyError ? <p role="status">正在恢复对话…</p> : null}
       {contextDropCount > 0 ? <p role="status">正在添加所选内容…</p> : null}
       {contextDropMessage ? <p role="alert">{contextDropMessage}</p> : null}
-      {historyError ? <div role="alert">{historyError}{historyErrorTechnical ? <DisclosureSection title="错误技术详情"><pre>{historyErrorTechnical}</pre></DisclosureSection> : null}<button type="button" onClick={() => { if (historyReady) void persistConversation().catch(() => {}); else setHistoryLoadAttempt((value) => value + 1); }}>重试</button></div> : null}
+      {historyError ? <div className="assistant-history-error" role="alert">{historyError}{historyErrorTechnical ? <DisclosureSection title="错误技术详情"><pre>{historyErrorTechnical}</pre></DisclosureSection> : null}<Button onClick={() => { if (historyReady) void persistConversation().catch(() => {}); else setHistoryLoadAttempt((value) => value + 1); }}>重试</Button></div> : null}
       {activeSession?.outbox?.filter((entry) => entry.state === "needs_review" || (activeSession.status === "unknown" && entry.state === "accepted")).map((entry) => <div key={entry.requestId} className="assistant-recovery-notice" role="status">
         <span>已保存的发送记录需要核对，不会自动重放。</span><Button size="small" onClick={() => { void reconcileSavedSend(activeSession.id, entry.requestId).catch((error) => showHistoryFailure("核对", error)); }}>核对发送回执</Button>
       </div>)}

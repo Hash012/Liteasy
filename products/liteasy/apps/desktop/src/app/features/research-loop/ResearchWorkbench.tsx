@@ -1,4 +1,4 @@
-import { ActionButton as Button, DisclosureSection, OptionPicker } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, DisclosureSection, InlineNotice, OptionPicker } from "../../shared/ui/productPrimitives";
 import { useEffect, useState } from "react";
 import { Checkbox, Field, Input, Textarea, Tooltip } from "@fluentui/react-components";
 import { AddRegular, ArrowClockwiseRegular, DismissRegular, DocumentSaveRegular, PlayRegular } from "@fluentui/react-icons";
@@ -29,26 +29,43 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
   useEffect(() => { setAllowModel(false); }, [model.source, model.model, model.connections.activeAccount, model.detail?.task.taskId]);
   const latestRun = model.detail?.runs.find(run => run.runId === model.runId) ?? model.detail?.runs.at(-1);
   const executing = model.detail?.task.state === "running" || model.detail?.task.state === "waiting_job";
+  const connectionMessage = model.connectionStatus?.message.includes("chatgpt_discovery_failed")
+    ? "无法读取 ChatGPT 连接信息。请检查网络和登录状态后重试连接。" : model.connectionStatus?.message;
   return <section className="research-workbench" aria-label="研究工作台">
     <div className="research-toolbar"><h2>研究工作台</h2>
-      <Tooltip content="刷新研究状态" relationship="description"><Button appearance="subtle" icon={<ArrowClockwiseRegular />} aria-label="刷新研究状态" onClick={() => void model.refresh()} /></Tooltip>
+      <Tooltip content="刷新研究状态" relationship="description"><Button disabled={model.busy} appearance="subtle" icon={<ArrowClockwiseRegular />} aria-label="刷新研究状态" onClick={() => void model.refresh()} /></Tooltip>
     </div>
-    {!model.supported ? <p>研究实验需要桌面应用；浏览器当前可用于阅读与文档整理。</p> : null}
+    {!model.supported ? <InlineNotice message="研究实验需要桌面应用；浏览器当前可用于阅读与文档整理。" /> : null}
+    {model.busy && model.pendingAction !== "login" && model.pendingAction !== "connection" ? <InlineNotice intent="busy" message="正在处理研究操作，请稍候…" /> : null}
     <div className="research-grid">
-      <aside className="research-tasks" aria-label="研究任务">
-        <Field label="研究目标"><Textarea value={model.goal} resize="vertical" onChange={(_, data) => model.setGoal(data.value)} /></Field>
-        <Button icon={<AddRegular />} disabled={!model.supported || model.busy} onClick={() => void model.createTask()}>创建研究任务</Button>
-        {model.tasks.map(task => <Button key={task.taskId} disabled={model.busy} appearance={model.detail?.task.taskId === task.taskId ? "secondary" : "subtle"} onClick={() => void model.open(task.taskId)}>
-          <span>{task.goal}<small>{states[task.state]} · 本机实验 {task.budget.usedRuns}/{task.budget.maxRuns}</small></span>
-        </Button>)}
-        <DisclosureSection title="模型连接">
-          <p>ChatGPT 订阅与自备 API 分别管理。仅实际完成推理才能确认这次模型可访问。</p>
-          <Button disabled={!model.supported || model.busy} onClick={() => void model.login()}>Continue with ChatGPT</Button>
-          {model.busy ? <Button onClick={() => void model.cancelLogin()}>取消授权等待</Button> : null}
-          <Field label="ChatGPT 账号"><OptionPicker aria-label="ChatGPT 账号" value={model.connections.activeAccount ?? ""} onValueChange={(value) => void model.selectAccount(value)} options={[{ value: "", label: "请选择账号" }, ...model.connections.accounts.map(account => ({ value: account.id, label: account.name || account.email }))]} /></Field>
-          <Field label="模型"><OptionPicker aria-label="模型" value={model.model} onValueChange={model.setModel} options={[{ value: "", label: "请选择模型" }, ...model.models.map(item => ({ value: item.slug, label: item.displayName }))]} /></Field>
-          <Button disabled={model.busy || !model.model} onClick={() => void model.verifyModel()}>验证所选模型</Button>
-          <Button disabled={model.busy || !model.connections.activeAccount} onClick={() => void model.logout()}>断开并移除本机凭据</Button>
+      <section className="research-tasks research-card" aria-label="研究任务">
+        <h3>研究目标与任务</h3>
+        <p className="research-description">先创建一个研究目标。探索假设可随时保存；测量和结论升级通过固定规格与实际运行核验。</p>
+        <Field label="研究目标"><Textarea rows={4} value={model.goal} resize="vertical" onChange={(_, data) => model.setGoal(data.value)} /></Field>
+        <Button className="research-create-task" appearance="primary" icon={<AddRegular />} disabled={!model.supported || model.busy} onClick={() => void model.createTask()}>创建研究任务</Button>
+        {model.tasks.length ? <ul className="research-task-list">{model.tasks.map(task => <li key={task.taskId}><Button className="research-task" disabled={model.busy} aria-pressed={model.detail?.task.taskId === task.taskId} onClick={() => void model.open(task.taskId)}>
+          <span>{task.goal}<small>{states[task.state] ?? task.state} · 本机实验 {task.budget.usedRuns}/{task.budget.maxRuns}</small></span>
+        </Button></li>)}</ul> : <p className="research-description">暂无研究任务，填写目标后即可创建。</p>}
+      </section>
+      <section className="research-card research-connection" aria-label="模型连接配置">
+        {model.connectionStatus && connectionMessage ? <InlineNotice intent={model.connectionStatus.intent} message={connectionMessage} /> : null}
+        {model.connectionStatus && connectionMessage !== model.connectionStatus.message ? <DisclosureSection title="连接诊断详情"><pre>{model.connectionStatus.message}</pre></DisclosureSection> : null}
+        {model.pendingAction === "login" || model.pendingAction === "connection" ? <InlineNotice intent="busy" message={model.pendingAction === "login" ? "正在等待 ChatGPT 授权，可在下方取消。" : "正在处理连接操作，请稍候…"} /> : null}
+        <DisclosureSection title="模型连接" defaultOpen>
+          <p className="research-description">ChatGPT 订阅与自备 API 分别管理。仅实际完成推理才能确认这次模型可访问。</p>
+          <div className="research-actions">
+            <Button className="research-login" disabled={!model.supported || model.busy} onClick={() => void model.login()}>Continue with ChatGPT</Button>
+            {model.pendingAction === "login" ? <Button onClick={() => void model.cancelLogin()}>取消授权等待</Button> : null}
+          </div>
+          <div className="research-connection-fields">
+            <Field label="ChatGPT 账号" hint={!model.connections.accounts.length ? "连接 ChatGPT 后，可选择已授权账号。" : undefined}><OptionPicker aria-label="ChatGPT 账号" disabled={model.busy || !model.connections.accounts.length} value={model.connections.activeAccount ?? ""} onValueChange={(value) => void model.selectAccount(value)} options={[{ value: "", label: "请选择账号" }, ...model.connections.accounts.map(account => ({ value: account.id, label: account.name || account.email }))]} /></Field>
+            <Field label="模型" hint={!model.models.length ? "选定账号并读取可用模型后，可进行验证。" : undefined}><OptionPicker aria-label="模型" disabled={model.busy || !model.connections.activeAccount || !model.models.length} value={model.model} onValueChange={model.setModel} options={[{ value: "", label: "请选择模型" }, ...model.models.map(item => ({ value: item.slug, label: item.displayName }))]} /></Field>
+          </div>
+          <div className="research-actions">
+            <Button disabled={model.busy || !model.model || !model.connections.activeAccount} onClick={() => void model.verifyModel()}>验证所选模型</Button>
+            <Button className="research-disconnect" disabled={model.busy || !model.connections.activeAccount} onClick={() => void model.logout()}>断开并移除本机凭据</Button>
+          </div>
+          <DisclosureSection title="研究引擎与校验服务">
           <Field label="研究引擎可执行文件"><Input value={executable} onChange={(_, data) => setExecutable(data.value)} /></Field>
           <p>需要 Codex {model.backend.requiredVersion}。连接只接受该版本，研究工具与目录权限由 Liteasy 限制。</p>
           <Button disabled={model.busy || !executable} onClick={() => void model.configureBackend(executable)}>连接研究引擎</Button>
@@ -62,9 +79,10 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
           {harness.operation === "create_packet" ? <Field label="Packet（仅引用该工作索引中的既有记录）"><Textarea value={harness.packet} onChange={(_, data) => setHarness({ ...harness, packet: data.value })} /></Field> : null}
           <Button disabled={model.busy} onClick={() => void model.checkHarness(harness.operation, harness.recordId, harness.operation === "create_packet" ? harness.packet : undefined)}>{harness.operation === "create_packet" ? "批准生成文献 packet 并校验" : "读取原内核校验回执"}</Button>
           {model.harnessReceipt ? <pre>{model.harnessReceipt}</pre> : null}
+          </DisclosureSection>
         </DisclosureSection>
-      </aside>
-      <main className="research-detail">
+      </section>
+      <div className="research-detail research-card" hidden={!model.detail && !model.notice && !exportNotice}>
         {model.detail ? <>
           <div className="research-toolbar"><h3>{model.detail.task.goal}</h3><span>{states[model.detail.task.state]}</span></div>
           <p>{model.detail.task.taskBrief.nextCheck} · 本机实验预算 {model.detail.task.budget.usedRuns}/{model.detail.task.budget.maxRuns}</p>
@@ -133,10 +151,10 @@ export function ResearchWorkbench({ model }: { model: ResearchWorkbenchModel }) 
             {model.modelRun ? <Button onClick={() => void model.cancelModel()}>取消研究推理</Button> : null}
             <ContentView streaming={Boolean(model.modelRun)} mediaPolicy="blocked" content={legacyContent(model.answer)} />
           </fieldset>
-        </> : <p>先创建一个研究目标。探索假设可随时保存；测量和结论升级通过固定规格与实际运行核验。</p>}
-        {model.notice ? <pre className="research-notice" role="status">{model.notice}</pre> : null}
+        </> : null}
+        {model.notice ? <div className="research-notice"><InlineNotice intent={model.noticeIntent ?? "info"} message={model.notice} /></div> : null}
         {exportNotice ? <p role="status">{exportNotice}</p> : null}
-      </main>
+      </div>
     </div>
     {exportOpen && exportPort ? <DocumentExportDialog jobScope={exportPort.jobScope} sourceIdentity={JSON.stringify(model.detail)} title="导出研究证据" open initialFormat="markdown"
       compile={(options, signal) => model.compileReport({ ...defaultExportOptions, ...options }, signal)}

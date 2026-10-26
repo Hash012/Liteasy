@@ -1,6 +1,6 @@
 import { createContext, useContext, forwardRef, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject, type ButtonHTMLAttributes, type KeyboardEvent } from "react";
 import { Accordion, AccordionItem, AccordionHeader, AccordionPanel, Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Dropdown, Option, Popover, PopoverTrigger, PopoverSurface, Spinner, Textarea, Tooltip, type ButtonProps } from "@fluentui/react-components";
-import { DismissRegular, FilterRegular, InfoRegular, TextBulletListLtrRegular } from "@fluentui/react-icons";
+import { CheckmarkCircleRegular, DismissRegular, FilterRegular, InfoRegular, TextBulletListLtrRegular, WarningRegular } from "@fluentui/react-icons";
 import "./productPrimitives.css";
 
 export type ControlDensity = "compact" | "default";
@@ -99,7 +99,7 @@ export function OptionPicker({ scopeKey, selectedDisplay, value, onValueChange, 
   </Dropdown>{value && display?.state === "error" && display.onRetry ? <ActionButton appearance="subtle" onClick={display.onRetry}>重试加载名称</ActionButton> : null}{name ? <input type="hidden" name={name} form={form} value={value} disabled={disabled} /> : null}{required ? <input className="product-validation-proxy" tabIndex={-1} aria-label={label ? `${label}验证` : "选项验证"} value={value} onChange={() => {}} required disabled={disabled} form={form} onInvalid={event => { event.preventDefault(); setInvalid(true); trigger.current?.focus(); }} /> : null}{invalid ? <span id={errorId} role="alert" className="product-field-error">请选择一个选项。</span> : null}</span>;
 }
 export function InlineNotice({ intent = "info", message, action }: { intent?: "normal" | "info" | "warning" | "error" | "success" | "busy"; message: string; action?: ReactNode }) {
-  return <div className="product-inline-notice" data-intent={intent} role={intent === "error" ? "alert" : "status"}>{intent === "busy" ? <Spinner size="tiny" /> : null}<span>{message}</span>{action}</div>;
+  return <div className="product-inline-notice" data-intent={intent} role={intent === "error" ? "alert" : "status"}>{intent === "busy" ? <Spinner size="tiny" /> : intent !== "normal" ? <span className="product-notice-icon" aria-hidden="true">{intent === "error" || intent === "warning" ? <WarningRegular /> : intent === "success" ? <CheckmarkCircleRegular /> : <InfoRegular />}</span> : null}<span>{message}</span>{action}</div>;
 }
 export function ReadingSurface({ children, label }: { children: ReactNode; label?: string }) { return <section className="product-reading-surface" aria-label={label}>{children}</section>; }
 

@@ -2,7 +2,7 @@ import type { RecommendationFeedbackHandler } from "../recommendations/recommend
 import { DisclosureSection } from "../../shared/ui/productPrimitives";
 import type { RecommendationFeedbackMeaning } from "../recommendations/recommendationCoordinator";
 import { OptionPicker } from "../../shared/ui/productPrimitives";
-import { ActionButton as Button, IconAction, ContextualActions } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, ControlToolbar, IconAction, ContextualActions } from "../../shared/ui/productPrimitives";
 import { citationPaper, normalizeCitationDoi, type CitationPaper } from "../citation-graph/citationGraph";
 import { createCitationGraphClient } from "../citation-graph/citationGraphClient";
 import { SearchOptions, SearchHighlight } from "../search/SearchOptions";
@@ -1314,7 +1314,7 @@ function LibraryPaneContent({
       <li className={`library-paper-node${selected ? " active" : ""}`} key={entry.id}>
         {row}
         {childrenExpanded ? (
-          <div className="library-paper-children" style={{ marginInlineStart: `${depth * 18 + 50}px` }}>
+          <div className="library-paper-children" style={{ marginInlineStart: `min(${depth * 18 + 24}px, 16%)` }}>
             <p role="status">{inventoryLabel(inventory)}{inventory.state !== "ready" && children.length > 0 ? ` · 以下为上次已知的 ${children.length} 项` : ""}</p>
             {inventory.summary ? <p>{inventory.summary}</p> : null}
             {inventory.state === "error" && onRefreshPaperInventory ? <Button size="small" onClick={onRefreshPaperInventory}>重试关联内容</Button> : null}
@@ -1324,9 +1324,11 @@ function LibraryPaneContent({
               <li><DisclosureSection title="提取结果">
                 <p role="status">{{ unknown: "尚未查询", not_extracted: "打开时准备，可先阅读原文件", loading: "正在后台准备", ready: "已有提取内容", error: "提取未完成，可重试" }[inventory.extraction]}</p>
                 {inventory.capabilities?.structuredFulltext.reason ? <p>{inventory.capabilities.structuredFulltext.reason}</p> : null}
+                <ControlToolbar className="library-extraction-controls" label="文献解析选项">
                 {sourcePaper && onSetPaperProcessingPolicy ? <OptionPicker aria-label="此文献的解析时机" value={sourcePaper.processingPolicy ?? "default"} onValueChange={value => onSetPaperProcessingPolicy(sourcePaper, value === "default" ? undefined : value as Paper["processingPolicy"])} options={[{ value: "default", label: "遵循全局设置" }, { value: "on-open", label: "首次打开时解析" }, { value: "on-import", label: "导入时解析" }, { value: "manual", label: "仅手动解析" }]} /> : null}
                 {sourcePaper && onCancelPaperProcessing && inventory.extraction === "loading" ? <Button size="small" onClick={() => onCancelPaperProcessing(sourcePaper)}>取消解析</Button> : null}
                 {sourcePaper && onPreparePaper && inventory.extraction !== "loading" ? <Button size="small" onClick={() => onPreparePaper(sourcePaper)}>{inventory.extraction === "error" ? "重试解析" : "准备全文与图表"}</Button> : null}
+                </ControlToolbar>
                 <ul>{children.filter(child => !["note", "board", "artifact"].includes(child.kind)).map(childRow)}</ul>
               </DisclosureSection></li>
             </ul>

@@ -339,12 +339,12 @@
 .thin-reading__mindmap-branch.is-vertical { display: grid; gap: 18px; width: 320px; }
 .thin-reading__mindmap-children { position: relative; }
 .thin-reading__mindmap-children.is-next-column { display: flex; flex-direction: column; gap: 22px; padding-left: 24px; }
-.thin-reading__mindmap-children.is-next-column::before { background: var(--colorNeutralStroke1); bottom: 18px; content: ""; left: 0; position: absolute; top: 18px; width: 1px; }
-.thin-reading__mindmap-children.is-next-column > .thin-reading__mindmap-branch::before { background: var(--colorNeutralStroke1); content: ""; height: 1px; left: -24px; position: absolute; top: 28px; width: 24px; }
+.thin-reading__mindmap-children.is-next-column::before { background: var(--colorNeutralStroke1); bottom: 18px; content: ""; left: 0; position: absolute; top: 18px; width: 1px;  pointer-events: none;}
+.thin-reading__mindmap-children.is-next-column > .thin-reading__mindmap-branch::before { background: var(--colorNeutralStroke1); content: ""; height: 1px; left: -24px; position: absolute; top: 28px; width: 24px;  pointer-events: none;}
 .thin-reading__mindmap-children.is-below { display: flex; flex-direction: column; gap: 16px; padding-top: 18px; width: max-content; }
-.thin-reading__mindmap-children.is-below::before { background: var(--colorNeutralStroke1); content: ""; height: 18px; left: 20px; position: absolute; top: 0; width: 1px; }
+.thin-reading__mindmap-children.is-below::before { background: var(--colorNeutralStroke1); content: ""; height: 18px; left: 20px; position: absolute; top: 0; width: 1px;  pointer-events: none;}
 .thin-reading__mindmap-children.is-below > .thin-reading__mindmap-branch { margin-left: 28px; width: 320px; }
-.thin-reading__mindmap-children.is-below > .thin-reading__mindmap-branch::before { background: var(--colorNeutralStroke1); content: ""; height: 1px; left: -8px; position: absolute; top: 28px; width: 8px; }
+.thin-reading__mindmap-children.is-below > .thin-reading__mindmap-branch::before { background: var(--colorNeutralStroke1); content: ""; height: 1px; left: -8px; position: absolute; top: 28px; width: 8px;  pointer-events: none;}
 .thin-reading__mindmap-children.is-below > .thin-reading__mindmap-branch > .thin-reading__mindmap-node { margin-left: 0; width: 300px; }
 .thin-reading__mindmap-node { background: var(--colorNeutralBackground1); border: 1px solid var(--colorNeutralStroke1); border-radius: 8px; box-shadow: var(--shadow4); color: var(--colorNeutralForeground1); cursor: grab; flex: 0 0 auto; min-height: 56px; padding: 10px 12px; width: 300px; }
 .thin-reading__mindmap-node:active { cursor: grabbing; }

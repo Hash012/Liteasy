@@ -67,8 +67,8 @@
 /* Progressive disclosure: useful excerpts first; execution diagnostics on demand. */
 .evidence-lens__summary-icon { flex: 0 0 auto; color: var(--colorNeutralForeground3); }
 .evidence-lens__summary-text { align-items: center; flex: 1; gap: 2px 8px; }
-.evidence-lens__summary-text > span + span::before { content: "·"; margin-right: 8px; color: var(--colorNeutralForeground4); }
-.evidence-lens__summary-text > .evidence-lens__counts::before { content: none; }
+.evidence-lens__summary-text > span + span::before { content: "·"; margin-right: 8px; color: var(--colorNeutralForeground4);  pointer-events: none;}
+.evidence-lens__summary-text > .evidence-lens__counts::before { content: none;  pointer-events: none;}
 .evidence-lens__counts { margin-left: auto; }
 .evidence-lens__counts span { border-radius: 4px; padding: 0 4px; background: var(--colorNeutralBackground3); }
 .evidence-lens__expanded { position: relative; padding: 10px; border-color: var(--colorNeutralStroke2); }
@@ -89,8 +89,8 @@
 .evidence-lens__version { min-width: 0; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--colorNeutralForeground3); font-size: 11px; }
 .evidence-lens__checks { border-top: 1px solid var(--colorNeutralStroke2); padding-top: 8px; }
 .evidence-lens__checks summary { cursor: pointer; min-height: 28px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; border-radius: 4px; padding: 2px 0; }
-.evidence-lens__checks summary::after { content: "+"; margin-left: auto; font-size: 14px; }
-.evidence-lens__checks[open] summary::after { content: "−"; }
+.evidence-lens__checks summary::after { content: "+"; margin-left: auto; font-size: 14px;  pointer-events: none;}
+.evidence-lens__checks[open] summary::after { content: "−";  pointer-events: none;}
 .evidence-lens__checks summary > span:last-of-type { color: var(--colorNeutralForeground3); }
 .evidence-lens__checks summary:focus-visible { outline: 2px solid var(--colorStrokeFocus2); outline-offset: 2px; }
 .evidence-lens__check-records { padding: 4px 8px; border-left: 2px solid var(--colorNeutralStroke2); margin: 4px 0; }
