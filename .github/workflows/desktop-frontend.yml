@@ -71,7 +71,8 @@ jobs:
     name: L1 - UI browser contracts (${{ matrix.shard }}/2)
     needs: contracts
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Ubuntu mirror downloads can consume ten minutes before browser tests begin.
+    timeout-minutes: 30
     strategy:
       # The complete browser suite now exceeds twelve minutes locally.
       # Split files without omitting tests; preserve evidence from both shards.
