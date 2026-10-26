@@ -26,7 +26,7 @@
 
 .workspace-command-bar {
   height: var(--shell-top-height);
-  background: var(--colorNeutralBackground3);
+  background: var(--bg-app-shell);
   border-bottom: 1px solid var(--colorNeutralStroke2);
   -webkit-user-select: none;
   user-select: none;
@@ -41,7 +41,7 @@
 }
 
 .shell-navigation { gap: 2px; }
-.workspace-command-bar .shell-ai-button { min-width: 48px; height: 28px; padding: 0 12px; border-radius: 4px; font-size: 15px; font-weight: 800; letter-spacing: 0.5px; }
+.workspace-command-bar .shell-ai-button { min-width: 48px; height: 28px; padding: 0 12px; border-radius: 4px; font-size: 13px; font-weight: 600; background: var(--ai-accent-gradient); color: var(--text-on-accent); border-color: transparent; box-shadow: var(--shadow-xs); }
 .reader-ai-feedback { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--colorNeutralForeground2); font-size: 12px; }
 
 .workspace-command-bar .shell-icon-button {
@@ -74,7 +74,7 @@
   flex-shrink: 0;
   padding-block: 3px;
   white-space: normal;
-  background: var(--colorNeutralBackground2);
+  background: var(--bg-app-shell);
   border-top: 1px solid var(--colorNeutralStroke2);
   font-size: var(--shell-status-font-size);
   line-height: 18px;
@@ -96,9 +96,10 @@
   min-width: 0;
   padding: 4px 4px 4px 0;
   column-gap: 4px;
-  background: var(--colorNeutralBackground3);
+  background: var(--bg-app-shell);
 }
 .workspace-frame > .app-shell > .activity-bar {
+  background: var(--bg-app-shell);
   border: 0;
   border-right: 1px solid var(--colorNeutralStroke2);
   border-radius: 0;
@@ -106,7 +107,7 @@
 }
 .workspace-frame .dock-workspace-columns > .dock-region,
 .workspace-frame .dock-bottom-columns > .dock-region {
-  border: 1px solid var(--colorNeutralStroke2);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--colorNeutralBackground1);
   box-shadow: none;
@@ -115,7 +116,7 @@
 .workspace-frame .pane-resizer:hover,
 .workspace-frame .pane-resizer:focus-visible { background: var(--colorBrandStroke1); }
 .workspace-frame .dock-region > .dock-region-tab-row {
-  background: var(--colorNeutralBackground2);
+  background: var(--bg-app-shell);
   border-bottom-color: var(--colorNeutralStroke2);
 }
 
@@ -136,9 +137,10 @@
 .workspace-command-bar.has-global-search { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 30%) minmax(0, 1fr); }
 .has-global-search .shell-command-wing { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .has-global-search .shell-command-wing-end { justify-content: flex-end; }
-.has-global-search .shell-global-search { width: 100%; min-width: 0; min-height: 28px; height: 28px; border-radius: 6px; justify-content: flex-start; color: var(--colorNeutralForeground3); background: var(--colorNeutralBackground1); }
+.has-global-search .shell-global-search { width: 100%; min-width: 0; min-height: 28px; height: 28px; border-radius: 6px; justify-content: flex-start; color: var(--colorNeutralForeground3); background: var(--bg-hover); border-color: transparent; }
+.has-global-search .shell-global-search:hover { background: var(--bg-active); border-color: var(--border-default); }
 .shell-global-search-label { white-space: nowrap; }
-.shell-global-search kbd { margin-left: auto; font: inherit; font-size: 10px; opacity: .8; white-space: nowrap; }
+.shell-global-search kbd { margin-left: auto; padding: 0 4px; border: 1px solid var(--border-subtle); border-radius: 4px; background: var(--bg-sidebar); color: var(--text-muted); font: inherit; font-size: 10px; line-height: 18px; white-space: nowrap; }
 @media (max-width: 900px) { .shell-global-search kbd { display: none; } }
 @media (max-width: 600px) {
   .workspace-command-bar.has-global-search { grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr); }
@@ -151,3 +153,18 @@
   .workspace-command-bar .shell-icon-button, .has-global-search .shell-global-search, .workspace-command-bar .shell-ai-button { min-width: 44px; min-height: 44px; }
   .app-frame.workspace-frame { --shell-top-height: 48px; --shell-icon-button: 44px; }
 }
+
+/* Background hierarchy remains attached to content when panels are docked elsewhere. */
+.workspace-frame .pane.left:not(.assistant-only-pane) { background: var(--bg-sidebar); }
+.workspace-frame .assistant-only-pane { background: var(--bg-panel-secondary); }
+.workspace-frame .activity-button { color: var(--text-secondary); border-radius: 6px; }
+.workspace-frame .activity-button.active { background: var(--bg-selected-accent); color: var(--accent-primary); }
+.workspace-frame .activity-button.active::before { content: ""; position: absolute; left: -6px; top: 11px; bottom: 11px; width: 3px; border-radius: 4px; background: var(--accent-primary); }
+.workspace-frame .shell-ai-button:hover:not(:disabled) { box-shadow: 0 0 0 3px var(--ai-focus-ring); }
+.reader-ai-action.fui-Button { color: var(--ai-accent); background: var(--ai-surface-subtle); border: 1px solid var(--ai-border-subtle); border-radius: 6px; font-weight: 600; }
+.reader-ai-action.fui-Button:hover:not(:disabled) { color: var(--ai-accent); background: var(--ai-surface-subtle); box-shadow: 0 0 0 3px var(--ai-focus-ring); }
+.pdf-reader .pdf-reader-toolbar-wrap { background: var(--bg-elevated); border-bottom-color: var(--border-subtle); box-shadow: var(--shadow-xs); }
+.pdf-reader .pdf-reader-toolbar { gap: 8px; padding: 5px 8px; }
+.pdf-reader .pdf-reader-tools { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding-inline-end: 8px; border-inline-end: 1px solid var(--border-subtle); }
+.pdf-reader .pdf-left-sidebar { background: var(--bg-panel-secondary); }
+.pdf-reader .pdf-page-count, .pdf-reader .pdf-zoom-value { font-variant-numeric: tabular-nums; font-weight: 500; }

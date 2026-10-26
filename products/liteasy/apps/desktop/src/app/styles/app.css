@@ -1,7 +1,9 @@
+@import "../features/theme/surfaceTokens.css";
+
 :root {
   color: #242424;
   background: #faf9f8;
-  font-family: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei UI", sans-serif;
   --paper-0: #faf9f8;
   --paper-1: #f5f5f5;
   --paper-2: #ffffff;
@@ -313,8 +315,9 @@ body {
 .dock-dynamic-tab.is-document { min-width: 164px; max-width: 280px; }
 .dock-dynamic-tab:hover { background: var(--colorSubtleBackgroundHover, var(--paper-2)); }
 .dock-dynamic-tab.is-active {
-  border-color: var(--colorNeutralStroke2, var(--line-1));
-  background: var(--colorNeutralBackground1, var(--surface-1));
+  border-color: transparent;
+  background: var(--bg-canvas-primary);
+  box-shadow: var(--shadow-xs);
 }
 
 .dock-region-actions {
@@ -354,16 +357,9 @@ body {
 .dock-tab-icon svg { width: 1em; height: 1em; }
 .dock-tab[draggable="true"] { cursor: grab; }
 .dock-tab[draggable="true"]:active { cursor: grabbing; }
-.dock-dynamic-tab.is-active > .dock-tab.active { background: var(--colorNeutralBackground1, var(--surface-1)); color: var(--colorNeutralForeground1, var(--ink-1)); font-weight: 600; }
+.dock-dynamic-tab.is-active > .dock-tab.active { background: transparent; color: var(--text-primary); font-weight: 500; }
 .dock-tab.active::after {
-  position: absolute;
-  right: 12px;
-  bottom: 0;
-  left: 12px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--colorBrandStroke1, var(--accent-1));
-  content: "";
+  content: none;
 }
 
 .dock-tab-close {
@@ -3138,9 +3134,7 @@ body {
   height: auto;
   overflow: auto;
   padding: 2px;
-  background:
-    linear-gradient(135deg, rgba(27, 102, 179, 0.05), transparent 42%),
-    var(--pdf-reading-background, #e8eef5);
+  background: var(--bg-reader);
 }
 
 .pdf-main-stage {
@@ -3882,10 +3876,8 @@ body {
 }
 
 .pdf-page-shell.evidence-target {
-  border-color: rgba(27, 102, 179, 0.78);
-  box-shadow:
-    0 0 0 4px rgba(27, 102, 179, 0.16),
-    0 22px 52px rgba(24, 34, 47, 0.15);
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--badge-border), var(--shadow-pdf-page);
 }
 
 .pdf-overlay-mark.search-result {
@@ -4388,7 +4380,7 @@ body {
 }
 
 .pdf-annotation-item.highlight {
-  background: #fff4df;
+  background: var(--bg-canvas-primary);
 }
 
 .pdf-annotation-item.underline {
@@ -4409,8 +4401,8 @@ body {
   left: 0;
   top: 0;
   bottom: 0;
-  width: 4px;
-  border-radius: 2px 0 0 2px;
+  width: 3px;
+  border-radius: 8px 0 0 8px;
 }
 
 .selection-menu-row {
@@ -5720,7 +5712,7 @@ button.pdf-overlay-mark:focus-visible {
   min-height: 80px;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: var(--colorNeutralStrokeAccessible, #8a929a) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
   overflow-y: scroll;
   overflow-x: hidden;
 }
@@ -5998,8 +5990,6 @@ button.pdf-overlay-mark:focus-visible {
 }
 .pdf-sidebar-resizer:hover, .pdf-sidebar-resizer:focus-visible { background: var(--accent-1); }
 .pdf-annotation-options { font-size: 12px; padding: 4px 0; }
-.pdf-annotation-item:not(.expanded) { padding: 5px 7px; }
-.pdf-annotation-item:not(.expanded) .pdf-annotation-summary { gap: 2px; }
 .pdf-overlay-mark.underline.quick-ask { border-bottom: 2px dashed var(--accent-1); }
 .pdf-overlay-mark[draggable="true"] { cursor: grab; }
 .pdf-overlay-mark[draggable="true"]:active { cursor: grabbing; }
@@ -6019,15 +6009,6 @@ button.pdf-overlay-mark:focus-visible {
 .pdf-quick-ask-panel textarea { width: 100%; box-sizing: border-box; resize: vertical; }
 .pdf-annotation-popover { max-height: min(600px, 75vh); overflow-y: auto; }
 
-.pdf-annotation-item:not(.expanded) .pdf-annotation-summary {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
-  font-size: 12px;
-}
-.pdf-annotation-item:not(.expanded) .pdf-annotation-kind { margin-right: 6px; }
-.pdf-annotation-item:not(.expanded) .pdf-annotation-excerpt { display: inline; }
 .pdf-annotation-summary-note { color: var(--ink-2); }
 
 /* Keep document chrome outside the paper’s usable area. */
@@ -6039,7 +6020,7 @@ button.pdf-overlay-mark:focus-visible {
 .pane-resizer.vertical::after { inset: -2px 0; }
 .pane-resizer:hover, .pane-resizer:focus-visible { background: var(--accent-1); }
 .pane-resizer:focus-visible { outline: 1px solid var(--accent-1); outline-offset: 1px; }
-.pdf-page-shell { border-radius: 4px; box-shadow: 0 1px 3px rgba(24,34,47,.12); }
+.pdf-page-shell { border-radius: 4px; box-shadow: var(--shadow-pdf-page); }
 
 .pdf-whiteboard-pane { position: relative; display: grid; min-width: 0; min-height: 0; }
 .pdf-whiteboard-resizer { position: absolute; z-index: 30; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; touch-action: none; }

@@ -198,7 +198,7 @@ export function ReaderPane({
   const readingVisible = readingMode && Boolean(readingContent);
   const activePaper = selectedPapers[0] ?? null;
   const thinReadingButton = activePaper ? <>
-    <Button appearance="primary" size="small" onClick={() => setThinReadingPromptOpen(true)} title={`为《${activePaper.title}》生成薄读`}>AI 薄读</Button>
+    <Button className="reader-ai-action" appearance="primary" size="small" onClick={() => setThinReadingPromptOpen(true)} title={`为《${activePaper.title}》生成薄读`}>AI 薄读</Button>
     {thinReadingPromptOpen ? <GenerationPromptDialog task="thin_reading" title={`为《${activePaper.title}》生成薄读`} onClose={() => setThinReadingPromptOpen(false)} onConfirm={(systemPrompt) => {
       setThinReadingPromptOpen(false);
       try { setAnalysisFeedback(onStartAnalysis("thin_reading", [activePaper], { systemPrompt }) ?? ""); }

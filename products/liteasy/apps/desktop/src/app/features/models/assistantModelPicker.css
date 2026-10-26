@@ -13,3 +13,7 @@
 .assistant-thinking-popover .assistant-thinking-depth { width: 100%; max-width: none; gap: 8px; color: var(--colorNeutralForeground1); }
 .assistant-thinking-popover .assistant-thinking-labels { color: var(--colorNeutralForeground2); }
 .assistant-thinking-description { margin: 0; color: var(--colorNeutralForeground3); font-size: var(--fontSizeBase200, 12px); }
+
+
+.assistant-composer-actions .assistant-model-trigger { padding: 3px 8px; border: 1px solid transparent; border-radius: 6px; background: var(--badge-neutral); color: var(--text-secondary); font-size: var(--fontSizeBase200); font-weight: 500; }
+.assistant-composer-actions .assistant-model-trigger:hover { background: var(--bg-active); }

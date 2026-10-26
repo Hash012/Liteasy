@@ -2,7 +2,7 @@ import { message } from "../../shared/i18n/i18n";
 import type { SettingsState } from "./settings.types";
 
 export const viewFontOptions = [
-  { get label() { return message("view.font.recommended"); }, value: '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif' },
+  { get label() { return message("view.font.recommended"); }, value: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei UI", sans-serif' },
   { label: "Microsoft YaHei UI", value: '"Microsoft YaHei UI", "Microsoft YaHei", sans-serif' },
   { label: "Noto Sans CJK SC", value: '"Noto Sans CJK SC", "Source Han Sans SC", sans-serif' },
   { get label() { return message("view.font.systemSans"); }, value: "system-ui, sans-serif" }

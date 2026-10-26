@@ -13,3 +13,6 @@
 .literature-guide-explanation header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .literature-guide-explanation header > strong { flex: 1; }
 .literature-guide-explanation small { color: var(--colorNeutralForeground3); }
+
+.literature-guide-controls > .fui-Button { color: var(--ai-accent); background: var(--ai-surface-subtle); border: 1px solid var(--ai-border-subtle); border-radius: 6px; }
+.literature-guide-controls > .fui-Button:hover { background: var(--ai-surface-subtle); box-shadow: 0 0 0 3px var(--ai-focus-ring); }

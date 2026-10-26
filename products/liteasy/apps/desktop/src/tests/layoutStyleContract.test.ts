@@ -41,11 +41,11 @@ function extractBlock(startToken: string) {
 }
 
 describe("layout style contract", () => {
-  test("uses the Fluent-style Windows font stack", () => {
+  test("uses system typography with Fluent Windows and CJK fallbacks", () => {
     const rootBlock = extractBlock(":root");
 
     expect(rootBlock).toContain(
-      'font-family: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;'
+      'font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei UI", sans-serif;'
     );
     expect(css).toMatch(/button,\s*\ninput,\s*\ntextarea,\s*\nselect\s*\{[\s\S]*font:\s*inherit;/);
   });

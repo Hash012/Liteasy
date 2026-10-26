@@ -90,6 +90,12 @@ test("Notes shows grouped excerpts and expands details at the selected row on na
   await expect(notes.getByRole("heading", { name: /个人笔记/ })).toBeVisible();
   await notes.getByRole("combobox", { name: "笔记排序" }).click();
   await page.getByRole("option", { name: "标题", exact: true }).click();
+  // Markdown summaries end on a complete line, including lists and headings.
+  const excerpt = notes.locator(".notes-item-excerpt .markdown-content").first();
+  const lines = await excerpt.evaluate(element => element.getBoundingClientRect().height / Number.parseFloat(getComputedStyle(element).lineHeight));
+  expect(lines).toBeGreaterThan(0);
+  expect(lines).toBeLessThanOrEqual(3.01);
+  expect(lines).toBeCloseTo(Math.round(lines), 1);
   const target = notes.getByRole("button", { name: "查看笔记 实验记录", exact: true });
   await target.click();
   const row = target.locator("xpath=ancestor::article");

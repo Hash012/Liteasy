@@ -39,6 +39,9 @@ for (const fontSize of [14, 24]) test(`annotation management remains usable at f
     expect(metrics.height).toBeLessThanOrEqual(Math.max(36, metrics.font * 2.4));
   }
   await expect(summaries.first().locator(".pdf-annotation-excerpt")).toHaveCSS("font-size", `${fontSize}px`);
+  // Highlight colors stay on the marker; the excerpt remains a neutral reading surface.
+  await expect(sidebar.locator(".pdf-annotation-item").first()).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(sidebar.locator(".annotation-color-indicator").first()).toBeVisible();
   const countFont = await sidebar.getByLabel("批注检索结果").evaluate(element => Number.parseFloat(getComputedStyle(element).fontSize));
   expect(countFont).toBeCloseTo(fontSize * 12 / 14, 2);
   await summaries.first().focus();
@@ -92,6 +95,7 @@ for (const fontSize of [14, 24]) test(`new colors persist and filter with keyboa
     }))));
   });
   await page.reload();
+  await expect(page.locator(".pdf-text-layer").first()).not.toBeEmpty({ timeout: 30_000 });
   const sidebar = page.getByRole("complementary", { name: "PDF 左侧批注栏" });
   const summaries = sidebar.getByRole("button", { name: /^编辑批注：/ });
   await expect(summaries).toHaveCount(4);

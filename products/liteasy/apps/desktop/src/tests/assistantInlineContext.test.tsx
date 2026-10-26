@@ -43,7 +43,7 @@ test.each(["mention", "browser", "path", "drop"])("%s inserts the name in prose 
   if (source === "mention") await user.click(screen.getByRole("button", { name: /^@ CicN/ }));
   else if (source === "browser") {
     await user.click(screen.getByRole("button", { name: "添加上下文" }));
-    await user.click(screen.getByRole("checkbox", { name: "选择 CicN" }));
+    await user.click(await screen.findByRole("checkbox", { name: "选择 CicN" }));
     await user.click(screen.getByRole("button", { name: "添加所选（1）" }));
   } else if (source === "path") fireEvent.paste(input, { clipboardData: { getData: () => "liteasy://objects/cicn?scope=local" } });
   else fireEvent.drop(input, { dataTransfer: { types: [ASSET_CONTEXT_MIME], getData: (type: string) => type === ASSET_CONTEXT_MIME ? "asset" : "" } });
@@ -65,7 +65,7 @@ test("batch additions preserve order at the original caret and do not duplicate 
   const { input, user } = setup();
   placeCaret(input, "比较 的内容", 3);
   await user.click(screen.getByRole("button", { name: "添加上下文" }));
-  await user.click(screen.getByRole("checkbox", { name: "选择 CicN" }));
+  await user.click(await screen.findByRole("checkbox", { name: "选择 CicN" }));
   await user.click(screen.getByRole("checkbox", { name: "选择 Cicada" }));
   await user.click(screen.getByRole("button", { name: "添加所选（2）" }));
   await waitFor(() => expect(input).toHaveValue("比较 CicN Cicada 的内容"));

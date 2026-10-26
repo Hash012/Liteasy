@@ -1,3 +1,4 @@
+import "./surfaceTokens.css";
 import "../../shared/ui/productPrimitives.css";
 import { resolveTypography } from "../settings/typography";
 import type { SettingsState } from "../settings/settings.types";
@@ -70,6 +71,32 @@ export function ApplicationThemeProvider({ children }: { children: ReactNode }) 
 
   const theme = useMemo(() => ({ ...(scheme === "dark" ? webDarkTheme : webLightTheme),
     fontFamilyBase: fontFamily, fontFamilyNumeric: fontFamily,
+    colorNeutralBackground1: "var(--bg-canvas-primary)",
+    colorNeutralBackground2: "var(--bg-sidebar)",
+    colorNeutralBackground3: "var(--bg-app-shell)",
+    colorNeutralBackground4: "var(--bg-panel-secondary)",
+    colorNeutralBackground1Hover: "var(--bg-hover)",
+    colorNeutralBackground1Pressed: "var(--bg-active)",
+    colorNeutralBackground1Selected: "var(--bg-active)",
+    colorSubtleBackgroundHover: "var(--bg-hover)",
+    colorSubtleBackgroundPressed: "var(--bg-active)",
+    colorSubtleBackgroundSelected: "var(--bg-active)",
+    colorNeutralForeground1: "var(--palette-foreground-primary)",
+    colorNeutralForeground2: "var(--palette-foreground-secondary)",
+    colorNeutralForeground3: "var(--palette-foreground-muted)",
+    colorNeutralStroke1: "var(--palette-border-default)",
+    colorNeutralStroke2: "var(--palette-border-subtle)",
+    colorNeutralStrokeAccessible: "var(--palette-border-default)",
+    colorBrandBackground: "var(--brand-fill)",
+    colorBrandBackgroundHover: "var(--brand-fill-hover)",
+    colorBrandBackgroundPressed: "var(--brand-fill-pressed)",
+    colorBrandBackground2: "var(--bg-selected-accent)",
+    colorBrandForeground1: "var(--accent-primary)",
+    colorBrandForeground2: "var(--accent-primary)",
+    colorBrandForegroundLink: "var(--accent-primary)",
+    colorBrandStroke1: "var(--accent-primary)",
+    colorBrandStroke2: "var(--badge-border)",
+    colorStrokeFocus2: "var(--border-focus)",
   }), [scheme, fontFamily]);
 
   return (

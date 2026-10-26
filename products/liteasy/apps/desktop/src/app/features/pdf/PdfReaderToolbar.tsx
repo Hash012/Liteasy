@@ -166,7 +166,7 @@ export function PdfReaderToolbar({
   return (
     <div className="pdf-reader-toolbar-wrap">
       <div aria-label="PDF 导航工具栏" className="pdf-reader-toolbar" role="toolbar">
-        {readingControls}
+        {readingControls ? <div className="pdf-reader-tools" role="group" aria-label="阅读工具">{readingControls}</div> : null}
         <div aria-label="页面导航" className="pdf-reader-toolbar-group" role="group">
           <IconAction density="compact"
             label="上一页"

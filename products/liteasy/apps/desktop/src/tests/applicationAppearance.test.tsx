@@ -61,9 +61,11 @@ test("switches Fluent theme tokens inside dialogs rendered through a portal", ()
   expect(container.contains(dialog)).toBe(false);
   const portalProvider = dialog.closest(".fluent-app-root");
   expect(portalProvider).not.toBeNull();
-  expect(getComputedStyle(portalProvider!).getPropertyValue("--colorNeutralForeground1").trim()).toBe(webLightTheme.colorNeutralForeground1);
+  expect(getComputedStyle(portalProvider!).getPropertyValue("--colorNeutralForeground1").trim()).toBe("var(--palette-foreground-primary)");
+  expect(getComputedStyle(portalProvider!).getPropertyValue("--colorNeutralForegroundInverted").trim()).toBe(webLightTheme.colorNeutralForegroundInverted);
   act(() => store.apply({ intent: "update_setting", target: "view.theme", value: "dark" }));
-  expect(getComputedStyle(portalProvider!).getPropertyValue("--colorNeutralForeground1").trim()).toBe(webDarkTheme.colorNeutralForeground1);
+  expect(document.documentElement).toHaveAttribute("data-color-scheme", "dark");
+  expect(getComputedStyle(portalProvider!).getPropertyValue("--colorNeutralForegroundInverted").trim()).toBe(webDarkTheme.colorNeutralForegroundInverted);
 });
 
 test("changes appearance for the current session when storage writes are blocked", () => {

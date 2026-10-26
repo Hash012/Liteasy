@@ -3,7 +3,7 @@
   flex-direction: column;
   min-height: 0;
   height: 100%;
-  background: var(--colorNeutralBackground1);
+  background: var(--bg-panel-secondary);
   color: var(--colorNeutralForeground1);
   container: notes / inline-size;
 }
@@ -34,7 +34,7 @@
   padding: 4px;
   overflow: auto;
   border-right: 1px solid var(--colorNeutralStroke2);
-  background: var(--colorNeutralBackground2);
+  background: var(--bg-sidebar);
 }
 .notes-folders > button {
   justify-content: flex-start;
@@ -92,12 +92,14 @@
 .notes-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
 }
 .notes-item {
   position: relative;
-  border: 1px solid transparent;
-  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-canvas-primary);
+  box-shadow: var(--shadow-card);
 }
 .notes-item.is-selected {
   background: var(--colorBrandBackground2);
@@ -130,12 +132,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 400;
+  font-weight: 600;
 }
 .notes-item-text {
   color: var(--colorNeutralForeground2);
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
+  line-height: 1.6;
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
@@ -237,7 +240,7 @@
   outline-offset: -2px;
 }
 .notes-tree-row:hover, .notes-item:hover { background: var(--colorNeutralBackground1Hover); }
-.notes-tree-row.is-selected { background: var(--colorBrandBackground2); color: var(--colorBrandForeground1); }
+.notes-tree-row.is-selected { background: var(--bg-active); color: var(--text-primary); font-weight: 600; }
 .notes-tree-row.is-drop-target { background: var(--colorBrandBackground2); box-shadow: inset 0 0 0 1px var(--colorBrandStroke1); }
 .notes-tree-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fontSizeBase200); }
 .notes-tree-toggle { display: inline-flex; flex: 0 0 18px; width: 18px; height: 24px; align-items: center; justify-content: center; border: 0; padding: 0; background: transparent; color: var(--colorNeutralForeground3); cursor: pointer; }
@@ -245,7 +248,7 @@
 .notes-tree-row .library-item-icon { display: inline-flex; flex-shrink: 0; font-size: 18px; }
 .notes-folder-menu { opacity: 0; }
 .notes-tree-row:hover .notes-folder-menu, .notes-tree-row:focus-within .notes-folder-menu { opacity: 1; }
-.notes-item-source { margin-left: 24px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.notes-item-source { align-self: flex-start; padding: 1px 6px; border: 1px solid var(--badge-border); border-radius: 4px; background: var(--badge-accent); color: var(--accent-primary); margin-left: 24px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .notes-item-content { padding-top: 8px; padding-bottom: 8px; }
 .notes-child-folders { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
 .notes-child-folders > button { justify-content: flex-start; text-align: left; }
@@ -275,3 +278,11 @@
 .notes-paper-group > h3 > span { margin-left: auto; font-weight: 400; color: var(--colorNeutralForeground2); }
 .notes-item .notes-item-detail { margin: 4px 6px 6px; max-height: none; border-radius: 4px; }
 .notes-item-excerpt { margin: 0 12px 8px 30px; }
+
+.notes-paper-group { display: flex; flex-direction: column; gap: 8px; }
+.notes-item-title.is-derived { color: var(--text-muted); font-size: var(--fontSizeBase200); }
+.notes-item-title.is-derived strong { font-weight: 400; }
+.notes-item-source { width: fit-content; max-width: calc(100% - 36px); }
+.notes-item-excerpt .content-excerpt { max-height: none; color: var(--text-primary); line-height: 1.6; }
+.notes-item-excerpt :is(.markdown-content, .content-view__source) { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; font-size: var(--fontSizeBase300); line-height: 1.6; }
+.notes-item-excerpt .markdown-content :is(p, h1, h2, h3, h4, h5, h6, blockquote, ul, ol, li, pre) { margin-block: 0; font-size: inherit; line-height: inherit; }

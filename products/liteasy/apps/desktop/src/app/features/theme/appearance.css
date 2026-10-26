@@ -47,13 +47,12 @@
 /* Chrome, side panels and editing surfaces. No blanket filters or inversion:
    PDF canvases, cover art and slides must keep their original colors. */
 html[data-color-scheme="dark"] :is(
-  .activity-bar, .pane-header, .dock-tab.active, .assistant-input-wrap,
-  .assistant-suggestion-menu,
+  .pane-header, .assistant-suggestion-menu,
   .assistant-context-panel, .assistant-history-panel, .assistant-history-item,
   .assistant-session-button, .assistant-launcher-mode, .assistant-command-feedback,
   .assistant-editing-banner, .assistant-context-toggle, .assistant-message-action,
-  .pdf-toolbar, .pdf-left-sidebar, .pdf-sidebar-collapse-button, .pdf-ink-tools,
-  .pdf-annotation-item, .pdf-annotation-popover, .pdf-annotation-note-editor,
+  .pdf-toolbar, .pdf-sidebar-collapse-button, .pdf-ink-tools,
+  .pdf-annotation-popover, .pdf-annotation-note-editor,
   .pdf-annotation-editor, .pdf-entry-review, .pdf-quick-ask-panel,
   .note-editor textarea, .skill-doc-editor, .organization-form-input,
   .library-metadata-editor, .library-file-drop-target, .library-workspace-switcher,
@@ -72,7 +71,7 @@ html[data-color-scheme="dark"] :is(
 }
 
 html[data-color-scheme="dark"] :is(
-  .dock-region-tab-row, .assistant-input-highlight,
+  .dock-region-tab-row,
   .pdf-sidebar-switcher, .pdf-thumbnail-list li, .assistant-history-restore,
   .pdf-annotation-popover .pdf-annotation-markdown, .note-editor .pdf-annotation-markdown,
   .artifact-result-meta, .assistant-suggestion-trigger
@@ -117,15 +116,13 @@ html[data-color-scheme="dark"] :is(
 ) { background: var(--hover-surface); color: var(--ink-1); }
 
 html[data-color-scheme="dark"] :is(
-  .activity-button.active, .activity-button.active:hover,
   .library-tree-row.active, .library-folder-row.is-selected,
   .library-item.selected > .paper-row, .library-item.active > .paper-row,
   .library-collection-row.active, .library-workspace-switcher button.active,
   .assistant-history-item.active,
   .assistant-message-action.active, .assistant-suggestion-item.active,
   .assistant-message-token,
-  .pdf-sidebar-switcher button.active, .pdf-thumbnail-list li.active,
-  .library-paper-tag, .library-paper-category
+  .pdf-sidebar-switcher button.active, .pdf-thumbnail-list li.active
 ) { background: var(--selection-surface); color: var(--accent-1); border-color: var(--accent-1); }
 
 html[data-color-scheme="dark"] :is(

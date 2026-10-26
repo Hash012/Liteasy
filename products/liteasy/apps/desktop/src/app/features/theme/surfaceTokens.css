@@ -1,0 +1,105 @@
+/* Shared by the application and Fluent portals. Paper content keeps its own palette. */
+:root {
+  --bg-app-shell: #f3f4f6;
+  --bg-sidebar: #f8f9fa;
+  --bg-panel-secondary: #fafafa;
+  --bg-canvas-primary: #ffffff;
+  --bg-reader: #f1f5f9;
+  --bg-elevated: rgba(255, 255, 255, 0.88);
+  --bg-hover: rgba(15, 23, 42, 0.04);
+  --bg-active: rgba(15, 23, 42, 0.07);
+  --bg-selected-accent: #eef2ff;
+  /* Palette names avoid cycles with the public roles mapped by FluentProvider. */
+  --palette-foreground-primary: #0f172a;
+  --palette-foreground-secondary: #475569;
+  --palette-foreground-muted: #64748b;
+  --palette-border-subtle: rgba(15, 23, 42, 0.06);
+  --palette-border-default: rgba(15, 23, 42, 0.10);
+  --text-muted: var(--palette-foreground-muted);
+  --border-default: var(--palette-border-default);
+  --border-focus: #3b82f6;
+  --brand-fill: #2563eb;
+  --brand-fill-hover: #1d4ed8;
+  --brand-fill-pressed: #1e40af;
+  --accent-primary: #2563eb;
+  --accent-primary-hover: #1d4ed8;
+  --ai-accent-gradient: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  --ai-accent: #4f46e5;
+  --ai-surface-subtle: #f5f3ff;
+  --ai-border-subtle: #ddd6fe;
+  --ai-focus-border: #6366f1;
+  --ai-focus-ring: rgba(99, 102, 241, 0.12);
+  --text-on-accent: #ffffff;
+  --badge-neutral: #f1f5f9;
+  --badge-accent: #eff6ff;
+  --badge-border: rgba(37, 99, 235, 0.15);
+  --annotation-marker-yellow: #f59e0b;
+  --annotation-marker-red: #ef4444;
+  --annotation-marker-blue: #3b82f6;
+  --annotation-marker-green: #10b981;
+  --annotation-marker-pink: #ec4899;
+  --annotation-marker-orange: #f97316;
+  --annotation-marker-purple: #8b5cf6;
+  --annotation-marker-cyan: #06b6d4;
+  --annotation-marker-gray: #94a3b8;
+  --canvas-grid-dot: rgba(15, 23, 42, 0.12);
+  --scrollbar-thumb: rgba(15, 23, 42, 0.18);
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.03);
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
+  --shadow-floating: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 4px 10px -2px rgba(15, 23, 42, 0.04);
+  --shadow-pdf-page: 0 4px 20px rgba(15, 23, 42, 0.07), 0 0 1px rgba(15, 23, 42, 0.12);
+  --transition-surface: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), border-color 150ms cubic-bezier(0.4, 0, 0.2, 1), color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+:root[data-color-scheme="dark"] {
+  --bg-app-shell: #161b24;
+  --bg-sidebar: #1c222d;
+  --bg-panel-secondary: #202733;
+  --bg-canvas-primary: #252e3b;
+  --bg-reader: #131923;
+  --bg-elevated: rgba(37, 46, 59, 0.92);
+  --bg-hover: rgba(226, 232, 240, 0.06);
+  --bg-active: rgba(226, 232, 240, 0.10);
+  --bg-selected-accent: #293753;
+  --palette-foreground-primary: #e2e8f0;
+  --palette-foreground-secondary: #b8c4d6;
+  --palette-foreground-muted: #94a3b8;
+  --palette-border-subtle: rgba(226, 232, 240, 0.08);
+  --palette-border-default: rgba(226, 232, 240, 0.16);
+  --border-focus: #93c5fd;
+  --accent-primary: #93b4ff;
+  --accent-primary-hover: #bfdbfe;
+  --ai-accent: #c4b5fd;
+  --ai-surface-subtle: #302b47;
+  --ai-border-subtle: #514572;
+  --ai-focus-border: #a5a4fc;
+  --ai-focus-ring: rgba(165, 164, 252, 0.18);
+  --badge-neutral: #2b3544;
+  --badge-accent: #263952;
+  --badge-border: rgba(147, 180, 255, 0.22);
+  --canvas-grid-dot: rgba(226, 232, 240, 0.15);
+  --scrollbar-thumb: rgba(226, 232, 240, 0.24);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.12);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.16), 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-floating: 0 10px 25px -5px rgba(0, 0, 0, 0.28), 0 4px 10px -2px rgba(0, 0, 0, 0.16);
+  --shadow-pdf-page: 0 4px 20px rgba(0, 0, 0, 0.24), 0 0 1px rgba(0, 0, 0, 0.32);
+}
+
+.fluent-app-root :where(button, [role="treeitem"], .notes-item, .dock-dynamic-tab) {
+  transition: var(--transition-surface);
+}
+.fluent-app-root :where(kbd, time, .pdf-zoom-label, .pdf-page-input, .pdf-annotation-page, .library-tag-year) {
+  font-variant-numeric: tabular-nums;
+}
+.fluent-app-root :where(*) { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+.fluent-app-root ::-webkit-scrollbar { width: 5px; height: 5px; }
+.fluent-app-root ::-webkit-scrollbar-thumb { background: transparent; border-radius: 8px; }
+.fluent-app-root :hover::-webkit-scrollbar-thumb,
+.fluent-app-root :focus-within::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); }
+@media (prefers-reduced-motion: reduce) {
+  :root { --transition-surface: none; }
+}
+@media (forced-colors: active) {
+  .fluent-app-root :is(.dock-dynamic-tab.is-active, .notes-item, .pdf-annotation-item, .assistant-input-wrap) { border: 1px solid CanvasText; }
+  .fluent-app-root :is(.activity-button.active, .dock-tab.active, .assistant-target-tabs [aria-pressed="true"]) { outline: 2px solid Highlight; outline-offset: -2px; }
+}

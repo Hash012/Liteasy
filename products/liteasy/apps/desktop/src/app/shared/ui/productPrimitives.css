@@ -1,7 +1,7 @@
 /* Product roles map to the existing Fluent provider, including its portal class. */
 .fui-FluentProvider {
-  --surface-app: var(--colorNeutralBackground2);
-  --surface-canvas: var(--colorNeutralBackground3);
+  --surface-app: var(--bg-app-shell, var(--colorNeutralBackground2));
+  --surface-canvas: var(--bg-reader, var(--colorNeutralBackground3));
   --surface-base: var(--colorNeutralBackground1);
   --surface-raised: var(--colorNeutralBackground1);
   --surface-overlay: var(--colorNeutralBackground1);
@@ -35,6 +35,7 @@
   --line-2: var(--border-control);
   --hover-surface: var(--surface-hover);
   --selection-surface: var(--surface-selected);
+  --accent-1: var(--colorBrandForeground1);
   --danger-ink: var(--status-danger);
   --warning-ink: var(--status-warning);
   --success-ink: var(--status-success);

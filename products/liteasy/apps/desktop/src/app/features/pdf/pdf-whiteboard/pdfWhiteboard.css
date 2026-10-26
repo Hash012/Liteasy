@@ -6,8 +6,8 @@
   min-width: 0;
   min-height: 0;
   border-left: 1px solid var(--line-1);
-  background: #f7fafc;
-  box-shadow: -5px 0 18px rgba(24, 34, 47, 0.08);
+  background: var(--bg-canvas-primary);
+  box-shadow: none;
   outline: none;
 }
 
@@ -20,7 +20,7 @@
   min-height: 42px;
   padding: 6px 8px 6px 12px;
   border-bottom: 1px solid var(--line-1);
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--bg-sidebar);
 }
 
 .pdf-whiteboard-header > div {
@@ -48,7 +48,7 @@
   gap: 4px;
   padding: 5px 8px;
   border-bottom: 1px solid var(--border-subtle);
-  background: rgba(250, 252, 254, 0.96);
+  background: var(--bg-sidebar);
 }
 
 .pdf-whiteboard-toolbar > span {
@@ -65,9 +65,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 80% 10%, rgba(92, 153, 205, 0.09), transparent 34%),
-    #f5f8fb;
+  background: var(--bg-canvas-primary);
 }
 
 .pdf-whiteboard-empty {
@@ -97,16 +95,16 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
-  border: 1px solid rgba(85, 111, 136, 0.34);
+  border: 1px solid var(--border-default);
   border-radius: 7px;
-  background: rgba(255, 255, 250, 0.98);
-  box-shadow: 0 5px 16px rgba(24, 34, 47, 0.13);
+  background: var(--bg-canvas-primary);
+  box-shadow: var(--shadow-card);
   color: var(--ink-1);
 }
 
 .pdf-whiteboard-node.is-selected {
   border-color: var(--accent-1);
-  box-shadow: 0 0 0 2px rgba(27, 102, 179, 0.14), 0 7px 20px rgba(24, 34, 47, 0.16);
+  box-shadow: 0 0 0 2px var(--badge-border), var(--shadow-card);
 }
 .pdf-whiteboard-editor { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .pdf-whiteboard-editor > :is(.markdown-live-editor, .markdown-source-editor) { flex: 1; min-height: 0; }
@@ -119,7 +117,7 @@
   min-height: 26px;
   padding: 2px 4px 2px 8px;
   border-bottom: 1px solid var(--border-subtle);
-  background: rgba(240, 245, 249, 0.94);
+  background: var(--bg-sidebar);
   color: var(--ink-2);
   cursor: grab;
   font-size: 10px;
@@ -139,8 +137,8 @@
 }
 
 .pdf-whiteboard-node-header button:hover {
-  background: rgba(190, 46, 46, 0.1);
-  color: #a4262c;
+  background: var(--bg-hover);
+  color: var(--status-danger);
 }
 
 .pdf-whiteboard-node textarea {
@@ -208,20 +206,20 @@
 .pdf-whiteboard-node .react-flow__handle {
   width: 9px;
   height: 9px;
-  border: 2px solid #ffffff;
+  border: 2px solid var(--bg-canvas-primary);
   background: var(--accent-1);
 }
 
 .pdf-whiteboard .react-flow__edge-path {
-  stroke: rgba(49, 91, 126, 0.75);
+  stroke: var(--text-secondary);
   stroke-width: 1.6;
 }
 
 .pdf-whiteboard .react-flow__minimap {
   overflow: hidden;
-  border: 1px solid rgba(24, 34, 47, 0.12);
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--bg-elevated);
 }
 
 .pdf-whiteboard-status {
@@ -229,9 +227,16 @@
   overflow: hidden;
   padding: 5px 8px;
   border-top: 1px solid var(--border-subtle);
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--bg-sidebar);
   color: var(--ink-2);
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+
+.pdf-whiteboard .react-flow__controls { display: flex; gap: 2px; padding: 4px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg-elevated); backdrop-filter: blur(12px); box-shadow: var(--shadow-floating); }
+.pdf-whiteboard .react-flow__controls-button { width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: var(--text-secondary); fill: currentColor; }
+.pdf-whiteboard .react-flow__controls-button:hover { background: var(--bg-hover); }
+.pdf-whiteboard .react-flow__controls-button:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
+@media (pointer: coarse) { .pdf-whiteboard .react-flow__controls-button { width: 44px; height: 44px; } }

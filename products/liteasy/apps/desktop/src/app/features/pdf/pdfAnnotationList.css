@@ -1,7 +1,10 @@
 .pdf-sidebar-annotations .pdf-annotation-item {
-  border-radius: 4px;
-  padding: 5px 6px;
-  line-height: 1.4;
+  border-radius: 8px;
+  border-color: var(--border-subtle);
+  background: var(--bg-canvas-primary);
+  box-shadow: var(--shadow-card);
+  padding: 8px 10px;
+  line-height: 1.6;
 }
 .pdf-annotation-item .pdf-annotation-summary {
   --pdf-annotation-icon-size: calc(16px * var(--app-font-ratio, 1));
@@ -40,14 +43,20 @@
 .pdf-annotation-summary .pdf-annotation-excerpt {
   display: -webkit-box;
   overflow-wrap: anywhere;
-  -webkit-line-clamp: 2;
-  line-height: 1.45;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.6;
   font-size: var(--fontSizeBase300);
 }
 .pdf-annotation-item.expanded .pdf-annotation-excerpt {
   display: block;
 }
 .pdf-annotation-page {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--badge-accent);
+  font-variant-numeric: tabular-nums;
   display: inline-flex;
   align-items: center;
   gap: 1px;
@@ -147,7 +156,7 @@
 
 .pdf-sidebar-controls { min-width: 0; }
 .pdf-sidebar-controls .notes-label-filters { padding-top: 4px; border-bottom: 1px solid var(--colorNeutralStroke2); }
-.pdf-annotation-list { grid-template-columns: minmax(0, 1fr); }
+.pdf-annotation-list { grid-template-columns: minmax(0, 1fr); gap: 8px; background: var(--bg-panel-secondary); }
 .pdf-annotation-item, .pdf-annotation-summary { min-width: 0; max-width: 100%; }
 
 .pdf-annotation-search {

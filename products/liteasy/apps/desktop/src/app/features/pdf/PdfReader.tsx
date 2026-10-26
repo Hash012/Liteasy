@@ -3993,7 +3993,7 @@ export function PdfReader({
                           {annotation.kind === "highlight" && annotation.color && (
                             <div
                               className="annotation-color-indicator"
-                              style={{ backgroundColor: getHighlightColor(annotation.color) }}
+                              style={{ backgroundColor: `var(--annotation-marker-${annotation.color}, ${getHighlightColor(annotation.color)})` }}
                             />
                           )}
                           <button

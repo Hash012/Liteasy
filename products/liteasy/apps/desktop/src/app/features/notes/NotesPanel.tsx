@@ -408,7 +408,7 @@ function NotesPanelContent({ model }: { model: NotesViewModel }) {
                   aria-label={`查看笔记 ${item.title}`}
                   aria-expanded={model.selected?.key === item.key}
                 >
-                  <span className="notes-item-title">
+                  <span className={`notes-item-title${item.titleOrigin === "derived-body" ? " is-derived" : ""}`}>
                     <LibraryItemIcon itemKey={noteIconKey(item)} kind={item.object?.kind === "workspace.board" || /\.canvas$/i.test(item.title) ? "board" : item.target.kind === "pdf-annotation" ? "pdf" : "note"} />
                     <strong title={item.title}>{item.titleOrigin === "derived-body" ? "批注" : <SearchHighlight text={item.title} query={model.query} />}</strong>
                   </span>

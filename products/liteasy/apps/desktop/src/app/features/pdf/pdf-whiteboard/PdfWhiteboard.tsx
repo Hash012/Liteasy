@@ -442,7 +442,7 @@ export function PdfWhiteboard({ document, onChange, onClose, paperTitle }: PdfWh
           }}
           proOptions={{ hideAttribution: true }}
         >
-          <Background color="#9db0c2" gap={18} size={1} variant={BackgroundVariant.Dots} />
+          <Background color="var(--canvas-grid-dot)" gap={18} size={1} variant={BackgroundVariant.Dots} />
           <Controls showInteractive={false} />
           <MiniMap pannable zoomable />
         </ReactFlow>

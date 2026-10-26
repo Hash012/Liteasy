@@ -2745,9 +2745,9 @@ export function AssistantSessionController({
       />
 
       <div className="assistant-target-tabs" role="group" aria-label="对话与任务导航">
-        <Button size="small" appearance={view.kind === "home" ? "primary" : "subtle"} onClick={() => startNewSession()}>首页</Button>
-        <Button size="small" appearance={view.kind === "conversation" || view.kind === "history" ? "primary" : "subtle"} onClick={() => navigateView({ kind: "history", filter: "conversations" })}>对话</Button>
-        <Button size="small" appearance={view.kind === "task-list" || view.kind === "task-detail" ? "primary" : "subtle"} onClick={() => navigateView({ kind: "task-list" })}>任务{sessionHistory.some((session) => session.kind === "artifact_generation" && session.status === "running") ? ` ${sessionHistory.filter((session) => session.kind === "artifact_generation" && session.status === "running").length}` : ""}</Button>
+        <Button size="small" aria-pressed={view.kind === "home"} appearance={view.kind === "home" ? "primary" : "subtle"} onClick={() => startNewSession()}>首页</Button>
+        <Button size="small" aria-pressed={view.kind === "conversation" || view.kind === "history"} appearance={view.kind === "conversation" || view.kind === "history" ? "primary" : "subtle"} onClick={() => navigateView({ kind: "history", filter: "conversations" })}>对话</Button>
+        <Button size="small" aria-pressed={view.kind === "task-list" || view.kind === "task-detail"} appearance={view.kind === "task-list" || view.kind === "task-detail" ? "primary" : "subtle"} onClick={() => navigateView({ kind: "task-list" })}>任务{sessionHistory.some((session) => session.kind === "artifact_generation" && session.status === "running") ? ` ${sessionHistory.filter((session) => session.kind === "artifact_generation" && session.status === "running").length}` : ""}</Button>
       </div>
       {historyOpen ? (
         <AssistantHistoryPanel
