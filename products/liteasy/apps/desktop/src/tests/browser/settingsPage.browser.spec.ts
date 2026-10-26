@@ -61,7 +61,7 @@ test("settings opens centrally, searches globally and retains drafts across cate
   await settings.getByRole("combobox", { name: "外观", exact: true }).click();
   await page.getByRole("option", { name: "深色", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");
-  await expect(settings).toHaveCSS("background-color", "rgb(41, 41, 41)");
+  await expect(settings).toHaveCSS("background-color", "rgb(32, 39, 51)");
   await settings.screenshot({ path: testInfo.outputPath("settings-appearance-dark.png") });
   await page.setViewportSize({ width: 1000, height: 800 });
   await settings.getByRole("button", { name: "AI 与助手" }).click();

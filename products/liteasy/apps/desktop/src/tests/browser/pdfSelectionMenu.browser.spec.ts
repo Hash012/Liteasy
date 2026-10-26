@@ -25,7 +25,7 @@ for (const theme of ["light", "dark"] as const) {
     await menu.getByRole("button", { name: "选择蓝色高亮" }).click();
     await expect(menu.getByRole("button", { name: "选择蓝色高亮" })).toHaveAttribute("aria-pressed", "true");
     await expect(menu.getByRole("button", { name: "选择蓝色高亮" })).toHaveCSS("width", "24px");
-    await expect(menu).toHaveCSS("background-color", theme === "dark" ? "rgb(41, 41, 41)" : "rgb(255, 255, 255)");
+    await expect(menu).toHaveCSS("background-color", theme === "dark" ? "rgb(37, 46, 59)" : "rgb(255, 255, 255)");
     for (const width of [1440, 1100]) {
       await page.setViewportSize({ width, height: 650 });
       await expect.poll(async () => menu.evaluate((element) => {
