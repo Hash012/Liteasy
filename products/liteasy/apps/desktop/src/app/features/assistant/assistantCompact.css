@@ -1,0 +1,134 @@
+/* Bottom-dock chrome uses width; the transcript owns the remaining height. */
+.assistant-header { display: contents; }
+.assistant-pane.compact-bottom {
+  container: assistant-dock / inline-size;
+  gap: 4px;
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+.assistant-pane.compact-bottom .assistant-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+.assistant-pane.compact-bottom .assistant-session-toolbar {
+  flex: 1 1 180px;
+  max-width: 420px;
+  min-height: 32px;
+}
+.assistant-pane.compact-bottom .assistant-context-toolbar { display: flex; flex: 0 0 auto; }
+.assistant-pane.compact-bottom .assistant-target-tabs {
+  margin-left: auto;
+  flex: 0 0 auto;
+  padding: 2px;
+  border: 0;
+}
+.assistant-pane.compact-bottom .assistant-target-tabs > .fui-Button { flex: 0 0 auto; padding: 2px 10px; }
+.assistant-pane.compact-bottom > .assistant-transcript-surface {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.assistant-pane.compact-bottom .assistant-messages {
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 4px 8px;
+  gap: 8px;
+  overflow-y: auto;
+}
+.assistant-pane.compact-bottom .assistant-message.user {
+  align-self: stretch;
+  align-items: flex-start;
+  text-align: start;
+  max-width: 100%;
+  padding: 4px 8px;
+}
+.assistant-pane.compact-bottom .assistant-message.assistant { padding-block: 4px; }
+.assistant-pane.compact-bottom .assistant-user-message {
+  max-width: 100%;
+  padding: 0;
+  background: transparent;
+}
+.assistant-pane.compact-bottom .assistant-message-actions {
+  position: absolute;
+  inset: 0 0 auto auto;
+  max-width: 100%;
+  background: var(--bg-canvas-primary);
+  border-radius: 4px;
+  z-index: var(--layer-panel);
+}
+.assistant-pane.compact-bottom .assistant-input-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  max-height: 60%;
+  overflow-y: auto;
+  padding: 4px 8px;
+  gap: 2px;
+  box-shadow: none;
+}
+.assistant-pane.compact-bottom .assistant-input {
+  height: auto;
+  min-height: 28px;
+  max-height: 96px;
+  overflow-y: auto;
+}
+.assistant-pane.compact-bottom .assistant-composer-actions { justify-content: flex-start; }
+.assistant-pane.compact-bottom .assistant-save-status {
+  margin: 0 auto 0 4px;
+  color: var(--text-muted);
+  font-size: var(--fontSizeBase200);
+}
+.assistant-pane.compact-bottom .assistant-add-context { margin-left: auto; }
+.assistant-pane.compact-bottom .assistant-voice-button { display: none; }
+.assistant-pane.compact-bottom .assistant-home-compact {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 8px;
+  color: var(--colorNeutralForeground1);
+}
+.assistant-pane.compact-bottom .assistant-home-compact p { margin: 0; color: var(--text-muted); }
+.assistant-pane.compact-bottom > .assistant-history-panel {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: none;
+  padding: 4px 8px;
+}
+.assistant-pane.compact-bottom > p[role="status"] { margin: 0; font-size: var(--fontSizeBase200); }
+.assistant-pane.compact-bottom .assistant-command-feedback { padding: 4px 8px; }
+.assistant-compact-suggestions {
+  width: min(560px, calc(100vw - 32px));
+  padding: 4px;
+}
+.assistant-compact-suggestions .assistant-suggestion-menu { margin: 0; }
+.assistant-compact-popover {
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(420px, 65vh);
+  overflow: auto;
+  padding: 8px;
+}
+.assistant-compact-popover .assistant-history-panel { max-height: none; padding: 0; border: 0; }
+.assistant-compact-popover .assistant-context-token-row { display: flex; flex-direction: column; align-items: stretch; margin: 8px 0; }
+.assistant-compact-popover .assistant-context-token { max-width: 100%; justify-content: space-between; }
+@container assistant-dock (max-width: 650px) {
+  .assistant-pane.compact-bottom .assistant-header { flex-wrap: wrap; }
+  .assistant-pane.compact-bottom .assistant-session-toolbar { max-width: none; }
+  .assistant-pane.compact-bottom .assistant-target-tabs { margin-left: 0; }
+}
+.assistant-pane.compact-bottom > section[aria-label="任务详情"] {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 8px;
+}
+.assistant-pane.compact-bottom > .assistant-task-run-details {
+  flex: 0 1 auto;
+  max-height: 45%;
+  overflow: auto;
+}

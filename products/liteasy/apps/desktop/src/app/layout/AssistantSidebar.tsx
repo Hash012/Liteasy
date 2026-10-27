@@ -131,6 +131,7 @@ export function AssistantSidebar({
       {memoryNotice ? <div role="status" className="assistant-memory-notice">{memoryNotice} 可在个人中心查看。{memoryNoticeKind === "success" && onDismissMemoryNotice ? <IconAction label="关闭记忆提示" density="compact" icon={<DismissRegular />} onClick={onDismissMemoryNotice} /> : null}</div> : null}
       <div className="pane-body">
         <AssistantPane
+          compact={regionId === "bottom"}
           agentClient={agentClient}
           historyPersistence={historyPersistence}
           academicProfile={academicProfile}

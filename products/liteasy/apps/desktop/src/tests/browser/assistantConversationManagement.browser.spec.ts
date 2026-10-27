@@ -34,13 +34,17 @@ test("compact conversation rows manage real titles, export and delete across res
   await expect(page.getByLabel("测试响应")).toHaveValue("连接测试响应。");
   await page.getByRole("button", { name: "文献库", exact: true }).click();
   await page.getByRole("button", { name: "首页", exact: true }).click();
+  await page.getByRole("button", { name: "近期会话", exact: true }).click();
+  await expect(page.getByLabel("近期会话", { exact: true }).locator(".assistant-session-row-title").first()).toHaveText("论文实验与误差分析");
+  await page.keyboard.press("Escape");
+  await page.locator(".assistant-only-pane").screenshot({ path: testInfo.outputPath("conversation-bottom.png") });
+  // Moving the same live controller restores the sidebar presentation and preserves its draft.
+  await page.getByRole("tab", { name: "Liteasy Chat", exact: true }).press("Alt+Shift+ArrowRight");
   const home = page.getByLabel("助手首页");
   const row = home.locator(".assistant-history-item").first();
   await expect(row.locator(".assistant-session-row-title")).toHaveText("论文实验与误差分析");
   await expect(row.locator(".assistant-session-row-date")).toBeVisible();
   await expect(row).not.toContainText("条消息");
-  // AI starts below the reader; move it explicitly before testing narrow side panes.
-  await page.getByRole("tab", { name: "Liteasy Chat", exact: true }).press("Alt+Shift+ArrowRight");
   for (const width of [320, 560]) {
     // Resize the actual dock through its pointer control, keeping the whole pane inside the viewport.
     const pane = page.locator(".assistant-only-pane");

@@ -3,7 +3,7 @@ import { ActionButton as Button } from "../../shared/ui/productPrimitives";
 import { ContextAssetThumbnail } from "./ContextAssetThumbnail";
 import "../models/assistantModelPicker.css";
 import { displayPath } from "../resource-filesystem/displayPath";
-import { useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useContext, useEffect, useLayoutEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Link, Popover, PopoverSurface, PopoverTrigger, Slider, Tooltip, useRestoreFocusTarget } from "@fluentui/react-components";
 import { thinkingDepths, thinkingDepthLabels, type ThinkingDepth } from "./thinkingDepth";
 import { DismissRegular, AddRegular, BrainCircuitRegular, EyeRegular, FlashRegular, GridRegular, MicRegular, SendRegular } from "@fluentui/react-icons";
@@ -28,6 +28,11 @@ type ActiveTrigger = {
 };
 
 type AssistantComposerProps = {
+  compact?: boolean;
+  contextToolbar?: HTMLElement | null;
+  contextOpen?: boolean;
+  onContextOpenChange?: (open: boolean) => void;
+  status?: ReactNode;
   researchSelection?: ReactNode;
   researchSelected?: boolean;
   onSelectResearchSkill?: (skill: import("../research-skills/researchDocument").ResearchSkillRef) => void;
@@ -71,6 +76,7 @@ function getActiveTrigger(input: string, caret: number): ActiveTrigger | null {
 
 
 export function AssistantComposer({
+  compact = false, contextToolbar, contextOpen = false, onContextOpenChange, status,
   researchSelection, researchSelected, onSelectResearchSkill,
   contextUsage,
   modelPicker,
@@ -111,6 +117,20 @@ export function AssistantComposer({
   const [browserPreviewId, setBrowserPreviewId] = useState<string>();
   const insertionCaret = useRef<number>();
   const browserInsertion = useRef<ContextInsertion>();
+  const contextSurfaceRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || !compact) return;
+    const resize = () => {
+      editor.style.height = "0px";
+      editor.style.height = `${Math.min(96, Math.max(28, editor.scrollHeight))}px`;
+    };
+    resize();
+    // Reflow long drafts when the dock is resized, without changing the mirror metrics.
+    const observer = new ResizeObserver(resize);
+    if (editor.parentElement) observer.observe(editor.parentElement);
+    return () => { observer.disconnect(); editor.style.removeProperty("height"); };
+  }, [compact, input, editorRef]);
   useEffect(() => { setBrowserQuery(null); }, [contextScopeId]);
   useEffect(() => { setDismissed(false); setActiveIndex(0); }, [input]);
   useEffect(() => {
@@ -135,7 +155,11 @@ export function AssistantComposer({
     return undefined;
   }
   function removeToken(token: AssistantContextToken) {
-    return <Tooltip content={tChinese("context.composer.remove", "移除上下文：{{label}}", { label: token.label })} relationship="label"><Button appearance="subtle" size="small" icon={<DismissRegular />} aria-label={tChinese("context.composer.remove", "移除上下文：{{label}}", { label: token.label })} onClick={() => onRemoveContextToken?.(token.id)} /></Tooltip>;
+    return <Tooltip content={tChinese("context.composer.remove", "移除上下文：{{label}}", { label: token.label })} relationship="label"><Button appearance="subtle" size="small" icon={<DismissRegular />} aria-label={tChinese("context.composer.remove", "移除上下文：{{label}}", { label: token.label })} onClick={() => {
+      onRemoveContextToken?.(token.id);
+      // Keep Escape/Tab usable after the focused removal button disappears.
+      if (compact && contextOpen) contextSurfaceRef.current?.focus();
+    }} /></Tooltip>;
   }
   function tokenPreview(token: AssistantContextToken, label: string, inline = false) {
     const locator = tokenLocator(token);
@@ -241,33 +265,7 @@ export function AssistantComposer({
 
   const lastToken = contextTokens[contextTokens.length - 1];
 
-  return (
-    <div className="assistant-input-wrap" data-tour="assistant-composer">
-      {researchSelection}
-      {pending ? (
-        <div className="assistant-command-feedback">
-          当前回复仍在执行；发送的新消息会先暂存，可随后选择执行时机。
-        </div>
-      ) : null}
-      {editing ? (
-        <div className="assistant-editing-banner">
-          <span>正在编辑原问题；发送后创建分支，原讨论保留</span>
-          <button className="assistant-editing-cancel" onClick={onCancelEdit} type="button">
-            取消编辑
-          </button>
-        </div>
-      ) : null}
-      {voiceInputMessage ? (
-        <div className="assistant-voice-placeholder">{voiceInputMessage}</div>
-      ) : null}
-      {contextTokens.some(token => !mentionedIds.has(token.id)) ? (
-        <div aria-label="已添加到对话上下文" className="assistant-context-token-row">
-          {contextTokens.filter(token => !mentionedIds.has(token.id)).map(token => <span className={`assistant-context-token ${token.kind}`} key={token.id}>
-            {tokenPreview(token, shortContextName(token))}{removeToken(token)}
-          </span>)}
-        </div>
-      ) : null}
-      {menuItemCount > 0 ? (
+  const suggestionMenu = (
         <div aria-label="输入候选" id={menuId} role="group" className={`assistant-suggestion-menu${activeTrigger?.trigger === "/" ? " commands" : ""}`}>
           {visibleSuggestions.map((suggestion, index) => (
             <button
@@ -304,7 +302,52 @@ export function AssistantComposer({
               onMouseDown={(event) => event.preventDefault()} onClick={() => openAssetBrowser()}>浏览全部资产</Button>
           </> : null}
         </div>
+  );
+
+  return (
+    <div className="assistant-input-wrap" data-tour="assistant-composer">
+      {compact && contextToolbar ? <Popover open={contextOpen} onOpenChange={(_, data) => {
+        onContextOpenChange?.(data.open);
+        if (!data.open) contextToolbar.focus();
+      }} positioning={{ target: contextToolbar, position: "above", align: "start" }} trapFocus>
+        <PopoverSurface ref={contextSurfaceRef} tabIndex={-1} className="assistant-compact-popover" aria-label="对话上下文">
+          <strong>已添加的上下文</strong>
+          {contextTokens.length ? <div aria-label="已添加到对话上下文" className="assistant-context-token-row">
+            {contextTokens.map(token => <span className={`assistant-context-token ${token.kind}`} key={token.id}>
+              {tokenPreview(token, shortContextName(token))}{removeToken(token)}
+            </span>)}
+          </div> : <p>尚未添加资料，可直接提问。</p>}
+          <Button appearance="subtle" icon={<AddRegular />} onClick={() => { onContextOpenChange?.(false); openAssetBrowser(); }}>添加上下文</Button>
+        </PopoverSurface>
+      </Popover> : null}
+      {researchSelection}
+      {pending ? (
+        <div className="assistant-command-feedback">
+          当前回复仍在执行；发送的新消息会先暂存，可随后选择执行时机。
+        </div>
       ) : null}
+      {editing ? (
+        <div className="assistant-editing-banner">
+          <span>正在编辑原问题；发送后创建分支，原讨论保留</span>
+          <button className="assistant-editing-cancel" onClick={onCancelEdit} type="button">
+            取消编辑
+          </button>
+        </div>
+      ) : null}
+      {voiceInputMessage ? (
+        <div className="assistant-voice-placeholder">{voiceInputMessage}</div>
+      ) : null}
+      {!compact && contextTokens.some(token => !mentionedIds.has(token.id)) ? (
+        <div aria-label="已添加到对话上下文" className="assistant-context-token-row">
+          {contextTokens.filter(token => !mentionedIds.has(token.id)).map(token => <span className={`assistant-context-token ${token.kind}`} key={token.id}>
+            {tokenPreview(token, shortContextName(token))}{removeToken(token)}
+          </span>)}
+        </div>
+      ) : null}
+      {menuItemCount > 0 ? compact ? <Popover open positioning={{ target: editorRef.current, position: "above", align: "start", autoSize: "height" }} unstable_disableAutoFocus
+        onOpenChange={(_, data) => { if (!data.open) setDismissed(true); }}>
+        <PopoverSurface className="assistant-compact-suggestions" aria-label="输入候选面板">{suggestionMenu}</PopoverSurface>
+      </Popover> : suggestionMenu : null}
       <div className={`assistant-input-editor${textSelected ? " has-text-selection" : ""}`}>
       <div className="assistant-input-highlight" ref={highlightRef}>{highlightedInput}{"\n"}</div>
       <textarea
@@ -388,6 +431,7 @@ export function AssistantComposer({
       </div>
       <div className="assistant-composer-actions">
         {modelPicker}
+        {status}
         <Tooltip content="按类别和项目浏览资料，组合添加到上下文" relationship="description">
           <Button {...restoreContextFocus} appearance="subtle" aria-label="添加上下文" data-tour="add-context" className="assistant-add-context" icon={<AddRegular />} onClick={() => openAssetBrowser()} />
         </Tooltip>

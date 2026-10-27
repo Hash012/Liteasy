@@ -18,7 +18,7 @@ test("appearance follows the system and an explicit choice persists across launc
   await expect(page.locator(".activity-bar")).toHaveCSS("background-color", "rgb(22, 27, 36)");
   await expect(page.locator(".reader-layout-button:not(.active)").first()).toHaveCSS("background-color", "rgb(37, 46, 59)");
   const assistantHome = page.getByRole("region", { name: "助手首页", exact: true });
-  await expect(assistantHome.getByRole("heading", { name: "开始新对话", exact: true })).toBeVisible();
+  await expect(assistantHome.getByText("直接提问，或用 @ 添加资料、/ 选择命令。", { exact: true })).toBeVisible();
   await expect(assistantHome).toHaveCSS("color", "rgb(226, 232, 240)");
   await expect(page.locator(".assistant-input-highlight")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   const navigation = page.getByRole("group", { name: "对话与任务导航" });

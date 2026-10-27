@@ -8,6 +8,7 @@ import { ArrowLeftRegular, ArrowRightRegular, OpenRegular, ComposeRegular, Docum
 
 type Props = {
   title: string;
+  compact?: boolean;
   sessionActions?: ReactNode;
   messages?: AssistantMessage[];
   kind: "conversation" | "artifact_generation";
@@ -27,11 +28,11 @@ type Props = {
 export function AssistantSessionToolbar(props: Props) {
   const digest = conversationDigest(props.messages ?? []);
   return <div className="assistant-session-toolbar" role="group" aria-label="对话顶栏">
-    <Tooltip content={props.historyOpen ? "返回当前对话" : "查看历史会话"} positioning="below" relationship="description">
+    {!props.compact || props.historyOpen ? <Tooltip content={props.historyOpen ? "返回当前对话" : "查看历史会话"} positioning="below" relationship="description">
       <Button appearance="subtle" className="assistant-toolbar-button" aria-label={props.historyOpen ? "隐藏历史" : "历史"}
         aria-expanded={props.historyOpen} title={props.historyOpen ? "返回当前对话" : "查看历史会话"}
         icon={props.historyOpen ? <ArrowRightRegular /> : <ArrowLeftRegular />} onClick={props.onToggleHistory} />
-    </Tooltip>
+    </Tooltip> : null}
     <div className="assistant-active-session" aria-label="当前会话" data-session-kind={props.kind} draggable onDragStart={props.onDragStart}>
       <Popover positioning="below-start">
         <PopoverTrigger disableButtonEnhancement><Button appearance="subtle" className="assistant-active-session-title" aria-label="对话摘要" title="查看对话摘要">{props.title}</Button></PopoverTrigger>

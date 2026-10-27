@@ -78,7 +78,7 @@ test("generates reading layers in the background and opens their session only fr
     await expect(page.getByLabel("当前会话")).toContainText("生成：薄读");
     releases[1]();
     await expect(page.getByTestId("thin-reading-summary").getByRole("heading", { name: "外部记忆", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "历史", exact: true }).click();
+    await page.getByRole("button", { name: "任务", exact: true }).click();
     await expect(page.getByRole("button", { name: /(?:当前|打开)会话：生成：薄读/ })).toHaveCount(1);
     expect(requests).toBe(2);
   } finally {

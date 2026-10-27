@@ -2,7 +2,8 @@ import { Children, type ReactNode } from "react";
 import { ArrowRightRegular, DocumentPdfRegular, SparkleRegular } from "@fluentui/react-icons";
 import { ActionButton } from "../../shared/ui/productPrimitives";
 
-export function AssistantHomePanel({ papers, emptyMaterialsMessage, recentConversationsLabel = "最近对话", onAskSelected, onViewAll, children }: {
+export function AssistantHomePanel({ compact = false, papers, emptyMaterialsMessage, recentConversationsLabel = "最近对话", onAskSelected, onViewAll, children }: {
+  compact?: boolean;
   papers: ReadonlyArray<{ id: string; title: string }>;
   emptyMaterialsMessage: string;
   recentConversationsLabel?: string;
@@ -10,6 +11,10 @@ export function AssistantHomePanel({ papers, emptyMaterialsMessage, recentConver
   onViewAll(): void;
   children: ReactNode;
 }) {
+  if (compact) return <section className="assistant-home assistant-home-compact" aria-label="助手首页">
+    <p>直接提问，或用 @ 添加资料、/ 选择命令。</p>
+    {papers.length ? <ActionButton appearance="subtle" icon={<SparkleRegular />} onClick={onAskSelected}>根据已选 {papers.length} 篇资料提问</ActionButton> : null}
+  </section>;
   return <section className="assistant-home" aria-label="助手首页">
     <div className="assistant-home-start">
       <h3>开始新对话</h3>

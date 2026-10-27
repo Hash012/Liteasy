@@ -11,6 +11,7 @@ import { useUiTranslation } from "../../shared/i18n/useUiTranslation";
 import { presentAssistantHistoryError } from "../../features/assistant/assistantHistoryError";
 import { OptionPicker, DisclosureSection } from "../../shared/ui/productPrimitives";
 import "../../features/assistant/assistantView.css";
+import "../../features/assistant/assistantCompact.css";
 import { createAssistantSessionService } from "./assistantSessionService";
 import { useAssistantSessionTitles } from "./useAssistantSessionTitles";
 import { registerQuickAskTransfer } from "../../features/pdf/quickAskTransfer";
@@ -40,7 +41,8 @@ import { hasResourceContextTransfer, readContextPaper } from "../../features/obj
 import { contextRefSchema, type ContextRef } from "../../features/context/objectContext";
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { adaptContextMentions, contextInstructionText, insertContextMentions, mapContextMentions, type ContextInsertion } from "../../features/assistant/inlineContext";
-import { Button, Input } from "@fluentui/react-components";
+import { Button, Input, Popover, PopoverTrigger, PopoverSurface } from "@fluentui/react-components";
+import { HistoryRegular, AttachRegular, ChevronDownRegular } from "@fluentui/react-icons";
 import { AssistantSessionActions } from "../../features/assistant/AssistantSessionActions";
 import { AssistantSessionToolbar } from "../../features/assistant/AssistantSessionToolbar";
 import { AssistantComposer } from "../../features/assistant/AssistantComposer";
@@ -163,6 +165,7 @@ export function hasPaperGroundedAuditScope(run: AgentRun) {
 }
 
 export type AssistantPaneProps = {
+  compact?: boolean;
   contextUsage?: AgentContextUsage;
   /**
    * The application always supplies the public Agent client. Keeping this optional
@@ -322,6 +325,7 @@ function createConversationIdempotencyKey(mode: AssistantMode) {
 }
 
 export function AssistantSessionController({
+  compact = false,
   contextUsage,
   agentClient,
   historyPersistence,
@@ -413,7 +417,11 @@ export function AssistantSessionController({
   );
   const [activeSessionId, setActiveSessionId] = useState(initialSessionRef.current.id);
   const [view, setView] = useState<AssistantView>({ kind: "home" });
+  const [recentOpen, setRecentOpen] = useState(false);
+  const [contextToolbar, setContextToolbar] = useState<HTMLElement | null>(null);
+  const [contextPanelOpen, setContextPanelOpen] = useState(false);
   const historyOpen = view.kind === "history" || view.kind === "task-list";
+  useEffect(() => { setContextPanelOpen(false); setRecentOpen(false); }, [activeSessionId, compact, historyOpen]);
   const historyKind = view.kind === "task-list" ? "artifact_generation" : view.kind === "history" ? "conversation" : undefined;
   const sendLockRef = useRef(new Set<string>());
   const taskDiscussionLocksRef = useRef(new Set<string>());
@@ -2694,8 +2702,10 @@ export function AssistantSessionController({
     ? activeSession.status === "running"
     : assistantState.pending;
 
+  const saveFeedback = !historyOpen && historyPersistence && hasCurrentContent ? <p className="assistant-save-status" role="status">{{ dirty: "有未保存内容", saving: "正在保存…", saved: isTauri() ? "已保存本机" : "已保存到此浏览器", failed: "保存失败 · 内容仍保留", conflict: "其他窗口已有更新 · 当前内容仍保留" }[projectedSaveStatus]}</p> : null;
+
   return (
-    <AssistantPane conversationStarted={conversationStarted}
+    <AssistantPane conversationStarted={conversationStarted} compact={compact}
       onDragOver={(event) => {
         if (!event.dataTransfer.types.includes(readerContextDragMime) && !hasResourceContextTransfer(event.dataTransfer)) return;
         event.preventDefault();
@@ -2723,7 +2733,9 @@ export function AssistantSessionController({
         if (context) addReaderContext(context);
       }}
     >
+      <div className="assistant-header">
       <AssistantSessionToolbar
+        compact={compact}
         sessionActions={!historyOpen && activeSession ? <AssistantSessionActions menuLabel="更多会话操作" key={activeSession.id} session={activeSession} onUpdateSession={updateSessionMetadata} onExportSession={exportSession} onDeleteSession={deleteSession} onRenameWithAI={renameSessionWithAI} onExpand={onExpand} onOpenSettings={onApplyPanelAction ? () => onApplyPanelAction({ operation: "open", panel: "settings" }) : undefined} /> : undefined}
         messages={historyOpen ? [] : assistantState.messages}
         onExpand={onExpand}
@@ -2745,10 +2757,23 @@ export function AssistantSessionController({
         }}
       />
 
+      {compact ? <>
+        <Popover open={recentOpen} onOpenChange={(_, data) => setRecentOpen(data.open)} positioning="above-start" trapFocus>
+          <PopoverTrigger disableButtonEnhancement><Button appearance="subtle" size="small" icon={<HistoryRegular />} aria-expanded={recentOpen}>近期会话 <ChevronDownRegular /></Button></PopoverTrigger>
+          <PopoverSurface className="assistant-compact-popover" aria-label="近期会话">
+            <AssistantHistoryPanel kind="conversation" activeSessionId={activeSessionId}
+              history={sessionHistory.filter(session => session.kind !== "artifact_generation" && hasAssistantContent(session))}
+              onOpenSession={id => { setRecentOpen(false); void openSession(id); }}
+              onUpdateSession={updateSessionMetadata} onExportSession={exportSession} onDeleteSession={deleteSession} onRenameWithAI={renameSessionWithAI} />
+          </PopoverSurface>
+        </Popover>
+        {!historyOpen && view.kind !== "task-detail" ? <Button className="assistant-context-toolbar" ref={setContextToolbar} appearance="subtle" size="small" icon={<AttachRegular />} aria-expanded={contextPanelOpen} onClick={() => setContextPanelOpen(open => !open)}>上下文 {composerContextTokens.length} <ChevronDownRegular /></Button> : null}
+      </> : null}
       <div className="assistant-target-tabs" role="group" aria-label="对话与任务导航">
         <Button size="small" aria-pressed={view.kind === "home"} appearance={view.kind === "home" ? "primary" : "subtle"} onClick={() => startNewSession()}>首页</Button>
         <Button size="small" aria-pressed={view.kind === "conversation" || view.kind === "history"} appearance={view.kind === "conversation" || view.kind === "history" ? "primary" : "subtle"} onClick={() => navigateView({ kind: "history", filter: "conversations" })}>对话</Button>
         <Button size="small" aria-pressed={view.kind === "task-list" || view.kind === "task-detail"} appearance={view.kind === "task-list" || view.kind === "task-detail" ? "primary" : "subtle"} onClick={() => navigateView({ kind: "task-list" })}>任务{sessionHistory.some((session) => session.kind === "artifact_generation" && session.status === "running") ? ` ${sessionHistory.filter((session) => session.kind === "artifact_generation" && session.status === "running").length}` : ""}</Button>
+      </div>
       </div>
       {historyOpen ? (
         <AssistantHistoryPanel
@@ -2765,7 +2790,7 @@ export function AssistantSessionController({
         />
       ) : null}
 
-      {view.kind === "home" ? <AssistantHomePanel papers={selectedPapers} emptyMaterialsMessage={tChinese("context.composer.noMaterials", "尚未添加资料")}
+      {view.kind === "home" ? <AssistantHomePanel compact={compact} papers={selectedPapers} emptyMaterialsMessage={tChinese("context.composer.noMaterials", "尚未添加资料")}
         recentConversationsLabel={tChinese("context.composer.recentConversations", "最近对话")}
         onAskSelected={() => { setInput(selectedPapers.length > 1 ? "比较这些论文的方法与证据" : "概述这篇论文的方法与证据"); setComposerContextTokens(selectedPapers.map((paper) => ({ id: `paper-${paper.id}`, kind: "paper", label: paper.title, resourcePath: liteasyPath(objectWorkbench?.scopeId ?? "local", { kind: "paper", paperId: paper.id }), prompt: `论文：${paper.title}` }))); }}
         onViewAll={() => navigateView({ kind: "history", filter: "conversations" })}>
@@ -2834,11 +2859,16 @@ export function AssistantSessionController({
         <span>{contextCatalogStatus}</span>
         {onRefreshContextCatalog ? <Button appearance="subtle" size="small" onClick={onRefreshContextCatalog}>重试</Button> : null}
       </div> : null}
-      {!historyOpen && historyPersistence && hasCurrentContent ? <p className="assistant-save-status" role="status">{{ dirty: "有未保存内容", saving: "正在保存…", saved: isTauri() ? "已保存本机" : "已保存到此浏览器", failed: "保存失败 · 内容仍保留", conflict: "其他窗口已有更新 · 当前内容仍保留" }[projectedSaveStatus]}</p> : null}
+      {!compact || view.kind === "task-detail" ? saveFeedback : null}
       {view.kind === "task-detail" && activeSession?.kind === "artifact_generation" ? <div className="assistant-task-discussion">
         <Button disabled={!activeSession.artifactId || !taskHasSavedResult} onClick={() => { void beginTaskDiscussion(activeSession).catch((error) => setContextDropMessage(error instanceof Error ? error.message : String(error))); }}>围绕此结果提问</Button>
         {activeSession.origin?.parentConversationId ? <Button appearance="subtle" onClick={() => { void openSession(activeSession.origin!.parentConversationId!); }}>返回发起对话</Button> : null}
       </div> : !historyOpen ? <AssistantComposer
+        compact={compact}
+        contextToolbar={compact ? contextToolbar : null}
+        contextOpen={contextPanelOpen}
+        onContextOpenChange={setContextPanelOpen}
+        status={compact ? saveFeedback : undefined}
         researchSelected={!!selectedResearchSkill}
         onSelectResearchSkill={skill => setSelectedResearchSkill({ skill, roles: {}, preset: { id: "default", parameters: {} }, destination: selectedResearchSkill?.destination })}
         researchSelection={selectedResearchSkill ? <ResearchSkillSelectionView selection={selectedResearchSkill} destinations={researchSkills?.destinations ?? []} sources={composerContextTokens.map(token => ({ label: token.label, detail: token.detail, refs: token.contextRefs ?? [] }))} onChange={setSelectedResearchSkill} /> : undefined}

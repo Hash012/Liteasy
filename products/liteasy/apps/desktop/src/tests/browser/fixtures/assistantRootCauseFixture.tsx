@@ -7,13 +7,14 @@ import { createAssistantSession } from "../../../app/features/assistant/assistan
 import "../../../app/styles/app.css";
 import "../../../app/features/theme/appearance.css";
 
+const compact = new URLSearchParams(location.search).has("bottom");
 const persistence = createAssistantHistoryPersistence({
   load: async () => JSON.parse(localStorage.getItem("assistant-isolated-fixture") ?? "null") ?? {
     version: "liteasy.assistant-history/v1", activeSessionId: "fixture-conversation",
     sessions: [{ ...createAssistantSession({ id: "fixture-conversation" }), messages: [
       { id: "question", role: "user", content: "离线测试问题" },
       { id: "answer", role: "assistant", content: "旧对话中的回答", turnOutcome: "completed" }
-    ] }], draft: { input: "待保存草稿", tokens: [], readerContexts: [] }
+    ] }], draft: { input: "待保存草稿", tokens: compact ? [{ id: "fixture-context", kind: "paper", label: "并行图压缩论文", detail: "已添加的论文资料", prompt: "论文资料" }] : [], readerContexts: [] }
   },
   save: async (snapshot) => localStorage.setItem("assistant-isolated-fixture", JSON.stringify(snapshot))
 });
@@ -24,8 +25,8 @@ const tasks = [
 ];
 createRoot(document.getElementById("root")!).render(<ApplicationThemeProvider>
   <ButtonBar />
-  <div style={{ width: 360, height: 780, maxHeight: "90vh", border: "1px solid var(--colorNeutralStroke1)", display: "flex" }}>
-    <AssistantSessionController historyPersistence={persistence} artifactTasks={tasks} onGenerateArtifact={() => { throw new Error("Offline fixture must not generate"); }} selectedSetStatus={{ importedCount: 0, selectedCount: 0, selectionLocked: false }} />
+  <div style={{ width: compact ? "100%" : 360, height: compact ? 280 : 780, maxHeight: "90vh", border: "1px solid var(--colorNeutralStroke1)", display: "flex" }}>
+    <AssistantSessionController compact={compact} historyPersistence={persistence} artifactTasks={tasks} onGenerateArtifact={() => { throw new Error("Offline fixture must not generate"); }} selectedSetStatus={{ importedCount: 0, selectedCount: 0, selectionLocked: false }} />
   </div>
 </ApplicationThemeProvider>);
 function ButtonBar() {
