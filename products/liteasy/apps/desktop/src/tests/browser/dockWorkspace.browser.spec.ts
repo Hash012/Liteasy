@@ -5,11 +5,11 @@ test("panel close controls hide whole groups and restore their existing pages", 
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto("/");
   const nav = page.getByRole("navigation", { name: "左边栏导航" });
-  const right = page.locator('[data-region="right"]');
-  const composer = right.getByPlaceholder("输入你的问题或命令");
+  const bottom = page.locator('[data-region="bottom"]');
+  const composer = bottom.getByPlaceholder("输入你的问题或命令");
   await composer.fill("收起后保留这份草稿");
-  await right.getByRole("button", { name: "收起右栏面板", exact: true }).click();
-  await expect(right).toHaveCount(0);
+  await bottom.getByRole("button", { name: "收起下栏面板", exact: true }).click();
+  await expect(bottom).toHaveCount(0);
   await nav.getByRole("button", { name: "Agent", exact: true }).click();
   await expect(composer).toHaveValue("收起后保留这份草稿");
   const main = page.locator('[data-region="main"]');
@@ -63,9 +63,11 @@ test("independent bars retain Notes and board tabs, while Agent can move into th
   await expect(
     page.getByRole("region", { name: "研究白板", exact: true }),
   ).toBeVisible();
+  await nav.getByRole("button", { name: "折叠下栏", exact: true }).click();
   await nav.getByRole("button", { name: "展开下栏", exact: true }).click();
   const bottom = page.locator('[data-region="bottom"]');
   await expect(bottom).toBeVisible();
+  await bottom.getByRole("tab", { name: "Liteasy Chat", exact: true }).dragTo(page.locator('[data-region="main"]'));
   await page
     .getByRole("tab", { name: "Liteasy Chat", exact: true })
     .dragTo(bottom);
@@ -181,13 +183,13 @@ test("activity entries dock through the body of a persistent Agent surface", asy
   await page.setViewportSize({ width: 1500, height: 1000 });
   await page.goto("/");
   const nav = page.getByRole("navigation", { name: "左边栏导航" });
-  const right = page.locator('[data-region="right"]');
-  const surface = right.locator(".dock-persistent-surface");
+  const bottom = page.locator('[data-region="bottom"]');
+  const surface = bottom.locator(".dock-persistent-surface");
   await expect(surface).toBeVisible();
   await nav.getByRole("button", { name: "帮助", exact: true }).dragTo(surface);
   await expect(
-    right.getByRole("tab", { name: "帮助", exact: true }),
+    bottom.getByRole("tab", { name: "帮助", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
-  await right.getByRole("button", { name: "关闭 帮助", exact: true }).click();
+  await bottom.getByRole("button", { name: "关闭 帮助", exact: true }).click();
   await expect(surface).toBeVisible();
 });

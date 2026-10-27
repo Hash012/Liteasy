@@ -3182,6 +3182,13 @@ body {
   flex: 1 1 auto;
 }
 
+.pdf-reader .pdf-reader-toolbar[data-compact="true"] { gap: 4px; padding: 4px; }
+.pdf-reader-overflow.pdf-layout-popover { box-sizing: border-box; width: min(340px, calc(100vw - 24px)); max-height: calc(100dvh - 80px); overflow-y: auto; }
+.pdf-reader-overflow .pdf-reader-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.pdf-reader-overflow .pdf-layout-options { display: flex; flex-wrap: wrap; }
+.pdf-reader-overflow .pdf-layout-options .fui-Button { flex: 1 0 auto; white-space: nowrap; }
+.pdf-reader-overflow > .fui-Button { white-space: normal; }
+
 .pdf-page-number-input {
   width: 58px;
 }

@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { renderWithPdfAnnotations } from "./fixtures/renderWithPdfAnnotations";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -38,7 +39,7 @@ function annotation(overrides: Partial<PdfAnnotationV2> = {}): PdfAnnotationV2 {
 
 function renderAnnotation(value: PdfAnnotationV2) {
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [value]);
-  return render(<PdfReader selectedPapers={[paper]} zoom={100} />);
+  return renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} />);
 }
 
 afterEach(() => {
@@ -47,7 +48,7 @@ afterEach(() => {
 });
 
 test("document find shortcuts leave active IME composition untouched", async () => {
-  await act(async () => { render(<PdfReader selectedPapers={[paper]} zoom={100} />); });
+  await act(async () => { renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} />); });
   fireEvent.keyDown(window, { key: "f", ctrlKey: true, isComposing: true });
   fireEvent.keyDown(window, { key: "f", ctrlKey: true, keyCode: 229 });
   expect(screen.queryByRole("textbox", { name: "搜索文档内容" })).not.toBeInTheDocument();
@@ -210,7 +211,7 @@ test("shows highlighted comments beside the PDF only when the margin layer is en
 
 test("opens a persistent whiteboard beside the PDF reader", async () => {
   const user = userEvent.setup();
-  render(<PdfReader selectedPapers={[paper]} zoom={100} />);
+  renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} />);
   await user.click(screen.getByRole("button", { name: "PDF 批注工具" }));
   const toggle = screen.getByRole("button", { name: "打开 PDF 白板" });
 
@@ -261,7 +262,7 @@ test("filters sidebar annotations by lookup origin and text without hiding their
       annotation({ id: "personal", excerpt: "Personal passage", note: "自己的实验观察" }),
       annotation({ id: "lookup", excerpt: "synchronize", note: "v. 同步\n来源：必应词典", lookupKind: "dictionary" }),
     ]);
-    render(<PdfReader selectedPapers={[paper]} zoom={100} />);
+    renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} />);
     const user = userEvent.setup();
     await screen.findByRole("button", { name: "编辑批注：synchronize" });
     await user.click(screen.getByRole("button", { name: "标签筛选" }));

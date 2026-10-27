@@ -1,14 +1,15 @@
+import { openPdfAnnotations, renderWithPdfAnnotations } from "./fixtures/renderWithPdfAnnotations";
 import {
   act,
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
+import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { PdfReader } from "../app/features/pdf/PdfReader";
 import { PdfInkLayer } from "../app/features/pdf/PdfInkLayer";
 import {
@@ -147,7 +148,7 @@ test("grouped drawing notes preserve every stroke and legacy single strokes afte
   expect(pdfInkStrokes(normalized.annotations[1])).toEqual([stroke]);
   const onDeleteStroke = vi.fn();
   const onDelete = vi.fn();
-  render(
+  renderWithPdfAnnotations(
     <PdfInkLayer
       annotations={[grouped]}
       mode="erase"
@@ -173,7 +174,7 @@ test.each(["highlight", "underline", "note", "text", "ink"] as const)(
     const item = annotation(kind);
     savePdfAnnotations(pdfAnnotationStorageKey(paper), [item]);
     const workbench = port({ dragAnnotation: vi.fn() });
-    render(
+    renderWithPdfAnnotations(
       <ObjectWorkbenchContext.Provider value={workbench}>
         <PdfReader selectedPapers={[paper]} zoom={100} />
       </ObjectWorkbenchContext.Provider>,
@@ -202,7 +203,7 @@ test.each(["highlight", "underline", "note", "text", "ink"] as const)(
 
 test("the PDF toolbar closes the object whiteboard without reserving a hidden legacy grid column", () => {
   const workbench = port({ isOpen: true, close: vi.fn() });
-  render(
+  renderWithPdfAnnotations(
     <ObjectWorkbenchContext.Provider value={workbench}>
       <PdfReader selectedPapers={[paper]} zoom={100} />
     </ObjectWorkbenchContext.Provider>,
@@ -222,7 +223,7 @@ test.each(["highlight", "underline"] as const)(
     const item = annotation(kind);
     savePdfAnnotations(pdfAnnotationStorageKey(paper), [item]);
     await act(async () => {
-      render(<PdfReader selectedPapers={[paper]} zoom={100} />);
+      renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} />);
     });
     const overlay = document.querySelector(`.pdf-overlay-mark.${kind}`)!;
     fireEvent.click(overlay);
@@ -284,7 +285,7 @@ test("text boxes activate with one click and expose all eight resize handles plu
     onOpacityChange: vi.fn(),
     rect: item.rects[0],
   };
-  const rendered = render(<PdfMarkdownTextBox {...props} active={false} />);
+  const rendered = renderWithPdfAnnotations(<PdfMarkdownTextBox {...props} active={false} />);
   const data = { setData: vi.fn() } as unknown as DataTransfer;
   fireEvent.dragStart(screen.getByRole("region"), { dataTransfer: data });
   expect(onDragToBoard).toHaveBeenCalledWith(expect.objectContaining({ note: item.note }), data);
@@ -372,7 +373,7 @@ test("a failed board migration leaves a readable snapshot that the toolbar can c
     }),
   });
   await act(async () => {
-    render(
+    renderWithPdfAnnotations(
       <ObjectWorkbenchContext.Provider value={workbench}>
         <PdfReader selectedPapers={[paper]} zoom={100} />
       </ObjectWorkbenchContext.Provider>,
@@ -393,7 +394,7 @@ test("a failed board migration leaves a readable snapshot that the toolbar can c
   expect(workbench.openLegacyBoard).toHaveBeenCalledTimes(1);
 });
 
-test("annotation summaries retain readable content with icon metadata and reveal actions only after selection", async () => {
+test("annotation summaries reserve their width for content and expose page and status through the context menu", async () => {
   const item = annotation("highlight");
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [item]);
   const workbench = port({
@@ -401,12 +402,15 @@ test("annotation summaries retain readable content with icon metadata and reveal
     captureAnnotation: vi.fn(async () => []),
   });
   await act(async () => {
-    render(
+    renderWithPdfAnnotations(
+      <FluentProvider theme={webLightTheme}>
       <ObjectWorkbenchContext.Provider value={workbench}>
         <PdfReader selectedPapers={[paper]} zoom={100} />
-      </ObjectWorkbenchContext.Provider>,
+      </ObjectWorkbenchContext.Provider>
+      </FluentProvider>
     );
   });
+  openPdfAnnotations();
   const summary = screen.getByRole("button", {
     name: `编辑批注：${item.excerpt}`,
   });
@@ -417,14 +421,23 @@ test("annotation summaries retain readable content with icon metadata and reveal
   expect(
     within(summary).getByRole("img", { name: "高亮" }),
   ).toBeInTheDocument();
-  expect(within(summary).getByLabelText("第 1 页")).toHaveTextContent("1");
+  expect(within(summary).queryByLabelText("第 1 页")).not.toBeInTheDocument();
   expect(
-    within(summary).getByRole("img", { name: "未公开到论坛" }),
-  ).toBeInTheDocument();
+    within(summary).queryByRole("img", { name: "未公开到论坛" }),
+  ).not.toBeInTheDocument();
+  expect(summary).toHaveAttribute("aria-description", "高亮，第 1 页，未公开到论坛");
   expect(
     screen.queryByRole("toolbar", { name: /^批注操作/ }),
   ).not.toBeInTheDocument();
   const saved = window.localStorage.getItem(pdfAnnotationStorageKey(paper)!);
+  fireEvent.contextMenu(summary);
+  const menu = await screen.findByRole("menu", { name: `批注信息：${item.excerpt}` });
+  expect(within(menu).getByText("未公开到论坛")).toBeInTheDocument();
+  expect(within(menu).getByRole("img", { name: "未公开到论坛" })).toBeInTheDocument();
+  expect(summary).toHaveAttribute("aria-expanded", "false");
+  fireEvent.click(within(menu).getByRole("menuitem", { name: "定位原文 · 第 1 页" }));
+  expect(screen.getByText("已定位到第 1 页的高亮。")).toBeInTheDocument();
+  expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   fireEvent.click(summary);
   const actions = screen.getByRole("toolbar", { name: /^批注操作/ });
   expect(
@@ -450,7 +463,7 @@ test("annotation summaries retain readable content with icon metadata and reveal
   );
 });
 
-test("failed publication remains identifiable by icon and readable tooltip without a permanent status paragraph", async () => {
+test("failed publication remains accessible and reveals its icon and full error in the context menu", async () => {
   const item = {
     ...annotation("underline"),
     publication: {
@@ -462,8 +475,15 @@ test("failed publication remains identifiable by icon and readable tooltip witho
   };
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [item]);
   await act(async () => {
-    render(<PdfReader selectedPapers={[paper]} zoom={100} />);
+    renderWithPdfAnnotations(<FluentProvider theme={webLightTheme}><PdfReader selectedPapers={[paper]} zoom={100} /></FluentProvider>);
   });
+  openPdfAnnotations();
+  const summary = screen.getByRole("button", { name: `编辑批注：${item.excerpt}` });
+  expect(summary).toHaveAttribute("aria-description", "划线，第 1 页，撤回失败，论坛仍公开：timeout");
+  expect(within(summary).queryByRole("img", { name: /撤回失败/ })).not.toBeInTheDocument();
+  fireEvent.contextMenu(summary);
+  const menu = await screen.findByRole("menu", { name: `批注信息：${item.excerpt}` });
+  expect(within(menu).getByText("撤回失败，论坛仍公开：timeout")).toBeInTheDocument();
   const status = screen.getByRole("img", {
     name: "撤回失败，论坛仍公开：timeout",
   });
@@ -484,14 +504,15 @@ test("a drawing summary uses a compact stroke count and separate accessible page
   };
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [item]);
   await act(async () => {
-    render(<PdfReader selectedPapers={[paper]} zoom={100} />);
+    renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} />);
   });
+  openPdfAnnotations();
   const summary = screen.getByRole("button", {
     name: `编辑批注：${item.excerpt}`,
   });
   expect(summary).toHaveTextContent("2 笔");
   expect(summary).not.toHaveTextContent("第 1 页");
-  expect(within(summary).getByLabelText("第 1 页")).toBeInTheDocument();
+  expect(summary).toHaveAttribute("aria-description", "手绘，第 1 页，仅保存在本地");
   expect(
     within(summary).getByRole("img", { name: "手绘" }),
   ).toBeInTheDocument();

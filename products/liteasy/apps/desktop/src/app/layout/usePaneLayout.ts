@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { loadPaneLayoutPreference, savePaneLayoutPreference } from "./paneLayout.storage";
-import type { PaneCollapseState, PaneLayout } from "./paneLayout.types";
+import { defaultPaneCollapseState, defaultPaneLayout, type PaneCollapseState, type PaneLayout } from "./paneLayout.types";
 
 type PaneSide = keyof PaneCollapseState;
 
@@ -91,19 +91,9 @@ export function usePaneLayout() {
   }
 
   function resetLayout() {
-    syncPreference(loadPaneLayoutPreference());
     syncPreference({
-      collapsed: {
-        bottom: true,
-        left: false,
-        right: false
-      },
-      layout: {
-        bottom: 32,
-        center: 52,
-        left: 24,
-        right: 24
-      }
+      collapsed: defaultPaneCollapseState,
+      layout: defaultPaneLayout
     });
   }
 

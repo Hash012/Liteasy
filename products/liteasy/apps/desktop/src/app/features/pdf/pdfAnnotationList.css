@@ -9,7 +9,7 @@
 .pdf-annotation-item .pdf-annotation-summary {
   --pdf-annotation-icon-size: calc(16px * var(--app-font-ratio, 1));
   display: grid;
-  grid-template-columns: var(--pdf-annotation-icon-size) minmax(0, 1fr) auto var(--pdf-annotation-icon-size);
+  grid-template-columns: var(--pdf-annotation-icon-size) minmax(0, 1fr);
   align-items: start;
   gap: 5px;
   min-height: 20px;
@@ -52,22 +52,17 @@
 .pdf-annotation-item.expanded .pdf-annotation-excerpt {
   display: block;
 }
-.pdf-annotation-page {
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--badge-accent);
-  font-variant-numeric: tabular-nums;
-  display: inline-flex;
+.pdf-annotation-context-status {
+  display: flex;
   align-items: center;
-  gap: 1px;
-  color: var(--colorNeutralForeground3);
-  font-size: var(--fontSizeBase200);
-  white-space: nowrap;
-  line-height: calc(18px * var(--app-font-ratio, 1));
+  gap: 8px;
+  max-width: min(320px, calc(100vw - 48px));
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-weight: 400;
 }
-.pdf-annotation-page svg {
-  width: calc(12px * var(--app-font-ratio, 1));
-  height: calc(12px * var(--app-font-ratio, 1));
+.pdf-annotation-context-status .pdf-annotation-status-icon {
+  flex-shrink: 0;
 }
 .pdf-annotation-status-icon {
   color: var(--colorNeutralForeground3);

@@ -24,7 +24,7 @@ export const onboardingSteps: readonly OnboardingStep[] = [
     description: "设置按用途分类，也可以直接搜索。先选择界面与阅读字体、深浅主题和数据目录；使用 AI 前，在“AI 与助手”中配置可用模型。",
     tip: "本地阅读不需要 API key。保存并测试模型会发出真实请求，导览本身不会调用 AI。" },
   { id: "assistant", title: "从一个具体问题开始对话", page: "assistant", target: '[data-tour="assistant-composer"]',
-    description: "在右侧输入问题，通过模型选择器切换模型。思考强度按钮中可以同时调整回答速度、严谨程度和系统提示词。",
+    description: "在下方输入问题，通过模型选择器切换模型。思考强度按钮中可以同时调整回答速度、严谨程度和系统提示词。",
     tip: "小环显示上下文占用；悬停可以查看已用 tokens 和上限。" },
   { id: "context", title: "明确告诉 AI 看什么", target: '[data-tour="add-context"]',
     description: "点击添加上下文，选择文件、论文或笔记片段；也可以从文献库直接拖进输入框，或输入 @ 搜索。正文中会插入资料名称。",
@@ -33,12 +33,12 @@ export const onboardingSteps: readonly OnboardingStep[] = [
     description: "下方运行记录集中展示工作流的步骤、状态和结果。左侧产物库用于查找已经生成的内容，方便回到相关论文继续整理。",
     tip: "面板右上角的收起按钮只隐藏面板。需要时，从活动栏重新打开。" },
   { id: "finish", title: "准备好了，开始你的第一次阅读", page: "help", article: "getting-started.basics", target: '[data-tour="replay"]',
-    description: "导览结束后，文献库、阅读区、AI 与运行记录会保持展开。点击文献库导入一份资料，按手册中的第一条路线试一试。",
+    description: "导览结束后，左侧文献库与下方工具栏保持展开，AI 与运行记录可在下方切换。点击文献库导入一份资料，按手册中的第一条路线试一试。",
     tip: "按 F1 打开手册，点击播放按钮，随时重新观看这段导览。" },
 ];
 
 const tourPages: Partial<Record<DockRegionId, DockItemId[]>> = {
-  left: ["library", "notes", "artifact-library"], main: ["help", "settings"], right: ["assistant"], bottom: ["workflow-runs"],
+  left: ["library", "notes", "artifact-library"], main: ["help", "settings"], right: [], bottom: ["assistant", "workflow-runs"],
 };
 
 /** A complete, predictable teaching layout; retain existing tabs and split regions. */

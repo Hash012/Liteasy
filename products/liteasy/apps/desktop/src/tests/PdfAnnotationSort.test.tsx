@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { renderWithPdfAnnotations } from "./fixtures/renderWithPdfAnnotations";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { PdfReader } from "../app/features/pdf/PdfReader";
 import { PdfAnnotationsOverview } from "../app/features/pdf/PdfAnnotationsOverview";
@@ -26,7 +27,7 @@ test("date ties and invalid legacy dates fall back deterministically to reading 
 
 test("sidebar sort changes presentation while keeping annotation storage intact", async () => {
   savePdfAnnotations(pdfAnnotationStorageKey(paper), annotations);
-  render(<PdfReader selectedPapers={[paper]} zoom={100} />);
+  renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} />);
   await screen.findByRole("button", { name: "编辑批注：first" });
   const order = () => screen.getAllByRole("button", { name: /^编辑批注：/ }).map((button) => button.getAttribute("aria-label"));
   expect(order()).toEqual(["编辑批注：first", "编辑批注：second", "编辑批注：third"]);
@@ -40,7 +41,7 @@ test("sidebar sort changes presentation while keeping annotation storage intact"
 
 test("overview sorts local and team entries together and retains the query", () => {
   const teamItem = item("shared", 4, 4, 5);
-  render(<PdfAnnotationsOverview annotations={annotations} paperIdentity={resolvePaperIdentity(paper)}
+  renderWithPdfAnnotations(<PdfAnnotationsOverview annotations={annotations} paperIdentity={resolvePaperIdentity(paper)}
     teamAnnotations={[{ annotationId: "shared", body: { ...teamItem, clientAnnotationId: "shared" }, uploadedBy: "reader", createdAt: teamItem.createdAt,
       updatedAt: teamItem.updatedAt, revision: 1, documentId: "doc", organizationId: "org" }]} onNavigate={vi.fn()} onClose={vi.fn()} />);
   choose("最近创建");

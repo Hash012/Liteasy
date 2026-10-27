@@ -56,10 +56,10 @@ function createRegion(
 export function createDefaultDockLayout(): DockLayout {
   return {
     regions: {
-      bottom: createRegion([]),
+      bottom: createRegion(["assistant"]),
       left: createRegion(["library"]),
       main: createRegion([]),
-      right: createRegion(["assistant"]),
+      right: createRegion([]),
     },
     horizontalOrder: ["left", "main", "right"],
     bottomOrder: ["bottom"],

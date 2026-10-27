@@ -11,7 +11,7 @@ import {
 } from "../app/features/dock/dockLayout";
 
 describe("dock layout", () => {
-  test("starts with the three persistent product areas and an empty document workspace", () => {
+  test("starts with the library, a bottom assistant and empty reading and right regions", () => {
     const layout = createDefaultDockLayout();
 
     expect(layout.regions.left).toEqual({
@@ -19,26 +19,26 @@ describe("dock layout", () => {
       itemIds: ["library"],
     });
     expect(layout.regions.main.itemIds).toEqual([]);
-    expect(layout.regions.right.itemIds).toEqual(["assistant"]);
-    expect(layout.regions.bottom.itemIds).toEqual([]);
+    expect(layout.regions.right.itemIds).toEqual([]);
+    expect(layout.regions.bottom.itemIds).toEqual(["assistant"]);
   });
 
   test("moves a tab across allowed regions and leaves a real empty region", () => {
     const layout = moveDockItem(
       createDefaultDockLayout(),
       "assistant",
-      "bottom",
+      "right",
     );
 
-    expect(layout.regions.right).toEqual({
+    expect(layout.regions.bottom).toEqual({
       activeItemId: null,
       itemIds: [],
     });
-    expect(layout.regions.bottom).toEqual({
+    expect(layout.regions.right).toEqual({
       activeItemId: "assistant",
       itemIds: ["assistant"],
     });
-    expect(findDockItemRegion(layout, "assistant")).toBe("bottom");
+    expect(findDockItemRegion(layout, "assistant")).toBe("right");
   });
 
   test("rejects a drop outside an item's allowed regions", () => {
@@ -224,7 +224,7 @@ test("persists independently split containers and evacuates their tabs on close"
   ]);
   expect(restored.regionWidths["bar-one"]).toBe(39);
   expect(findDockItemRegion(restored, "board")).toBe("bar-one");
-  expect(restored.regions.right.itemIds).toEqual(["assistant"]);
+  expect(restored.regions.bottom.itemIds).toEqual(["assistant"]);
   const closed = removeDockRegion(restored, "bar-one");
   expect(closed.regions["bar-one"]).toBeUndefined();
   expect(findDockItemRegion(closed, "board")).toBe("main");

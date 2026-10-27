@@ -56,7 +56,7 @@ const coreDockItems: Record<CoreDockItemId, DockItemDescriptor> = {
   assistant: {
     allowedRegions: sideToolRegions,
     id: "assistant",
-    preferredRegion: "right",
+    preferredRegion: "bottom",
     title: "Liteasy Chat",
   },
   help: {

@@ -19,6 +19,7 @@ test("column dividers follow continuous dragging and persist both adjacent width
   const left = columns.locator('[data-region="left"]');
   const main = columns.locator('[data-region="main"]');
   const right = columns.locator('[data-region="right"]');
+  await page.getByRole("button", { name: "展开右侧栏", exact: true }).click();
   await expect(left).toBeVisible();
   const width = async (item: Locator) => (await item.boundingBox())!.width;
   const original = [await width(left), await width(main), await width(right)];
@@ -42,7 +43,6 @@ test("bottom height and split widths can be resized independently", async ({ pag
   await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto("/");
-  await page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "展开下栏", exact: true }).click();
   const bottom = page.locator('[data-region="bottom"]');
   const height = (await bottom.boundingBox())!.height;
   await dragDivider(page, page.getByRole("separator", { name: "调整下栏高度", exact: true }), 0, -100);

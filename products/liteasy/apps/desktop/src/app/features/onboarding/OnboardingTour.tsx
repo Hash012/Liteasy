@@ -28,7 +28,15 @@ function useSpotlight(target: string, card: RefObject<HTMLDivElement>) {
     const measure = () => {
       frame = 0;
       const element = [...document.querySelectorAll<HTMLElement>(target)].find(node => node.getClientRects().length && !node.closest("[hidden]"));
-      if (observed !== element) { if (observed) resize.unobserve(observed); observed = element ?? null; if (observed) resize.observe(observed); }
+      if (observed !== element) {
+        if (observed) resize.unobserve(observed);
+        observed = element ?? null;
+        if (observed) {
+          // A short bottom pane may need to scroll before its next control can be highlighted.
+          observed.scrollIntoView({ block: "nearest", inline: "nearest" });
+          resize.observe(observed);
+        }
+      }
       const bounds = element?.getBoundingClientRect();
       const width = window.innerWidth, height = window.innerHeight;
       const left = Math.max(4, (bounds?.left ?? 0) - 5), top = Math.max(4, (bounds?.top ?? 0) - 5);

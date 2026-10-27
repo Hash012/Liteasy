@@ -56,6 +56,7 @@ test("an imported note exposes its location and visual preview before becoming r
   }, path);
   expect(text).toContain("这段真实文件内容应被读取到 Agent 上下文。");
   const rail = page.getByRole("navigation", { name: "左边栏导航" });
+  await rail.getByRole("button", { name: "折叠下栏", exact: true }).click();
   const bottomToggle = rail.getByRole("button", { name: "展开下栏", exact: true });
   await expect(bottomToggle).not.toHaveClass(/active/);
   await bottomToggle.click();

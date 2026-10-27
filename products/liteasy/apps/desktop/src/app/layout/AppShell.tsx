@@ -803,7 +803,7 @@ export function AppShell({
     }
     latestArtifactTaskIdRef.current = latestTask.id;
     if (latestTask.type === "thin_reading") return;
-    const assistantRegionId = dock.findItemRegion("assistant") ?? "right";
+    const assistantRegionId = dock.findItemRegion("assistant") ?? dockItemRegistry.assistant.preferredRegion;
     dock.openItem("assistant");
     if (assistantRegionId !== "main") {
       revealDockRegion(assistantRegionId);
@@ -2250,7 +2250,7 @@ export function AppShell({
 
   function addReaderContextToConversation(context: ReaderConversationContext) {
     setReaderConversationContext(context);
-    const assistantRegionId = dock.findItemRegion("assistant") ?? "right";
+    const assistantRegionId = dock.findItemRegion("assistant") ?? dockItemRegistry.assistant.preferredRegion;
     dock.openItem("assistant");
     if (assistantRegionId !== "main") {
       revealDockRegion(assistantRegionId);
@@ -2957,7 +2957,7 @@ export function AppShell({
           onExport: readingLibrary.exportFile, onDelete: readingLibrary.remove,
           renderLocation: (entry) => readingLibrary.entries.some((item) => item.id === entry.id) ? <ResourceLocationButton target={readingLibrary.target(entry)} /> : null }} />
     </div>
-    {createPortal(<SurfaceErrorBoundary surface="assistant"><SurfaceRenderer render={() => renderAssistantSurface(dock.findItemRegion("assistant") ?? "right")} /></SurfaceErrorBoundary>, assistantSurfaceHost)}
+    {createPortal(<SurfaceErrorBoundary surface="assistant"><SurfaceRenderer render={() => renderAssistantSurface(dock.findItemRegion("assistant") ?? dockItemRegistry.assistant.preferredRegion)} /></SurfaceErrorBoundary>, assistantSurfaceHost)}
     </MarkdownEditingContext.Provider>
     </ResourceReferencesContext.Provider>
     </VisualAssetContext.Provider>

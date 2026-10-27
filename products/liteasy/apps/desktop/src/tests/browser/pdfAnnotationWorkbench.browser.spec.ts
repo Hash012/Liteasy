@@ -1,5 +1,11 @@
 import { readFile } from "node:fs/promises";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function useAnnotationTool(page: Page, name: string) {
+  await page.getByRole("button", { name: /^(PDF 批注工具|更多阅读工具)$/ }).click();
+  await page.locator(".pdf-reader-overflow").getByRole("button", { name, exact: true }).click();
+  await page.keyboard.press("Escape");
+}
 
 test("PDF highlights, annotation rows and resting text boxes drag directly to a board with collapsible source text", async ({
   page,
@@ -72,9 +78,7 @@ test("PDF highlights, annotation rows and resting text boxes drag directly to a 
     .dragTo(board);
   await expect(cards).toHaveCount(2);
   // A resting PDF text box is itself a drag source, without first revealing its toolbar.
-  await page
-    .getByRole("button", { name: "在 PDF 中添加 Markdown 文本框", exact: true })
-    .click();
+  await useAnnotationTool(page, "添加 Markdown 文本框");
   const paperBounds = (await paper.boundingBox())!;
   await page.mouse.click(
     paperBounds.x + paperBounds.width * 0.25,
@@ -96,7 +100,7 @@ test("PDF highlights, annotation rows and resting text boxes drag directly to a 
   await expect(box).toContainText("从 PDF 文本框直接拖动");
 });
 
-test("PDF annotation rows use compact icon metadata and reveal labeled actions on selection", async ({
+test("PDF annotation rows show metadata only in the context menu and reveal editing actions on selection", async ({
   page,
 }, testInfo) => {
   const pdf = await readFile(
@@ -151,10 +155,16 @@ test("PDF annotation rows use compact icon metadata and reveal labeled actions o
   await expect(
     row.getByRole("checkbox", { name: /公开到论坛/ }),
   ).not.toBeChecked();
-  await row.getByRole("status", { name: "未公开到论坛", exact: true }).hover();
+  await expect(summary.locator(".pdf-annotation-page, .pdf-annotation-status-icon")).toHaveCount(0);
+  await summary.click({ button: "right" });
+  const menu = page.getByRole("menu", { name: /^批注信息：/ });
+  await expect(menu.getByRole("menuitem", { name: "定位原文 · 第 1 页" })).toBeVisible();
+  await menu.getByRole("img", { name: "未公开到论坛", exact: true }).hover();
   await expect(
     page.getByRole("tooltip", { name: "未公开到论坛", exact: true }),
   ).toBeVisible();
+  await menu.getByRole("menuitem", { name: "定位原文 · 第 1 页" }).click();
+  await expect(menu).toHaveCount(0);
   await page.screenshot({
     path: testInfo.outputPath("annotations.png"),
     fullPage: true,
@@ -181,7 +191,8 @@ test("PDF drawing groups, resizable notes and annotation transfers survive reope
   await expect(paper.locator(".pdf-text-layer")).not.toBeEmpty({
     timeout: 30_000,
   });
-  await page.getByRole("button", { name: "手绘涂鸦", exact: true }).click();
+  await page.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).click();
+  await useAnnotationTool(page, "手绘涂鸦");
   const inkLayer = paper.getByLabel("PDF 手绘图层");
   async function draw(x: number, y: number) {
     const bounds = (await inkLayer.boundingBox())!;
@@ -204,9 +215,7 @@ test("PDF drawing groups, resizable notes and annotation transfers survive reope
   await draw(0.6, 0.55);
   await expect(page.locator(".pdf-annotation-item.ink")).toHaveCount(2);
   await page.getByRole("button", { name: "完成手绘", exact: true }).click();
-  await page
-    .getByRole("button", { name: "在 PDF 中添加 Markdown 文本框", exact: true })
-    .click();
+  await useAnnotationTool(page, "添加 Markdown 文本框");
   const paperBounds = (await paper.boundingBox())!;
   await page.mouse.click(
     paperBounds.x + paperBounds.width * 0.4,
@@ -267,14 +276,13 @@ test("PDF drawing groups, resizable notes and annotation transfers survive reope
     .dragTo(board);
   await expect(page.locator(".object-placement")).toHaveCount(2);
   await expect(page.locator(".object-placement img")).toHaveCount(1);
-  await page
-    .getByRole("button", { name: "关闭 PDF 白板", exact: true })
-    .click();
+  await useAnnotationTool(page, "关闭 PDF 白板");
   await expect(board).toHaveCount(0);
   await expect(page.getByLabel("PDF 阅读工作区")).not.toHaveClass(
     /whiteboard-open/,
   );
   await page.reload();
+  await page.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).click();
   await expect(paper.getByLabel("手绘笔迹")).toHaveCount(3);
   await expect(page.locator(".pdf-annotation-item.ink")).toHaveCount(2);
   await expect

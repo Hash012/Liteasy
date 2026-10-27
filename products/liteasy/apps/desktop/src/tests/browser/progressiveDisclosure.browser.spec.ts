@@ -36,7 +36,7 @@ for (const width of [320, 400, 520]) {
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "清除筛选" }).click();
     await expect(page.getByRole("button", { name: /^查看推荐/ })).toHaveCount(2);
-    await page.getByRole("button", { name: "PDF 批注工具", exact: true }).click();
+    await page.getByRole("button", { name: "更多阅读工具", exact: true }).click();
     await page.getByRole("button", { name: "添加 Markdown 文本框", exact: true }).click();
     await page.keyboard.press("Escape");
     const exit = page.getByRole("button", { name: "结束文本框", exact: true });

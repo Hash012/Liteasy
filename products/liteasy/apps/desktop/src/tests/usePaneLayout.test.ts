@@ -11,9 +11,9 @@ test("starts with the confirmed default layout and persists user changes", () =>
     right: 24
   });
   expect(result.current.collapsed).toEqual({
-    bottom: true,
+    bottom: false,
     left: false,
-    right: false
+    right: true
   });
 
   act(() => {
@@ -32,4 +32,8 @@ test("starts with the confirmed default layout and persists user changes", () =>
   });
 
   expect(result.current.collapsed.bottom).toBe(true);
+
+  act(() => result.current.resetLayout());
+  expect(result.current.layout).toEqual({ bottom: 32, center: 52, left: 24, right: 24 });
+  expect(result.current.collapsed).toEqual({ bottom: false, left: false, right: true });
 });

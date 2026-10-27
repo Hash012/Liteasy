@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { renderWithPdfAnnotations } from "./fixtures/renderWithPdfAnnotations";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { PdfReader } from "../app/features/pdf/PdfReader";
 import { PdfAnnotationsOverview } from "../app/features/pdf/PdfAnnotationsOverview";
@@ -30,7 +31,7 @@ test("sidebar combines kind and color filters across local and team annotations 
   savePdfAnnotations(pdfAnnotationStorageKey(paper), items);
   const shared: TeamAnnotation = { annotationId: "shared", body: { ...item("team underline", "underline", "blue"), clientAnnotationId: "shared" },
     createdAt: "2026-10-01", updatedAt: "2026-10-01", revision: 1, uploadedBy: "reader", documentId: "doc", organizationId: "org" };
-  render(<PdfReader selectedPapers={[paper]} zoom={100} loadOrganizationAnnotations={async () => [shared]} />);
+  renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} loadOrganizationAnnotations={async () => [shared]} />);
   await screen.findByText("team underline");
   fireEvent.click(screen.getByRole("button", { name: "筛选蓝色批注" }));
   expect(screen.queryByRole("button", { name: "编辑批注：yellow highlight" })).not.toBeInTheDocument();
@@ -46,7 +47,7 @@ test("sidebar combines kind and color filters across local and team annotations 
 });
 
 test("overview combines query, type and color and keeps an empty filter removable", () => {
-  render(<PdfAnnotationsOverview annotations={items} teamAnnotations={[]} onNavigate={vi.fn()} onClose={vi.fn()} />);
+  renderWithPdfAnnotations(<PdfAnnotationsOverview annotations={items} teamAnnotations={[]} onNavigate={vi.fn()} onClose={vi.fn()} />);
   choose("筛选批注类型", "高亮");
   fireEvent.click(screen.getByRole("button", { name: "筛选蓝色批注" }));
   expect(screen.getAllByRole("listitem")).toHaveLength(1);
@@ -62,7 +63,7 @@ test("overview combines query, type and color and keeps an empty filter removabl
 test("exposes only present colors with counts and toggles a selected color off", () => {
   const onChange = vi.fn();
   const props = { annotations: [...items, item("violet evidence", "highlight", "purple")], onChange };
-  const mounted = render(<PdfAnnotationFilters {...props} value={{ kind: "all", color: "purple" }} />);
+  const mounted = renderWithPdfAnnotations(<PdfAnnotationFilters {...props} value={{ kind: "all", color: "purple" }} />);
   expect(screen.queryByRole("combobox", { name: "筛选批注颜色" })).not.toBeInTheDocument();
   const group = screen.getByRole("group", { name: "按批注颜色筛选" });
   expect(within(group).getAllByRole("button")).toHaveLength(3);

@@ -28,6 +28,8 @@ for (const fontSize of [14, 24]) test(`annotation management remains usable at f
   await page.reload();
   await expect(page.locator(".pdf-text-layer").first()).not.toBeEmpty({ timeout: 30_000 });
   const sidebar = page.getByRole("complementary", { name: "PDF 左侧批注栏" });
+  await expect(page.getByLabel("PDF 阅读工作区", { exact: true })).toHaveClass(/sidebar-collapsed/);
+  await sidebar.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).click();
   const summaries = sidebar.getByRole("button", { name: /^编辑批注：/ });
   await expect(summaries).toHaveCount(2, { timeout: 30_000 });
   const controls = sidebar.locator(".pdf-sidebar-controls");
@@ -42,6 +44,28 @@ for (const fontSize of [14, 24]) test(`annotation management remains usable at f
   // Highlight colors stay on the marker; the excerpt remains a neutral reading surface.
   await expect(sidebar.locator(".pdf-annotation-item").first()).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await expect(sidebar.locator(".annotation-color-indicator").first()).toBeVisible();
+  const summary = summaries.first();
+  await summary.hover();
+  await expect(sidebar.locator(".pdf-annotation-page, .pdf-annotation-status-icon")).toHaveCount(0);
+  await expect(page.getByRole("menu", { name: /^批注信息：/ })).toHaveCount(0);
+  const contentRightGap = await summary.evaluate(element => {
+    const content = element.querySelector(".pdf-annotation-summary-content")!.getBoundingClientRect();
+    return element.getBoundingClientRect().right - content.right - Number.parseFloat(getComputedStyle(element).paddingRight);
+  });
+  expect(contentRightGap).toBeLessThanOrEqual(1);
+  await summary.click({ button: "right" });
+  const menu = page.getByRole("menu", { name: "批注信息：Evidence first", exact: true });
+  await expect(menu.getByRole("img", { name: "未公开到论坛", exact: true })).toBeVisible();
+  await expect(menu.getByText("未公开到论坛", { exact: true })).toBeVisible();
+  await expect(summary).toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await summary.focus();
+  await page.keyboard.press("Shift+F10");
+  await expect(menu).toBeVisible();
+  await menu.getByRole("menuitem", { name: "定位原文 · 第 1 页", exact: true }).click();
+  await expect(sidebar.getByText("已定位到第 1 页的高亮。", { exact: true })).toBeVisible();
+  await expect(menu).toHaveCount(0);
   const countFont = await sidebar.getByLabel("批注检索结果").evaluate(element => Number.parseFloat(getComputedStyle(element).fontSize));
   expect(countFont).toBeCloseTo(fontSize * 12 / 14, 2);
   await summaries.first().focus();
@@ -97,6 +121,7 @@ for (const fontSize of [14, 24]) test(`new colors persist and filter with keyboa
   await page.reload();
   await expect(page.locator(".pdf-text-layer").first()).not.toBeEmpty({ timeout: 30_000 });
   const sidebar = page.getByRole("complementary", { name: "PDF 左侧批注栏" });
+  await sidebar.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).click();
   const summaries = sidebar.getByRole("button", { name: /^编辑批注：/ });
   await expect(summaries).toHaveCount(4);
   await expect(sidebar.getByRole("combobox", { name: "筛选批注颜色" })).toHaveCount(0);
@@ -115,6 +140,7 @@ for (const fontSize of [14, 24]) test(`new colors persist and filter with keyboa
   await expect(purpleFilter).toHaveText(/2/);
   await page.reload();
   await expect(page.locator(".pdf-text-layer").first()).not.toBeEmpty({ timeout: 30_000 });
+  await sidebar.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).click();
   await expect(sidebar.getByRole("button", { name: "筛选紫色批注" })).toHaveText(/2/);
   await sidebar.getByRole("button", { name: "批注", exact: true }).dblclick();
   const overview = page.getByRole("region", { name: "全部批注", exact: true });

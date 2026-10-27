@@ -54,8 +54,8 @@ test("first-run spotlight teaches real controls, stays in the viewport and can r
   await expect(tour).toHaveCount(0);
   const layout = await page.evaluate(() => JSON.parse(localStorage.getItem("liteasy.ui.dock-layout.v3")!));
   expect(layout.regions.left.itemIds).toEqual(expect.arrayContaining(["library", "notes", "artifact-library"]));
-  expect(layout.regions.right.itemIds).toContain("assistant");
-  expect(layout.regions.bottom.itemIds).toContain("workflow-runs");
+  expect(layout.regions.right.itemIds).not.toContain("assistant");
+  expect(layout.regions.bottom.itemIds).toEqual(expect.arrayContaining(["assistant", "workflow-runs"]));
   await expect(page.locator('[data-region="bottom"]')).toBeVisible();
   await page.getByRole("button", { name: "收起左栏面板" }).click();
   await page.getByRole("button", { name: "播放新手导览", exact: true }).click();

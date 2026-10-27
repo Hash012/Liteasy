@@ -16,7 +16,7 @@ async function expectGeometry(page: Page) {
     expect(bottom.height).toBeGreaterThanOrEqual(26);
     expect(await fileName.evaluate((element) => element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight)).toBe(true);
   } else {
-    expect(bottom.height).toBe(26);
+    expect(bottom.height).toBe(32);
   }
   expect(bottom.y + bottom.height).toBe(page.viewportSize()!.height);
   expect(workspace.y).toBe(top.height);
@@ -68,6 +68,8 @@ test("commands overflow without wrapping, keep accessible names, and retain the 
   await expect(page.getByRole("menuitem", { name: "搜索", exact: true })).toBeVisible();
   await page.getByRole("menuitem", { name: "布局", exact: true }).click();
   const right = page.getByRole("menuitemcheckbox", { name: "右侧栏", exact: true });
+  await expect(right).not.toBeChecked();
+  await right.click();
   await expect(right).toBeChecked();
   await right.click();
   await expect(page.locator('.dock-workspace-columns > [data-region="right"]')).toHaveCount(0);

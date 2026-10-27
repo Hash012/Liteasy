@@ -598,6 +598,7 @@ describe("ReaderPane", () => {
       />
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "展开 PDF 左侧栏" }));
     expect(await screen.findByText("persistent PDF annotation")).toBeInTheDocument();
   });
 
@@ -622,6 +623,7 @@ describe("ReaderPane", () => {
       />
     );
 
+    await user.click(screen.getByRole("button", { name: "展开 PDF 左侧栏" }));
     await user.click(screen.getByRole("button", { name: "批注选项" }));
     const autoPublic = screen.getByRole("checkbox", { name: "新批注自动公开到论坛" });
     expect(autoPublic).not.toBeChecked();
@@ -934,6 +936,7 @@ describe("ReaderPane", () => {
 
     expect(screen.getByLabelText("PDF 左侧批注栏")).toBeInTheDocument();
     expect(screen.getByLabelText("PDF 页面滚动区")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "展开 PDF 左侧栏" }));
     const thumbnailsButton = screen.getByRole("button", { name: "缩略图" });
     const annotationsButton = screen.getByRole("button", { name: "批注" });
     expect(thumbnailsButton).toHaveAttribute("title", "页面缩略图；双击或按 Enter 展开全部页面");
@@ -1073,6 +1076,7 @@ describe("ReaderPane", () => {
       />
     );
 
+    await user.click(screen.getByRole("button", { name: "展开 PDF 左侧栏" }));
     await user.click(screen.getByRole("button", { name: "缩略图" }));
 
     const sidebar = screen.getByLabelText("PDF 左侧批注栏");
@@ -1081,7 +1085,7 @@ describe("ReaderPane", () => {
     expect(within(sidebar).getByText("1")).toBeInTheDocument();
   });
 
-  test("collapses and expands the PDF annotation sidebar", async () => {
+  test("starts with annotations collapsed and supports expanding and collapsing them", async () => {
     const user = userEvent.setup();
 
     render(
@@ -1097,6 +1101,9 @@ describe("ReaderPane", () => {
     );
 
     const workspace = screen.getByLabelText("PDF 阅读工作区");
+    expect(workspace).toHaveClass("sidebar-collapsed");
+    expect(screen.queryByRole("button", { name: "批注选项" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "展开 PDF 左侧栏" }));
     expect(workspace).toHaveClass("sidebar-open");
 
     await user.click(screen.getByRole("button", { name: "收起 PDF 左侧栏" }));

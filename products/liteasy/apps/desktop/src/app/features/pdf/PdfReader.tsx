@@ -65,7 +65,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent
 } from "react";
-import { Button, Checkbox, Input, Popover, PopoverTrigger, PopoverSurface, Tooltip } from "@fluentui/react-components";
+import { Button, Checkbox, Input, Menu, MenuGroup, MenuGroupHeader, MenuItem, MenuList, MenuPopover, MenuTrigger, Popover, PopoverTrigger, PopoverSurface, Tooltip } from "@fluentui/react-components";
 import { useObjectWorkbench } from "../objects/objectWorkbenchPort";
 import {
   SearchRegular,
@@ -1688,7 +1688,7 @@ export function PdfReader({
   const [searchMatchCase, setSearchMatchCase] = useState(false);
   const [searchWholeWords, setSearchWholeWords] = useState(false);
   const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     try { return Math.max(160, Math.min(1600, Number(localStorage.getItem("liteasy.pdf-sidebar-width")) || 180)); }
     catch { return 180; }
@@ -1752,7 +1752,12 @@ export function PdfReader({
   const [inkColor, setInkColor] = useState("#1b66b3");
   const [inkWidth, setInkWidth] = useState(.3);
   useEffect(() => {
-    const stop = (event: KeyboardEvent) => { if (event.key === "Escape") setInkMode(null); };
+    const stop = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      // Closing a menu or dialog must not also cancel the active drawing tool.
+      if (event.target instanceof Element && event.target.closest(".fui-PopoverSurface, .fui-MenuPopover, [role='dialog']")) return;
+      setInkMode(null);
+    };
     window.addEventListener("keydown", stop);
     return () => window.removeEventListener("keydown", stop);
   }, []);
@@ -3112,6 +3117,8 @@ export function PdfReader({
   }
 
   function openAnnotationEditor(annotation: PdfAnnotationV2) {
+    setSidebarCollapsed(false);
+    setSidebarMode("annotations");
     if (annotation.kind === "text") {
       setActiveAnnotationId(annotation.id);
       setAnnotationPopup(null);
@@ -3982,7 +3989,9 @@ export function PdfReader({
                   {citationParsing.warning ? <InlineNotice intent="warning" message="引用解析受限" action={<InfoPopover label="查看引用解析问题"><p>{citationParsing.warning}</p><p>{citationParsing.modeDescription}</p></InfoPopover>} /> : null}
                   {filteredAnnotations.length > 0 ? (
                     <ul className="pdf-annotation-list">
-                      {filteredAnnotations.map((annotation) => (
+                      {filteredAnnotations.map((annotation) => {
+                        const statusLabel = annotation.kind === "text" || annotation.kind === "ink" || annotation.quickAsk ? "仅保存在本地" : publicationStatus(annotation.publication);
+                        return (
                         <li
                           className={`pdf-annotation-item ${annotation.kind} ${
                             activeAnnotationId === annotation.id ? "expanded" : ""
@@ -3996,22 +4005,24 @@ export function PdfReader({
                               style={{ backgroundColor: `var(--annotation-marker-${annotation.color}, ${getHighlightColor(annotation.color)})` }}
                             />
                           )}
-                          <button
+                          <Menu openOnContext>
+                          <MenuTrigger disableButtonEnhancement><Button appearance="transparent"
                             aria-expanded={activeAnnotationId === annotation.id}
                             aria-label={`编辑批注：${annotation.excerpt}`}
-                            aria-description={`${annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)}，第 ${annotation.page} 页，${annotation.kind === "text" || annotation.kind === "ink" || annotation.quickAsk ? "仅保存在本地" : publicationStatus(annotation.publication)}`}
+                            aria-description={`${annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)}，第 ${annotation.page} 页，${statusLabel}`}
+                            aria-haspopup="menu"
                             className="pdf-annotation-summary"
                             draggable={Boolean(objectWorkbench)}
                             onDragStart={(event) => dragAnnotation(annotation, event.dataTransfer)}
                             onClick={() => openAnnotationEditor(annotation)}
                             onKeyDown={(event) => navigatePdfAnnotationList(event, () => locateAnnotation(annotation))}
-                            aria-keyshortcuts="Control+Enter Meta+Enter ArrowUp ArrowDown Home End"
+                            aria-keyshortcuts="Control+Enter Meta+Enter ArrowUp ArrowDown Home End Shift+F10"
                             onDoubleClick={(event) => {
                               event.preventDefault();
                               event.stopPropagation();
                               locateAnnotation(annotation);
                             }}
-                            title={`${annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)} · 第 ${annotation.page} 页；展开完整内容；双击或 Ctrl/⌘+Enter 定位原文；方向键浏览批注；拖到白板或对话添加引用`}
+                            title={`${annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)} · 第 ${annotation.page} 页；展开完整内容；右键查看页码与公开状态；双击或 Ctrl/⌘+Enter 定位原文；方向键浏览批注；拖到白板或对话添加引用`}
                             type="button"
                           >
                             <Tooltip content={annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)} relationship="description">
@@ -4024,16 +4035,20 @@ export function PdfReader({
                               {annotation.kind !== "text" && annotation.kind !== "ink" && activeAnnotationId !== annotation.id && (annotation.quickAsk?.question || annotation.note) ?
                                 <span className="pdf-annotation-summary-note"><CommentRegular /><span><SearchHighlight text={annotation.quickAsk?.question ?? annotation.note ?? ""} query={annotationQuery} /></span></span> : null}
                             </span>
-                            <Tooltip content={`第 ${annotation.page} 页；双击条目定位原文`} relationship="description">
-                              <span className="pdf-annotation-page" aria-label={`第 ${annotation.page} 页`}><DocumentRegular />{annotation.page}</span>
-                            </Tooltip>
-                            <PdfAnnotationStatus
-                              label={annotation.kind === "text" || annotation.kind === "ink" || annotation.quickAsk ? "仅保存在本地" : publicationStatus(annotation.publication)}
-                              state={annotation.publication.state === "failed" ? "failed" : annotation.publication.state === "published" ? "public" :
-                                annotation.publication.state === "not_published" ? "private" : "pending"}
-                              live={activeAnnotationId === annotation.id}
-                            />
-                          </button>
+                          </Button></MenuTrigger>
+                          <MenuPopover><MenuList aria-labelledby={undefined} aria-label={`批注信息：${annotation.excerpt}`}>
+                            <MenuGroup>
+                              <MenuGroupHeader className="pdf-annotation-context-status">
+                                <PdfAnnotationStatus label={statusLabel}
+                                  state={annotation.publication.state === "failed" ? "failed" : annotation.publication.state === "published" ? "public" :
+                                    annotation.publication.state === "not_published" ? "private" : "pending"} live={false} />
+                                <span>{statusLabel}</span>
+                              </MenuGroupHeader>
+                              <MenuItem icon={<DocumentRegular />} onClick={() => locateAnnotation(annotation)}>定位原文 · 第 {annotation.page} 页</MenuItem>
+                            </MenuGroup>
+                          </MenuList></MenuPopover>
+                          </Menu>
+                          {activeAnnotationId === annotation.id ? <span className="pdf-annotation-accessible-label" role="status" aria-label={statusLabel}>{statusLabel}</span> : null}
                           {activeAnnotationId === annotation.id ? <div className="pdf-annotation-actions" role="toolbar" aria-label={`批注操作：${annotation.excerpt}`}>
                             <Tooltip content="定位到 PDF 原文" relationship="description">
                               <Button aria-label={`定位批注：${annotation.excerpt}`} appearance="subtle" size="small" icon={<LocationRegular />}
@@ -4101,7 +4116,7 @@ export function PdfReader({
                             </div>
                           ) : null}
                         </li>
-                      ))}
+                      ); })}
                     </ul>
                   ) : (
                     <div className="pdf-empty-note">{annotations.length ? "没有符合筛选条件的批注" : "暂无批注"}</div>
@@ -4258,10 +4273,14 @@ export function PdfReader({
                 onClick={() => { const last = annotations.filter((annotation) => annotation.kind === "ink" && annotation.page === focusedPage).sort((a, b) => Date.parse(a.inkLastStrokeAt ?? a.createdAt) - Date.parse(b.inkLastStrokeAt ?? b.createdAt)).at(-1); if (last) deleteInkStroke(last, pdfInkStrokes(last).length - 1); }} />
               <Button size="small" appearance="subtle" onClick={() => setInkMode(null)}>完成手绘</Button>
             </div> : null}
-            {targetEvidence?.paperId === activePaper?.id ? (
+            {status && (sidebarCollapsed || sidebarMode !== "annotations" || targetEvidence?.paperId === activePaper?.id) ? (
               <div aria-live="polite" className="pdf-evidence-status" role="status">
                 {status}
               </div>
+            ) : null}
+            {annotationLoadError && (sidebarCollapsed || sidebarMode !== "annotations") ? (
+              <InlineNotice intent="error" message={annotationLoadError}
+                action={<Button size="small" onClick={() => setAnnotationLoadAttempt((attempt) => attempt + 1)}>重试恢复批注</Button>} />
             ) : null}
           </div>
           <div

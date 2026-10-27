@@ -1,4 +1,5 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { openPdfAnnotations, renderWithPdfAnnotations } from "./fixtures/renderWithPdfAnnotations";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { PdfReader } from "../app/features/pdf/PdfReader";
 import { pdfAnnotationStorageKey, savePdfAnnotations, type PdfAnnotationV2 } from "../app/features/pdf/pdfAnnotationStorage";
@@ -14,7 +15,7 @@ afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); });
 
 test("summary arrow keys follow visible entries, preserve editor drafts, and use Ctrl+Enter to locate", async () => {
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [item("first", 10), item("second", 20), item("third", 30)]);
-  render(<PdfReader selectedPapers={[paper]} zoom={100} />);
+  renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} />);
   const first = await screen.findByRole("button", { name: "编辑批注：first" });
   const second = screen.getByRole("button", { name: "编辑批注：second" });
   const third = screen.getByRole("button", { name: "编辑批注：third" });
@@ -44,7 +45,8 @@ test("summary arrow keys follow visible entries, preserve editor drafts, and use
 
 test("selecting a filtered page annotation offers to reveal and scroll its sidebar entry", async () => {
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [item("first", 10), item("second", 20)]);
-  await act(async () => { render(<PdfReader selectedPapers={[paper]} zoom={100} />); });
+  await act(async () => { renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} />); });
+  openPdfAnnotations();
   fireEvent.change(screen.getByRole("textbox", { name: "搜索批注内容" }), { target: { value: "first" } });
   const scrollIntoView = vi.fn();
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: scrollIntoView, configurable: true });

@@ -25,15 +25,16 @@ function useFixture() {
   });
   return { dock, collapsed, board, navigation };
 }
-test("Agent can reopen after close and reveal a collapsed right region alongside the board", () => {
+test("Agent can reopen after close and reveal a collapsed bottom region alongside the board", () => {
   const { result } = renderHook(useFixture);
   act(() => result.current.dock.closeItem("assistant"));
   expect(result.current.navigation.isVisible("assistant")).toBe(false);
   act(() => result.current.navigation.open("assistant"));
-  expect(result.current.dock.layout.regions.right.activeItemId).toBe(
+  expect(result.current.dock.layout.regions.bottom.activeItemId).toBe(
     "assistant",
   );
-  expect(result.current.collapsed.right).toBe(false);
+  expect(result.current.collapsed.bottom).toBe(false);
+  expect(result.current.collapsed.right).toBe(true);
   expect(result.current.board).toBe(true);
   expect(result.current.navigation.isVisible("assistant")).toBe(true);
 });
@@ -105,7 +106,7 @@ test("settings opens in the center and relocates old sidebar placements without 
   expect(result.current.dock.layout.regions.main.activeItemId).toBe("settings");
   expect(result.current.dock.layout.regions.left.itemIds).toContain("library");
   expect(result.current.dock.layout.regions.left.itemIds).not.toContain("settings");
-  expect(result.current.dock.layout.regions.right.itemIds).toContain("assistant");
+  expect(result.current.dock.layout.regions.bottom.itemIds).toContain("assistant");
 });
 
 test("recommendation previews open in the main region while retaining the library and reader", () => {

@@ -54,9 +54,9 @@ export function useOnboardingController(input: {
       current.leaveFocus(); current.closeBoard();
       current.dock.replaceLayout(createOnboardingLayout(current.dock.layout));
       current.resetPaneSizes();
-      current.restoreVisibility({ collapsed: { left: false, right: false, bottom: false },
+      current.restoreVisibility({ collapsed: { left: false, right: true, bottom: false },
         hiddenRegions: Object.keys(current.dock.layout.regions).filter(id => !["left", "main", "right", "bottom"].includes(id)) as DockRegionId[] });
-      for (const [region, item] of [["left", "library"], ["right", "assistant"], ["bottom", "workflow-runs"], ["main", "help"]] as const) current.activate(region, item);
+      for (const [region, item] of [["left", "library"], ["bottom", "assistant"], ["main", "help"]] as const) current.activate(region, item);
       current.openManual("getting-started.basics");
       remember("started"); setIndex(0);
     } catch { setError("暂时无法准备导览布局，请重试。已打开的资料仍然保留。"); }

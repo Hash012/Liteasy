@@ -4550,6 +4550,13 @@
       "interactions": [
         "GenerationPromptDialog",
         "InfoPopover",
+        "Menu",
+        "MenuGroup",
+        "MenuGroupHeader",
+        "MenuItem",
+        "MenuList",
+        "MenuPopover",
+        "MenuTrigger",
         "PdfAnnotationDeleteDialog",
         "PdfSelectionMenu",
         "Popover",
@@ -4570,7 +4577,7 @@
         "infoPopover": true,
         "filterPopover": false,
         "optionPicker": false,
-        "commandMenu": false,
+        "commandMenu": true,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
       },

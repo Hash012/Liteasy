@@ -4,6 +4,7 @@ import {
   type PaneCollapseState,
   type PaneLayout
 } from "./paneLayout.types";
+import { hasLegacyAssistantPlacementPreference } from "../features/dock/dockLayout.storage";
 
 type PaneLayoutPreference = {
   collapsed: PaneCollapseState;
@@ -87,10 +88,20 @@ export function loadPaneLayoutPreference(): PaneLayoutPreference {
       nestedLayout &&
       isPaneCollapseState(parsed.collapsed)
     ) {
-      return {
+      const preference = {
         collapsed: normalizePaneCollapseState(parsed.collapsed),
         layout: nestedLayout
       };
+      if (parsed.readingLayoutVersion !== 1 && preference.collapsed.bottom &&
+        !preference.collapsed.right && hasLegacyAssistantPlacementPreference()) {
+        preference.collapsed = { ...preference.collapsed, bottom: false, right: true };
+        try {
+          savePaneLayoutPreference(preference);
+        } catch {
+          // Keep the loaded layout usable if storage is unavailable.
+        }
+      }
+      return preference;
     }
   } catch {
     // Fall back to defaults when stored data is malformed.
@@ -103,5 +114,5 @@ export function loadPaneLayoutPreference(): PaneLayoutPreference {
 }
 
 export function savePaneLayoutPreference(preference: PaneLayoutPreference) {
-  window.localStorage.setItem(storageKey, JSON.stringify(preference));
+  window.localStorage.setItem(storageKey, JSON.stringify({ ...preference, readingLayoutVersion: 1 }));
 }

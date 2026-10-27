@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { renderWithPdfAnnotations } from "./fixtures/renderWithPdfAnnotations";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { PdfReader } from "../app/features/pdf/PdfReader";
 import * as persistence from "../app/features/pdf/pdfAnnotationPersistence";
@@ -26,7 +27,7 @@ test.each([false, true])("a replaced promotion callback does not save unchanged 
   const save = vi.spyOn(persistence, "persistPdfAnnotationState").mockResolvedValue();
   const first = vi.fn(async () => {});
   const next = vi.fn(async () => {});
-  const mounted = render(<PdfReader selectedPapers={[paper]} zoom={100} onPaperAnnotated={first} />);
+  const mounted = renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} onPaperAnnotated={first} />);
   await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
   expect(first).toHaveBeenCalledTimes(hasAnnotations ? 1 : 0);
 
@@ -41,7 +42,7 @@ test("an actual annotation edit saves once and uses the latest promotion callbac
   const save = vi.spyOn(persistence, "persistPdfAnnotationState").mockResolvedValue();
   const first = vi.fn(async () => {});
   const next = vi.fn(async () => {});
-  const mounted = render(<PdfReader selectedPapers={[paper]} zoom={100} onPaperAnnotated={first} />);
+  const mounted = renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} onPaperAnnotated={first} />);
   await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
   mounted.rerender(<PdfReader selectedPapers={[paper]} zoom={100} onPaperAnnotated={next} />);
   await act(async () => {});
@@ -66,7 +67,7 @@ test("same-path content replacement waits for its artifact read before saving wi
     return new Promise((resolve) => { complete = resolve; }) as never;
   });
   const save = vi.spyOn(persistence, "persistPdfAnnotationState").mockResolvedValue();
-  const mounted = render(<PdfReader selectedPapers={[paper]} zoom={100} onPaperAnnotated={async () => {}} />);
+  const mounted = renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} onPaperAnnotated={async () => {}} />);
   await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
   save.mockClear();
 

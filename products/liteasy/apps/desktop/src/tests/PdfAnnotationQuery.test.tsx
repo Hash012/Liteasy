@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { renderWithPdfAnnotations } from "./fixtures/renderWithPdfAnnotations";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { PdfReader } from "../app/features/pdf/PdfReader";
 import { PdfAnnotationsOverview } from "../app/features/pdf/PdfAnnotationsOverview";
@@ -31,7 +32,7 @@ test("annotation query searches questions, answers, reviews, pages, authors and 
 
 test("sidebar searches local and team entries and overview starts from the complete collection", async () => {
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [annotation("local", 3), annotation("other", 8)]);
-  render(<PdfReader selectedPapers={[paper]} zoom={100} loadOrganizationAnnotations={async () => [team()]} />);
+  renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} loadOrganizationAnnotations={async () => [team()]} />);
   await screen.findByText("团队成员 · 第 12 页");
   const search = screen.getByRole("textbox", { name: "搜索批注内容" });
   fireEvent.change(search, { target: { value: "陈老师" } });
@@ -50,7 +51,7 @@ test("sidebar searches local and team entries and overview starts from the compl
 
 test("overview includes quick-ask and review content in its query", () => {
   const item = { ...annotation("review"), review: { text: "独有的审阅证据", generatedAt: "2026-10-01", updatedAt: "2026-10-01", sourceRevision: 1 } };
-  render(<PdfAnnotationsOverview annotations={[item, annotation("other")]} teamAnnotations={[]} onNavigate={vi.fn()} onClose={vi.fn()} />);
+  renderWithPdfAnnotations(<PdfAnnotationsOverview annotations={[item, annotation("other")]} teamAnnotations={[]} onNavigate={vi.fn()} onClose={vi.fn()} />);
   fireEvent.change(screen.getByRole("textbox", { name: "搜索全部批注" }), { target: { value: "审阅证据" } });
   expect(screen.getAllByRole("listitem")).toHaveLength(1);
   expect(screen.getByText("Passage review")).toBeVisible();

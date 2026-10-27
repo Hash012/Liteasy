@@ -127,7 +127,7 @@ type ReaderPaneProps = {
 const defaultLayoutCollapsed: PaneCollapseState = {
   bottom: false,
   left: false,
-  right: false
+  right: true
 };
 
 export function ReaderPane({

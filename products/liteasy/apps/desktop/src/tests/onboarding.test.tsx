@@ -17,7 +17,9 @@ test("the tour restores useful pages without dropping existing tabs or custom re
   expect(JSON.stringify(layout)).toBe(before);
   expect(result.regions.left.itemIds).toEqual(["library", "notes", "artifact-library"]);
   expect(result.regions.main.itemIds).toEqual(["help", "settings"]);
-  expect(result.regions.bottom.activeItemId).toBe("workflow-runs");
+  expect(result.regions.bottom.itemIds).toEqual(["assistant", "workflow-runs"]);
+  expect(result.regions.bottom.activeItemId).toBe("assistant");
+  expect(result.regions.right.itemIds).toEqual([]);
   expect(result.regions["bar-research"].itemIds).toEqual(["paper-note"]);
   const all = Object.values(result.regions).flatMap(region => region.itemIds);
   expect(new Set(all).size).toBe(all.length);
@@ -44,7 +46,7 @@ test("first-run invitation is dismissible and manual replay resets layout and pr
   act(() => result.current.tour.start());
   expect(ports.leaveFocus).toHaveBeenCalledTimes(1);
   expect(ports.resetPaneSizes).toHaveBeenCalledTimes(1);
-  expect(ports.restoreVisibility).toHaveBeenCalledWith({ collapsed: { left: false, right: false, bottom: false }, hiddenRegions: [] });
+  expect(ports.restoreVisibility).toHaveBeenCalledWith({ collapsed: { left: false, right: true, bottom: false }, hiddenRegions: [] });
   expect(result.current.dock.layout.regions.left.activeItemId).toBe("library");
   expect(result.current.dock.dynamicItemRegions["unsaved-note"]).toBe("right");
   act(() => result.current.tour.next());

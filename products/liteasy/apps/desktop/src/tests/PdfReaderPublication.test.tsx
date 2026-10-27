@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { renderWithPdfAnnotations } from "./fixtures/renderWithPdfAnnotations";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import {
@@ -54,7 +55,7 @@ function renderStoredAnnotation(
   loadLiteratureHints?: typeof collectPdfLiteratureHints
 ) {
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [annotation]);
-  render(
+  renderWithPdfAnnotations(
     <PdfReader
       loadLiteratureHints={loadLiteratureHints}
       onChangeAnnotationPublication={onChangeAnnotationPublication}
@@ -120,7 +121,7 @@ afterEach(() => {
 
 test.each(["高亮", "划线"])("creates %s privately by default", async (command) => {
   const onChangeAnnotationPublication = vi.fn();
-  render(
+  renderWithPdfAnnotations(
     <PdfReader
       onChangeAnnotationPublication={onChangeAnnotationPublication}
       selectedPapers={[paper]}
@@ -149,7 +150,7 @@ test("does not auto-publish a duplicate selection that was not saved locally", a
     remoteRevision: 1,
     state: "published" as const
   }));
-  render(
+  renderWithPdfAnnotations(
     <PdfReader
       onChangeAnnotationPublication={onChange}
       selectedPapers={[paper]}
@@ -441,7 +442,7 @@ test("re-reads a restart replay revision after hint collection and sends only th
     .mockResolvedValue({ identifiers: [{ kind: "doi", value: "10.1000/reader" }] });
 
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [stored]);
-  render(
+  renderWithPdfAnnotations(
     <PdfReader
       loadLiteratureHints={loadLiteratureHints}
       onChangeAnnotationPublication={onChange}
@@ -481,7 +482,7 @@ test("gives same-excerpt publication checkboxes unique names and announces each 
     text: "高亮"
   };
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [note, highlight]);
-  render(<PdfReader selectedPapers={[paper]} zoom={100} />);
+  renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} />);
 
   expect(publicationToggle()).not.toBeChecked();
   expect(publicationToggle("Publication evidence", "高亮")).not.toBeChecked();
