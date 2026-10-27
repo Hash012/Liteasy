@@ -39,6 +39,8 @@ test("compact conversation rows manage real titles, export and delete across res
   await expect(row.locator(".assistant-session-row-title")).toHaveText("论文实验与误差分析");
   await expect(row.locator(".assistant-session-row-date")).toBeVisible();
   await expect(row).not.toContainText("条消息");
+  // AI starts below the reader; move it explicitly before testing narrow side panes.
+  await page.getByRole("tab", { name: "Liteasy Chat", exact: true }).press("Alt+Shift+ArrowRight");
   for (const width of [320, 560]) {
     // Resize the actual dock through its pointer control, keeping the whole pane inside the viewport.
     const pane = page.locator(".assistant-only-pane");

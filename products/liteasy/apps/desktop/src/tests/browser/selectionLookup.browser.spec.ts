@@ -78,8 +78,10 @@ test("looks up a PDF selection, expands senses and persists the result as a shar
   await page.screenshot({ path: testInfo.outputPath("pdf-selection-lookup.png") });
   await card.getByRole("button", { name: "保存为批注" }).click();
   await expect(card.getByRole("status")).toHaveText("查询结果已保存为批注。");
+  await page.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).click();
   await expect(page.locator(".pdf-annotation-item")).toHaveCount(1);
   await page.reload();
+  await page.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).click();
   await expect(page.locator(".pdf-annotation-item")).toHaveCount(1);
   await page.locator(".pdf-annotation-summary").first().click();
   await expect(page.getByRole("textbox", { name: "补充批注笔记" })).toContainText(/首个查询释义[\s\S]*来源：必应词典/);
@@ -179,6 +181,7 @@ test("automatically queries a reading-mode word with its sentence and shares the
   await card.getByRole("button", { name: "保存为批注" }).click();
   await expect(card.getByRole("status")).toHaveText("查询结果已保存为批注。");
   await reading.getByRole("button", { name: "PDF 模式", exact: true }).click();
+  await page.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).click();
   const annotation = page.locator(".pdf-annotation-item");
   await expect(annotation).toHaveCount(1);
   await annotation.locator(".pdf-annotation-summary").click();

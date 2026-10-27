@@ -83,7 +83,12 @@ test("a paper context opens the original PDF without Markdown and navigates page
   await preview.getByRole("button", { name: "打开原文件" }).click();
   await page.waitForFunction(() => {
     const stage = document.querySelector(".pdf-stage");
-    return stage && Math.abs(stage.scrollHeight - stage.clientHeight - stage.scrollTop) <= 1;
+    const target = stage?.querySelector('.pdf-page-shell[data-page="2"]');
+    if (!stage || !target) return false;
+    // The bottom AI pane changes the reading viewport height. Align page 2 to
+    // the reading edge, or reach the scroll limit when that page is shorter.
+    const top = target.getBoundingClientRect().top - stage.getBoundingClientRect().top - stage.clientTop;
+    return Math.abs(top) <= 1 || Math.abs(stage.scrollHeight - stage.clientHeight - stage.scrollTop) <= 1;
   });
   await expect(page.getByLabel("当前页码")).toHaveValue("2");
   await expect(preview.getByRole("alert")).toHaveCount(0);

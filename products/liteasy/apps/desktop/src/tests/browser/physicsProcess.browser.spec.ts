@@ -1,8 +1,11 @@
 import { expect, test } from "@playwright/test";
 
+test.setTimeout(60_000);
+
 async function expectPhysicsProcessRendered(page: import("@playwright/test").Page) {
   const stage = page.getByTestId("physics-process-browser-fixture");
-  await expect(stage).toBeVisible();
+  // The first visit also loads this lazy fixture through Vite on a cold CI worker.
+  await expect(stage).toBeVisible({ timeout: 30_000 });
   const processStage = stage.getByTestId("physics-process-stage");
   const svg = processStage.locator("svg");
   await expect(svg).toBeVisible();

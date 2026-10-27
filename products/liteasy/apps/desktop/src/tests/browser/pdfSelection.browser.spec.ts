@@ -49,9 +49,13 @@ for (const scenario of [
     await menu.getByRole("button", { name: "高亮", exact: true }).click();
     const mark = page.locator('.pdf-page-shell[data-page="1"] button.pdf-overlay-mark.highlight');
     await expect(mark).toHaveAttribute("title", "第 1 页：WiW");
-    const saved = await mark.boundingBox();
-    expect(saved!.x).toBeCloseTo(bounds!.x, 0);
-    expect(saved!.width).toBeCloseTo(bounds!.width, 0);
+    // Saving opens the annotation pane. Compare in PDF coordinates so a changed
+    // page position/size still has to match the exact same glyph boundaries.
+    await expect.poll(async () => {
+      const saved = (await mark.boundingBox())!, current = (await surface.boundingBox())!;
+      return Math.max(Math.abs(saved.x - (current.x + 50 / 400 * current.width)),
+        Math.abs(saved.width - 52.984 / 400 * current.width));
+    }).toBeLessThan(0.5);
     await page.reload();
     await expect(mark).toHaveAttribute("title", "第 1 页：WiW", { timeout: 30_000 });
     if (scenario.zoom === 100 && !scenario.reverse) {
