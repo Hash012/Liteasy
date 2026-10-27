@@ -557,7 +557,7 @@ export function PaperResourceTab({
         </section>
       ) : null}
       <Dialog modalType="modal" onOpenChange={(_, data) => setTranslationDialogOpen(data.open)} open={translationDialogOpen}>
-        <DialogSurface aria-label="选择翻译语言">
+        <DialogSurface aria-label="选择翻译语言" className="paper-resource-translation-dialog">
           <DialogBody>
             <DialogTitle>翻译 MinerU 提取内容</DialogTitle>
             <DialogContent className="paper-resource-tab__translation-dialog-content">

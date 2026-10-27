@@ -231,12 +231,10 @@
         "handleSubmit"
       ],
       "interactions": [
-        "button",
-        "form",
-        "input"
+        "form"
       ],
       "styles": [],
-      "migration": "existing-Fluent-adapter",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
         "semanticSection": false,
@@ -3395,11 +3393,10 @@
         "OrganizationCreateDialog"
       ],
       "interactions": [
-        "button",
-        "input"
+        "form"
       ],
       "styles": [],
-      "migration": "inherited-semantic-surface",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
         "semanticSection": false,
@@ -3513,8 +3510,7 @@
         "OrganizationInviteConfirmDialog"
       ],
       "interactions": [
-        "button",
-        "input"
+        "form"
       ],
       "styles": [],
       "migration": "product-primitives",
@@ -3541,11 +3537,10 @@
         "OrganizationJoinDialog"
       ],
       "interactions": [
-        "button",
-        "input"
+        "form"
       ],
       "styles": [],
-      "migration": "inherited-semantic-surface",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
         "semanticSection": false,
@@ -3568,11 +3563,9 @@
       "symbols": [
         "OrganizationLeaveConfirmDialog"
       ],
-      "interactions": [
-        "button"
-      ],
+      "interactions": [],
       "styles": [],
-      "migration": "inherited-semantic-surface",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
         "semanticSection": false,
@@ -4804,11 +4797,9 @@
       "symbols": [
         "AcademicArchiveDialog"
       ],
-      "interactions": [
-        "button"
-      ],
+      "interactions": [],
       "styles": [],
-      "migration": "inherited-semantic-surface",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
         "semanticSection": false,
@@ -4862,11 +4853,9 @@
       "symbols": [
         "ClearProfileConfirmDialog"
       ],
-      "interactions": [
-        "button"
-      ],
+      "interactions": [],
       "styles": [],
-      "migration": "inherited-semantic-surface",
+      "migration": "product-primitives",
       "disclosure": {
         "contextualActions": false,
         "semanticSection": false,
@@ -7635,6 +7624,7 @@
         "ContextualActions",
         "SurfaceHeader",
         "SurfaceActions",
+        "ModalSurface",
         "ActionChips",
         "GenerationComposer",
         "ContextSummary",

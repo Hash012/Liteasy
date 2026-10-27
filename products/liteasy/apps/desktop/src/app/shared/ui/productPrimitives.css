@@ -54,25 +54,28 @@
    Fluent's inner inputs and reading/document links keep their own semantics. */
 .fui-FluentProvider :where(button:not([class]), .btn-link) { font: inherit; padding: 6px 10px; border: 1px solid var(--border-default); border-radius: var(--radius-control); background: var(--bg-canvas-primary); color: var(--text-primary); cursor: pointer; text-decoration: none; }
 .fui-FluentProvider :where(button:not([class]), .btn-link):hover:not(:disabled) { background: var(--bg-hover); }
-.fui-FluentProvider :is(.product-action, .product-icon-action, button:not([class])):is(:disabled, [aria-disabled="true"]) {
+.fui-FluentProvider :is(button, .fui-Button, [role="button"]):is(:disabled, [aria-disabled="true"]) {
   background: var(--bg-sidebar);
   color: var(--text-muted);
   border-color: var(--border-subtle);
   box-shadow: none;
   cursor: not-allowed;
 }
-.fui-FluentProvider :is(.fui-Input, .fui-Textarea, .fui-Dropdown, .fui-Select) {
+.fui-FluentProvider :is(.fui-Input, .fui-Textarea, .fui-Dropdown, .fui-Select, .fui-Combobox, .fui-SpinButton) {
+  min-width: 0;
+  max-width: 100%;
   border-radius: var(--radius-control);
   border-color: var(--border-default);
   background-color: var(--bg-canvas-primary);
   transition: var(--transition-surface);
 }
-.fui-FluentProvider :is(.fui-Input, .fui-Textarea, .fui-Dropdown, .fui-Select):focus-within {
+.fui-FluentProvider :is(.fui-Input, .fui-Textarea, .fui-Dropdown, .fui-Select, .fui-Combobox, .fui-SpinButton):focus-within {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--border-focus) 15%, transparent);
 }
-.fui-FluentProvider :is(.fui-Input, .fui-Textarea, .fui-Dropdown, .fui-Select):is(:has(:disabled), :has([readonly])) { background-color: var(--bg-sidebar); }
-.fui-FluentProvider :is(.fui-Input, .fui-Textarea, .fui-Dropdown, .fui-Select):is([aria-invalid="true"], :has([aria-invalid="true"])) { border-color: var(--notice-error-text); }
+.fui-FluentProvider :is(.fui-Input, .fui-Textarea, .fui-Dropdown, .fui-Select, .fui-Combobox, .fui-SpinButton):is(:has(:disabled), :has([readonly])) { background-color: var(--bg-sidebar); }
+.fui-FluentProvider :is(.fui-Input, .fui-Textarea, .fui-Dropdown, .fui-Select, .fui-Combobox, .fui-SpinButton):is([aria-invalid="true"], :has([aria-invalid="true"])) { border-color: var(--notice-error-text); }
+.fui-Combobox > input, .fui-SpinButton > input { min-width: 0; }
 .fui-FluentProvider :where(input:not([class]):not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]), select:not([class]), textarea:not([class])) { box-sizing: border-box; max-width: 100%; padding: 6px 8px; background: var(--bg-canvas-primary); border: 1px solid var(--border-default); border-radius: var(--radius-control); color: var(--text-primary); font: inherit; }
 .fui-FluentProvider :where(button:not([class]), .btn-link, input:not([class]), select:not([class]), textarea:not([class])):focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
 .product-action[data-density="compact"], .product-icon-action[data-density="compact"] { min-height: var(--control-size-compact); height: auto; line-height: var(--lineHeightBase300); padding-block: 2px; }
@@ -110,6 +113,8 @@
 @media (pointer: coarse) { .product-option-picker.fui-Dropdown, .product-option-picker > button, .product-disclosure-section .fui-AccordionHeader > button { min-block-size: 44px; } .product-option-listbox .fui-Option { min-block-size: 44px; } }
 @media (forced-colors: active) { .product-option-picker { border-color: ButtonText; } }
 .product-inline-notice { display: flex; align-items: start; gap: var(--space-control); padding: var(--space-control); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); color: var(--text-primary); background: var(--surface-base); overflow-wrap: anywhere; }
+.product-inline-notice { flex-wrap: wrap; min-width: 0; }
+.product-inline-notice > span:not(.product-notice-icon) { flex: 1 1 120px; }
 .product-inline-notice > span:not(.product-notice-icon) { min-width: 0; }
 .product-notice-icon { display: inline-flex; flex: 0 0 auto; font-size: 18px; margin-top: 1px; }
 .product-inline-notice[data-intent="error"] { border-color: var(--notice-error-border); background: var(--notice-error-bg); color: var(--notice-error-text); }
@@ -136,6 +141,24 @@
 
 .product-error-surface { display:contents; }
 .product-surface-failure { padding:16px; color:var(--text-primary); overflow-wrap:anywhere; }
+
+.product-modal.fui-DialogSurface { box-sizing: border-box; width: min(560px, calc(100vw - 24px)); max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); padding: 20px; border: 1px solid var(--border-default); border-radius: var(--radius-surface); background: var(--bg-canvas-primary); color: var(--text-primary); box-shadow: var(--shadow-floating); }
+.product-modal-body.fui-DialogBody { max-height: calc(100dvh - 66px); min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto; gap: 16px; }
+.product-modal .fui-DialogTitle { font-size: var(--fontSizeBase400); line-height: 1.5; font-weight: 600; overflow-wrap: anywhere; }
+.product-modal-content.fui-DialogContent { display: flex; flex-direction: column; gap: 14px; min-width: 0; min-height: 0; overflow: auto; padding: 2px; overflow-wrap: anywhere; }
+.product-modal-content :is(p, dl) { margin: 0; line-height: 1.6; }
+.product-modal-content > p { color: var(--text-secondary); font-size: var(--fontSizeBase200); }
+.product-modal-content :is(form, .product-modal-fields) { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.product-modal-content .fui-Field { min-width: 0; }
+.product-modal-content .product-option-picker-field { width: 100%; }
+.product-modal-content dl { display: grid; gap: 8px; padding: 12px; border-radius: 6px; background: var(--bg-sidebar); }
+.product-modal-content dt { color: var(--text-muted); font-size: var(--fontSizeBase200); }
+.product-modal-content dd { margin: 0 0 8px; }
+.product-modal-actions.fui-DialogActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.product-action[data-intent="danger"]:not(:disabled) { color: var(--status-danger); border-color: var(--notice-error-border); }
+.product-action[data-intent="danger"]:hover:not(:disabled) { background: var(--notice-error-bg); }
+@media (max-width: 440px) { .product-modal.fui-DialogSurface { padding: 16px; } .product-modal-body.fui-DialogBody { max-height: calc(100dvh - 58px); } }
+@media (forced-colors: active) { .product-modal.fui-DialogSurface { border-color: CanvasText; } }
 
 .product-control-toolbar { display: flex; gap: 8px; align-items: center; min-width: 0; flex-wrap: wrap; }
 .product-control-toolbar[data-density="compact"] > .fui-Input { min-height: var(--control-size-compact); font-size: var(--fontSizeBase300); }

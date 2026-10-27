@@ -1,4 +1,4 @@
-import { OptionPicker } from "../../shared/ui/productPrimitives";
+import { InlineNotice, OptionPicker } from "../../shared/ui/productPrimitives";
 import { useState } from "react";
 import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input } from "@fluentui/react-components";
 import type { ReadingCatalogEntry, ReadingCatalogMetadataPatch } from "./readingCatalog.types";
@@ -27,8 +27,8 @@ export function LibraryMetadataEditor({ entry, tagSuggestions, onSave, onClose }
     finally { setPending(false); }
   }
   return <Dialog open onOpenChange={(_, data) => { if (!data.open && !pending) onClose(); }}>
-    <DialogSurface aria-label="编辑资产分类与标签" className="library-metadata-dialog"><form onSubmit={(event) => { event.preventDefault(); void save(); }}>
-      <DialogBody><DialogTitle>分类与标签</DialogTitle><DialogContent className="library-metadata-editor">
+    <DialogSurface aria-label="编辑资产分类与标签" className="library-metadata-dialog product-modal"><form onSubmit={(event) => { event.preventDefault(); void save(); }}>
+      <DialogBody className="product-modal-body"><DialogTitle>分类与标签</DialogTitle><DialogContent className="library-metadata-editor product-modal-content">
         <strong>{entry.title}</strong>
         <div className="library-metadata-fields">
           <Field label="类别"><OptionPicker autoFocus aria-label="资产类别" value={String(type ?? "")} disabled={pending} onValueChange={nextValue => setType(nextValue)} options={[{ value: String(""), label: String("\u672A\u5206\u7C7B") }, ...(!assetTypeLabels[type] && type ? [{ value: type, label: type }] : []), ...(Object.entries(assetTypeLabels).map(([value, label]) => ({ value: String(value), label: String(label) })))]} /></Field>
@@ -39,8 +39,8 @@ export function LibraryMetadataEditor({ entry, tagSuggestions, onSave, onClose }
         <Field label="分类"><Input aria-label="资产分类" value={collection} disabled={pending} onChange={(_, data) => setCollection(data.value)} placeholder="例如：待读 / 项目资料" maxLength={80} /></Field>
         <Field label="标签"><ResourceTagEditor label="资产标签" value={tags} onChange={setTags} suggestions={tagSuggestions} disabled={pending} /></Field>
         <small>用于整理、显示和筛选；不会改变已经确认的正式题录。</small>
-        {error ? <div role="alert">{error}</div> : null}
-      </DialogContent><DialogActions><Button disabled={pending} onClick={onClose}>取消</Button><Button type="submit" appearance="primary" disabled={pending}>保存</Button></DialogActions></DialogBody>
+        {error ? <InlineNotice intent="error" message={error} /> : null}
+      </DialogContent><DialogActions className="product-modal-actions"><Button disabled={pending} onClick={onClose}>取消</Button><Button type="submit" appearance="primary" disabled={pending}>保存</Button></DialogActions></DialogBody>
     </form></DialogSurface>
   </Dialog>;
 }

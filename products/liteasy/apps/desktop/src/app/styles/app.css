@@ -5752,10 +5752,11 @@ button.pdf-overlay-mark:focus-visible {
 }
 
 .layered-graph {
-  border: 1px solid #c7d8e7;
-  border-radius: 14px;
-  background: #f9fcff;
-  color: #23384d;
+  container: layered-graph / inline-size;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-canvas-primary);
+  color: var(--text-primary);
   overflow: hidden;
 }
 
@@ -5770,6 +5771,7 @@ button.pdf-overlay-mark:focus-visible {
 
 .layered-graph-control {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   align-items: center;
   font-size: 12px;
@@ -5777,17 +5779,17 @@ button.pdf-overlay-mark:focus-visible {
 
 .layered-graph-control > span {
   margin-right: 4px;
-  color: #51677b;
+  color: var(--text-secondary);
   font-weight: 700;
 }
 
 .layered-graph-control button,
 .layered-graph-detail button,
 .layered-graph-accessible-list button {
-  border: 1px solid #bfd1df;
+  border: 1px solid var(--border-default);
   border-radius: 7px;
-  background: #fff;
-  color: #284c5a;
+  background: var(--bg-canvas-primary);
+  color: var(--text-secondary);
   cursor: pointer;
   font: inherit;
   padding: 4px 8px;
@@ -5798,8 +5800,8 @@ button.pdf-overlay-mark:focus-visible {
 .layered-graph-control button:focus-visible,
 .layered-graph-detail button:hover,
 .layered-graph-detail button:focus-visible {
-  border-color: #125d71;
-  background: #d8f0f3;
+  border-color: var(--accent-primary);
+  background: var(--bg-selected-accent);
   outline: none;
 }
 
@@ -5814,7 +5816,7 @@ button.pdf-overlay-mark:focus-visible {
 }
 
 .layered-graph-canvas .react-flow__node {
-  box-shadow: 0 3px 12px rgb(51 82 99 / 14%);
+  box-shadow: var(--shadow-card);
 }
 
 .layered-graph-detail {
@@ -5823,7 +5825,7 @@ button.pdf-overlay-mark:focus-visible {
   gap: 10px;
   padding: 18px;
   border-left: 1px solid var(--border-subtle);
-  background: rgb(245 250 253 / 80%);
+  background: var(--bg-sidebar);
   font-size: 13px;
   line-height: 1.55;
 }
@@ -5833,16 +5835,16 @@ button.pdf-overlay-mark:focus-visible {
 }
 
 .layered-graph-detail small {
-  color: #587085;
+  color: var(--text-muted);
 }
 
 .layered-graph-accessible-list {
   display: none;
 }
 
-@media (max-width: 760px) {
+@container layered-graph (max-width: 760px) {
   .layered-graph-content {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .layered-graph-detail {
@@ -5850,6 +5852,8 @@ button.pdf-overlay-mark:focus-visible {
     border-left: 0;
   }
 }
+
+.layered-graph-detail { min-width: 0; overflow-wrap: anywhere; }
 
 @media (prefers-reduced-motion: reduce) {
   .association-edge,

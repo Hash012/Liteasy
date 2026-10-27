@@ -1,4 +1,4 @@
-import { ActionButton as Button } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, InlineNotice } from "../../shared/ui/productPrimitives";
 import { displayPath } from "../resource-filesystem/displayPath";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
@@ -42,9 +42,10 @@ export function DataLocationSettings({ embedded = false }: { embedded?: boolean 
           <Button size="small" disabled={busy} onClick={() => void run("restart_for_data_location")}>重启并迁移数据</Button>
           <Button size="small" disabled={busy} onClick={() => void run("cancel_data_location_change")}>取消目录更改</Button>
         </> : null}
-        {location?.migrationError ? <p role="alert">{location.migrationError}</p> : null}
+        {location?.migrationError ? <InlineNotice intent="error" message={location.migrationError} /> : null}
       </> : <p>浏览器版数据保存在当前浏览器；可在 Notes 中连接文件夹。桌面版支持自定义本地数据目录。</p>}
-      {error ? <p role="alert">{error}</p> : null}
+      {busy ? <InlineNotice intent="busy" message="正在处理数据目录，请稍候…" /> : null}
+      {error ? <InlineNotice intent="error" message={error} /> : null}
     </div>
   </section>;
 }

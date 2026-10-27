@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 
 const fixture = "/src/tests/browser/fixtures/ui-refinement.html";
 test.use({ viewport: { width: 1600, height: 1000 } });
@@ -139,4 +139,177 @@ test("native titlebar aligns AI and window controls at multiple window and font 
     await bar.getByRole("button", { name: "还原窗口", exact: true }).click();
     await bar.screenshot({ path: info.outputPath(`titlebar-${width}.png`) });
   }
+});
+
+const corners = "/src/tests/browser/fixtures/ui-corners.html";
+
+async function enlargeModalText(dialog: Locator) {
+  // Dialog portals have their own provider: apply the scale to the actual surface.
+  await dialog.evaluate(element => {
+    element.style.setProperty("--fontSizeBase300", "21px");
+    element.style.setProperty("--lineHeightBase300", "30px");
+  });
+}
+
+for (const theme of ["浅色", "深色"]) test(`corners: modal forms retain focus, pending guards and exact submissions (${theme})`, async ({ page }, info) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.goto(corners);
+  await page.getByRole("button", { name: theme, exact: true }).click();
+  await page.locator(".fluent-app-root:not([data-portal-node])").evaluate(element => {
+    element.style.setProperty("--fontSizeBase300", "21px");
+    element.style.setProperty("--lineHeightBase300", "30px");
+  });
+  for (const [trigger, title, field, value, submit] of [
+    ["创建组织", "创建组织", "组织名称", "  可核查研究组  ", "创建组织"],
+    ["加入组织", "加入组织", "邀请令牌", "  orginv_abcdefghijklmnopqrstuvwxyz0123456789  ", "加入组织"],
+    ["邀请成员", "邀请成员确认", "账号主体 ID", "  researcher-id  ", "创建邀请"],
+  ]) {
+    await page.getByRole("navigation", { name: "审核弹窗" }).getByRole("button", { name: trigger, exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: title, exact: true });
+    await enlargeModalText(dialog);
+    await expect(dialog.getByRole("textbox", { name: field, exact: true })).toHaveCSS("font-size", "21px");
+    await dialog.getByRole("textbox", { name: field, exact: true }).fill(value);
+    if (trigger === "邀请成员") {
+      await dialog.getByRole("combobox", { name: "组织角色" }).click();
+      await page.getByRole("option", { name: "管理员", exact: true }).click();
+    }
+    await expect(dialog.getByRole("button", { name: submit, exact: true })).toBeInViewport();
+    await dialog.getByRole("button", { name: submit, exact: true }).click();
+    await expect(page.getByTestId("corner-events")).toContainText(value.trim());
+    if (trigger === "邀请成员") await expect(page.getByTestId("corner-events")).toContainText('"role":"admin"');
+    await expect(dialog.getByRole("button", { name: "关闭", exact: true })).toBeDisabled();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeVisible();
+    await page.evaluate(() => window.dispatchEvent(new Event("ui-review-finish")));
+    await expect(dialog.getByRole("textbox", { name: field, exact: true })).toHaveValue(value);
+    await expect(dialog.getByRole("status")).toContainText("已填写内容会保留");
+    for (let i = 0; i < 10; i++) {
+      await page.keyboard.press("Tab");
+      expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
+    }
+    expect(await dialog.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+    await dialog.screenshot({ path: info.outputPath(`corners-${theme}-${trigger}.png`) });
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "审核弹窗" }).getByRole("button", { name: trigger, exact: true })).toBeFocused();
+  }
+  await page.getByRole("navigation", { name: "审核弹窗" }).getByRole("button", { name: "登录", exact: true }).click();
+  const login = page.getByRole("dialog", { name: "轻量登录面板" });
+  await enlargeModalText(login);
+  await login.getByRole("button", { name: "创建账号", exact: true }).click();
+  await login.getByLabel("昵称", { exact: true }).fill("  Ada  ");
+  await login.getByLabel("邮箱", { exact: true }).fill("ada@example.invalid");
+  await login.getByLabel("密码或密码短语（至少 12 位）", { exact: true }).fill("fixture-password-123");
+  await login.getByRole("button", { name: "注册并登录" }).click();
+  await expect(page.getByTestId("corner-events")).toContainText('"displayName":"Ada","email":"ada@example.invalid","password":"fixture-password-123"');
+  await expect(login.getByRole("button", { name: "请稍候…", exact: true })).toBeDisabled();
+  await expect(login.getByRole("button", { name: "跳过，进入本地阅读器" })).toBeInViewport();
+  await login.getByRole("button", { name: "跳过，进入本地阅读器" }).click();
+  for (const [trigger, title, action, event] of [
+    ["退出组织", "退出组织确认", "退出组织", "leave"],
+    ["查看档案", "学术档案页面", "导出学术档案", "export"],
+    ["清空档案", "清空学术档案确认", "确认清空学术档案", "clear"],
+  ]) {
+    await page.getByRole("navigation", { name: "审核弹窗" }).getByRole("button", { name: trigger, exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: title, exact: true });
+    await enlargeModalText(dialog);
+    await expect(dialog.getByRole("button", { name: action, exact: true })).toBeInViewport();
+    await dialog.getByRole("button", { name: action, exact: true }).click();
+    await expect(page.getByTestId("corner-events")).toContainText(event);
+    if (event === "leave") await page.evaluate(() => window.dispatchEvent(new Event("ui-review-finish")));
+    if (event !== "clear") await dialog.getByRole("button", { name: "关闭", exact: true }).click();
+  }
+});
+
+test("corners: model advanced fields, failed requests and readonly replies remain usable in a narrow card", async ({ page }, info) => {
+  let calls = 0;
+  await page.route("https://api.example.invalid/v1/chat/completions", async route => {
+    const body = route.request().postDataJSON();
+    expect(body.model).toBe("review-model");
+    expect(body.messages).toEqual(expect.arrayContaining([expect.objectContaining({ role: "user", content: expect.stringContaining("准备好帮助阅读论文") })]));
+    calls++;
+    if (calls === 1) await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { message: "fixture service unavailable" } }) });
+    else await route.fulfill({ contentType: "text/event-stream", body: `data: ${JSON.stringify({ choices: [{ delta: { content: "已准备好，测试回复。" }, finish_reason: "stop" }] })}\n\ndata: [DONE]\n\n` });
+  });
+  await page.goto(corners);
+  const pane = page.getByTestId("corner-pane");
+  await pane.evaluate(element => { element.style.width = "320px"; });
+  await pane.getByLabel("API key", { exact: true }).fill("fixture-review-key");
+  await pane.getByRole("button", { name: "高级设置", exact: true }).click();
+  await pane.getByRole("combobox", { name: "结构化输出" }).click();
+  await page.getByRole("option", { name: "JSON 模式", exact: true }).click();
+  await pane.getByRole("button", { name: "保存并测试", exact: true }).click();
+  await expect(pane.getByRole("alert")).toBeVisible();
+  await pane.getByRole("button", { name: "保存并测试", exact: true }).click();
+  await expect(pane.getByRole("textbox", { name: "测试响应", exact: true })).toHaveValue("已准备好，测试回复。");
+  await expect(pane.getByRole("textbox", { name: "测试响应", exact: true })).toHaveAttribute("readonly", "");
+  expect(calls).toBe(2);
+  expect(await pane.locator(".settings-card-content").evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+  await pane.screenshot({ path: info.outputPath("corners-model-320.png") });
+});
+
+for (const width of [320, 520]) test(`corners: reading and workflow layouts follow a ${width}px pane inside a wide window`, async ({ page }, info) => {
+  await page.goto(corners);
+  const pane = page.getByTestId("corner-pane");
+  await pane.evaluate((element, value) => { element.style.width = `${value}px`; }, width);
+  for (const view of ["解析图表", "翻译对照", "电子书", "薄读", "工作流", "认知图"]) {
+    await page.getByRole("navigation", { name: "审核页面" }).getByRole("button", { name: view, exact: true }).click();
+    if (view === "翻译对照") {
+      await pane.getByRole("button", { name: "查看译文", exact: true }).click();
+      await pane.getByRole("button", { name: "左右对照", exact: true }).click();
+      const boxes = await pane.locator(".paper-resource-tab__reading-pane").evaluateAll(elements => elements.map(e => e.getBoundingClientRect().toJSON()));
+      expect(boxes[1].top).toBeGreaterThanOrEqual(boxes[0].bottom);
+    }
+    if (view === "解析图表") {
+      const figure = pane.locator(".paper-resource-tab__figure").first();
+      const caption = (await figure.locator("figcaption").boundingBox())!;
+      const media = (await figure.locator("img").boundingBox())!;
+      expect(caption.y).toBeGreaterThanOrEqual(media.y + media.height);
+    }
+    if (view === "电子书") {
+      await expect(pane.getByRole("complementary", { name: "阅读目录" })).toHaveCSS("position", "absolute");
+      await pane.getByRole("button", { name: "发现", exact: true }).click();
+      await pane.getByRole("button", { name: "目录", exact: true }).click();
+      await expect(pane.getByRole("heading", { name: "发现", exact: true })).toBeVisible();
+    }
+    if (view === "薄读") await expect(pane.locator(".thin-reading__body")).toHaveCSS("display", "block");
+    if (view === "工作流") {
+      await pane.getByRole("button", { name: /整理阅读来源 · 失败/ }).click();
+      await expect(pane.getByRole("heading", { name: "整理阅读来源", exact: true })).toBeVisible();
+      const nav = (await pane.getByRole("navigation", { name: "工作流运行" }).boundingBox())!;
+      const detail = (await pane.locator(".workflow-run-layout > article").boundingBox())!;
+      expect(detail.y).toBeGreaterThanOrEqual(nav.y + nav.height);
+    }
+    if (view === "认知图") {
+      const canvas = (await pane.locator(".layered-graph-canvas").boundingBox())!;
+      const detail = (await pane.locator(".layered-graph-detail").boundingBox())!;
+      expect(detail.y).toBeGreaterThanOrEqual(canvas.y + canvas.height);
+      await pane.getByRole("button", { name: "深入一层", exact: true }).click();
+      await expect(page.getByTestId("corner-events")).toContainText('"expand":"root"');
+    }
+    expect(await pane.evaluate(element => element.scrollWidth - element.clientWidth), `${view} outer overflow`).toBeLessThanOrEqual(1);
+    await pane.screenshot({ path: info.outputPath(`corners-${view}-${width}.png`) });
+  }
+});
+
+test("corners: metadata validation and citation detail fit a small window", async ({ page }, info) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.goto(corners);
+  await page.getByRole("button", { name: "分类标签", exact: true }).click();
+  const metadata = page.getByRole("dialog", { name: "编辑资产分类与标签" });
+  await metadata.getByRole("textbox", { name: "资产年份" }).fill("abc");
+  await metadata.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(metadata.getByRole("alert")).toContainText("四位数字");
+  await expect(metadata.getByRole("button", { name: "保存", exact: true })).toBeInViewport();
+  await metadata.getByRole("textbox", { name: "资产年份" }).fill("2026");
+  await metadata.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page.getByTestId("corner-events")).toContainText('"year":2026');
+  await page.getByRole("button", { name: "引用图", exact: true }).click();
+  const graph = page.getByRole("dialog", { name: "文献引用图" });
+  await expect(graph).toBeVisible();
+  await graph.getByRole("button", { name: "加载引用关系", exact: true }).click();
+  await expect(graph).toContainText("已匹配 0 篇论文");
+  expect(await graph.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+  await graph.screenshot({ path: info.outputPath("corners-citation-360.png") });
+  await graph.getByRole("button", { name: "关闭文献引用图", exact: true }).click();
 });

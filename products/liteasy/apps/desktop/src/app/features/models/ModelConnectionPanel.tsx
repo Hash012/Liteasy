@@ -1,4 +1,4 @@
-import { ActionButton as Button, DisclosureSection, OptionPicker } from "../../shared/ui/productPrimitives";
+import { ActionButton as Button, DisclosureSection, InlineNotice, OptionPicker } from "../../shared/ui/productPrimitives";
 import { OpenRegular } from "@fluentui/react-icons";
 import { rememberVerifiedModel, forgetVerifiedModel, modelProfileId, directModelSettingCommands } from "./verifiedModelProfiles";
 import { useVerifiedModels } from "./useVerifiedModels";
@@ -158,7 +158,7 @@ export function ModelConnectionPanel({ settings = {}, onUpdateSetting, expandAdv
       {mode === "direct" && hasKey ? <Button disabled={pending} onClick={() => void removeKey()}>删除密钥</Button> : null}
     </div>
     {mode === "direct" ? <p className="model-connection-description">测试会发送一条短请求，按服务商的 API 计费规则使用额度。</p> : null}
-    {message ? <p className="model-connection-message" role={failed ? "alert" : "status"}>{message}</p> : null}
+    {message ? <InlineNotice intent={failed ? "error" : pending ? "busy" : "info"} message={message} /> : null}
     {reply ? <SettingRow title="测试响应"><Textarea aria-label="测试响应" readOnly resize="vertical" value={reply} /></SettingRow> : null}
   </div>;
 }

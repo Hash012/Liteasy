@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useId, useState } from "react";
+import { Field, Input } from "@fluentui/react-components";
+import { ActionButton, InlineNotice, ModalSurface } from "../../shared/ui/productPrimitives";
 
 type OrganizationCreateDialogProps = {
   message?: string;
@@ -7,52 +9,17 @@ type OrganizationCreateDialogProps = {
   pending?: boolean;
 };
 
-export function OrganizationCreateDialog({
-  message,
-  onCancel,
-  onConfirm,
-  pending = false
-}: OrganizationCreateDialogProps) {
-  const [organizationName, setOrganizationName] = useState("");
-
-  return (
-    <div className="workspace-dialog-backdrop profile-dialog-backdrop" data-testid="workspace-dialog-backdrop">
-      <div aria-label="创建组织" className="workspace-modal-panel profile-dialog" role="dialog">
-        <div className="profile-dialog-header">
-          <div>
-            <div className="profile-dialog-kicker">Organization Creation</div>
-            <div className="profile-dialog-title">创建组织</div>
-          </div>
-          <button className="organization-dialog-close" disabled={pending} onClick={onCancel} type="button">
-            关闭
-          </button>
-        </div>
-        <div className="profile-archive-card">
-          <label className="organization-form-field">
-            <span>组织名称</span>
-            <input
-              aria-label="组织名称"
-              className="organization-form-input"
-              onChange={(event) => setOrganizationName(event.target.value)}
-              value={organizationName}
-            />
-          </label>
-        </div>
-        {message ? <div aria-live="polite" className="organization-action-message">{message}</div> : null}
-        <div className="profile-dialog-actions">
-          <button className="left-rail-button subtle" disabled={pending} onClick={onCancel} type="button">
-            取消
-          </button>
-          <button
-            className="left-rail-button"
-            disabled={pending || organizationName.trim().length === 0}
-            onClick={() => onConfirm(organizationName.trim())}
-            type="button"
-          >
-            {pending ? "正在创建" : "创建组织"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+export function OrganizationCreateDialog({ message, onCancel, onConfirm, pending = false }: OrganizationCreateDialogProps) {
+  const [organizationName, setValue] = useState("");
+  const formId = useId();
+  return <ModalSurface title="创建组织" onClose={onCancel} busy={pending} actions={<>
+    <ActionButton disabled={pending} onClick={onCancel}>取消</ActionButton>
+    <ActionButton appearance="primary" type="submit" form={formId} disabled={pending || !organizationName.trim()}>{pending ? "正在创建" : "创建组织"}</ActionButton>
+  </>}>
+    <form id={formId} onSubmit={event => { event.preventDefault(); if (!pending && organizationName.trim()) onConfirm(organizationName.trim()); }}>
+      <Field label="组织名称"><Input aria-label="组织名称" disabled={pending} value={organizationName} placeholder="" onChange={(_, data) => setValue(data.value)} /></Field>
+    </form>
+    {pending ? <InlineNotice intent="busy" message="正在创建，请稍候…" /> : null}
+    {message ? <InlineNotice message={message} /> : null}
+  </ModalSurface>;
 }

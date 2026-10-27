@@ -20,6 +20,30 @@ export function SurfaceHeader({ title, children, onClose }: { title: string; chi
   return <header className="product-surface-header"><h2>{title}</h2>{children}{onClose ? <IconAction label="关闭" appearance="subtle" icon={<DismissRegular />} onClick={onClose} /> : null}</header>;
 }
 export function SurfaceActions({ children }: { children: ReactNode }) { return <footer className="product-surface-actions">{children}</footer>; }
+/** Shared modal chrome keeps long forms scrollable and focus inside the active dialog. */
+export function ModalSurface({ title, label = title, onClose, busy = false, children, actions }: {
+  title: string; label?: string; onClose(): void; busy?: boolean; children: ReactNode; actions?: ReactNode;
+}) {
+  const [opener] = useState(() => typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  useEffect(() => () => {
+    // These dialogs are opened by controllers rather than a colocated DialogTrigger.
+    // Restore their opener after unmount, unless another modal now owns focus.
+    requestAnimationFrame(() => {
+      if (!opener?.isConnected) return;
+      const dialogs = [...opener.ownerDocument.querySelectorAll('[role="dialog"][aria-modal="true"]')];
+      if (dialogs.every(dialog => dialog.contains(opener))) opener.focus({ preventScroll: true });
+    });
+  }, [opener]);
+  return <Dialog open onOpenChange={(_, data) => { if (!data.open && !busy) onClose(); }}>
+    <DialogSurface className="product-modal" aria-label={label}>
+      <DialogBody className="product-modal-body">
+        <DialogTitle action={<IconAction label="关闭" appearance="subtle" icon={<DismissRegular />} disabled={busy} onClick={onClose} />}>{title}</DialogTitle>
+        <DialogContent className="product-modal-content">{children}</DialogContent>
+        {actions ? <DialogActions className="product-modal-actions">{actions}</DialogActions> : null}
+      </DialogBody>
+    </DialogSurface>
+  </Dialog>;
+}
 export function ActionChips({ items, value, onChange, label = "选择任务" }: { items: readonly { id: string; label: string; disabled?: boolean }[]; value: string; onChange(id: string): void; label?: string }) {
   return <div className="product-action-chips" role="group" aria-label={label}>{items.map(item => <ActionButton key={item.id} appearance={value === item.id ? "primary" : "secondary"} aria-pressed={value === item.id} disabled={item.disabled} onClick={() => onChange(item.id)}>{item.label}</ActionButton>)}</div>;
 }

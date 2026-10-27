@@ -6,7 +6,8 @@ import type {
 } from "./accountSessionClient";
 import { isLoopbackAccountEndpoint } from "./desktopIdentityClient";
 import { OpenRegular } from "@fluentui/react-icons";
-import { Button } from "@fluentui/react-components";
+import { Checkbox, Field, Input } from "@fluentui/react-components";
+import { ActionButton as Button, InlineNotice, ModalSurface } from "../../shared/ui/productPrimitives";
 
 type LightweightLoginDialogProps = {
   accountMessage?: string;
@@ -37,6 +38,7 @@ export function LightweightLoginDialog({
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (accountPending) return;
     if (mode === "register") {
       onSubmitAccountRegistration({
         displayName: displayName.trim(),
@@ -52,114 +54,26 @@ export function LightweightLoginDialog({
     });
   }
 
-  return (
-    <div className="workspace-dialog-backdrop" data-testid="workspace-dialog-backdrop">
-      <div
-        aria-label="轻量登录面板"
-        className="workspace-modal-panel lightweight-login-dialog"
-        role="dialog"
-      >
-        <div className="organization-dialog-kicker">账号</div>
-        <div className="organization-dialog-title">登录 LiteasyClaw</div>
-        <div className="organization-dialog-empty">也可以暂不登录，在设置 → AI 接入中配置自己的 API key。</div>
-        <div className="organization-dialog-empty">
-          {showDevelopmentLogin
-            ? "当前连接本机开发账号服务。"
-            : "登录在系统浏览器中完成，Liteasy 不会接触你的密码。"}
-        </div>
-        {!showDevelopmentLogin ? <Button
-          appearance="primary"
-          disabled={accountPending}
-          icon={<OpenRegular />}
-          onClick={onSubmitSystemBrowserLogin}
-          type="button"
-        >
-          使用系统浏览器登录
-        </Button> : null}
-        {showDevelopmentLogin ? <>
-        <div className="organization-dialog-empty">本地开发服务</div>
-        <div aria-label="开发账号操作" className="account-auth-mode-tabs" role="group">
-          <button
-            aria-pressed={mode === "login"}
-            className={`left-rail-button ${mode === "login" ? "active" : "muted"}`}
-            onClick={() => setMode("login")}
-            type="button"
-          >
-            已有账号登录
-          </button>
-          <button
-            aria-pressed={mode === "register"}
-            className={`left-rail-button ${mode === "register" ? "active" : "muted"}`}
-            onClick={() => setMode("register")}
-            type="button"
-          >
-            创建账号
-          </button>
-        </div>
-        <form className="account-registration-form" onSubmit={handleSubmit}>
-          {mode === "register" ? (
-            <label className="organization-form-field">
-              <span>昵称</span>
-              <input
-                autoComplete="name"
-                className="organization-form-input"
-                maxLength={80}
-                onChange={(event) => setDisplayName(event.currentTarget.value)}
-                required
-                type="text"
-                value={displayName}
-              />
-            </label>
-          ) : null}
-          <label className="organization-form-field">
-            <span>邮箱</span>
-            <input
-              autoComplete="email"
-              className="organization-form-input"
-              onChange={(event) => setEmail(event.currentTarget.value)}
-              required
-              type="email"
-              value={email}
-            />
-          </label>
-          <label className="organization-form-field">
-            <span>{mode === "register" ? "密码或密码短语（至少 12 位）" : "密码"}</span>
-            <input
-              autoComplete={mode === "register" ? "new-password" : "current-password"}
-              className="organization-form-input"
-              maxLength={128}
-              minLength={mode === "register" ? 12 : undefined}
-              onChange={(event) => setPassword(event.currentTarget.value)}
-              required
-              type="password"
-              value={password}
-            />
-          </label>
-          <button className="left-rail-button active" disabled={accountPending} type="submit">
-            {accountPending ? "请稍候…" : mode === "register" ? "注册并登录" : "登录"}
-          </button>
-        </form>
-        </> : null}
-        {accountMessage ? (
-          <div aria-live="polite" className="organization-dialog-empty">
-            {accountMessage}
-          </div>
-        ) : null}
-        <label className="organization-form-field">
-          <span>
-            <input
-              onChange={(event) => onToggleSuppressReminder(event.currentTarget.checked)}
-              type="checkbox"
-            />{" "}
-            不再提醒
-          </span>
-        </label>
-        <div className="clear-profile-actions">
-          <button className="left-rail-button muted" onClick={onSkip} type="button">
-            跳过，进入本地阅读器
-          </button>
-        </div>
+  return <ModalSurface title="登录 LiteasyClaw" label="轻量登录面板" onClose={onSkip}
+    actions={<Button appearance="subtle" onClick={onSkip}>跳过，进入本地阅读器</Button>}>
+    <p>也可以暂不登录，在设置 → AI 接入中配置自己的 API key。</p>
+    <p>{showDevelopmentLogin ? "当前连接本机开发账号服务。" : "登录在系统浏览器中完成，Liteasy 不会接触你的密码。"}</p>
+    {!showDevelopmentLogin ? <Button appearance="primary" disabled={accountPending} icon={<OpenRegular />} onClick={onSubmitSystemBrowserLogin}>使用系统浏览器登录</Button> : <>
+      <div aria-label="开发账号操作" className="product-action-chips" role="group">
+        <Button aria-pressed={mode === "login"} appearance={mode === "login" ? "primary" : "secondary"} disabled={accountPending} onClick={() => setMode("login")}>已有账号登录</Button>
+        <Button aria-pressed={mode === "register"} appearance={mode === "register" ? "primary" : "secondary"} disabled={accountPending} onClick={() => setMode("register")}>创建账号</Button>
       </div>
-    </div>
-  );
+      <form onSubmit={handleSubmit}>
+        {mode === "register" ? <Field label="昵称"><Input autoComplete="name" maxLength={80} required disabled={accountPending} value={displayName} onChange={(_, data) => setDisplayName(data.value)} /></Field> : null}
+        <Field label="邮箱"><Input autoComplete="email" type="email" required disabled={accountPending} value={email} onChange={(_, data) => setEmail(data.value)} /></Field>
+        <Field label={mode === "register" ? "密码或密码短语（至少 12 位）" : "密码"}>
+          <Input autoComplete={mode === "register" ? "new-password" : "current-password"} type="password" maxLength={128} minLength={mode === "register" ? 12 : undefined} required disabled={accountPending} value={password} onChange={(_, data) => setPassword(data.value)} />
+        </Field>
+        <Button appearance="primary" disabled={accountPending} type="submit">{accountPending ? "请稍候…" : mode === "register" ? "注册并登录" : "登录"}</Button>
+      </form>
+    </>}
+    {accountPending ? <InlineNotice intent="busy" message="正在等待登录结果…" /> : null}
+    {accountMessage ? <InlineNotice message={accountMessage} /> : null}
+    <Checkbox label="不再提醒" onChange={(_, data) => onToggleSuppressReminder(data.checked === true)} />
+  </ModalSurface>;
 }

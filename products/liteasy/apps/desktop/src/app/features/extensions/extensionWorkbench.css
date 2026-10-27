@@ -14,9 +14,14 @@
 .workflow-run-layout nav button { display: flex; flex-direction: column; align-items: start; text-align: start; }
 .workflow-run-layout pre { overflow: auto; max-height: 360px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .workflow-run-layout details { border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; padding: 10px; margin-block: 8px; }
-@media(max-width: 700px) { .workflow-run-layout { grid-template-columns: minmax(0, 1fr); } }
-.extension-page { container-type:inline-size; background:var(--colorNeutralBackground1); }
+@container extension (max-width: 700px) { .workflow-run-layout { grid-template-columns: minmax(0, 1fr); } }
+.extension-page { container: extension / inline-size; background:var(--bg-panel-secondary); }
 .extension-page > .workbench-page-header { padding:0 0 16px; margin:0; }
 .extension-page .extension-toolbar > .fui-Input { min-width:0; max-width:100%; }
 .extension-library-card h2 { font-size:17px; font-weight:600; line-height:1.5; }
 .extension-library-card p { color:var(--colorNeutralForeground2); font-size:13px; line-height:1.65; }
+
+.extension-page > header { flex-wrap: wrap; }
+.extension-page :is(.extension-library-card, .workflow-run-layout > *) { min-width: 0; overflow-wrap: anywhere; }
+.extension-library-card { box-shadow: var(--shadow-card); }
+.extension-page > p[role="status"] { padding: 12px; border: 1px dashed var(--border-default); border-radius: 8px; color: var(--text-muted); }

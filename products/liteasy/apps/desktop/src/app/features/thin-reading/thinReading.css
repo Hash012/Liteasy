@@ -1,4 +1,5 @@
 .thin-reading {
+  container: thin-reading / inline-size;
   --thin-ink: var(--colorNeutralForeground1);
   --thin-muted: var(--colorNeutralForeground2);
   --thin-line: var(--colorNeutralStroke2);
@@ -252,7 +253,7 @@
 .thin-reading__recovery button { background: var(--colorBrandBackground); border: 0; border-radius: 4px; color: var(--colorNeutralForegroundOnBrand); font: inherit; padding: 7px 10px; }
 .thin-reading__recovery button:disabled { cursor: wait; opacity: 0.65; }
 @keyframes thin-reading-generation-pulse { 50% { opacity: .45; transform: scale(.82); } }
-@media (max-width: 720px) { .thin-reading__generation-status { bottom: 12px; left: 12px; max-width: none; right: 12px; } }
+@container thin-reading (max-width: 720px) { .thin-reading__generation-status { bottom: 12px; left: 12px; max-width: none; right: 12px; } }
 @media (prefers-reduced-motion: reduce) { .thin-reading__generation-status::before { animation: none; } }
 .thin-reading__recovery small { color: var(--colorNeutralForeground2); font-size: 12px; }
 .thin-reading__annotations { border-top: 1px solid var(--thin-line); display: grid; gap: 12px; margin-top: 38px; padding-top: 22px; }
@@ -379,7 +380,7 @@
 .thin-reading__selection-command-copy { display: grid; gap: 3px; min-width: 0; }
 .thin-reading__selection-command-copy strong { font-size: 12px; line-height: 1.4; }
 .thin-reading__selection-command-copy small { color: var(--thin-muted); font-size: 11px; line-height: 1.45; }
-@media (max-width: 720px) {
+@container thin-reading (max-width: 720px) {
   .thin-reading__topbar { align-items: flex-start; flex-direction: column; }
   .thin-reading__controls { justify-content: space-between; width: 100%; }
   .thin-reading__graph-heading { align-items: start; flex-direction: column; }
@@ -399,6 +400,8 @@
   .thin-reading__figure-media { border-bottom: 1px solid var(--thin-line); border-right: 0; }
   .thin-reading__intuecho { border-left: 0; border-top: 1px solid var(--thin-line); margin-top: 54px; padding: 28px 0 0; }
   .thin-reading__intuecho-floating { right: 12px; top: 12px; }
+}
+@media (max-width: 720px) {
   .thin-reading__selection-popover { align-items: stretch; bottom: 12px; flex-direction: column; left: 12px !important; max-width: calc(100vw - 24px); top: auto !important; }
   .thin-reading__selection-quick-commands { min-width: 0; }
 }
@@ -420,4 +423,10 @@
 }
 @media (forced-colors: active) {
   .thin-reading :is(button, a):focus-visible { outline-color: Highlight; }
+}
+
+@container thin-reading (max-width: 440px) {
+  .thin-reading__topbar { padding: 16px; gap: 12px; }
+  .thin-reading__controls, .thin-reading__depth-nav { flex-wrap: wrap; gap: 8px; }
+  .thin-reading__body { padding-inline: 16px; }
 }

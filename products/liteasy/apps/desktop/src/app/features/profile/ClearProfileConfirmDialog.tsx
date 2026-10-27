@@ -1,33 +1,12 @@
-type ClearProfileConfirmDialogProps = {
-  onCancel: () => void;
-  onConfirm: () => void;
-};
+import { ActionButton, InlineNotice, ModalSurface } from "../../shared/ui/productPrimitives";
+
+type ClearProfileConfirmDialogProps = { onCancel: () => void; onConfirm: () => void };
 
 export function ClearProfileConfirmDialog({ onCancel, onConfirm }: ClearProfileConfirmDialogProps) {
-  return (
-    <div className="workspace-dialog-backdrop clear-profile-backdrop danger" data-testid="workspace-dialog-backdrop">
-      <div aria-label="清空学术档案确认" className="workspace-modal-panel clear-profile-dialog" role="dialog">
-        <div className="academic-archive-header">
-          <div>
-            <div className="personal-center-kicker">数据管理</div>
-            <div className="academic-archive-title">清空学术档案确认</div>
-          </div>
-          <button className="organization-dialog-close" onClick={onCancel} type="button">
-            取消
-          </button>
-        </div>
-        <div className="academic-archive-card">
-          将清空学术档案、阅读画像、已记偏好和待确认变更，并暂停自动整理。昵称、用户 ID 和头像会保留。
-        </div>
-        <div className="clear-profile-actions">
-          <button className="left-rail-button" onClick={onCancel} type="button">
-            取消
-          </button>
-          <button className="left-rail-button danger" onClick={onConfirm} type="button">
-            确认清空学术档案
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  return <ModalSurface title="清空学术档案确认" onClose={onCancel} actions={<>
+    <ActionButton onClick={onCancel}>取消</ActionButton>
+    <ActionButton data-intent="danger" onClick={onConfirm}>确认清空学术档案</ActionButton>
+  </>}>
+    <InlineNotice intent="warning" message="将清空学术档案、阅读画像、已记偏好和待确认变更，并暂停自动整理。昵称、用户 ID 和头像会保留。" />
+  </ModalSurface>;
 }

@@ -1,9 +1,32 @@
-import { render, screen, within } from "@testing-library/react";
+import { render as renderView, screen, within, waitFor, fireEvent } from "@testing-library/react";
+import { FluentProvider, webLightTheme } from "@fluentui/react-components";
+import type { ReactElement } from "react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { AppDialogs, type AppDialogsProps } from "../app/layout/AppDialogs";
 import type { OrganizationSummary } from "../app/features/organization/organization.types";
 import { defaultAcademicProfile } from "../app/features/profile/profile.types";
+
+const render = (ui: ReactElement) => renderView(ui, {
+  wrapper: ({ children }) => <FluentProvider theme={webLightTheme}>{children}</FluentProvider>,
+});
+
+// JSDOM has no layout. Give Fluent's focus manager visible geometry here;
+// real focus containment, restoration and clipping are covered in the browser suite.
+beforeEach(() => {
+  vi.spyOn(document.body, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 1024, 768));
+  vi.spyOn(HTMLElement.prototype, "offsetParent", "get").mockImplementation(function (this: HTMLElement) {
+    return this.closest("[hidden]") ? null : this.parentElement;
+  });
+});
+afterEach(() => vi.restoreAllMocks());
+
+async function readyModal(name: string) {
+  const dialog = await screen.findByRole("dialog", { name });
+  // Fluent moves initial focus after mounting the portal; type only once that transition completes.
+  await waitFor(() => expect(within(dialog).getByRole("button", { name: "关闭", exact: true })).toHaveFocus());
+  return dialog;
+}
 
 const summary: OrganizationSummary = {
   auditEvents: [],
@@ -87,7 +110,7 @@ describe("AppDialogs", () => {
       />
     );
 
-    const dialog = screen.getByRole("dialog", { name: "轻量登录面板" });
+    const dialog = await readyModal("轻量登录面板");
     expect(within(dialog).getByRole("button", { name: "登录" })).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "跳过，进入本地阅读器" })).toBeInTheDocument();
     expect(within(dialog).getByRole("checkbox", { name: "不再提醒" })).toBeInTheDocument();
@@ -105,7 +128,7 @@ describe("AppDialogs", () => {
       onSubmitSystemBrowserLogin
     })} />);
 
-    const dialog = screen.getByRole("dialog", { name: "轻量登录面板" });
+    const dialog = await readyModal("轻量登录面板");
     await user.click(within(dialog).getByRole("button", { name: "使用系统浏览器登录" }));
     expect(onSubmitSystemBrowserLogin).toHaveBeenCalledTimes(1);
     expect(within(dialog).queryByLabelText("邮箱")).not.toBeInTheDocument();
@@ -125,14 +148,11 @@ describe("AppDialogs", () => {
       />
     );
 
-    const dialog = screen.getByRole("dialog", { name: "轻量登录面板" });
+    const dialog = await readyModal("轻量登录面板");
     await user.click(within(dialog).getByRole("button", { name: "创建账号" }));
-    await user.type(within(dialog).getByLabelText("昵称"), "Tian");
-    await user.type(within(dialog).getByLabelText("邮箱"), "tian@example.com");
-    await user.type(
-      within(dialog).getByLabelText("密码或密码短语（至少 12 位）"),
-      "private-password-1"
-    );
+    fireEvent.change(within(dialog).getByLabelText("昵称"), { target: { value: "Tian" } });
+    fireEvent.change(within(dialog).getByLabelText("邮箱"), { target: { value: "tian@example.com" } });
+    fireEvent.change(within(dialog).getByLabelText("密码或密码短语（至少 12 位）"), { target: { value: "private-password-1" } });
     await user.click(within(dialog).getByRole("button", { name: "注册并登录" }));
 
     expect(onSubmitAccountRegistration).toHaveBeenCalledWith({
@@ -155,9 +175,9 @@ describe("AppDialogs", () => {
       />
     );
 
-    const dialog = screen.getByRole("dialog", { name: "轻量登录面板" });
-    await user.type(within(dialog).getByLabelText("邮箱"), "tian@example.com");
-    await user.type(within(dialog).getByLabelText("密码"), "private-password-1");
+    const dialog = await readyModal("轻量登录面板");
+    fireEvent.change(within(dialog).getByLabelText("邮箱"), { target: { value: "tian@example.com" } });
+    fireEvent.change(within(dialog).getByLabelText("密码"), { target: { value: "private-password-1" } });
     await user.click(within(dialog).getByRole("button", { name: "登录" }));
 
     expect(onSubmitAccountLogin).toHaveBeenCalledWith({
@@ -176,12 +196,12 @@ describe("AppDialogs", () => {
     expect(screen.getByRole("dialog", { name: "组织窗口" })).toHaveClass("workspace-modal-panel");
 
     rerender(<AppDialogs {...createProps({ academicArchiveOpen: true })} />);
-    expect(screen.getByTestId("workspace-dialog-backdrop")).toHaveClass("workspace-dialog-backdrop");
-    expect(screen.getByRole("dialog", { name: "学术档案页面" })).toHaveClass("workspace-modal-panel");
+    expect(screen.getByRole("dialog", { name: "学术档案页面" })).toHaveAttribute("aria-modal", "true");
+    expect(screen.getByRole("dialog", { name: "学术档案页面" })).toHaveClass("fui-DialogSurface", "product-modal");
 
     rerender(<AppDialogs {...createProps({ clearProfileConfirmOpen: true })} />);
-    expect(screen.getByTestId("workspace-dialog-backdrop")).toHaveClass("workspace-dialog-backdrop");
-    expect(screen.getByRole("dialog", { name: "清空学术档案确认" })).toHaveClass("workspace-modal-panel");
+    expect(screen.getByRole("dialog", { name: "清空学术档案确认" })).toHaveAttribute("aria-modal", "true");
+    expect(screen.getByRole("dialog", { name: "清空学术档案确认" })).toHaveClass("fui-DialogSurface", "product-modal");
   });
   test("renders only active profile dialogs and forwards actions", async () => {
     const user = userEvent.setup();
@@ -229,18 +249,21 @@ describe("AppDialogs", () => {
       />
     );
 
-    await user.type(screen.getByLabelText("组织名称"), "Liteasy Research Lab");
+    await readyModal("创建组织");
+    fireEvent.change(screen.getByLabelText("组织名称"), { target: { value: "Liteasy Research Lab" } });
     await user.click(screen.getByRole("button", { name: "创建组织" }));
     expect(onCreateOrganization).toHaveBeenCalledWith("Liteasy Research Lab");
 
     rerender(<AppDialogs {...createProps({ joinOrganizationOpen: true, onJoinOrganization })} />);
-    await user.type(screen.getByLabelText("邀请令牌"), `orginv_${"a".repeat(43)}`);
+    await readyModal("加入组织");
+    fireEvent.change(screen.getByLabelText("邀请令牌"), { target: { value: `orginv_${"a".repeat(43)}` } });
     await user.click(screen.getByRole("button", { name: "加入组织" }));
     expect(onJoinOrganization).toHaveBeenCalledWith(`orginv_${"a".repeat(43)}`);
 
     rerender(<AppDialogs {...createProps({ inviteSummary: summary, onInviteMember })} />);
+    await readyModal("邀请成员确认");
     expect(screen.getByRole("dialog", { name: "邀请成员确认" })).toBeInTheDocument();
-    await user.type(screen.getByLabelText("账号主体 ID"), "user-researcher-1");
+    fireEvent.change(screen.getByLabelText("账号主体 ID"), { target: { value: "user-researcher-1" } });
     await user.click(screen.getByRole("button", { name: "创建邀请" }));
     expect(onInviteMember).toHaveBeenCalledWith({ role: "member", targetSubject: "user-researcher-1" });
 

@@ -1,3 +1,4 @@
+.ai-workbench-dialog { container: ai-workbench / inline-size; }
 .ai-workbench-dialog button { color: var(--colorNeutralForeground1); }
 .ai-workbench-dialog button:disabled { color: var(--colorNeutralForegroundDisabled); }
 .ai-paper-confirm button:not(:disabled):last-child { color: var(--colorNeutralForegroundOnBrand); }
@@ -24,7 +25,7 @@
 .ai-capability-list .ai-capability { justify-content: flex-start; text-align: left; padding: 10px 12px; gap: 10px; }
 .ai-capability span > strong, .ai-capability small { display: block; }
 .ai-workbench-result { font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--colorNeutralBackground3); border-radius: 4px; padding: 10px; }
-@media (max-width: 640px) {
+@container ai-workbench (max-width: 640px) {
   .ai-workbench-content { grid-template-columns: minmax(0, 1fr); max-height: 75vh; overflow: auto; gap: 12px; }
   .ai-paper-picker-scroll { height: 25vh; }
   .ai-workbench-capabilities { border-left: 0; border-top: 1px solid var(--colorNeutralStroke2); padding: 12px 0 0; max-height: none; }
@@ -35,3 +36,5 @@
 
 .ai-folder-toggle.fui-Button { width: 100%; justify-content: flex-start; text-align: start; }
 .ai-paper-folder > div[hidden] { display: none; }
+
+.ai-paper-confirm { flex-wrap: wrap; }
