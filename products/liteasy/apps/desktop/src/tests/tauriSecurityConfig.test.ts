@@ -42,6 +42,7 @@ test("limits main window permissions to host events, deep links, zoom, fullscree
     "core:window:allow-toggle-maximize",
     "core:window:allow-internal-toggle-maximize",
     "core:window:allow-close",
+    "core:window:allow-destroy",
     "core:window:allow-start-dragging"
   ]);
   expect(capability.permissions).not.toContain("core:event:allow-emit");

@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { PdfReader } from "../app/features/pdf/PdfReader";
+import { openPdfAnnotations } from "./fixtures/renderWithPdfAnnotations";
 import { pdfAnnotationStorageKey, loadPdfAnnotations } from "../app/features/pdf/pdfAnnotationStorage";
 import { buildQuickAskPrompt, extractQuickAskAbstract } from "../app/features/pdf/pdfQuickAsk";
 import type { PdfQuickAskRequest } from "../app/features/pdf/pdfQuickAsk";
@@ -75,6 +76,7 @@ test("uses the full page and abstract, stores the answer privately, and restores
   expect(saved.publication?.desiredVisibility).toBe("private");
   view.unmount();
   render(<PdfReader selectedPapers={[paper]} zoom={100} onQuickAsk={onQuickAsk} />);
+  openPdfAnnotations();
   const mark = await screen.findByLabelText("速问：第 1 页：compact representations");
   expect(mark).toHaveStyle({ borderBottomStyle: "dashed" });
   await user.click(mark);

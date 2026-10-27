@@ -178,6 +178,19 @@ test("scrolling within the current page saves the updated offset", async () => {
   await waitFor(() => expect((state.rows.get(key)?.value as { topRatio: number })?.topRatio).toBe(0.4));
 });
 
+test("a page beginning below the viewport retains its leading gap without changing the legacy offset format", async () => {
+  const store = createPdfReaderPositionStore("local", () => "local", state.storage);
+  await store.save("paper-a", "sha256:aaa", 7, -0.15);
+  expect(state.rows.get(key)?.value).toMatchObject({ page: 7, topRatio: 0, topGapRatio: 0.15 });
+  expect(await store.loadLocation("paper-a", "sha256:aaa")).toEqual({ page: 7, topRatio: -0.15 });
+  const options = input(); const hook = renderHook(() => usePdfReaderPosition(options));
+  await waitFor(() => expect(options.restorePage).toHaveBeenCalledWith(7, expect.any(Function), -0.15));
+  hook.unmount();
+  await store.save("paper-a", "sha256:aaa", 7, 0.4);
+  expect(state.rows.get(key)?.value).not.toHaveProperty("topGapRatio");
+  expect(await store.loadLocation("paper-a", "sha256:aaa")).toEqual({ page: 7, topRatio: 0.4 });
+});
+
 test.each([-0.1, 1.1, NaN])("rejects an invalid saved page offset %s without overwriting it", async (topRatio) => {
   const row = saved(); row.value = { ...(row.value as object), topRatio }; state.rows.set(key, row);
   const store = createPdfReaderPositionStore("local", () => "local", state.storage);
@@ -192,7 +205,51 @@ test("unmount flushes the trailing position before a reopen reads storage", asyn
   act(() => hook.result.current.markNavigation()); hook.rerender({ ...options, page: 7, topRatio: 0.3 });
   expect(state.storage.commit).not.toHaveBeenCalled(); hook.unmount();
   const store = createPdfReaderPositionStore("local", () => "local", state.storage);
-  await expect(store.loadLocation("paper-a", "sha256:aaa")).resolves.toEqual({ page: 7, topRatio: 0.3 });
+  await expect(store.loadLocation("paper-a", "sha256:aaa")).resolves.toEqual({ page: 7, topRatio: 0.3, pageCount: 12 });
+});
+
+test("closing captures the visible position before a pending scroll render can finish", async () => {
+  const options = input({ page: 2, capturePosition: () => ({ page: 7, topRatio: 0.65 }), view: { zoom: 125, layoutMode: "continuous" } });
+  const hook = renderHook(() => usePdfReaderPosition(options));
+  await act(async () => {});
+  act(() => hook.result.current.markNavigation());
+  hook.unmount();
+  const store = createPdfReaderPositionStore("local", () => "local", state.storage);
+  await expect(store.loadLocation("paper-a", "sha256:aaa")).resolves.toEqual({ page: 7, topRatio: 0.65, pageCount: 12, view: { zoom: 125, layoutMode: "continuous" } });
+});
+
+test("each document keeps its own complete reading checkpoint and replacement bytes do not inherit it", async () => {
+  const store = createPdfReaderPositionStore("local", () => "local", state.storage);
+  await store.save("paper-a", "sha256:aaa", 5, 0.35, { pageCount: 12, view: { zoom: 130, layoutMode: "single" } });
+  await store.save("paper-b", "sha256:bbb", 2, 0.7, { pageCount: 20, view: { zoom: 85, layoutMode: "spread" } });
+  expect(await store.loadLocation("paper-a", "sha256:aaa")).toEqual({ page: 5, topRatio: 0.35, pageCount: 12, view: { zoom: 130, layoutMode: "single" } });
+  expect(await store.loadLocation("paper-b", "sha256:bbb")).toEqual({ page: 2, topRatio: 0.7, pageCount: 20, view: { zoom: 85, layoutMode: "spread" } });
+  expect(await store.loadLocation("paper-a", "sha256:replacement")).toBeNull();
+  const restoreView = vi.fn(), options = input({ restoreView, view: { zoom: 100, layoutMode: "continuous" } });
+  renderHook(() => usePdfReaderPosition(options));
+  await waitFor(() => expect(restoreView).toHaveBeenCalledWith({ zoom: 130, layoutMode: "single" }));
+  expect(options.restorePage).toHaveBeenCalledWith(5, expect.any(Function), 0.35);
+});
+
+test("a zoom choice while loading wins over the saved document view", async () => {
+  const row = saved(); row.value = { ...(row.value as object), view: { zoom: 150, layoutMode: "spread" } };
+  state.rows.set(key, row);
+  const read = deferred<StorageRow | null>(); vi.mocked(state.storage.get).mockReturnValueOnce(read.promise);
+  const restoreView = vi.fn(), options = input({ restoreView, view: { zoom: 100, layoutMode: "continuous" } });
+  const hook = renderHook(props => usePdfReaderPosition(props), { initialProps: options });
+  act(() => hook.result.current.markNavigation());
+  hook.rerender({ ...options, view: { zoom: 110, layoutMode: "continuous" } });
+  await act(async () => read.resolve(row));
+  expect(restoreView).not.toHaveBeenCalled(); expect(options.restorePage).not.toHaveBeenCalled();
+  await waitFor(() => expect(state.rows.get(key)?.value).toMatchObject({ view: { zoom: 110, layoutMode: "continuous" } }));
+});
+
+test.each([{ zoom: 0, layoutMode: "single" }, { zoom: 100, layoutMode: "unknown" }])("invalid saved view %j remains untouched", async view => {
+  const row = saved(); row.value = { ...(row.value as object), view }; state.rows.set(key, row);
+  const store = createPdfReaderPositionStore("local", () => "local", state.storage);
+  await expect(store.loadLocation("paper-a", "sha256:aaa")).rejects.toThrow("阅读视图");
+  await expect(store.save("paper-a", "sha256:aaa", 4)).rejects.toThrow("阅读视图");
+  expect(state.storage.commit).not.toHaveBeenCalled(); expect(state.rows.get(key)).toEqual(row);
 });
 
 test("temporary save failures can be retried without reopening the document", async () => {

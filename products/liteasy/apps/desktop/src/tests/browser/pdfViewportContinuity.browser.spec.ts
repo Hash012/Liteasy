@@ -58,6 +58,7 @@ test("mixed-size pages keep the reading line through zoom, resize and reopening"
     };
   }))).toBeCloseTo(savedOffset, 2);
   await page.reload(); await expect(page.getByLabel("当前页码")).toHaveValue("6", { timeout: 30_000 });
+  await expect(page.getByLabel("PDF 显示比例 140%")).toBeVisible();
   await expect(page.locator('.pdf-page-shell[data-page="6"] .pdf-text-layer')).toContainText("PAGE 6");
   await expect.poll(async () => Math.abs(await offset(page, 6) - savedOffset)).toBeLessThan(0.015);
   await go(page, 10); await page.setViewportSize({ width: 1350, height: 900 });
@@ -157,5 +158,42 @@ test("wheel-only reading saves before a quick tab close without a page-number ac
   await page.getByRole("button", { name: "文献库", exact: true }).dblclick();
   await page.getByRole("button", { name: "das24a.pdf", exact: true }).dblclick();
   await expect(page.getByLabel("当前页码")).toHaveValue(savedPage, { timeout: 30_000 });
-  await expect.poll(async () => Math.abs(await offset(page, Number(savedPage)) - savedOffset)).toBeLessThan(0.015);
+  await expect.poll(async () => Math.abs(await offset(page, Number(savedPage)) - savedOffset), {
+    message: `Restore page ${savedPage} at viewport offset ${savedOffset}`
+  }).toBeLessThan(0.015);
+});
+
+test("each paper restores its own zoom and layout together with its saved page", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
+  await page.route("**/manual-preview/**.pdf", route => route.fulfill({ body: book(12), contentType: "application/pdf" }));
+  await page.goto("/?pdf-highlight-fixture#ai-workbench");
+  const tabs = page.locator('[data-region="main"]');
+  await tabs.getByRole("tab", { name: "Current Research", exact: true }).click();
+  await expect(page.locator('.pdf-page-shell[data-page="1"] .pdf-text-layer')).toContainText("PAGE 1", { timeout: 30_000 });
+  await go(page, 6);
+  for (let index = 0; index < 4; index++) await page.getByRole("button", { name: "按比例放大 PDF", exact: true }).click();
+  await page.getByRole("button", { name: "页面布局设置", exact: true }).click();
+  await page.getByRole("button", { name: "单页", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await tabs.getByRole("tab", { name: "Recent Research", exact: true }).click();
+  await expect(page.locator('.pdf-page-shell[data-page="1"] .pdf-text-layer')).toContainText("PAGE 1");
+  await go(page, 3);
+  for (let index = 0; index < 3; index++) await page.getByRole("button", { name: "按比例缩小 PDF", exact: true }).click();
+  await page.getByRole("button", { name: "页面布局设置", exact: true }).click();
+  await page.getByRole("button", { name: "双页", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await tabs.getByRole("button", { name: "关闭 Recent Research", exact: true }).click();
+  await expect(page.getByLabel("当前页码")).toHaveValue("6");
+  await expect(page.getByLabel("PDF 显示比例 120%")).toBeVisible();
+  await expect(page.locator(".pdf-page-list")).toHaveClass(/layout-single/);
+  await page.reload();
+  await tabs.getByRole("tab", { name: "Current Research", exact: true }).click();
+  await expect(page.getByLabel("当前页码")).toHaveValue("6", { timeout: 30_000 });
+  await expect(page.getByLabel("PDF 显示比例 120%")).toBeVisible();
+  await expect(page.locator(".pdf-page-list")).toHaveClass(/layout-single/);
+  await tabs.getByRole("tab", { name: "Recent Research", exact: true }).click();
+  await expect(page.getByLabel("当前页码")).toHaveValue("3");
+  await expect(page.getByLabel("PDF 显示比例 85%")).toBeVisible();
+  await expect(page.locator(".pdf-page-list")).toHaveClass(/layout-spread/);
 });

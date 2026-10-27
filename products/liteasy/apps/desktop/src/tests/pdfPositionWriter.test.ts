@@ -1,5 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { createPdfPositionWriter } from "../app/features/pdf/pdfPositionWriter";
+import { flushPdfReaderPositions, registerPdfPositionWriter } from "../app/features/pdf/pdfReaderPersistence";
 afterEach(() => vi.useRealTimers());
 const tick = async () => { for (let index = 0; index < 10; index++) await Promise.resolve(); };
 
@@ -30,4 +31,31 @@ test("a read-only error prevents queued writes and retries", async () => {
   writer.enqueue({ page: 2 }); writer.flush(); writer.enqueue({ page: 3 }); await tick();
   writer.retry(); writer.enqueue({ page: 4 }); writer.flush(); await tick();
   expect(save).toHaveBeenCalledOnce();
+});
+
+test("shutdown waits for both the in-flight location and its newer trailing view state", async () => {
+  vi.useFakeTimers();
+  const completions: (() => void)[] = [];
+  const save = vi.fn(() => new Promise<void>(resolve => completions.push(resolve)));
+  const writer = createPdfPositionWriter({ save, onSaved: vi.fn(), onError: () => false });
+  const release = registerPdfPositionWriter(writer);
+  writer.enqueue({ page: 2 }); writer.flush();
+  writer.enqueue({ page: 7, topRatio: 0.4, pageCount: 12, view: { zoom: 125, layoutMode: "single" } });
+  let done = false;
+  const closing = flushPdfReaderPositions().then(() => { done = true; });
+  expect(done).toBe(false);
+  completions.shift()!(); await tick();
+  expect(save).toHaveBeenCalledTimes(2); expect(done).toBe(false);
+  expect(save).toHaveBeenLastCalledWith({ page: 7, topRatio: 0.4, pageCount: 12, view: { zoom: 125, layoutMode: "single" } });
+  completions.shift()!(); await closing; release(); await tick();
+  expect(done).toBe(true); expect(vi.getTimerCount()).toBe(0);
+});
+
+test("shutdown reports a transient failure and a later retry stores the same checkpoint", async () => {
+  const save = vi.fn(async () => {}).mockRejectedValueOnce(new Error("disk full"));
+  const writer = createPdfPositionWriter({ save, onSaved: vi.fn(), onError: () => false });
+  writer.enqueue({ page: 9 });
+  await expect(writer.flushAndWait()).rejects.toThrow("disk full");
+  await expect(writer.flushAndWait()).resolves.toBeUndefined();
+  expect(save).toHaveBeenLastCalledWith({ page: 9 });
 });

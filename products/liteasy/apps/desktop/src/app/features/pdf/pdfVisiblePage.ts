@@ -17,3 +17,16 @@ export function pdfVisiblePage(viewport: { top: number; bottom: number }, pages:
   }
   return selected;
 }
+
+/** Sample fresh bounds before closing; a pending animation frame can lag behind the last wheel event. */
+export function readPdfViewportPosition(stage: HTMLElement | null, currentPage: number, layout: string) {
+  if (!stage || !stage.clientHeight || !stage.clientWidth) return undefined;
+  const top = stage.getBoundingClientRect().top + stage.clientTop;
+  const entries = Array.from(stage.querySelectorAll<HTMLElement>(".pdf-page-shell"), element => {
+    const bounds = element.getBoundingClientRect();
+    return { page: Number(element.dataset.page), top: bounds.top, bottom: bounds.bottom, width: bounds.width };
+  }).filter(entry => entry.width > 0 && entry.bottom > entry.top);
+  const page = layout === "continuous" ? pdfVisiblePage({ top, bottom: top + stage.clientHeight }, entries, currentPage) : currentPage;
+  const bounds = entries.find(entry => entry.page === page);
+  return bounds ? { page, topRatio: Math.round(Math.min(1, (top - bounds.top) / (bounds.bottom - bounds.top)) * 100_000) / 100_000 } : undefined;
+}

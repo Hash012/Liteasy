@@ -27,6 +27,7 @@ import { schedulePdfPageRender } from "./pdfPageRenderQueue";
 import { pdfReaderContentRevision } from "./pdfReaderPosition";
 import { usePdfReaderFeedback } from "./usePdfReaderFeedback";
 import { usePdfReaderPosition } from "./usePdfReaderPosition";
+import { readPdfViewportPosition } from "./pdfVisiblePage";
 import { getHighlightColor, getOverlayStyle, pdfAnnotationColorLabels } from "./pdfAnnotationAppearance";
 import { CheckmarkRegular, DrawShapeRegular, EraserRegular, ArrowUndoRegular } from "@fluentui/react-icons";
 import { PdfInkLayer } from "./PdfInkLayer";
@@ -1658,6 +1659,7 @@ export function PdfReader({
   const documentInfoSource = useRef<{ paperId?: string; sourcePath?: string; contentHash?: string; document?: PDFDocumentProxy }>({});
   const [pageCount, setPageCount] = useState(1);
   const [focusedPage, setFocusedPage] = useState(1);
+  const [layoutMode, setLayoutMode] = useState<PdfPageLayoutMode>(loadPdfPageLayoutMode);
   const [pageOffset, setPageOffset] = useState<{ page: number; topRatio: number }>();
   const loadedPositionDocument = pdfDocument && documentInfoSource.current.document === pdfDocument &&
     documentInfoSource.current.paperId === activePaper?.id && documentInfoSource.current.sourcePath === activePaper?.sourcePath &&
@@ -1666,10 +1668,15 @@ export function PdfReader({
     scopeId: objectWorkbench?.scopeId, paperId: activePaper?.id, sourcePath: activePaper?.sourcePath,
     document: loadedPositionDocument,
     contentRevision: loadedPositionDocument ? pdfReaderContentRevision(activePaper?.contentHash, loadedPositionDocument.fingerprints) : null,
+    view: { zoom, layoutMode },
+    capturePosition: () => readPdfViewportPosition(stageRef.current, focusedPage, layoutMode),
+    restoreView: (view) => {
+      setLayoutMode(view?.layoutMode ?? loadPdfPageLayoutMode());
+      onZoomChange?.(view?.zoom ?? 100);
+    },
     pageCount, page: focusedPage, topRatio: pageOffset?.page === focusedPage ? pageOffset.topRatio : undefined, hasNavigationTarget: targetEvidence?.paperId === activePaper?.id,
     restorePage: (page, stillCurrent, topRatio) => navigateToPage(page, "auto", topRatio, stillCurrent)
   });
-  const [layoutMode, setLayoutMode] = useState<PdfPageLayoutMode>(loadPdfPageLayoutMode);
   const [marginCommentsVisible, setMarginCommentsVisible] = useState(loadPdfMarginCommentsVisible);
   const [marginCommentConnectorsVisible, setMarginCommentConnectorsVisible] = useState(
     loadPdfMarginCommentConnectorsVisible
@@ -2012,6 +2019,7 @@ export function PdfReader({
   }
 
   function changeLayoutMode(mode: PdfPageLayoutMode) {
+    readerPosition.markNavigation();
     viewportAnchor.capture();
     setLayoutMode(mode);
   }
@@ -4247,8 +4255,8 @@ export function PdfReader({
                 setSelectionPreview(null);
               }}
               onToggleWhiteboard={() => { if (legacyBoardPreview && whiteboardOpen) { setWhiteboardOpen(false); setLegacyBoardPreview(false); return; } if (objectWorkbench?.isOpen) { objectWorkbench.close?.(); return; } if (objectWorkbench && activePaper && whiteboardStorageKey) { void objectWorkbench.openLegacyBoard(activePaper,resolvedWhiteboardDocument(),whiteboardStorageKey).catch((e) => { setLegacyBoardPreview(true); setWhiteboardOpen(true); setStatus(`白板迁移失败，正在只读显示原快照：${e.message}`); }); } else setWhiteboardOpen((current) => !current); }}
-              onZoomIn={() => { viewportAnchor.capture(); onZoomChange?.(Math.min(180, zoom + 5)); }}
-              onZoomOut={() => { viewportAnchor.capture(); onZoomChange?.(Math.max(70, zoom - 5)); }}
+              onZoomIn={() => { readerPosition.markNavigation(); viewportAnchor.capture(); onZoomChange?.(Math.min(180, zoom + 5)); }}
+              onZoomOut={() => { readerPosition.markNavigation(); viewportAnchor.capture(); onZoomChange?.(Math.max(70, zoom - 5)); }}
               pageCount={pageCount}
               searchOpen={searchOpen}
               searchTags={searchMetadata.tags}
@@ -4281,6 +4289,10 @@ export function PdfReader({
             {annotationLoadError && (sidebarCollapsed || sidebarMode !== "annotations") ? (
               <InlineNotice intent="error" message={annotationLoadError}
                 action={<Button size="small" onClick={() => setAnnotationLoadAttempt((attempt) => attempt + 1)}>重试恢复批注</Button>} />
+            ) : null}
+            {readerPosition.error && (sidebarCollapsed || sidebarMode !== "annotations") ? (
+              <InlineNotice intent="error" message={readerPosition.error}
+                action={readerPosition.canRetry ? <ActionButton size="small" onClick={readerPosition.retrySave}>重试保存阅读位置</ActionButton> : undefined} />
             ) : null}
           </div>
           <div

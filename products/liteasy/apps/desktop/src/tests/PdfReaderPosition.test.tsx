@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFDocumentProxy } from "pdfjs-dist";
@@ -7,6 +8,7 @@ import { createObjectStorage, type StorageRow, type ObjectStorage } from "../app
 import { ObjectWorkbenchContext, type ObjectWorkbenchPort } from "../app/features/objects/objectWorkbenchPort";
 import { buildOriginalReaderPaper, type OriginalFileDescriptor } from "../app/features/original-files/originalFileService";
 import type { Paper } from "../app/features/workspace/workspace.types";
+import { createPdfReaderPositionStore } from "../app/features/pdf/pdfReaderPosition";
 
 vi.mock("../app/features/objects/objectStorage", async (load) => ({ ...await load<object>(), createObjectStorage: vi.fn() }));
 vi.mock("pdfjs-dist/legacy/build/pdf.mjs", async (load) => ({ ...await load<object>(), getDocument: vi.fn() }));
@@ -89,4 +91,31 @@ test("retrying a failed reading-position save writes the requested page", async 
   fireEvent.click(await screen.findByRole("button", { name: "重试保存阅读位置" }));
   await waitFor(() => expect((rows.get(`reader-state/pdf/${paper.id}`)?.value as { page: number })?.page).toBe(5));
   expect(screen.queryByRole("button", { name: "重试保存阅读位置" })).not.toBeInTheDocument();
+});
+
+test("reopening and switching papers restores each page, zoom and layout independently", async () => {
+  const first = await buildOriginalReaderPaper(original, bytes);
+  const second = await buildOriginalReaderPaper({ ...original, path: "/synthetic/other.pdf" }, new TextEncoder().encode("%PDF-1.7\nother content"));
+  const store = createPdfReaderPositionStore("local", () => "local", storage);
+  await store.save(first.id, `sha256:${first.contentHash}`, 4, 0.3, { pageCount: 6, view: { zoom: 130, layoutMode: "single" } });
+  await store.save(second.id, `sha256:${second.contentHash}`, 2, 0.2, { pageCount: 6, view: { zoom: 85, layoutMode: "spread" } });
+  function Reader({ paper }: { paper: Paper }) {
+    const [zoom, setZoom] = useState(100);
+    return <ObjectWorkbenchContext.Provider value={port}><PdfReader selectedPapers={[paper]} zoom={zoom} onZoomChange={setZoom} loadPdfSource={loadPdfSource} /></ObjectWorkbenchContext.Provider>;
+  }
+  const mounted = render(<Reader paper={first} />);
+  await waitFor(() => expect(screen.getByRole("spinbutton", { name: "当前页码" })).toHaveValue(4));
+  expect(screen.getByLabelText("PDF 显示比例 130%")).toBeInTheDocument();
+  expect(screen.getByLabelText("PDF.js 页面列表")).toHaveClass("layout-single");
+  fireEvent.click(screen.getByRole("button", { name: "按比例放大 PDF" }));
+  await waitFor(() => expect(rows.get(`reader-state/pdf/${first.id}`)?.value).toMatchObject({ page: 4, view: { zoom: 135, layoutMode: "single" } }));
+  mounted.rerender(<Reader paper={second} />);
+  await waitFor(() => expect(screen.getByLabelText("PDF 显示比例 85%")).toBeInTheDocument());
+  expect(screen.getByRole("spinbutton", { name: "当前页码" })).toHaveValue(2);
+  expect(screen.getByLabelText("PDF.js 页面列表")).toHaveClass("layout-spread");
+  mounted.unmount();
+  render(<Reader paper={first} />);
+  await waitFor(() => expect(screen.getByLabelText("PDF 显示比例 135%")).toBeInTheDocument());
+  expect(screen.getByRole("spinbutton", { name: "当前页码" })).toHaveValue(4);
+  expect(screen.getByLabelText("PDF.js 页面列表")).toHaveClass("layout-single");
 });

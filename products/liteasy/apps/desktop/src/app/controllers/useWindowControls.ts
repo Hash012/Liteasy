@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { flushPdfReaderPositions } from "../features/pdf/pdfReaderPersistence";
 
 export function useWindowControls() {
   const available = isTauri();
@@ -10,6 +11,8 @@ export function useWindowControls() {
     if (!available) return;
     let disposed = false;
     let unlisten: (() => void) | undefined;
+    let unlistenClose: (() => void) | undefined;
+    let closing = false;
     let revision = 0;
     const window = getCurrentWindow();
     const refresh = async () => {
@@ -23,7 +26,20 @@ export function useWindowControls() {
     void window.onResized(() => { void refresh(); }).then((cleanup) => {
       if (disposed) cleanup(); else unlisten = cleanup;
     }).catch(() => {});
-    return () => { disposed = true; unlisten?.(); };
+    void window.onCloseRequested(async (event) => {
+      if (closing) { event.preventDefault(); return; }
+      closing = true;
+      try {
+        // Tauri awaits this handler before destroying the window (including Alt+F4).
+        await flushPdfReaderPositions();
+      } catch {
+        event.preventDefault();
+        if (!disposed) setError("阅读进度尚未保存，请检查存储空间后重试关闭。");
+      } finally { closing = false; }
+    }).then((cleanup) => {
+      if (disposed) cleanup(); else unlistenClose = cleanup;
+    }).catch(() => { if (!disposed) setError("退出保存未能就绪，请稍后重试。"); });
+    return () => { disposed = true; unlisten?.(); unlistenClose?.(); };
   }, [available]);
 
   async function run(action: "minimize" | "toggleMaximize" | "close") {
@@ -31,6 +47,7 @@ export function useWindowControls() {
     setError("");
     try {
       const window = getCurrentWindow();
+      if (action === "close") await flushPdfReaderPositions();
       await window[action]();
       if (action === "toggleMaximize") setMaximized(await window.isMaximized());
     } catch {

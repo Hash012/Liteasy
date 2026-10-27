@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPdfReaderPositionStore, isPdfPositionReadOnlyError } from "./pdfReaderPosition";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPdfReaderPositionStore, isPdfPositionReadOnlyError, type PdfReaderViewState } from "./pdfReaderPosition";
 import { createPdfPositionWriter } from "./pdfPositionWriter";
+import { registerPdfPositionWriter } from "./pdfReaderPersistence";
 
 export type PdfReaderPositionInput = {
   scopeId?: string;
@@ -12,6 +13,9 @@ export type PdfReaderPositionInput = {
   pageCount: number;
   page: number;
   topRatio?: number;
+  view?: PdfReaderViewState;
+  restoreView?: (view: PdfReaderViewState | undefined) => void;
+  capturePosition?: () => { page: number; topRatio: number } | undefined;
   hasNavigationTarget?: boolean;
   restorePage: (page: number, stillCurrent: () => boolean, topRatio?: number) => void;
 };
@@ -22,9 +26,11 @@ type Session = {
   restoring: boolean;
   lastPage?: number;
   lastTopRatio?: number;
+  lastView?: PdfReaderViewState;
   restoredPage?: number;
   savedIntent: number;
   writer: ReturnType<typeof createPdfPositionWriter>;
+  capture(): void;
 };
 
 export function usePdfReaderPosition(input: PdfReaderPositionInput) {
@@ -41,6 +47,11 @@ export function usePdfReaderPosition(input: PdfReaderPositionInput) {
   const [error, setError] = useState("");
   const [canRetry, setCanRetry] = useState(false);
 
+  useLayoutEffect(() => () => {
+    // Layout cleanup still has the reader DOM. Passive cleanup happens after its removal.
+    sessionRef.current?.capture();
+  }, [input.scopeId, input.paperId, input.sourcePath, input.document, input.contentRevision]);
+
   useEffect(() => {
     setError(""); setCanRetry(false);
     sessionRef.current = null;
@@ -52,7 +63,7 @@ export function usePdfReaderPosition(input: PdfReaderPositionInput) {
       latest.current.sourcePath === sourcePath && latest.current.document === document && latest.current.contentRevision === contentRevision;
     const store = createPdfReaderPositionStore(scopeId, () => latest.current.scopeId);
     const writer = createPdfPositionWriter({
-      save: ({ page, topRatio }) => store.save(paperId, contentRevision, page, topRatio),
+      save: ({ page, topRatio, pageCount, view }) => store.save(paperId, contentRevision, page, topRatio, { pageCount, view }),
       onSaved: () => { if (current()) { setError(""); setCanRetry(false); } },
       onError: (cause) => {
         const blocked = isPdfPositionReadOnlyError(cause);
@@ -63,7 +74,15 @@ export function usePdfReaderPosition(input: PdfReaderPositionInput) {
         return blocked;
       }
     });
-    const session: Session = { current, ready: false, blocked: false, restoring: false, savedIntent: 0, writer };
+    const capture = () => {
+      if (!current() || !session.ready || session.blocked || session.restoring ||
+        (session.restoredPage !== undefined && opening.intent === 0)) return;
+      const position = latest.current.capturePosition?.();
+      if (!position || position.page < 1 || position.page > latest.current.pageCount) return;
+      writer.enqueue({ ...position, pageCount: latest.current.pageCount, view: latest.current.view });
+    };
+    const session: Session = { current, ready: false, blocked: false, restoring: false, savedIntent: 0, writer, capture };
+    const releaseWriter = registerPdfPositionWriter({ flushAndWait: () => { capture(); return writer.flushAndWait(); } });
     sessionRef.current = session;
     const initialPage = input.page;
     void store.loadLocation(paperId, contentRevision).then((saved) => {
@@ -75,6 +94,8 @@ export function usePdfReaderPosition(input: PdfReaderPositionInput) {
         return;
       }
       session.lastPage = latest.current.page;
+      session.lastView = saved?.view ?? latest.current.view;
+      latest.current.restoreView?.(saved?.view);
       if (saved !== null || latest.current.page !== 1) {
         const page = saved === null ? 1 : Math.min(saved.page, Math.max(1, latest.current.pageCount));
         session.lastPage = page;
@@ -97,12 +118,12 @@ export function usePdfReaderPosition(input: PdfReaderPositionInput) {
       session.blocked = true;
       setError(`阅读位置无法恢复，原记录保持不变。${cause instanceof Error ? cause.message : "请检查本地存储。"}`);
     });
-    const flush = () => writer.flush();
+    const flush = () => { capture(); writer.flush(); };
     const visibility = () => { if (window.document.visibilityState === "hidden") flush(); };
     window.addEventListener("pagehide", flush);
     window.document.addEventListener("visibilitychange", visibility);
     return () => {
-      writer.flush(); active = false; cancelAnimationFrame(frame);
+      releaseWriter(); active = false; cancelAnimationFrame(frame);
       window.removeEventListener("pagehide", flush);
       window.document.removeEventListener("visibilitychange", visibility);
     };
@@ -112,14 +133,17 @@ export function usePdfReaderPosition(input: PdfReaderPositionInput) {
     const session = sessionRef.current;
     if (!session?.current() || !session.ready || session.blocked || session.restoring ||
       !Number.isSafeInteger(input.page) || input.page < 1 || input.page > input.pageCount ||
-      (session.lastPage === input.page && session.lastTopRatio === input.topRatio && session.savedIntent === opening.intent)) return;
+      (session.lastPage === input.page && session.lastTopRatio === input.topRatio &&
+        session.lastView?.zoom === input.view?.zoom && session.lastView?.layoutMode === input.view?.layoutMode &&
+        session.savedIntent === opening.intent)) return;
     if (session.restoredPage !== undefined && opening.intent === 0) return;
     session.restoredPage = undefined;
     session.lastPage = input.page;
     session.lastTopRatio = input.topRatio;
+    session.lastView = input.view;
     session.savedIntent = opening.intent;
-    session.writer.enqueue({ page: input.page, topRatio: input.topRatio });
-  }, [input.page, input.topRatio, input.pageCount, input.document, input.contentRevision, input.scopeId, input.paperId, opening, tick]);
+    session.writer.enqueue({ page: input.page, topRatio: input.topRatio, pageCount: input.pageCount, view: input.view });
+  }, [input.page, input.topRatio, input.view?.zoom, input.view?.layoutMode, input.pageCount, input.document, input.contentRevision, input.scopeId, input.paperId, opening, tick]);
 
   return {
     error, canRetry,

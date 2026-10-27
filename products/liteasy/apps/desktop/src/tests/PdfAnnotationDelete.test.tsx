@@ -1,4 +1,5 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { renderWithPdfAnnotations as render } from "./fixtures/renderWithPdfAnnotations";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { PdfReader } from "../app/features/pdf/PdfReader";
 import { loadPdfAnnotations, pdfAnnotationStorageKey, savePdfAnnotations, type PdfAnnotationPublication, type PdfAnnotationV2 } from "../app/features/pdf/pdfAnnotationStorage";
