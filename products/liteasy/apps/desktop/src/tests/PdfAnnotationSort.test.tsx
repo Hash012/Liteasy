@@ -28,14 +28,14 @@ test("date ties and invalid legacy dates fall back deterministically to reading 
 test("sidebar sort changes presentation while keeping annotation storage intact", async () => {
   savePdfAnnotations(pdfAnnotationStorageKey(paper), annotations);
   renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} />);
-  await screen.findByRole("button", { name: "编辑批注：first" });
-  const order = () => screen.getAllByRole("button", { name: /^编辑批注：/ }).map((button) => button.getAttribute("aria-label"));
-  expect(order()).toEqual(["编辑批注：first", "编辑批注：second", "编辑批注：third"]);
+  await screen.findByRole("button", { name: "展开批注：first" });
+  const order = () => screen.getAllByRole("button", { name: /^展开批注：/ }).map((button) => button.getAttribute("aria-label"));
+  expect(order()).toEqual(["展开批注：first", "展开批注：second", "展开批注：third"]);
   const stored = localStorage.getItem(pdfAnnotationStorageKey(paper)!);
   choose("最近创建");
-  expect(order()).toEqual(["编辑批注：second", "编辑批注：third", "编辑批注：first"]);
+  expect(order()).toEqual(["展开批注：second", "展开批注：third", "展开批注：first"]);
   choose("最近修改");
-  expect(order()).toEqual(["编辑批注：first", "编辑批注：third", "编辑批注：second"]);
+  expect(order()).toEqual(["展开批注：first", "展开批注：third", "展开批注：second"]);
   expect(localStorage.getItem(pdfAnnotationStorageKey(paper)!)).toBe(stored);
 });
 

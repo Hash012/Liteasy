@@ -8,7 +8,7 @@ import { useAnnotationStyle } from "../features/paper-reading/useAnnotationStyle
 import { resolveLocalAccountKey } from "../features/library/localAccountKey";
 
 export function useLiteratureGuideController(input: {
-  scopeId?: string; sessionGeneration?: number; getPapers?(): Paper[];
+  scopeId?: string; sessionGeneration?: string | number; getPapers?(): Paper[];
   getSettings(): SettingsState;
   profile: AcademicProfile;
   memory: ProfileMemory;

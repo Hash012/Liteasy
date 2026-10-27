@@ -1,3 +1,4 @@
+import { pdfAnnotationAction } from "./fixtures/renderWithPdfAnnotations";
 import { generationPromptTasks } from "../app/features/ai-prompts/generationPrompts";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -640,13 +641,13 @@ describe("ReaderPane", () => {
     await waitFor(() => expect(onChangeAnnotationPublication).toHaveBeenCalledWith(
       expect.objectContaining({ operation: "publish" })
     ));
-    await user.click(screen.getByRole("button", { name: "编辑批注：a publicly queued PDF annotation" }));
+    await user.click(screen.getByRole("button", { name: "展开批注：a publicly queued PDF annotation" }));
     expect(await screen.findByRole("status", { name: "已公开到论坛" })).toBeInTheDocument();
     expect(window.localStorage.getItem(pdfAnnotationStorageKey(readerTestPaper)!)).toContain('"state":"published"');
     expect(window.localStorage.getItem(pdfAnnotationAutoPublicStorageKey(readerTestPaper)!)).toBe("true");
   });
 
-  test("publishes one local annotation directly from its checkbox", async () => {
+  test("publishes one local annotation directly from its context menu", async () => {
     const user = userEvent.setup();
     const onChangeAnnotationPublication = vi.fn(async () => ({
       desiredVisibility: "public" as const,
@@ -674,10 +675,8 @@ describe("ReaderPane", () => {
     });
     fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
     await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "高亮" }));
-    await user.click(screen.getByRole("button", { name: "编辑批注：a forum draft annotation" }));
-    await user.click(screen.getByRole("checkbox", {
-      name: "将第 1 页高亮批注公开到论坛：a forum draft annotation"
-    }));
+    await user.click(screen.getByRole("button", { name: "展开批注：a forum draft annotation" }));
+    await user.click(pdfAnnotationAction("a forum draft annotation", "公开到论坛"));
 
     expect(onChangeAnnotationPublication).toHaveBeenCalledWith(expect.objectContaining({ operation: "publish" }));
     expect(await screen.findByRole("status", { name: "已公开到论坛" })).toBeInTheDocument();
@@ -888,7 +887,9 @@ describe("ReaderPane", () => {
 
     fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
     await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "高亮" }));
-    await user.click(screen.getByRole("button", { name: /编辑批注/ }));
+    await user.click(screen.getByRole("button", { name: /展开批注：/ }));
+    expect(screen.queryByRole("textbox", { name: "补充批注笔记" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "添加批注笔记" }));
     await user.type(screen.getByLabelText("补充批注笔记"), "这里要联系实验设置。");
     await user.click(screen.getByRole("button", { name: "保存笔记" }));
 

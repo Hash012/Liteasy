@@ -17,7 +17,7 @@ function readStyleFile(key: string): StyleFile | undefined {
 }
 
 export function useAnnotationStyle(input: {
-  scopeId: string; sessionGeneration: number; getPapers(): Paper[]; getSettings(): SettingsState; transport?: ModelTransport;
+  scopeId: string; sessionGeneration: string | number; getPapers(): Paper[]; getSettings(): SettingsState; transport?: ModelTransport;
 }) {
   const latest = useRef(input); latest.current = input;
   const lifetime = useMemo(() => ({}), [input.scopeId, input.sessionGeneration]);

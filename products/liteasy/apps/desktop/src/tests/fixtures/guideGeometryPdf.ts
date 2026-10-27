@@ -1,8 +1,9 @@
 /** Small authored PDF, with an initially offscreen fourth page and mixed-font multiline text. */
 export const guideGeometryQuote = "The visible record is selected from committed versions before the transaction starts, keeping reads consistent across threads.";
-export function guideGeometryPdf() {
+export function guideGeometryPdf(firstPageQuote = false) {
   const streams = ["BT /F1 12 Tf 50 350 Td (Page one) Tj ET", "BT /F1 12 Tf 50 350 Td (Page two) Tj ET", "BT /F1 12 Tf 50 350 Td (Page three) Tj ET",
     "BT /F1 12 Tf 50 350 Td (The ) Tj /F2 12 Tf (visible record) Tj /F1 12 Tf ( is selected) Tj 0 -20 Td (from committed versions before) Tj 0 -20 Td (the transaction starts, keeping) Tj 0 -20 Td (reads consistent across threads.) Tj ET"];
+  if (firstPageQuote) streams[0] = streams[3];
   const objects = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [5 0 R 7 0 R 9 0 R 11 0 R] /Count 4 >>",
     "<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Times-Italic >>"];
   streams.forEach((stream, index) => objects.push(

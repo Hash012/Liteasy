@@ -36,11 +36,11 @@ test("sidebar searches local and team entries and overview starts from the compl
   await screen.findByText("团队成员 · 第 12 页");
   const search = screen.getByRole("textbox", { name: "搜索批注内容" });
   fireEvent.change(search, { target: { value: "陈老师" } });
-  expect(screen.queryByRole("button", { name: "编辑批注：Passage local" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "展开批注：Passage local" })).not.toBeInTheDocument();
   expect(within(screen.getByRole("region", { name: "团队批注" })).getByText("Passage shared")).toBeInTheDocument();
   expect(screen.getByLabelText("批注检索结果")).toHaveTextContent("1 / 3 条批注");
   fireEvent.change(search, { target: { value: "3" } });
-  expect(screen.getByRole("button", { name: "编辑批注：Passage local" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "展开批注：Passage local" })).toBeInTheDocument();
   expect(within(screen.getByRole("region", { name: "团队批注" })).queryByText("Passage shared")).not.toBeInTheDocument();
   fireEvent.doubleClick(screen.getByRole("button", { name: "批注", exact: true }));
   const overview = within(screen.getByRole("region", { name: "全部批注" }));

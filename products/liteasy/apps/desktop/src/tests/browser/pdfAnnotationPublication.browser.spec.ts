@@ -66,17 +66,20 @@ for (const viewport of [
     await mountFixture(page);
     await selectFixtureText(page, "Late interaction evidence");
     await page.getByRole("button", { name: "高亮" }).click();
-    await page.getByRole("checkbox", { name: /Late interaction evidence/u }).click();
+    await page.getByRole("button", { name: /展开批注：Late interaction evidence/u }).click({ button: "right" });
+    await page.getByRole("menuitem", { name: /^(公开到论坛|从论坛撤回)$/ }).click();
     await expect(page.getByRole("dialog", { name: "确认文献身份" })).toBeVisible();
     await page.getByRole("button", { name: "选择 ColBERT" }).click();
     await expect(page.getByText("已公开到论坛")).toBeVisible();
 
-    await page.getByRole("button", { name: /编辑批注：Late interaction evidence/u }).click();
+    await page.getByRole("button", { name: /展开批注：Late interaction evidence/u }).click();
+    await page.getByRole("button", { name: /^(添加批注笔记|编辑批注正文)$/ }).click();
     await page.getByRole("textbox", { name: "补充批注笔记" }).fill("Updated after publication");
     await page.getByRole("button", { name: "保存笔记" }).click();
     await expect(page.getByText("已公开到论坛")).toBeVisible();
 
-    await page.getByRole("checkbox", { name: /Late interaction evidence/u }).click();
+    await page.getByRole("button", { name: /展开批注：Late interaction evidence/u }).click({ button: "right" });
+    await page.getByRole("menuitem", { name: /^(公开到论坛|从论坛撤回)$/ }).click();
     await expect(page.getByText(/撤回失败，论坛仍公开/u)).toBeVisible();
     await expectUsableLayout(page);
     await page.screenshot({

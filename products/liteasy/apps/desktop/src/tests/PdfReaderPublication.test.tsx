@@ -1,3 +1,4 @@
+import { pdfAnnotationAction, editExpandedPdfAnnotationNote } from "./fixtures/renderWithPdfAnnotations";
 import { renderWithPdfAnnotations } from "./fixtures/renderWithPdfAnnotations";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -63,21 +64,12 @@ function renderStoredAnnotation(
       zoom={100}
     />
   );
-  fireEvent.click(screen.getByRole("button", { name: `编辑批注：${annotation.excerpt}` }));
+  fireEvent.click(screen.getByRole("button", { name: `展开批注：${annotation.excerpt}` }));
   return onChangeAnnotationPublication;
 }
 
 function publicationToggle(excerpt = "Publication evidence", kind = "注释", page = 1) {
-  const name = `将第 ${page} 页${kind}批注公开到论坛：${excerpt}`;
-  if (!screen.queryByRole("checkbox", { name })) {
-    const summaries = screen.getAllByRole("button", { name: `编辑批注：${excerpt}` })
-      .filter((button) => within(button).queryByRole("img", { name: kind }));
-    expect(summaries).toHaveLength(1);
-    fireEvent.click(summaries[0]);
-  }
-  return screen.getByRole("checkbox", {
-    name: `将第 ${page} 页${kind}批注公开到论坛：${excerpt}`
-  });
+  return pdfAnnotationAction(excerpt, /^(公开到论坛|从论坛撤回)$/, kind);
 }
 
 function makeRect() {
@@ -136,7 +128,7 @@ test.each(["高亮", "划线"])("creates %s privately by default", async (comman
   selectPdfText(`private ${command}`);
   await userEvent.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: command }));
 
-  expect(publicationToggle(`private ${command}`, command)).not.toBeChecked();
+  expect(publicationToggle(`private ${command}`, command)).toHaveTextContent("公开到论坛");
   expect(onChangeAnnotationPublication).not.toHaveBeenCalled();
   await waitFor(() => expect(window.localStorage.getItem(pdfAnnotationStorageKey(paper)!))
     .toContain('"desiredVisibility":"private"'));
@@ -169,16 +161,14 @@ test("does not auto-publish a duplicate selection that was not saved locally", a
   expect(onChange).toHaveBeenCalledTimes(1);
 });
 
-test("publishes one annotation from its visibility checkbox and exposes pending then confirmed truth", async () => {
+test("publishes one annotation from its context menu and exposes pending then confirmed truth", async () => {
   let finish!: (publication: PdfAnnotationPublication) => void;
   const onChange = vi.fn(() => new Promise<PdfAnnotationPublication>((resolve) => {
     finish = resolve;
   }));
   renderStoredAnnotation(publicationAnnotation(), onChange);
 
-  const toggle = await screen.findByRole("checkbox", {
-    name: "将第 1 页注释批注公开到论坛：Publication evidence"
-  });
+  const toggle = publicationToggle();
   await userEvent.click(toggle);
   expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ operation: "publish", paper }));
   expect(screen.getByRole("status", { name: "正在公开到论坛" })).toBeInTheDocument();
@@ -239,7 +229,8 @@ test("requeues a current publish revision when note editing races literature hin
 
   await userEvent.click(publicationToggle());
   await waitFor(() => expect(loadLiteratureHints).toHaveBeenCalledTimes(1));
-  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
+  editExpandedPdfAnnotationNote();
   fireEvent.change(screen.getByRole("textbox", { name: "补充批注笔记" }), {
     target: { value: "Edited during publish hint collection" }
   });
@@ -276,13 +267,15 @@ test("requeues the latest update revision when a second edit races hint collecti
     state: "published"
   }), onChange, loadLiteratureHints);
 
-  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
+  editExpandedPdfAnnotationNote();
   fireEvent.change(screen.getByRole("textbox", { name: "补充批注笔记" }), {
     target: { value: "First edit" }
   });
   await userEvent.click(screen.getByRole("button", { name: "保存笔记" }));
   await waitFor(() => expect(loadLiteratureHints).toHaveBeenCalledTimes(1));
-  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
+  editExpandedPdfAnnotationNote();
   fireEvent.change(screen.getByRole("textbox", { name: "补充批注笔记" }), {
     target: { value: "Second edit wins" }
   });
@@ -451,7 +444,8 @@ test("re-reads a restart replay revision after hint collection and sends only th
     />
   );
   await waitFor(() => expect(loadLiteratureHints).toHaveBeenCalledTimes(1));
-  fireEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
+  fireEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
+  editExpandedPdfAnnotationNote();
   fireEvent.change(screen.getByRole("textbox", { name: "补充批注笔记" }), {
     target: { value: "Edited during restart hint collection" }
   });
@@ -472,7 +466,7 @@ test("re-reads a restart replay revision after hint collection and sends only th
   }));
 });
 
-test("gives same-excerpt publication checkboxes unique names and announces each status", () => {
+test("keeps same-excerpt publication menus scoped to their entries and announces each status", () => {
   const note = publicationAnnotation();
   const highlight: PdfAnnotationV2 = {
     ...publicationAnnotation(),
@@ -484,9 +478,9 @@ test("gives same-excerpt publication checkboxes unique names and announces each 
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [note, highlight]);
   renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} />);
 
-  expect(publicationToggle()).not.toBeChecked();
-  expect(publicationToggle("Publication evidence", "高亮")).not.toBeChecked();
-  expect(screen.getAllByRole("status", { name: "未公开到论坛" })).toHaveLength(1);
+  expect(publicationToggle()).toHaveTextContent("公开到论坛");
+  expect(publicationToggle("Publication evidence", "高亮")).toHaveTextContent("公开到论坛");
+  expect(within(screen.getByRole("menu", { name: "批注信息：Publication evidence" })).getByText("未公开到论坛")).toBeVisible();
   expect(screen.getByLabelText("批注检索结果")).toHaveTextContent("2 / 2 条批注");
 });
 
@@ -529,14 +523,15 @@ test("keeps the prior forum copy visible when a published note update fails", as
     state: "published"
   }), onChange);
 
-  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
+  editExpandedPdfAnnotationNote();
   fireEvent.change(screen.getByRole("textbox", { name: "补充批注笔记" }), {
     target: { value: "Updated public note" }
   });
   await userEvent.click(screen.getByRole("button", { name: "保存笔记" }));
 
   await waitFor(() => expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ operation: "update" })));
-  fireEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
+  fireEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
   expect(await screen.findByRole("status", { name: /更新失败，论坛仍保留上一版本.*network unavailable/u })).toBeInTheDocument();
 });
 
@@ -555,12 +550,12 @@ test("shows failed retract truth and refuses to delete the linked local annotati
     state: "published"
   }), onChange);
 
-  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
-  await userEvent.click(screen.getByRole("button", { name: "删除" }));
+  await userEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
+  await userEvent.click(pdfAnnotationAction("Publication evidence", "删除批注"));
   await userEvent.click(await screen.findByRole("button", { name: "确认删除" }));
 
   await waitFor(() => expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ operation: "retract" })));
-  fireEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
+  fireEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
   expect(await screen.findByRole("status", { name: /撤回失败，论坛仍公开/u })).toBeInTheDocument();
   expect(screen.getByText("Publication evidence")).toBeInTheDocument();
 });
@@ -579,8 +574,8 @@ test("deletes a published local annotation only after retract is confirmed", asy
     state: "published"
   }), onChange);
 
-  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
-  await userEvent.click(screen.getByRole("button", { name: "删除" }));
+  await userEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
+  await userEvent.click(pdfAnnotationAction("Publication evidence", "删除批注"));
   await userEvent.click(await screen.findByRole("button", { name: "确认删除" }));
 
   await waitFor(() => expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ operation: "retract" })));
@@ -618,8 +613,8 @@ test("recovers an unknown failed create before deleting the local annotation", a
 
   await userEvent.click(publicationToggle());
   expect(await screen.findByRole("status", { name: /create receipt missing/u })).toBeInTheDocument();
-  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
-  await userEvent.click(screen.getByRole("button", { name: "删除" }));
+  await userEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
+  await userEvent.click(pdfAnnotationAction("Publication evidence", "删除批注"));
   await userEvent.click(await screen.findByRole("button", { name: "确认删除" }));
 
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
@@ -667,13 +662,13 @@ test("retains an unknown failed create when deletion recovery cannot confirm ret
 
   await userEvent.click(publicationToggle());
   expect(await screen.findByRole("status", { name: /create receipt missing/u })).toBeInTheDocument();
-  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
-  await userEvent.click(screen.getByRole("button", { name: "删除" }));
+  await userEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
+  await userEvent.click(pdfAnnotationAction("Publication evidence", "删除批注"));
   await userEvent.click(await screen.findByRole("button", { name: "确认删除" }));
 
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
   expect(screen.getByText("Publication evidence")).toBeInTheDocument();
-  fireEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
+  fireEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
   expect(await screen.findByRole("status", { name: /recovery unavailable/u })).toBeInTheDocument();
   expect(onChange).toHaveBeenNthCalledWith(2, expect.objectContaining({
     annotation: expect.objectContaining({
@@ -688,7 +683,7 @@ test("cancels a queued create before it starts", () => {
   const toggle = publicationToggle();
 
   fireEvent.click(toggle);
-  fireEvent.click(toggle);
+  fireEvent.click(publicationToggle());
 
   return waitFor(() => expect(onChange).not.toHaveBeenCalled());
 });
@@ -708,7 +703,7 @@ test("queues an exact retract when visibility is disabled after create starts", 
 
   await userEvent.click(toggle);
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
-  await userEvent.click(toggle);
+  await userEvent.click(publicationToggle());
   expect(onChange).toHaveBeenNthCalledWith(2, expect.objectContaining({ operation: "retract" }));
   finishCreate({
     desiredVisibility: "public",
@@ -724,8 +719,8 @@ test("deletes a pending create before transport without publishing it", async ()
   const toggle = publicationToggle();
 
   fireEvent.click(toggle);
-  fireEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
-  fireEvent.click(screen.getByRole("button", { name: "删除" }));
+  fireEvent.click(screen.getByRole("button", { name: /展开批注：/u }));
+  fireEvent.click(pdfAnnotationAction("Publication evidence", "删除批注"));
   fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
 
   await waitFor(() => expect(screen.queryByText("Publication evidence")).not.toBeInTheDocument());
@@ -748,8 +743,8 @@ test("waits for an in-flight create and retracts that exact annotation before de
   await userEvent.click(publicationToggle());
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
   const createInput = onChange.mock.calls[0][0];
-  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
-  await userEvent.click(screen.getByRole("button", { name: "删除" }));
+  await userEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
+  await userEvent.click(pdfAnnotationAction("Publication evidence", "删除批注"));
   await userEvent.click(await screen.findByRole("button", { name: "确认删除" }));
 
   expect(screen.getByText("Publication evidence")).toBeInTheDocument();
@@ -789,8 +784,8 @@ test("retains local truth when create recovery cannot confirm the remote outcome
 
   await userEvent.click(publicationToggle());
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
-  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
-  await userEvent.click(screen.getByRole("button", { name: "删除" }));
+  await userEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
+  await userEvent.click(pdfAnnotationAction("Publication evidence", "删除批注"));
   await userEvent.click(await screen.findByRole("button", { name: "确认删除" }));
   finishCreate({
     desiredVisibility: "public",
@@ -799,7 +794,7 @@ test("retains local truth when create recovery cannot confirm the remote outcome
   });
 
   expect(await screen.findByText("Publication evidence")).toBeInTheDocument();
-  fireEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
+  fireEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
   expect(await screen.findByRole("status", { name: /create recovery failed/u })).toBeInTheDocument();
   expect(onChange).toHaveBeenCalledTimes(2);
   expect(onChange).toHaveBeenNthCalledWith(2, expect.objectContaining({
@@ -821,8 +816,8 @@ test("reuses a queued retract and deletes only after it confirms not published",
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
   await userEvent.click(publicationToggle());
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
-  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
-  await userEvent.click(screen.getByRole("button", { name: "删除" }));
+  await userEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
+  await userEvent.click(pdfAnnotationAction("Publication evidence", "删除批注"));
   await userEvent.click(await screen.findByRole("button", { name: "确认删除" }));
 
   expect(screen.getByText("Publication evidence")).toBeInTheDocument();
@@ -858,8 +853,8 @@ test("retains local truth when the queued retract outcome remains unknown", asyn
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
   await userEvent.click(publicationToggle());
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
-  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
-  await userEvent.click(screen.getByRole("button", { name: "删除" }));
+  await userEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
+  await userEvent.click(pdfAnnotationAction("Publication evidence", "删除批注"));
   await userEvent.click(await screen.findByRole("button", { name: "确认删除" }));
 
   expect(screen.getByText("Publication evidence")).toBeInTheDocument();
@@ -876,7 +871,7 @@ test("retains local truth when the queued retract outcome remains unknown", asyn
   });
 
   expect(await screen.findByText("Publication evidence")).toBeInTheDocument();
-  fireEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
+  fireEvent.click(await screen.findByRole("button", { name: /展开批注：/u }));
   expect(await screen.findByRole("status", { name: /recovery unavailable/u })).toBeInTheDocument();
   expect(onChange).toHaveBeenCalledTimes(2);
 });

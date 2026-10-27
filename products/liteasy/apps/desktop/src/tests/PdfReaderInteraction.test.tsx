@@ -71,7 +71,7 @@ test("expands a sidebar annotation entry so its complete excerpt is available", 
   const user = userEvent.setup();
   renderAnnotation(annotation());
 
-  const summary = await screen.findByRole("button", { name: /编辑批注/u });
+  const summary = await screen.findByRole("button", { name: /展开批注：/u });
   const item = summary.closest(".pdf-annotation-item");
   expect(summary).toHaveAttribute("aria-expanded", "false");
   expect(item).not.toHaveClass("expanded");
@@ -87,7 +87,7 @@ test("expands a sidebar annotation entry so its complete excerpt is available", 
 
 test("double-clicking an annotation entry scrolls to its exact page position", async () => {
   renderAnnotation(annotation());
-  const summary = await screen.findByRole("button", { name: /编辑批注/u });
+  const summary = await screen.findByRole("button", { name: /展开批注：/u });
   const stage = screen.getByLabelText("PDF 页面滚动区");
   const page = screen.getByLabelText("PDF.js 页面 1");
   const scrollTo = vi.fn();
@@ -167,8 +167,9 @@ test("clicking a page highlight opens its comment editor with a live Markdown pr
 
   await user.click(within(editor).getByRole("button", { name: "保存注释" }));
   expect(screen.queryByLabelText(/高亮注释编辑器/u)).not.toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: /编辑批注/u }));
-  const sidebarPreview = screen.getByLabelText("批注 Markdown 实时预览");
+  await user.click(screen.getByRole("button", { name: /展开批注：/u }));
+  const sidebarPreview = screen.getByRole("button", { name: "编辑批注正文" });
+  expect(screen.queryByRole("textbox", { name: "补充批注笔记" })).not.toBeInTheDocument();
   expect(sidebarPreview.querySelector("strong")).toHaveTextContent("核心结论");
 });
 
@@ -189,7 +190,8 @@ test("shows highlighted comments beside the PDF only when the margin layer is en
   expect(page.parentElement).toContainElement(rail);
   const connector = page.parentElement?.querySelector<HTMLElement>(".pdf-margin-comment-connector");
   expect(connector).not.toBeNull();
-  expect(Number.parseFloat(connector?.style.width ?? "0")).toBeGreaterThan(0);
+  expect(connector?.tagName.toLowerCase()).toBe("path");
+  expect(connector?.getAttribute("d")).toMatch(/^M [\d.]+ [\d.]+ H [\d.]+ V [\d.]+ H [\d.]+$/);
   expect(connector?.style.transform).toBe("");
   expect(screen.getByLabelText("PDF.js 页面列表")).toHaveClass("with-margin-comments");
   expect(within(comment).getByText("页边结论").tagName).toBe("STRONG");
@@ -238,7 +240,7 @@ test("opens a persistent whiteboard beside the PDF reader", async () => {
 
 test("double-clicking navigation buttons replaces pages with an overview and locating returns to the document", async () => {
   renderAnnotation(annotation());
-  await screen.findByRole("button", { name: /编辑批注/u });
+  await screen.findByRole("button", { name: /展开批注：/u });
   fireEvent.click(screen.getByRole("button", { name: "缩略图", exact: true }));
   expect(screen.getByLabelText("PDF.js 页面列表")).toBeInTheDocument();
   fireEvent.doubleClick(screen.getByRole("button", { name: "缩略图", exact: true }));
@@ -264,13 +266,13 @@ test("filters sidebar annotations by lookup origin and text without hiding their
     ]);
     renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} />);
     const user = userEvent.setup();
-    await screen.findByRole("button", { name: "编辑批注：synchronize" });
+    await screen.findByRole("button", { name: "展开批注：synchronize" });
     await user.click(screen.getByRole("button", { name: "标签筛选" }));
     await user.click(await screen.findByRole("checkbox", { name: "隐藏查词结果" }));
     await user.keyboard("{Escape}");
-    await screen.findByRole("button", { name: "编辑批注：Personal passage" });
-    expect(screen.queryByRole("button", { name: "编辑批注：synchronize" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "编辑批注：Personal passage" })).toBeInTheDocument();
+    await screen.findByRole("button", { name: "展开批注：Personal passage" });
+    expect(screen.queryByRole("button", { name: "展开批注：synchronize" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "展开批注：Personal passage" })).toBeInTheDocument();
     expect(document.querySelectorAll("button.pdf-overlay-mark.highlight")).toHaveLength(2);
     await user.type(await screen.findByRole("textbox", { name: "搜索批注内容" }), "不存在的关键词");
     await user.keyboard("{Escape}");
@@ -278,6 +280,6 @@ test("filters sidebar annotations by lookup origin and text without hiding their
     expect(screen.getByText("没有符合筛选条件的批注")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "清除批注搜索" }));
     await user.click(screen.getByRole("button", { name: "清除筛选" }));
-    expect(screen.getByRole("button", { name: "编辑批注：synchronize" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "展开批注：synchronize" })).toBeInTheDocument();
   } finally { restore(); }
 });

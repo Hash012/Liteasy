@@ -1,3 +1,4 @@
+import { editExpandedPdfAnnotationNote } from "./fixtures/renderWithPdfAnnotations";
 import { openPdfAnnotations, renderWithPdfAnnotations } from "./fixtures/renderWithPdfAnnotations";
 import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
@@ -16,10 +17,11 @@ afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); });
 test("summary arrow keys follow visible entries, preserve editor drafts, and use Ctrl+Enter to locate", async () => {
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [item("first", 10), item("second", 20), item("third", 30)]);
   renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} />);
-  const first = await screen.findByRole("button", { name: "编辑批注：first" });
-  const second = screen.getByRole("button", { name: "编辑批注：second" });
-  const third = screen.getByRole("button", { name: "编辑批注：third" });
+  const first = await screen.findByRole("button", { name: "展开批注：first" });
+  const second = screen.getByRole("button", { name: "展开批注：second" });
+  const third = screen.getByRole("button", { name: "展开批注：third" });
   fireEvent.click(first);
+  editExpandedPdfAnnotationNote();
   const editor = screen.getByRole("textbox", { name: "补充批注笔记" });
   fireEvent.change(editor, { target: { value: "Unsaved draft" } });
   first.focus();
@@ -51,9 +53,9 @@ test("selecting a filtered page annotation offers to reveal and scroll its sideb
   const scrollIntoView = vi.fn();
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: scrollIntoView, configurable: true });
   fireEvent.click(screen.getByRole("button", { name: "高亮标注：第 1 页：second" }));
-  expect(screen.queryByRole("button", { name: "编辑批注：second" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "展开批注：second" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "显示选中批注" }));
-  expect(screen.getByRole("button", { name: "编辑批注：second" })).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByRole("button", { name: "展开批注：second" })).toHaveAttribute("aria-expanded", "true");
   expect(screen.getByRole("textbox", { name: "搜索批注内容" })).toHaveValue("");
   expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
   delete (HTMLElement.prototype as unknown as Record<string, unknown>).scrollIntoView;

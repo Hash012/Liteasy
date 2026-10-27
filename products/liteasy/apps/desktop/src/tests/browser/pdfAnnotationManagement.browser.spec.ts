@@ -30,7 +30,7 @@ for (const fontSize of [14, 24]) test(`annotation management remains usable at f
   const sidebar = page.getByRole("complementary", { name: "PDF 左侧批注栏" });
   await expect(page.getByLabel("PDF 阅读工作区", { exact: true })).toHaveClass(/sidebar-collapsed/);
   await sidebar.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).click();
-  const summaries = sidebar.getByRole("button", { name: /^编辑批注：/ });
+  const summaries = sidebar.getByRole("button", { name: /^展开批注：/ });
   await expect(summaries).toHaveCount(2, { timeout: 30_000 });
   const controls = sidebar.locator(".pdf-sidebar-controls");
   expect(await controls.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
@@ -40,7 +40,7 @@ for (const fontSize of [14, 24]) test(`annotation management remains usable at f
     const metrics = await filter.evaluate(element => ({ height: element.getBoundingClientRect().height, font: Number.parseFloat(getComputedStyle(element).fontSize) }));
     expect(metrics.height).toBeLessThanOrEqual(Math.max(36, metrics.font * 2.4));
   }
-  await expect(summaries.first().locator(".pdf-annotation-excerpt")).toHaveCSS("font-size", `${fontSize}px`);
+  expect(await summaries.first().locator(".pdf-annotation-excerpt").evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeCloseTo(fontSize * 12 / 14, 2);
   // Highlight colors stay on the marker; the excerpt remains a neutral reading surface.
   await expect(sidebar.locator(".pdf-annotation-item").first()).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await expect(sidebar.locator(".annotation-color-indicator").first()).toBeVisible();
@@ -80,9 +80,9 @@ for (const fontSize of [14, 24]) test(`annotation management remains usable at f
   await sidebar.getByRole("button", { name: "清除类型与颜色筛选" }).click();
   await sidebar.getByRole("combobox", { name: "批注排序" }).click();
   await page.getByRole("option", { name: "最近创建", exact: true }).click();
-  await expect(summaries.first()).toHaveAccessibleName("编辑批注：Evidence second");
-  await summaries.first().click();
-  const deleteButton = sidebar.getByRole("button", { name: "删除", exact: true });
+  await expect(summaries.first()).toHaveAccessibleName("展开批注：Evidence second");
+  await summaries.first().click({ button: "right" });
+  const deleteButton = page.getByRole("menuitem", { name: "删除批注", exact: true });
   await deleteButton.focus();
   await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", { name: "删除批注确认" });
@@ -90,8 +90,8 @@ for (const fontSize of [14, 24]) test(`annotation management remains usable at f
   await expect(dialog.getByRole("button", { name: "保留批注" })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
-  await expect(deleteButton).toBeFocused();
-  await page.keyboard.press("Enter");
+  await summaries.first().click({ button: "right" });
+  await page.getByRole("menuitem", { name: "删除批注", exact: true }).click();
   await dialog.getByRole("button", { name: "确认删除" }).click();
   await expect(summaries).toHaveCount(1);
   await page.screenshot({ path: info.outputPath(`annotation-management-${fontSize}.png`), fullPage: true });
@@ -122,7 +122,7 @@ for (const fontSize of [14, 24]) test(`new colors persist and filter with keyboa
   await expect(page.locator(".pdf-text-layer").first()).not.toBeEmpty({ timeout: 30_000 });
   const sidebar = page.getByRole("complementary", { name: "PDF 左侧批注栏" });
   await sidebar.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).click();
-  const summaries = sidebar.getByRole("button", { name: /^编辑批注：/ });
+  const summaries = sidebar.getByRole("button", { name: /^展开批注：/ });
   await expect(summaries).toHaveCount(4);
   await expect(sidebar.getByRole("combobox", { name: "筛选批注颜色" })).toHaveCount(0);
   await expect(sidebar.getByRole("group", { name: "按批注颜色筛选" }).getByRole("button")).toHaveCount(4);
@@ -132,6 +132,8 @@ for (const fontSize of [14, 24]) test(`new colors persist and filter with keyboa
   await expect(summaries).toHaveCount(1);
   await page.keyboard.press("Space"); await expect(summaries).toHaveCount(4);
   await summaries.filter({ hasText: "Evidence orange" }).click();
+  await sidebar.getByRole("button", { name: "编辑批注正文", exact: true }).click();
+  await expect(sidebar.getByRole("button", { name: "展开 Markdown 工具栏", exact: true })).toHaveAttribute("aria-expanded", "false");
   const palette = sidebar.locator(".color-selector");
   expect(await palette.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
   await page.screenshot({ path: info.outputPath(`annotation-colors-${fontSize}.png`) });

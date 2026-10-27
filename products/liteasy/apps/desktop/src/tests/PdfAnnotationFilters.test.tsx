@@ -34,11 +34,11 @@ test("sidebar combines kind and color filters across local and team annotations 
   renderWithPdfAnnotations(<PdfReader selectedPapers={[paper]} zoom={100} loadOrganizationAnnotations={async () => [shared]} />);
   await screen.findByText("team underline");
   fireEvent.click(screen.getByRole("button", { name: "筛选蓝色批注" }));
-  expect(screen.queryByRole("button", { name: "编辑批注：yellow highlight" })).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "编辑批注：blue highlight" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "展开批注：yellow highlight" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "展开批注：blue highlight" })).toBeVisible();
   choose("筛选批注类型", "划线");
-  expect(screen.queryByRole("button", { name: "编辑批注：blue highlight" })).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "编辑批注：blue underline" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "展开批注：blue highlight" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "展开批注：blue underline" })).toBeVisible();
   expect(within(screen.getByRole("region", { name: "团队批注" })).getByText("team underline")).toBeVisible();
   expect(screen.getByLabelText("批注检索结果")).toHaveTextContent("2 / 4 条批注");
   expect(document.querySelectorAll(".pdf-overlay-mark")).toHaveLength(3);

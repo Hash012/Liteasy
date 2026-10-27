@@ -1,3 +1,4 @@
+import { pdfAnnotationAction } from "./fixtures/renderWithPdfAnnotations";
 import { selectPickerValue } from "./helpers/selectPickerValue";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -66,7 +67,7 @@ test("PDF and reading mode edit and delete the same persisted comment without ch
   await user.click(within(comments).getByRole("button", { name: "查看 PDF" }));
   expect(screen.queryByRole("complementary", { name: "阅读模式批注" })).not.toBeInTheDocument();
   expect(screen.getByLabelText("补充批注笔记")).toHaveValue("从阅读模式补充的评论");
-  await user.click(screen.getByRole("button", { name: `阅读模式查看批注：${original.excerpt}` }));
+  await user.click(pdfAnnotationAction(original.excerpt, "在阅读模式查看批注"));
   await user.click(screen.getByRole("complementary", { name: "阅读模式批注" }).querySelector("button")!);
   await user.click(within(screen.getByRole("complementary", { name: "阅读模式批注" })).getByRole("button", { name: "删除", exact: true }));
   await waitFor(() => expect(JSON.parse(localStorage.getItem(pdfAnnotationStorageKey(paper)!)!)).toEqual([]));

@@ -34,6 +34,7 @@ test("commands, compact resizable annotations, context drag, and persistent quic
   await expect(chip).toHaveCSS("border-radius", "0px")
   await expect(chip).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
 
+  await page.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).click();
   const resizer = page.getByRole("separator", { name: "调整批注栏宽度" });
   const resizeBox = (await resizer.boundingBox())!;
   await page.mouse.move(resizeBox.x + 2, resizeBox.y + 200);
@@ -54,8 +55,8 @@ test("commands, compact resizable annotations, context drag, and persistent quic
   await page.getByLabel("选中文本批注菜单").getByRole("button", { name: "高亮", exact: true }).click();
   const mark = page.locator("button.pdf-overlay-mark.highlight");
   await expect(mark).toHaveCount(1);
-  const summary = page.getByRole("button", { name: /^编辑批注：/ });
-  await expect(summary).toHaveCSS("-webkit-line-clamp", "3");
+  const summary = page.getByRole("button", { name: /^展开批注：/ });
+  await expect(summary.locator(".pdf-annotation-excerpt")).toHaveCSS("-webkit-line-clamp", "2");
   await expect(page.getByRole("checkbox", { name: /将第 1 页高亮批注公开到论坛/ })).toHaveCount(0);
   await mark.dragTo(composer);
   const context = page.getByRole("button", { name: "移除上下文：das24a.pdf" });
@@ -68,8 +69,8 @@ test("commands, compact resizable annotations, context drag, and persistent quic
   await mark.click();
   await expect(page.getByText("输入后将在这里实时显示排版效果。")).toHaveCount(0);
   await page.getByRole("button", { name: "关闭注释编辑器" }).click();
-  await summary.click();
-  await page.getByRole("button", { name: "删除", exact: true }).click();
+  await summary.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "删除批注", exact: true }).click();
   await page.getByRole("dialog", { name: "删除批注确认" }).getByRole("button", { name: "确认删除" }).click();
 
   await selectWord();

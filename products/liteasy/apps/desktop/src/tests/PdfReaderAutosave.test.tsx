@@ -1,3 +1,4 @@
+import { editExpandedPdfAnnotationNote } from "./fixtures/renderWithPdfAnnotations";
 import { renderWithPdfAnnotations } from "./fixtures/renderWithPdfAnnotations";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
@@ -48,7 +49,8 @@ test("an actual annotation edit saves once and uses the latest promotion callbac
   await act(async () => {});
   save.mockClear(); first.mockClear(); next.mockClear();
 
-  fireEvent.click(screen.getByRole("button", { name: "编辑批注：Synthetic evidence" }));
+  fireEvent.click(screen.getByRole("button", { name: "展开批注：Synthetic evidence" }));
+  editExpandedPdfAnnotationNote();
   fireEvent.change(screen.getByRole("textbox", { name: "补充批注笔记" }), { target: { value: "Edited note" } });
   fireEvent.click(screen.getByRole("button", { name: "保存笔记" }));
   await waitFor(() => expect(save).toHaveBeenCalledTimes(1));

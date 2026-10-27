@@ -52,7 +52,8 @@ test("AI guide uses real PDF geometry, persists, and shares clickable dashed exp
   await expect(mark).toBeVisible({ timeout: 30_000 });
   expect(prompts).toHaveLength(1);
   await controls.getByRole("button", { name: "AI 标注", exact: false }).click();
-  await dialog.getByLabel("AI 标注模式").selectOption("advanced");
+  await dialog.getByRole("combobox", { name: "AI 标注模式" }).click();
+  await page.getByRole("option", { name: "高阶", exact: true }).click();
   await dialog.getByRole("button", { name: "开始标注" }).click();
   await expect(dialog.getByRole("status")).toContainText("已标注 1 处");
   await dialog.getByRole("button", { name: "返回阅读" }).click();
@@ -64,7 +65,8 @@ test("AI guide uses real PDF geometry, persists, and shares clickable dashed exp
   } }));
   await page.getByRole("button", { name: "设置", exact: true }).click();
   await page.getByRole("region", { name: "应用设置" }).getByRole("button", { name: "论文与推荐" }).click();
-  await page.getByLabel("论文内容解析").selectOption("custom");
+  await page.getByRole("combobox", { name: "论文内容解析" }).click();
+  await page.getByRole("option", { name: "MinerU 兼容服务", exact: true }).click();
   await page.getByLabel("MinerU API 地址").fill("https://guide-parser.example.test");
   await page.getByLabel("mineru API key", { exact: true }).fill("guide-test-key");
   await page.getByRole("button", { name: "保存密钥", exact: true }).last().click();
@@ -155,4 +157,50 @@ test("later-page guides cover the complete mixed-font quote without depending on
   await expect(marks).toHaveCount(4);
   await marks.first().click();
   await expect(page.getByRole("complementary", { name: `AI 讲解：${guideGeometryQuote}`, exact: true })).toContainText("用户补充的解释");
+});
+
+test("first-page AI marks and margin connectors use painted glyphs despite distorted text-layer fonts", async ({ page }, info) => {
+  const { guideGeometryPdf, guideGeometryQuote } = await import("../fixtures/guideGeometryPdf");
+  await page.route("**/manual-preview/das24a.pdf", route => route.fulfill({ body: guideGeometryPdf(true), contentType: "application/pdf" }));
+  await page.route("**/literature-guide-model", route => route.fulfill({ json: { answer: JSON.stringify({ level: "balanced", items: route.request().postDataJSON().prompt.includes('"page":1') ? [
+    { page: 1, quote: guideGeometryQuote, category: "reasoning", title: "一致性", explanation: "先读取已提交版本，再核对事务边界。" },
+  ] : [] }), execution: { mode: "live", provider: "openai" } } }));
+  await page.addInitScript(() => {
+    localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true");
+    localStorage.setItem("liteasy:pdf-reader:margin-comments", "true");
+  });
+  await page.setViewportSize({ width: 1800, height: 1100 });
+  await page.goto("/?pdf-highlight-fixture#literature-guide");
+  const surface = page.locator('.pdf-page-shell[data-page="1"]');
+  await expect(surface.locator(".pdf-text-layer")).toContainText("visible record", { timeout: 30_000 });
+  await page.addStyleTag({ content: ".pdf-text-layer span { transform: translateY(-8px) scaleX(.12) !important; }" });
+  await page.getByRole("group", { name: "文献 AI 标注" }).getByRole("button", { name: "AI 标注", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "AI 标注", exact: true });
+  await dialog.getByRole("button", { name: "开始标注" }).click();
+  await expect(dialog.getByRole("status")).toContainText("已标注 1 处", { timeout: 30_000 });
+  await dialog.getByRole("button", { name: "返回阅读" }).click();
+  const marks = surface.locator(".pdf-overlay-mark.ai-guide");
+  await expect(marks).toHaveCount(4);
+  for (const rect of await marks.evaluateAll(elements => elements.map(element => ({ left: parseFloat((element as HTMLElement).style.left), width: parseFloat((element as HTMLElement).style.width) })))) {
+    expect(rect.left).toBeCloseTo(10, 1);
+    expect(rect.width).toBeGreaterThan(25);
+  }
+  const row = surface.locator("..");
+  await expect(row.locator(".pdf-margin-comment")).toHaveCount(1);
+  await expect.poll(() => row.evaluate(element => {
+    const mark = element.querySelector(".pdf-overlay-mark.ai-guide")!.getBoundingClientRect();
+    const origin = element.querySelector(".pdf-margin-comment-origin")!.getBoundingClientRect();
+    return Math.abs(mark.bottom - 1 - (origin.top + origin.height / 2));
+  })).toBeLessThan(2);
+  await expect.poll(() => row.evaluate(element => {
+    const path = element.querySelector<SVGPathElement>(".pdf-margin-comment-connector")!;
+    const point = path.getPointAtLength(path.getTotalLength()).matrixTransform(path.getScreenCTM()!);
+    const header = element.querySelector(".pdf-margin-comment > header")!.getBoundingClientRect();
+    return Math.abs(point.y - (header.top + header.height / 2));
+  })).toBeLessThan(2);
+  const originalGeometry = await marks.evaluateAll(elements => elements.map(element => (element as HTMLElement).style.cssText));
+  // Force a new page render while the broken text metrics remain in place.
+  await page.getByRole("button", { name: "按比例放大 PDF", exact: true }).click();
+  await expect.poll(() => marks.evaluateAll(elements => elements.map(element => (element as HTMLElement).style.cssText))).toEqual(originalGeometry);
+  await page.screenshot({ path: info.outputPath("first-page-ai-anchors.png"), fullPage: true });
 });

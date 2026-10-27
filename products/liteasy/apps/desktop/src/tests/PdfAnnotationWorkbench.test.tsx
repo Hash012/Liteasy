@@ -180,7 +180,7 @@ test.each(["highlight", "underline", "note", "text", "ink"] as const)(
       </ObjectWorkbenchContext.Provider>,
     );
     const summary = await screen.findByRole("button", {
-      name: `编辑批注：${item.excerpt}`,
+      name: `展开批注：${item.excerpt}`,
     });
     const data = {
       effectAllowed: "",
@@ -412,7 +412,7 @@ test("annotation summaries reserve their width for content and expose page and s
   });
   openPdfAnnotations();
   const summary = screen.getByRole("button", {
-    name: `编辑批注：${item.excerpt}`,
+    name: `展开批注：${item.excerpt}`,
   });
   expect(summary).toHaveAttribute("aria-expanded", "false");
   expect(summary).toHaveTextContent(item.excerpt);
@@ -439,25 +439,19 @@ test("annotation summaries reserve their width for content and expose page and s
   expect(screen.getByText("已定位到第 1 页的高亮。")).toBeInTheDocument();
   expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   fireEvent.click(summary);
-  const actions = screen.getByRole("toolbar", { name: /^批注操作/ });
-  expect(
-    within(actions).getByRole("button", { name: "删除" }).textContent,
-  ).toBe("");
-  expect(
-    within(actions).getByRole("button", { name: /^定位批注/ }),
-  ).toBeInTheDocument();
-  expect(
-    within(actions).getByRole("button", { name: /^加入研究白板/ }),
-  ).toBeInTheDocument();
-  expect(
-    within(actions).getByRole("checkbox", { name: /公开到论坛/ }),
-  ).not.toBeChecked();
-  fireEvent.click(
-    within(actions).getByRole("button", { name: "收起批注操作" }),
-  );
-  expect(
-    screen.queryByRole("toolbar", { name: /^批注操作/ }),
-  ).not.toBeInTheDocument();
+  expect(screen.queryByRole("toolbar", { name: /^批注操作/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole("textbox", { name: "补充批注笔记" })).not.toBeInTheDocument();
+  const preview = screen.getByRole("button", { name: "编辑批注正文" });
+  expect(preview).toHaveTextContent(item.note!);
+  // The entire row, including the expanded note body, opens the same menu.
+  fireEvent.contextMenu(preview);
+  const expandedMenu = screen.getByRole("menu", { name: `批注信息：${item.excerpt}` });
+  expect(within(expandedMenu).getByRole("menuitem", { name: "删除批注" })).toBeEnabled();
+  expect(within(expandedMenu).getByRole("menuitem", { name: "加入研究白板" })).toBeEnabled();
+  expect(within(expandedMenu).getByRole("menuitem", { name: "公开到论坛" })).toBeEnabled();
+  expect(within(expandedMenu).getByRole("menuitem", { name: "AI review" })).toBeInTheDocument();
+  fireEvent.click(within(expandedMenu).getByRole("menuitem", { name: "收起批注" }));
+  expect(summary).toHaveAttribute("aria-expanded", "false");
   expect(window.localStorage.getItem(pdfAnnotationStorageKey(paper)!)).toBe(
     saved,
   );
@@ -478,7 +472,7 @@ test("failed publication remains accessible and reveals its icon and full error 
     renderWithPdfAnnotations(<FluentProvider theme={webLightTheme}><PdfReader selectedPapers={[paper]} zoom={100} /></FluentProvider>);
   });
   openPdfAnnotations();
-  const summary = screen.getByRole("button", { name: `编辑批注：${item.excerpt}` });
+  const summary = screen.getByRole("button", { name: `展开批注：${item.excerpt}` });
   expect(summary).toHaveAttribute("aria-description", "划线，第 1 页，撤回失败，论坛仍公开：timeout");
   expect(within(summary).queryByRole("img", { name: /撤回失败/ })).not.toBeInTheDocument();
   fireEvent.contextMenu(summary);
@@ -508,7 +502,7 @@ test("a drawing summary uses a compact stroke count and separate accessible page
   });
   openPdfAnnotations();
   const summary = screen.getByRole("button", {
-    name: `编辑批注：${item.excerpt}`,
+    name: `展开批注：${item.excerpt}`,
   });
   expect(summary).toHaveTextContent("2 笔");
   expect(summary).not.toHaveTextContent("第 1 页");

@@ -1,3 +1,4 @@
+import { pdfAnnotationAction } from "./fixtures/renderWithPdfAnnotations";
 import { renderWithPdfAnnotations as render } from "./fixtures/renderWithPdfAnnotations";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
@@ -71,10 +72,8 @@ test("loads team annotations and explicitly shares a local annotation", async ()
   );
 
   await waitFor(() => expect(loadOrganizationAnnotations).toHaveBeenCalledWith(organizationPaper));
-  fireEvent.click(await screen.findByRole("button", { name: "编辑批注：Evidence excerpt" }));
-  const share = await screen.findByRole("button", {
-    name: "共享批注到组织：Evidence excerpt"
-  });
+  fireEvent.click(await screen.findByRole("button", { name: "展开批注：Evidence excerpt" }));
+  const share = pdfAnnotationAction("Evidence excerpt", "共享批注到组织");
   fireEvent.click(share);
 
   await waitFor(() => expect(onShareAnnotationToOrganization).toHaveBeenCalled());

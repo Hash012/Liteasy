@@ -28,7 +28,10 @@ test("a stored PDF review remains editable after reload and follows its entry on
   const summary = row.locator(".pdf-annotation-summary");
   const quote = await summary.locator(".pdf-annotation-excerpt").innerText();
   const userNote = "这里的论述是否充分？需要区分观察与推断。";
+  await expect(pdfPage.locator(".pdf-text-layer")).not.toBeEmpty({ timeout: 30_000 });
+  if (await page.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).isVisible()) await page.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).click();
   await summary.click();
+  await row.getByRole("button", { name: "添加批注笔记", exact: true }).click();
   await row.getByLabel("补充批注笔记").fill(userNote);
   await row.getByRole("button", { name: "保存笔记", exact: true }).click();
   await expect.poll(() => page.evaluate((note) => Object.keys(localStorage).some((key) =>
@@ -50,8 +53,12 @@ test("a stored PDF review remains editable after reload and follows its entry on
     localStorage.setItem(key, JSON.stringify(annotations));
   }, { note: userNote, review: seededReview });
   await page.reload();
+  await expect(pdfPage.locator(".pdf-text-layer")).not.toBeEmpty({ timeout: 30_000 });
+  if (await page.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).isVisible()) await page.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).click();
   await summary.click();
-  await expect(row.getByRole("button", { name: `AI review：${quote}`, exact: true })).toBeEnabled();
+  await row.getByRole("button", { name: "编辑批注正文", exact: true }).click({ button: "right" });
+  await expect(page.getByRole("menuitem", { name: "重新生成 AI review", exact: true })).toBeEnabled();
+  await page.keyboard.press("Escape");
   const review = row.getByRole("region", { name: "AI review", exact: true });
   await expect(review).toContainText(seededReview);
   await review.getByRole("button", { name: "编辑 AI review", exact: true }).click();
@@ -61,9 +68,11 @@ test("a stored PDF review remains editable after reload and follows its entry on
   await expect(review).toContainText(editedReview);
   await expect(review.getByRole("textbox")).toHaveCount(0);
   await page.reload();
+  await expect(pdfPage.locator(".pdf-text-layer")).not.toBeEmpty({ timeout: 30_000 });
+  if (await page.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).isVisible()) await page.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).click();
   await summary.click();
   await expect(review).toContainText(editedReview);
-  await expect(row.getByRole("textbox", { name: "补充批注笔记", exact: true })).toHaveValue(userNote);
+  await expect(row.getByRole("button", { name: "编辑批注正文", exact: true })).toHaveText(userNote);
   await expect(summary.locator(".pdf-annotation-excerpt")).toHaveText(quote);
   await expect(pdfPage.locator(".pdf-text-layer")).not.toBeEmpty({ timeout: 30_000 });
   await page.screenshot({ path: testInfo.outputPath("pdf-entry-review.png"), fullPage: true, animations: "disabled" });
@@ -84,6 +93,7 @@ test("a stored PDF review remains editable after reload and follows its entry on
   await page.mouse.move(resize.x + resize.width / 4, resize.y + resize.height / 2 + 160, { steps: 10 });
   await page.mouse.up();
   await expect.poll(async () => (await card.boundingBox())!.height).toBeGreaterThan(originalHeight + 140);
+  await page.getByRole("button", { name: "折叠下栏", exact: true }).click();
   await page.getByLabel("白板卡片区域", { exact: true }).click({ position: { x: 330, y: 650 } });
   await expect(page.getByRole("tooltip")).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("pdf-entry-review-board.png"), fullPage: true, animations: "disabled" });

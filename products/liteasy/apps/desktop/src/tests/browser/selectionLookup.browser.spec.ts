@@ -84,7 +84,7 @@ test("looks up a PDF selection, expands senses and persists the result as a shar
   await page.getByRole("button", { name: "展开 PDF 左侧栏", exact: true }).click();
   await expect(page.locator(".pdf-annotation-item")).toHaveCount(1);
   await page.locator(".pdf-annotation-summary").first().click();
-  await expect(page.getByRole("textbox", { name: "补充批注笔记" })).toContainText(/首个查询释义[\s\S]*来源：必应词典/);
+  await expect(page.getByRole("button", { name: "编辑批注正文" })).toContainText(/首个查询释义[\s\S]*来源：必应词典/);
 });
 
 test("opens an AI translation only after confirmation and sends the customized prompt", async ({ page }, testInfo) => {
@@ -185,5 +185,5 @@ test("automatically queries a reading-mode word with its sentence and shares the
   const annotation = page.locator(".pdf-annotation-item");
   await expect(annotation).toHaveCount(1);
   await annotation.locator(".pdf-annotation-summary").click();
-  await expect(annotation.getByRole("textbox", { name: "补充批注笔记" })).toContainText(/n\. 正则化\s*来源：必应词典/);
+  await expect(annotation.getByRole("button", { name: "编辑批注正文" })).toContainText(/n\. 正则化\s*来源：必应词典/);
 });

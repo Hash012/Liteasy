@@ -1,3 +1,4 @@
+import { pdfAnnotationAction, editExpandedPdfAnnotationNote } from "./fixtures/renderWithPdfAnnotations";
 import { renderWithPdfAnnotations as render } from "./fixtures/renderWithPdfAnnotations";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
@@ -37,8 +38,8 @@ function reader(port: ObjectWorkbenchPort, selected = paper) {
   </ObjectWorkbenchContext.Provider>;
 }
 async function openEntry() {
-  fireEvent.click(await screen.findByRole("button", { name: "编辑批注：Original source passage" }));
-  await waitFor(() => expect(screen.getByRole("button", { name: "AI review：Original source passage" })).toBeEnabled());
+  fireEvent.click(await screen.findByRole("button", { name: "展开批注：Original source passage" }));
+  expect(screen.getByRole("button", { name: "编辑批注正文" })).toBeVisible();
 }
 function stored() {
   return loadPdfAnnotations(pdfAnnotationStorageKey(paper), resolvePaperIdentity(paper))[0] as PdfAnnotationV2;
@@ -54,7 +55,7 @@ test("review is saved in the entry, reloads, remains editable, and travels with 
   const port = workbench();
   const view = render(reader(port));
   await openEntry();
-  fireEvent.click(screen.getByRole("button", { name: "AI review：Original source passage" }));
+  fireEvent.click(pdfAnnotationAction("Original source passage", /^(AI review|重新生成 AI review)$/));
   expect(screen.queryByRole("textbox", { name: "本次系统提示词" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("combobox", { name: "生成风格" }));
   fireEvent.click(screen.getByRole("option", { name: "深入" }));
@@ -89,8 +90,9 @@ test("an edited entry cannot be overwritten by an in-flight review; its result c
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [entry()]);
   render(reader(port));
   await openEntry();
-  fireEvent.click(screen.getByRole("button", { name: "AI review：Original source passage" }));
+  fireEvent.click(pdfAnnotationAction("Original source passage", /^(AI review|重新生成 AI review)$/));
   fireEvent.click(await screen.findByRole("button", { name: "开始生成", exact: true }));
+  editExpandedPdfAnnotationNote();
   fireEvent.change(screen.getByRole("textbox", { name: "补充批注笔记" }), { target: { value: "用户在 review 期间修改了批注" } });
   fireEvent.click(screen.getByRole("button", { name: "保存笔记" }));
   await act(async () => finish("基于旧版本的 review"));
@@ -112,7 +114,7 @@ test("switching papers cancels review and a late answer cannot change either ent
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [entry()]);
   const view = render(reader(port));
   await openEntry();
-  fireEvent.click(screen.getByRole("button", { name: "AI review：Original source passage" }));
+  fireEvent.click(pdfAnnotationAction("Original source passage", /^(AI review|重新生成 AI review)$/));
   fireEvent.click(await screen.findByRole("button", { name: "开始生成", exact: true }));
   view.rerender(reader(port, { ...paper, id: "other-paper" }));
   expect(request.mock.calls[0][1].aborted).toBe(true);
@@ -127,7 +129,7 @@ test("failed regeneration preserves a previously edited review and shows the req
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [item]);
   render(reader(workbench({ reviewAnnotation: vi.fn(async () => { throw new Error("AI 服务离线"); }) })));
   await openEntry();
-  fireEvent.click(screen.getByRole("button", { name: "AI review：Original source passage" }));
+  fireEvent.click(pdfAnnotationAction("Original source passage", /^(AI review|重新生成 AI review)$/));
   fireEvent.click(await screen.findByRole("button", { name: "开始生成", exact: true }));
   expect(await screen.findByRole("alert")).toHaveTextContent("AI 服务离线");
   expect(screen.getByText("用户保留的 review")).toBeVisible();
@@ -139,7 +141,7 @@ test("storage failure retains generated text for retry without claiming it was s
   render(reader(workbench()));
   await openEntry();
   vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("磁盘空间不足"); });
-  fireEvent.click(screen.getByRole("button", { name: "AI review：Original source passage" }));
+  fireEvent.click(pdfAnnotationAction("Original source passage", /^(AI review|重新生成 AI review)$/));
   fireEvent.click(await screen.findByRole("button", { name: "开始生成", exact: true }));
   expect(await screen.findByRole("alert")).toHaveTextContent("磁盘空间不足");
   expect(screen.getByText("请补充对照实验，区分观察与推断。")).toBeVisible();

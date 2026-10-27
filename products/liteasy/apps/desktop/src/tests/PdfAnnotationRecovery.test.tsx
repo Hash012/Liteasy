@@ -34,7 +34,7 @@ test("a failed native recovery never saves an empty fallback over disk; retry re
   expect(native.save.mock.calls.filter(([input]) => input.artifactKind === "annotations")).toHaveLength(0);
   recover = true;
   fireEvent.click(screen.getByRole("button", { name: "重试恢复批注" }));
-  fireEvent.click(await screen.findByRole("button", { name: "编辑批注：Durable source" }));
+  fireEvent.click(await screen.findByRole("button", { name: "展开批注：Durable source" }));
   expect(await screen.findByText("Durable review")).toBeVisible();
   await waitFor(() => expect(native.save).toHaveBeenCalledWith({
     artifactKind: "annotations", paperId: paper.id,
