@@ -38,6 +38,7 @@ test("independent bars retain Notes and board tabs, while Agent can move into th
   await expect(
     page.getByRole("tab", { name: "Liteasy Chat", exact: true }),
   ).toBeVisible();
+  await nav.getByRole("button", { name: "展开右侧栏", exact: true }).click();
   await page
     .locator('[data-region="main"]')
     .getByRole("button", { name: "主内容区面板选项" })

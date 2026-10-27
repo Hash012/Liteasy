@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
+import { createPortal } from "react-dom";
+import { createDockSurfaceHost, DockSurfaceSlot } from "../app/features/dock/DockSurfaceSlot";
 import {
   DockRegion,
   dockDynamicTabMimeType,
@@ -24,6 +26,50 @@ function createDataTransfer(itemId: string) {
 }
 
 describe("DockRegion", () => {
+  test.each(["leave", "dragend", "drop elsewhere", "Escape", "blur"])("clears the drag preview after %s over a persistent chat surface", (ending) => {
+    const host = createDockSurfaceHost(), onMoveItem = vi.fn();
+    render(<>
+      <button>拖动设置</button>
+      <DockRegion regionId="bottom" layout={{ activeItemId: "assistant", itemIds: ["assistant"] }}
+        onActivateItem={vi.fn()} onCloseItem={vi.fn()} onMoveItem={onMoveItem}
+        renderItem={() => <DockSurfaceSlot host={host} />} />
+      {createPortal(<div><button>聊天内容</button><button>聊天输入</button></div>, host)}
+    </>);
+    const region = screen.getByRole("region", { name: "下栏 Dock 区域" });
+    const content = screen.getByRole("button", { name: "聊天内容" });
+    const dataTransfer = createDataTransfer("settings"); dataTransfer.setData(dockItemMimeType, "settings");
+    fireEvent.dragOver(content, { dataTransfer });
+    expect(region).toHaveClass("drop-active");
+    // jsdom has no DragEvent constructor; MouseEvent preserves its relatedTarget.
+    fireEvent(content, new MouseEvent("dragleave", { bubbles: true, relatedTarget: screen.getByRole("button", { name: "聊天输入" }) }));
+    expect(region).toHaveClass("drop-active");
+    if (ending === "leave") fireEvent(content, new MouseEvent("dragleave", { bubbles: true, relatedTarget: document.body }));
+    else if (ending === "dragend") fireEvent.dragEnd(screen.getByRole("button", { name: "拖动设置" }), { dataTransfer });
+    else if (ending === "drop elsewhere") fireEvent.drop(document.body, { dataTransfer });
+    else if (ending === "Escape") fireEvent.keyDown(document, { key: "Escape" });
+    else fireEvent.blur(window);
+    expect(region).not.toHaveClass("drop-active");
+    expect(region.querySelector(".dock-drop-overlay")).toBeNull();
+    expect(onMoveItem).not.toHaveBeenCalled();
+    expect(content).toBeVisible();
+  });
+
+  test("dropping settings on the persistent chat surface moves it once and clears the preview", () => {
+    const host = createDockSurfaceHost(), onMoveItem = vi.fn();
+    render(<>
+      <DockRegion regionId="bottom" layout={{ activeItemId: "assistant", itemIds: ["assistant"] }}
+        onActivateItem={vi.fn()} onCloseItem={vi.fn()} onMoveItem={onMoveItem}
+        renderItem={() => <DockSurfaceSlot host={host} />} />
+      {createPortal(<button>聊天内容</button>, host)}
+    </>);
+    const content = screen.getByRole("button", { name: "聊天内容" });
+    const dataTransfer = createDataTransfer("settings"); dataTransfer.setData(dockItemMimeType, "settings");
+    fireEvent.dragOver(content, { dataTransfer });
+    fireEvent.drop(content, { dataTransfer });
+    expect(onMoveItem).toHaveBeenCalledExactlyOnceWith("settings", "bottom");
+    expect(screen.getByRole("region", { name: "下栏 Dock 区域" })).not.toHaveClass("drop-active");
+  });
+
   test("collapses the panel with its own visible button without closing any page", async () => {
     const onCollapseRegion = vi.fn(), onCloseRegion = vi.fn(), onCloseItem = vi.fn();
     render(<DockRegion regionId="right" layout={{ activeItemId: "assistant", itemIds: ["assistant"] }}

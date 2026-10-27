@@ -219,6 +219,32 @@ export function DockRegion({
   useEffect(() => {
     const element = regionElement.current;
     if (!element) return;
+    const owner = element.ownerDocument;
+    const clearPreview = () => setDropActive(false);
+    const leave = (event: globalThis.DragEvent) => {
+      if (!(event.relatedTarget instanceof Node) || !element.contains(event.relatedTarget)) clearPreview();
+    };
+    const cancel = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") clearPreview();
+    };
+    // Chat is a persistent portal: React events follow its original parent, not
+    // this DOM region. A cancelled drag also ends on the source, not the target.
+    element.addEventListener("dragleave", leave, true);
+    owner.addEventListener("drop", clearPreview, true);
+    owner.addEventListener("dragend", clearPreview, true);
+    owner.addEventListener("keydown", cancel, true);
+    owner.defaultView?.addEventListener("blur", clearPreview);
+    return () => {
+      element.removeEventListener("dragleave", leave, true);
+      owner.removeEventListener("drop", clearPreview, true);
+      owner.removeEventListener("dragend", clearPreview, true);
+      owner.removeEventListener("keydown", cancel, true);
+      owner.defaultView?.removeEventListener("blur", clearPreview);
+    };
+  }, []);
+  useEffect(() => {
+    const element = regionElement.current;
+    if (!element) return;
     // Persistent portals retain their React parent. Handle plain tab drags through
     // their DOM container; resource payloads remain owned by the surface itself.
     const isPortalTabDrag = (event: globalThis.DragEvent) => {
@@ -372,11 +398,6 @@ export function DockRegion({
       data-reading-focus-target={readingFocusTarget ? "true" : undefined}
       tabIndex={-1}
       ref={regionElement}
-      onDragLeave={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          setDropActive(false);
-        }
-      }}
       onDragOver={(event) => {
         if (!canAcceptDockPayload(event, regionId, onMoveDynamicTab)) {
           return;

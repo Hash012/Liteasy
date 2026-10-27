@@ -3,6 +3,50 @@ import { expect, test, type Locator } from "@playwright/test";
 const fixture = "/src/tests/browser/fixtures/ui-refinement.html";
 test.use({ viewport: { width: 1600, height: 1000 } });
 
+test("dragging settings across chat clears previews on leave, cancellation and drop", async ({ page }, info) => {
+  test.setTimeout(60_000);
+  const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
+  await page.addInitScript(() => localStorage.setItem("liteasy.account.suppress-login-reminder.v1", "true"));
+  await page.goto("/");
+  const source = page.getByRole("navigation", { name: "左边栏导航" }).getByRole("button", { name: "设置", exact: true });
+  const bottom = page.locator('[data-region="bottom"]');
+  const chat = bottom.locator(".assistant-pane");
+  const draft = bottom.getByPlaceholder("输入你的问题或命令");
+  await expect(chat).toBeVisible({ timeout: 30_000 });
+  await draft.fill("拖拽取消后保留草稿");
+  const start = (await source.boundingBox())!, target = (await chat.boundingBox())!;
+  async function hoverChat() {
+    await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 12 });
+    await page.mouse.move(target.x + target.width / 2 + 1, target.y + target.height / 2);
+    await expect(bottom.locator(".dock-drop-overlay")).toBeVisible();
+    await expect(bottom.locator(".dock-drop-overlay")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  }
+  await hoverChat();
+  await page.keyboard.press("Escape"); await page.mouse.up();
+  await expect(page.locator(".dock-drop-overlay")).toHaveCount(0);
+  await expect(draft).toHaveValue("拖拽取消后保留草稿");
+  await expect(bottom.getByRole("tab", { name: "Liteasy Chat", exact: true })).toBeVisible();
+  await hoverChat();
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2, { steps: 12 });
+  await expect(bottom.locator(".dock-drop-overlay")).toHaveCount(0);
+  await page.keyboard.press("Escape"); await page.mouse.up();
+  await source.dragTo(chat);
+  const settings = bottom.getByRole("region", { name: "应用设置" });
+  await expect(settings.getByRole("textbox", { name: "搜索设置" })).toBeVisible();
+  await expect(bottom.getByRole("tab", { name: "设置", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(".dock-drop-overlay")).toHaveCount(0);
+  await bottom.getByRole("tab", { name: "Liteasy Chat", exact: true }).click();
+  await expect(draft).toHaveValue("拖拽取消后保留草稿");
+  await bottom.getByRole("tab", { name: "设置", exact: true }).click();
+  await page.reload();
+  await expect(settings.getByRole("textbox", { name: "搜索设置" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".dock-drop-overlay")).toHaveCount(0);
+  await bottom.screenshot({ path: info.outputPath("settings-bottom-after-drag.png") });
+  expect(errors).toEqual([]);
+});
+
 for (const theme of ["浅色", "深色"]) {
   test(`research cards keep inputs and actions reachable in narrow panes (${theme})`, async ({ page }, info) => {
     await page.goto(fixture);
