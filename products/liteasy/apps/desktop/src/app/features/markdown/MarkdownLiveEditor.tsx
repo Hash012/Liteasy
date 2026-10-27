@@ -79,8 +79,9 @@ export type MarkdownEditorProps = {
   value: string; onChange(value: string): void; documentKey: string; className?: string; label?: string;
   readOnly?: boolean; autoFocus?: boolean; compact?: boolean; previewProps?: Omit<MarkdownContentProps, "value">;
   toolbar?: "inline" | "popover" | "none";
+  toolbarDefaultExpanded?: boolean;
 };
-export function MarkdownLiveEditor({ value, onChange, documentKey, className = "", label = "Markdown 正文", readOnly = false, autoFocus = false, compact = false, toolbar = compact ? "none" : "inline", previewProps }: MarkdownEditorProps) {
+export function MarkdownLiveEditor({ value, onChange, documentKey, className = "", label = "Markdown 正文", readOnly = false, autoFocus = false, compact = false, toolbar = compact ? "none" : "inline", toolbarDefaultExpanded, previewProps }: MarkdownEditorProps) {
   const [findOpen, setFindOpen] = useState(false);
   const references = useContext(ResourceReferencesContext);
   const host = useRef<HTMLDivElement>(null), editor = useRef<EditorView>();
@@ -157,7 +158,7 @@ export function MarkdownLiveEditor({ value, onChange, documentKey, className = "
   };
   return <div className={`markdown-live-editor ${compact ? "is-compact" : ""} ${className}`} data-editor-revision={tick} onKeyDownCapture={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") { event.preventDefault(); event.stopPropagation(); setFindOpen(true); } }}>
     {findOpen ? <DocumentFindBar text={value} onClose={() => setFindOpen(false)} onNavigate={(range) => { editor.current?.dispatch({ selection: { anchor: range.start, head: range.end }, effects: [focused.of(true), EditorView.scrollIntoView(range.start, { y: "center" })] }); }} /> : null}
-    {!readOnly && toolbar !== "none" ? <MarkdownEditingToolbar presentation={toolbar} execute={execute} undo={() => { if (view) undo(view); }} redo={() => { if (view) redo(view); }} canUndo={Boolean(view && undoDepth(view.state))} canRedo={Boolean(view && redoDepth(view.state))}
+    {!readOnly && toolbar !== "none" ? <MarkdownEditingToolbar presentation={toolbar} defaultExpanded={toolbarDefaultExpanded} execute={execute} undo={() => { if (view) undo(view); }} redo={() => { if (view) redo(view); }} canUndo={Boolean(view && undoDepth(view.state))} canRedo={Boolean(view && redoDepth(view.state))}
       insertReference={references ? () => { if (!view) return; const range = view.state.selection.main; view.dispatch({ changes: { from: range.from, to: range.to, insert: "[[]]" }, selection: { anchor: range.from + 2 }, userEvent: "input" }); setLinkOpen(true); } : undefined} /> : null}
     <div className="markdown-live-host" ref={host} />
     {previews.map((preview) => createPortal(<ContentView {...previewProps} content={legacyContent(preview.text)} />, preview.dom, String(preview.id)))}

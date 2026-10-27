@@ -1,6 +1,7 @@
 import { MarkdownEditor } from "../markdown/MarkdownEditor";
 import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
-import { Button, Textarea, Tooltip } from "@fluentui/react-components";
+import { useLayoutEffect, useRef } from "react";
+import { Button, Tooltip } from "@fluentui/react-components";
 import { CheckmarkRegular, DismissRegular } from "@fluentui/react-icons";
 import { PdfAnnotationMarkdown } from "./PdfAnnotationMarkdown";
 import "./pdfAnnotationEditor.css";
@@ -19,9 +20,29 @@ export function PdfAnnotationEditor({
   inline?: boolean;
 }) {
   const preference = useMarkdownEditing();
+  const container = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const textarea = container.current?.querySelector("textarea");
+    if (!textarea) return;
+    const fitContent = () => {
+      const scrollTop = textarea.scrollTop;
+      textarea.style.height = "0px";
+      textarea.style.height = `${textarea.scrollHeight}px`;
+      textarea.scrollTop = scrollTop;
+    };
+    fitContent();
+    let width = textarea.clientWidth;
+    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(() => {
+      if (textarea.clientWidth === width) return;
+      width = textarea.clientWidth;
+      fitContent();
+    });
+    observer?.observe(textarea);
+    return () => observer?.disconnect();
+  }, [value, preference.mode]);
   return (
-    <div className="pdf-annotation-note-editor">
-      <MarkdownEditor documentKey="annotation-note" label={inline ? "页内批注内容" : "补充批注笔记"} value={value} onChange={(text) => onChange(text.slice(0, 10000))} autoFocus={inline} />
+    <div className="pdf-annotation-note-editor" ref={container}>
+      <MarkdownEditor documentKey="annotation-note" label={inline ? "页内批注内容" : "补充批注笔记"} value={value} onChange={(text) => onChange(text.slice(0, 10000))} autoFocus toolbarDefaultExpanded={false} />
       {preference.mode === "manual" && value.trim() ? (
         <div
           aria-label={

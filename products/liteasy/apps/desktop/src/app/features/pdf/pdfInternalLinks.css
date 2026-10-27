@@ -1,5 +1,16 @@
-.pdf-internal-links { position: absolute; inset: 0; z-index: var(--layer-pdf-link, 3); pointer-events: none; }
+.pdf-internal-links { position: absolute; inset: 0; z-index: var(--layer-pdf-link, 4); pointer-events: none; }
 .pdf-internal-link { position: absolute; pointer-events: auto; }
-.pdf-internal-link > a { display: block; width: 100%; height: 100%; }
-.pdf-internal-link > a:hover { background: color-mix(in srgb, var(--colorBrandBackground) 12%, transparent); }
+.pdf-internal-link > a {
+  display: block;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--colorBrandStroke1, #0f6cbd);
+  border-radius: 1px;
+  cursor: pointer;
+}
+.pdf-internal-link > a:hover {
+  background: color-mix(in srgb, var(--colorBrandBackground) 12%, transparent);
+  outline: 1px solid var(--colorBrandStroke1);
+}
 .pdf-internal-link > a:focus-visible { outline: 2px solid var(--colorBrandStroke1); outline-offset: 1px; }

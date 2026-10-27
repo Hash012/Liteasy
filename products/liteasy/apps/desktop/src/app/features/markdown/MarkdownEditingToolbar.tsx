@@ -37,12 +37,13 @@ const more: Action[] = [
   { command: "outdent", label: "减少缩进" },
 ];
 
-export function MarkdownEditingToolbar({ execute, undo, redo, canUndo, canRedo, insertReference, presentation = "inline" }: {
+export function MarkdownEditingToolbar({ execute, undo, redo, canUndo, canRedo, insertReference, presentation = "inline", defaultExpanded = true }: {
   execute(command: MarkdownCommand): void; undo(): void; redo(): void; canUndo: boolean; canRedo: boolean;
   insertReference?(): void;
   presentation?: "inline" | "popover";
+  defaultExpanded?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const controlsId = useId();
   const button = (label: string, icon: ReactElement | undefined, action: () => void, disabled = false, hint = label) =>
     <Tooltip key={label} content={hint} relationship="description"><Button size="small" appearance="subtle" icon={icon}

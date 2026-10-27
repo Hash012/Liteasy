@@ -11,9 +11,10 @@ import { activeWiki } from "../resource-links/referenceText";
 import { textareaCaret } from "./textareaCaret";
 import "./markdownSourceEditor.css";
 
-export function MarkdownSourceEditor({ value, onChange, documentKey, className = "", label = "Markdown 源码", readOnly = false, autoFocus = false, compact = false, toolbar = compact ? "none" : "inline" }: {
+export function MarkdownSourceEditor({ value, onChange, documentKey, className = "", label = "Markdown 源码", readOnly = false, autoFocus = false, compact = false, toolbar = compact ? "none" : "inline", toolbarDefaultExpanded }: {
   value: string; onChange(value: string): void; documentKey: string; className?: string; label?: string; readOnly?: boolean; autoFocus?: boolean;
   compact?: boolean; toolbar?: "inline" | "popover" | "none";
+  toolbarDefaultExpanded?: boolean;
 }) {
   const [findOpen, setFindOpen] = useState(false);
   const references = useContext(ResourceReferencesContext);
@@ -96,7 +97,7 @@ export function MarkdownSourceEditor({ value, onChange, documentKey, className =
   };
   return <div className={`markdown-source-editor ${compact ? "is-compact" : ""} ${className}`} onKeyDownCapture={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") { event.preventDefault(); event.stopPropagation(); setFindOpen(true); } }}>
     {findOpen ? <DocumentFindBar text={value} onClose={() => setFindOpen(false)} onNavigate={(range) => { const element = textarea.current; if (!element) return; element.focus({ preventScroll: true }); element.setSelectionRange(range.start, range.end); element.scrollTop = Math.max(0, (value.slice(0, range.start).split("\n").length - 1) * (parseFloat(getComputedStyle(element).lineHeight) || 24) - element.clientHeight / 2); }} /> : null}
-    {!readOnly && toolbar !== "none" ? <MarkdownEditingToolbar presentation={toolbar} execute={execute} undo={() => travel(true)} redo={() => travel(false)} canUndo={history.current.canUndo} canRedo={history.current.canRedo} insertReference={references ? insertReference : undefined} /> : null}
+    {!readOnly && toolbar !== "none" ? <MarkdownEditingToolbar presentation={toolbar} defaultExpanded={toolbarDefaultExpanded} execute={execute} undo={() => travel(true)} redo={() => travel(false)} canUndo={history.current.canUndo} canRedo={history.current.canRedo} insertReference={references ? insertReference : undefined} /> : null}
     {wiki && references ? <WikiLinkEditor key={`${documentKey}:${wiki.start}`} raw={value.slice(wiki.start + 2, wiki.end - 2)} target={{ getBoundingClientRect: () => textarea.current ? textareaCaret(textarea.current, wiki.start) : new DOMRect() }}
       onChange={(raw) => editWiki(raw)} onFinish={(raw, beforeLast) => editWiki(raw, true, beforeLast)} onHistory={(undo) => { setEditingLink(false); travel(undo); }} /> : null}
     <Textarea ref={textarea} autoFocus={autoFocus} className="markdown-source-input" aria-label={label} value={value} readOnly={readOnly} resize="none" spellCheck={false}
