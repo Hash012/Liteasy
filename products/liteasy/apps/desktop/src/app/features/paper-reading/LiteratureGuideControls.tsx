@@ -7,6 +7,8 @@ import { Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, Dia
 import { SparkleRegular, DismissRegular, EyeRegular, EyeOffRegular, DeleteRegular, ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { guideCategories, guideModes, type GuideCategory, type GuideMode, type GuideOptions } from "./literatureGuide.types";
 import "./literatureGuide.css";
+import { AnnotationStyleControls } from "./AnnotationStyleControls";
+import type { AnnotationStyleController } from "./useAnnotationStyle";
 
 export type LiteratureGuideState = { mode: GuideMode; options: GuideOptions; busy: boolean; visible: boolean; count: number; resume: boolean; message: string; error: string;
   ready: boolean; setMode(value: GuideMode): void; setOptions(value: GuideOptions): void; start(systemPrompt?: string): void; cancel(): void; toggle(): void; clear(): void };
@@ -16,7 +18,7 @@ const modeDescriptions: Record<GuideMode, string> = {
   advanced: "评析精妙设计、隐含假设、推理转折与适用边界。",
   auto: "参考你的研究熟悉度选择深度；缺少相关画像时采用均衡。"
 };
-export function LiteratureGuideControls({ guide }: { guide: LiteratureGuideState }) {
+export function LiteratureGuideControls({ guide, annotationStyle }: { guide: LiteratureGuideState; annotationStyle?: AnnotationStyleController }) {
   const settings = useGenerationPromptSettings();
   const [open, setOpen] = useState(false);
   const [focusOpen, setFocusOpen] = useState(false);
@@ -44,6 +46,7 @@ export function LiteratureGuideControls({ guide }: { guide: LiteratureGuideState
             <GenerationPromptEditor task="literature_annotation" value={prompt} disabled={guide.busy} onChange={(value) => {
               setPrompt(value); guide.setOptions({ ...guide.options, systemPrompt: value ?? "" });
             }} />
+            {annotationStyle ? <AnnotationStyleControls style={annotationStyle} disabled={guide.busy} /> : null}
             <Field label="已有标注" hint="只处理所选类别；手动批注、已修改或已发布的讲解始终保留。">
               <OptionPicker aria-label="已有标注处理方式" disabled={guide.busy} value={String(guide.options.existing ?? "")} onValueChange={nextValue => guide.setOptions({ ...guide.options, existing: nextValue as GuideOptions["existing"] })} options={[{ value: String("replace"), label: String("\u66F4\u65B0\u5DF2\u6709 AI \u6807\u6CE8") }, { value: String("append"), label: String("\u4FDD\u7559\u5DF2\u6709\uFF0C\u4EC5\u8865\u5145\u65B0\u6807\u6CE8") }]} />
             </Field>
@@ -58,7 +61,7 @@ export function LiteratureGuideControls({ guide }: { guide: LiteratureGuideState
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setOpen(false)}>返回阅读</Button>
-            {guide.busy ? <Button appearance="primary" onClick={guide.cancel}>停止 AI 标注</Button> : <Button appearance="primary" disabled={!guide.ready || !guide.options.categories.length} onClick={() => guide.start(getGenerationPrompt("literature_annotation", settings, prompt))}>{guide.resume ? "继续标注" : "开始标注"}</Button>}
+            {guide.busy ? <Button appearance="primary" onClick={guide.cancel}>停止 AI 标注</Button> : <Button appearance="primary" disabled={!guide.ready || !guide.options.categories.length || annotationStyle?.busy} onClick={() => guide.start(getGenerationPrompt("literature_annotation", settings, prompt))}>{guide.resume ? "继续标注" : "开始标注"}</Button>}
           </DialogActions>
         </DialogBody>
       </DialogSurface>

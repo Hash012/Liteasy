@@ -49,6 +49,7 @@ import type { ThinReadingVisualizationStatus } from "../features/artifacts/artif
 type ReaderPaneProps = {
   selectionLookup?: SelectionLookupPort;
   onGenerateGuide?: import("../features/paper-reading/literatureGuide").GuideGenerator;
+  annotationStyle?: import("../features/paper-reading/useAnnotationStyle").AnnotationStyleController;
   onDocumentInfo?: (info: import("../features/pdf/pdfDocumentInfo").PdfDocumentInfo) => void;
   onQuickAsk?: (request: PdfQuickAskRequest) => Promise<string>;
   onQuickAskTransfer?: (input: QuickAskTransferInput) => Promise<QuickAskTransferResult>;
@@ -136,6 +137,7 @@ export function ReaderPane({
   onQuickAsk,
   onQuickAskTransfer,
   onGenerateGuide,
+  annotationStyle,
   readingContent, extractingPaper, onExtractPaper,
   allowServerPdfParsing = false,
   analysisHint,
@@ -231,6 +233,7 @@ export function ReaderPane({
           <PdfReader
             selectionLookup={selectionLookup}
             onGenerateGuide={onGenerateGuide}
+            annotationStyle={annotationStyle}
             onEnterReadingMode={readingContent ? () => setReadingMode(true) : undefined}
             onExitReadingMode={() => setReadingMode(false)}
             readingView={readingVisible ? (annotations) => <section aria-label="论文阅读模式" className="reader-reading-surface">

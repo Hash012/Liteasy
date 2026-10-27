@@ -7,6 +7,7 @@ import { assertExternalSourceReferences, type ModelSourceReference } from "../mo
 export function useLiteratureGuide(input: {
   scope: string | null; title: string; pageCount: number; ready: boolean; count: number;
   sourceReference?: ModelSourceReference;
+  readAnnotationStyle?(): Promise<string>;
   generate?: GuideGenerator; readPage(page: number): Promise<string>;
   save(batch: GuideBatch, pages: number[], mode: GuideMode, runId: string, signal: AbortSignal, options: GuideOptions): Promise<number>;
   clear(): Promise<void>;
@@ -39,6 +40,7 @@ export function useLiteratureGuide(input: {
     let pages: GuidePage[] = [];
     let characters = 0;
     let abstract = "";
+    let annotationStyle = "";
     const check = () => { signal.throwIfAborted(); if (latest.current.scope !== request.scope) throw new DOMException("论文已切换", "AbortError"); };
     async function flush() {
       if (!pages.length) return;
@@ -46,7 +48,7 @@ export function useLiteratureGuide(input: {
       setMessage(`正在标注 ${pages[0].page}–${pages.at(-1)!.page} / ${request.pageCount} 页…`);
       const timeout = setTimeout(() => controller.abort(new Error("模型响应超时，请重试。")), 90_000);
       try {
-        const batch = await request.generate!({ title: request.title, abstract, mode, pages, signal, sourceReference: request.sourceReference, ...runOptions });
+        const batch = await request.generate!({ title: request.title, abstract, mode, pages, signal, sourceReference: request.sourceReference, ...runOptions, annotationStyle });
         check();
         if (batch.rejected && !batch.items.length) throw new Error("本批讲解未能对应原文，原有标注已保留，请重试。");
         const saved = await request.save(batch, pages.map((page) => page.page), mode, runId, signal, runOptions);
@@ -58,6 +60,9 @@ export function useLiteratureGuide(input: {
     }
     try {
       assertExternalSourceReferences(request.sourceReference ? [request.sourceReference] : []);
+      // Keep one saved style snapshot for the entire run, including all page batches.
+      annotationStyle = await request.readAnnotationStyle?.() ?? "";
+      check();
       // Read bounded text only. Never render a PDF page canvas for AI analysis.
       abstract = (await request.readPage(1)).slice(0, 4000);
       check();

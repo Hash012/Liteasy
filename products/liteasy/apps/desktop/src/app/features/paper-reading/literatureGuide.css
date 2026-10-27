@@ -6,6 +6,8 @@
 .literature-guide-hint, .literature-guide-status { font-size: 12px; line-height: 1.6; color: var(--colorNeutralForeground3); }
 .literature-guide-error { font-size: 12px; color: var(--colorPaletteRedForeground1); }
 .literature-guide-focus { border: 1px solid var(--colorNeutralStroke2); border-radius: 6px; padding: 4px; }
+.annotation-style-settings { display: flex; flex-direction: column; gap: 8px; padding: 8px; min-width: 0; }
+.annotation-style-settings textarea { min-width: 0; max-height: 320px; }
 .literature-guide-categories { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 4px; }
 .literature-guide-management { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 12px; }
 .paper-reading-body { position: relative; }

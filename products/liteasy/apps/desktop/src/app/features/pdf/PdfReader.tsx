@@ -130,6 +130,7 @@ import {
 import type { PdfPageText } from "./citationAttribution";
 import { resolvePdfSelectionMenuPosition } from "./pdfSelectionPosition";
 import {
+  buildPageCharModelFromGlyphs,
   buildPageCharModelFromTextLayer,
   buildPdfSelectionRange,
   buildPdfSelectionText,
@@ -292,6 +293,7 @@ type PdfReaderProps = {
   onQuickAsk?: (request: PdfQuickAskRequest) => Promise<string>;
   onQuickAskTransfer?: (input: QuickAskTransferInput) => Promise<QuickAskTransferResult>;
   onGenerateGuide?: GuideGenerator;
+  annotationStyle?: import("../paper-reading/useAnnotationStyle").AnnotationStyleController;
   readingControls?: ReactNode;
   readingView?: (annotations: PdfReadingAnnotations) => ReactNode;
   onEnterReadingMode?: () => void;
@@ -1144,6 +1146,7 @@ export function PdfPageView({
   zoom
 }: PdfPageViewProps) {
   const [nativeCharModel, setNativeCharModel] = useState<PageCharModel>();
+  const [glyphCharModel, setGlyphCharModel] = useState<PageCharModel>();
   const [pageStageMessage, setPageStageMessage] = useState("");
   const selecting = useRef(false);
   const pendingRefinement = useRef<(() => void) | undefined>();
@@ -1233,6 +1236,8 @@ export function PdfPageView({
     let renderedPage: PDFPageProxy | undefined;
     const ownedCanvas = canvasRef.current;
     const ownedTextLayer = textLayerRef.current;
+    setNativeCharModel(undefined);
+    setGlyphCharModel(undefined);
 
     async function renderPage() {
       if (!pdfDocument || !renderActive) {
@@ -1243,6 +1248,7 @@ export function PdfPageView({
         setSearchHighlightRects([]);
         setTargetHighlightRects([]);
         setNativeCharModel(undefined);
+        setGlyphCharModel(undefined);
         onPageCharModelRendered?.(pageNumber, null);
         if (focused && targetEvidence?.paperId === activePaper?.id) {
           onEvidenceHighlightResolved?.(false);
@@ -1311,18 +1317,23 @@ export function PdfPageView({
         if (!cancelled) {
           const pageElement = pageShellRef.current;
           if (pageElement) {
-            const install = (glyphs: Awaited<ReturnType<typeof loadPdfPageGlyphs>>) => {
+            const install = (glyphs: Awaited<ReturnType<typeof loadPdfPageGlyphs>>, resolveQuotes = false) => {
               if (cancelled) return;
               const model = buildPageCharModelFromTextLayer({ glyphs, pageElement, pageIndex: pageNumber, textLayer });
-              setNativeCharModel(model); onPageCharModelRendered?.(pageNumber, model);
+              if (resolveQuotes) {
+                setGlyphCharModel(glyphs.length ? buildPageCharModelFromGlyphs(glyphs, pageNumber) : undefined);
+                setNativeCharModel(model);
+              }
+              onPageCharModelRendered?.(pageNumber, model);
             };
-            // Native DOM selection is ready before the optional operator-list pass.
+            // Allow selection immediately, but do not replace saved AI coordinates with
+            // provisional DOM measurements while the first page's fonts/glyphs settle.
             install([]);
             void loadPdfPageGlyphs(pdfDocument, pageNumber, page).then(glyphs => {
-              if (cancelled || !glyphs.length) return;
-              if (selecting.current) pendingRefinement.current = () => install(glyphs);
-              else install(glyphs);
-            }).catch(() => { /* The DOM model remains usable. */ });
+              if (cancelled) return;
+              if (selecting.current) pendingRefinement.current = () => install(glyphs, true);
+              else install(glyphs, true);
+            }).catch(() => { /* Keep saved AI anchors if native refinement fails. */ });
           }
           onPageTextRendered?.({
             page: pageNumber,
@@ -1334,7 +1345,7 @@ export function PdfPageView({
         }
         } catch {
           if (!cancelled) {
-            textLayer.replaceChildren(); setNativeCharModel(undefined);
+            textLayer.replaceChildren(); setNativeCharModel(undefined); setGlyphCharModel(undefined);
             onPageCharModelRendered?.(pageNumber, null);
             setPageStageMessage("本页文字层暂不可用，仍可阅读并使用区域批注。");
           }
@@ -1351,6 +1362,7 @@ export function PdfPageView({
         setPageStageMessage("本页暂时无法绘制，请重新打开文献后重试。");
         clearPdfCanvas(canvasRef.current);
         textLayerRef.current?.replaceChildren();
+        setNativeCharModel(undefined); setGlyphCharModel(undefined);
         setTargetHighlightRects([]);
         onPageCharModelRendered?.(pageNumber, null);
         if (focused && targetEvidence?.paperId === activePaper?.id) {
@@ -1395,9 +1407,12 @@ export function PdfPageView({
   // This also repairs previously saved partial geometry without changing notes or revisions.
   const pageAnnotations = useMemo(() => annotations.filter((annotation) => annotation.page === pageNumber).map((annotation) => {
     if (!annotation.aiGuide || !renderActive) return annotation;
-    const rects = readingQuoteRects(nativeCharModel, annotation.excerpt);
+    // Match generation's native coordinates. DOM measurements remain a fallback for quotes
+    // with unsupported fonts, never an override of a complete painted-glyph match.
+    const glyphRects = readingQuoteRects(glyphCharModel, annotation.excerpt);
+    const rects = glyphRects.length ? glyphRects : readingQuoteRects(nativeCharModel, annotation.excerpt);
     return rects.length ? { ...annotation, rects } : annotation;
-  }), [annotations, pageNumber, nativeCharModel, renderActive]);
+  }), [annotations, pageNumber, nativeCharModel, glyphCharModel, renderActive]);
 
   return (
     <div
@@ -1544,6 +1559,7 @@ export function PdfReader({
   onQuickAsk,
   onQuickAskTransfer,
   onGenerateGuide,
+  annotationStyle,
   onAddSelectionToConversation,
   onSelectionChanged,
   canModerateOrganizationAnnotations = false,
@@ -3279,6 +3295,7 @@ export function PdfReader({
     sourceReference: activePaper ? paperSourceReferences(activePaper)[0] : undefined,
     ready: Boolean(pdfDocument && annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey && !annotationLoadError),
     count: annotations.filter((annotation) => annotation.aiGuide).length, generate: onGenerateGuide,
+    readAnnotationStyle: annotationStyle?.readForGeneration,
     readPage: async (page) => {
       if (pageTexts[page]?.trim()) return pageTexts[page];
       if (!pdfDocument) throw new Error("PDF 文本尚未就绪。");
@@ -3323,7 +3340,7 @@ export function PdfReader({
       await persistReadingAnnotations();
     }
   });
-  const guideControls = onGenerateGuide ? <LiteratureGuideControls guide={guide} /> : null;
+  const guideControls = onGenerateGuide ? <LiteratureGuideControls guide={guide} annotationStyle={annotationStyle} /> : null;
   const visibleAnnotations = guide.visible ? annotations : annotations.filter((annotation) => !annotation.aiGuide);
 
   function createInkAnnotation(page: number, ink: PdfInkStroke) {
@@ -3944,11 +3961,11 @@ export function PdfReader({
                       {filteredAnnotations.map((annotation) => {
                         const statusLabel = annotation.kind === "text" || annotation.kind === "ink" || annotation.quickAsk ? "仅保存在本地" : publicationStatus(annotation.publication);
                         return (
-                        <li
+                        <Menu openOnContext key={annotation.id}>
+                        <MenuTrigger disableButtonEnhancement><li
                           className={`pdf-annotation-item ${annotation.kind} ${
                             activeAnnotationId === annotation.id ? "expanded" : ""
                           }`}
-                          key={annotation.id}
                           data-search-annotation={annotation.id}
                         >
                           {annotation.kind === "highlight" && annotation.color && (
@@ -3957,8 +3974,7 @@ export function PdfReader({
                               style={{ backgroundColor: `var(--annotation-marker-${annotation.color}, ${getHighlightColor(annotation.color)})` }}
                             />
                           )}
-                          <Menu openOnContext>
-                          <MenuTrigger disableButtonEnhancement><Button appearance="transparent"
+                          <Button appearance="transparent"
                             aria-expanded={activeAnnotationId === annotation.id}
                             aria-label={`展开批注：${annotation.excerpt}`}
                             aria-description={`${annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)}，第 ${annotation.page} 页，${statusLabel}`}
@@ -3979,7 +3995,7 @@ export function PdfReader({
                               event.stopPropagation();
                               locateAnnotation(annotation);
                             }}
-                            title={`${annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)} · 第 ${annotation.page} 页；展开完整内容；右键查看页码与公开状态；双击或 Ctrl/⌘+Enter 定位原文；方向键浏览批注；拖到白板或对话添加引用`}
+                            title={`${annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)} · 第 ${annotation.page} 页；展开完整内容；右键查看页码、公开状态与 AI review；双击或 Ctrl/⌘+Enter 定位原文；方向键浏览批注；拖到白板或对话添加引用`}
                             type="button"
                           >
                             <Tooltip content={annotation.quickAsk ? "速问" : getAnnotationLabel(annotation.kind)} relationship="description">
@@ -3992,36 +4008,7 @@ export function PdfReader({
                               {annotation.kind !== "text" && annotation.kind !== "ink" && activeAnnotationId !== annotation.id && (annotation.quickAsk?.question || annotation.note) ?
                                 <span className="pdf-annotation-summary-note"><CommentRegular /><span><SearchHighlight text={annotation.quickAsk?.question ?? annotation.note ?? ""} query={annotationQuery} /></span></span> : null}
                             </span>
-                          </Button></MenuTrigger>
-                          <MenuPopover><MenuList aria-labelledby={undefined} aria-label={`批注信息：${annotation.excerpt}`}>
-                            <MenuGroup>
-                              <MenuGroupHeader className="pdf-annotation-context-status">
-                                <PdfAnnotationStatus label={statusLabel}
-                                  state={annotation.publication.state === "failed" ? "failed" : annotation.publication.state === "published" ? "public" :
-                                    annotation.publication.state === "not_published" ? "private" : "pending"} live={false} />
-                                <span>{statusLabel}</span>
-                              </MenuGroupHeader>
-                              <MenuItem icon={<DocumentRegular />} onClick={() => locateAnnotation(annotation)}>定位原文 · 第 {annotation.page} 页</MenuItem>
-                              {!annotation.quickAsk ? <MenuItem icon={<EditRegular />} onClick={() => openAnnotationEditor(annotation)}>编辑批注正文</MenuItem> : null}
-                              {objectWorkbench?.reviewAnnotation ? <MenuItem icon={<SparkleRegular />}
-                                disabled={annotationNoteIsDirty(annotation) || hydratedAnnotationStorageKey !== annotationStorageKey || annotationReview.states[annotation.id]?.pending}
-                                onClick={() => { expandAnnotation(annotation); setReviewPromptId(annotation.id); }}>{annotation.review ? "重新生成 AI review" : "AI review"}</MenuItem> : null}
-                              {onEnterReadingMode ? <MenuItem icon={<DocumentRegular />}
-                                onClick={() => { setReadingAnnotationId(annotation.id); onEnterReadingMode(); }}>在阅读模式查看批注</MenuItem> : null}
-                              {objectWorkbench?.captureAnnotation ? <MenuItem icon={<WhiteboardRegular />}
-                                onClick={() => { if (activePaper) void objectWorkbench.captureAnnotation?.(annotationCaptureInput(annotation), "board").catch((error) => setStatus(error.message)); }}>加入研究白板</MenuItem> : null}
-                              {annotation.kind !== "text" && annotation.kind !== "ink" && !annotation.quickAsk ? <>
-                                <MenuItem icon={<GlobeRegular />} onClick={() => setAnnotationPublic(annotation.id, annotation.publication.desiredVisibility !== "public")}>
-                                  {annotation.publication.desiredVisibility === "public" ? "从论坛撤回" : "公开到论坛"}
-                                </MenuItem>
-                                {onShareAnnotationToOrganization ? <MenuItem icon={<ShareRegular />} disabled={sharingAnnotationId !== null}
-                                  onClick={() => void shareAnnotationToOrganization(annotation)}>共享批注到组织</MenuItem> : null}
-                              </> : null}
-                              <MenuItem icon={<DeleteRegular />} disabled={deletingAnnotationIds.has(annotation.id)} onClick={() => requestAnnotationDeletion(annotation)}>删除批注</MenuItem>
-                              {activeAnnotationId === annotation.id ? <MenuItem icon={<ChevronUpRegular />} onClick={cancelAnnotationEditing}>收起批注</MenuItem> : null}
-                            </MenuGroup>
-                          </MenuList></MenuPopover>
-                          </Menu>
+                          </Button>
                           {activeAnnotationId === annotation.id ? <span className="pdf-annotation-accessible-label" role="status" aria-label={statusLabel}>{statusLabel}</span> : null}
                           {activeAnnotationId === annotation.id ? renderAnnotationReview(annotation) : null}
                           {activeAnnotationId === annotation.id && annotation.kind !== "text" && annotation.note && (
@@ -4065,7 +4052,37 @@ export function PdfReader({
                               </>}
                             </div>
                           ) : null}
-                        </li>
+                        </li></MenuTrigger>
+                          <MenuPopover><MenuList aria-labelledby={undefined} aria-label={`批注信息：${annotation.excerpt}`}>
+                            <MenuGroup>
+                              <MenuGroupHeader className="pdf-annotation-context-status">
+                                <PdfAnnotationStatus label={statusLabel}
+                                  state={annotation.publication.state === "failed" ? "failed" : annotation.publication.state === "published" ? "public" :
+                                    annotation.publication.state === "not_published" ? "private" : "pending"} live={false} />
+                                <span>{statusLabel}</span>
+                              </MenuGroupHeader>
+                              <MenuItem icon={<DocumentRegular />} onClick={() => locateAnnotation(annotation)}>定位原文 · 第 {annotation.page} 页</MenuItem>
+                              {!annotation.quickAsk ? <MenuItem icon={<EditRegular />} onClick={() => openAnnotationEditor(annotation)}>编辑批注正文</MenuItem> : null}
+                              <MenuItem icon={<SparkleRegular />}
+                                title={!objectWorkbench?.reviewAnnotation ? "AI review 暂不可用" : annotationNoteIsDirty(annotation) ? "请先保存批注，再进行 AI review" : "请 Agent 评阅这条批注"}
+                                disabled={!objectWorkbench?.reviewAnnotation || annotationNoteIsDirty(annotation) || hydratedAnnotationStorageKey !== annotationStorageKey || annotationReview.states[annotation.id]?.pending}
+                                onClick={() => { expandAnnotation(annotation); setReviewPromptId(annotation.id); }}>{annotation.review ? "重新生成 AI review" : "AI review"}</MenuItem>
+                              {onEnterReadingMode ? <MenuItem icon={<DocumentRegular />}
+                                onClick={() => { setReadingAnnotationId(annotation.id); onEnterReadingMode(); }}>在阅读模式查看批注</MenuItem> : null}
+                              {objectWorkbench?.captureAnnotation ? <MenuItem icon={<WhiteboardRegular />}
+                                onClick={() => { if (activePaper) void objectWorkbench.captureAnnotation?.(annotationCaptureInput(annotation), "board").catch((error) => setStatus(error.message)); }}>加入研究白板</MenuItem> : null}
+                              {annotation.kind !== "text" && annotation.kind !== "ink" && !annotation.quickAsk ? <>
+                                <MenuItem icon={<GlobeRegular />} onClick={() => setAnnotationPublic(annotation.id, annotation.publication.desiredVisibility !== "public")}>
+                                  {annotation.publication.desiredVisibility === "public" ? "从论坛撤回" : "公开到论坛"}
+                                </MenuItem>
+                                {onShareAnnotationToOrganization ? <MenuItem icon={<ShareRegular />} disabled={sharingAnnotationId !== null}
+                                  onClick={() => void shareAnnotationToOrganization(annotation)}>共享批注到组织</MenuItem> : null}
+                              </> : null}
+                              <MenuItem icon={<DeleteRegular />} disabled={deletingAnnotationIds.has(annotation.id)} onClick={() => requestAnnotationDeletion(annotation)}>删除批注</MenuItem>
+                              {activeAnnotationId === annotation.id ? <MenuItem icon={<ChevronUpRegular />} onClick={cancelAnnotationEditing}>收起批注</MenuItem> : null}
+                            </MenuGroup>
+                          </MenuList></MenuPopover>
+                        </Menu>
                       ); })}
                     </ul>
                   ) : (

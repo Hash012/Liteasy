@@ -9,6 +9,11 @@ const cardGap = 8;
 const pageBorder = 1;
 const railGap = 8;
 
+function marginAnchorY(rect: PdfAnnotationRect, pageHeight: number, kind?: PdfAnnotationV2["kind"], border = 0) {
+  // Underlines use a 2px bottom border. Connect to that stroke, not the middle of the text.
+  return border + pageHeight * (rect.top + rect.height * (kind === "underline" ? 1 : 0.5)) / 100 - (kind === "underline" ? 1 : 0);
+}
+
 export function layoutPdfMarginComments(
   annotations: readonly PdfAnnotationV2[],
   pageHeight: number,
@@ -29,7 +34,7 @@ export function layoutPdfMarginComments(
     .sort((a, b) => a.anchorRect.top - b.anchorRect.top || a.anchorRect.left - b.anchorRect.left || a.annotation.id.localeCompare(b.annotation.id))
     .map(item => {
       const { height, anchorOffset } = measurements.get(item.annotation.id) ?? { height: 0, anchorOffset: 18 };
-      const anchorY = pageBorder + pageHeight * (item.anchorRect.top + item.anchorRect.height / 2) / 100;
+      const anchorY = marginAnchorY(item.anchorRect, pageHeight, item.annotation.kind, pageBorder);
       const top = Math.max(0, anchorY - anchorOffset, nextTop);
       nextTop = top + height + cardGap;
       return { ...item, top, height, anchorOffset };
@@ -38,6 +43,7 @@ export function layoutPdfMarginComments(
 
 export function buildPdfMarginConnectorGeometry(input: {
   anchorRect: PdfAnnotationRect;
+  kind?: PdfAnnotationV2["kind"];
   pageHeight: number;
   pageWidth: number;
   pageBorder?: number;
@@ -46,7 +52,7 @@ export function buildPdfMarginConnectorGeometry(input: {
 }) {
   const border = input.pageBorder ?? 0;
   const startX = border + input.pageWidth * Math.min(100, input.anchorRect.left + input.anchorRect.width) / 100;
-  const startY = border + input.pageHeight * (input.anchorRect.top + input.anchorRect.height / 2) / 100;
+  const startY = marginAnchorY(input.anchorRect, input.pageHeight, input.kind, border);
   const endX = input.pageWidth + border * 2 + railGap;
   const endY = input.commentTop === undefined ? startY : input.commentTop + (input.commentAnchorOffset ?? 18);
   // Any vertical displacement stays in the gutter, outside the PDF text.
@@ -93,7 +99,7 @@ export function PdfMarginComments({ annotations, pageNumber, pageWidth, pageHeig
     {connectorsVisible ? <svg aria-hidden="true" className="pdf-margin-comment-connectors"
       width={railLeft} height={height} style={{ left: -railLeft }}>
       {comments.map(({ annotation, anchorRect, top, anchorOffset }) => {
-        const connector = buildPdfMarginConnectorGeometry({ anchorRect, pageHeight, pageWidth, pageBorder, commentTop: top, commentAnchorOffset: anchorOffset });
+        const connector = buildPdfMarginConnectorGeometry({ anchorRect, kind: annotation.kind, pageHeight, pageWidth, pageBorder, commentTop: top, commentAnchorOffset: anchorOffset });
         return <g key={annotation.id} data-annotation-id={annotation.id}>
           <path className="pdf-margin-comment-connector" d={connector.path} />
           <circle className="pdf-margin-comment-origin" cx={connector.left} cy={connector.top} r={2.5} />

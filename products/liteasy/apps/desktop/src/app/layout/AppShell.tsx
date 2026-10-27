@@ -1447,6 +1447,8 @@ export function AppShell({
     getScopeGeneration: getAccountSessionGeneration
   });
   const generateLiteratureGuide = useLiteratureGuideController({
+    scopeId: objectWorkbench.repository.scopeId, sessionGeneration: getAccountSessionGeneration(),
+    getPapers: () => workspaceStoreRef.current.getState().papers,
     getSettings: () => settingsStoreRef.current.getState(), profile: profileActions.academicProfile,
     memory: profileActions.memory.data, samplingEnabled: profileActions.profileSamplingEnabled,
     transport: effectiveModelTransport
@@ -2407,6 +2409,7 @@ export function AppShell({
         onQuickAsk={askPdfQuestion}
         onQuickAskTransfer={transferQuickAskToConversation}
         onGenerateGuide={generateLiteratureGuide}
+        annotationStyle={generateLiteratureGuide.annotationStyle}
         {...teamAnnotations.readerBindings(paper)}
         allowServerPdfParsing={false}
         readingContent={getPaperMineruResources(paper.id)?.textChunks.some((chunk) => chunk.textExtraction === "mineru")
