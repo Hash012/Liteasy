@@ -4646,7 +4646,7 @@ button.pdf-overlay-mark:focus-visible {
   z-index: 9;
   left: 0;
   width: 100%;
-  max-height: 12%;
+  max-height: min(320px, 45dvh);
   overflow: auto;
   border: 1px solid rgba(76, 107, 136, 0.34);
   border-left: 3px solid var(--accent-1);
@@ -4659,25 +4659,26 @@ button.pdf-overlay-mark:focus-visible {
   user-select: text;
 }
 
-.pdf-margin-comment-connector {
+.pdf-margin-comment-connectors {
   position: absolute;
-  z-index: 7;
-  height: 0;
-  border-top: 1.5px dashed rgba(27, 102, 179, 0.72);
+  top: 0;
+  z-index: var(--layer-pdf-link, 4);
+  overflow: visible;
   pointer-events: none;
 }
 
-.pdf-margin-comment-connector::before {
-  position: absolute;
-  top: -3px;
-  left: -3px;
-  width: 6px;
-  height: 6px;
-  border: 1px solid rgba(27, 102, 179, 0.82);
-  border-radius: 999px;
-  background: #ffffff;
-  content: "";
-  pointer-events: none;
+.pdf-margin-comment-connector {
+  fill: none;
+  stroke: var(--colorBrandStroke1, var(--accent-1));
+  stroke-width: 1.5px;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.pdf-margin-comment-origin {
+  stroke: var(--colorBrandStroke1, var(--accent-1));
+  fill: var(--colorNeutralBackground1);
+  vector-effect: non-scaling-stroke;
 }
 
 .pdf-margin-comment > header {

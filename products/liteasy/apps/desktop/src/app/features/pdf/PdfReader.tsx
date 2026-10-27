@@ -151,6 +151,8 @@ import { selectionLookupContext } from "../selection-lookup/selectionLookupText"
 import type { SelectionLookupPort } from "../selection-lookup/selectionLookup.types";
 import "./pdfAnnotationList.css";
 import { PdfInternalLinks } from "./PdfInternalLinks";
+import { PdfMarginComments } from "./PdfMarginComments";
+export { layoutPdfMarginComments, buildPdfMarginConnectorGeometry } from "./PdfMarginComments";
 import type { PdfBookmarkTarget } from "./pdfBookmarkDestination";
 import { PdfOutline } from "./PdfOutline";
 import { PdfThumbnail } from "./PdfThumbnail";
@@ -1054,45 +1056,6 @@ export function buildPdfTextBoxRect(input: {
   };
 }
 
-export function layoutPdfMarginComments(annotations: readonly PdfAnnotationV2[]) {
-  let nextTop = 2;
-  return annotations
-    .filter((annotation) =>
-      (annotation.kind === "highlight" || annotation.kind === "underline") &&
-      Boolean(annotation.note?.trim()) && annotation.rects.length > 0
-    )
-    .sort((left, right) =>
-      Math.min(...left.rects.map((rect) => rect.top)) -
-      Math.min(...right.rects.map((rect) => rect.top))
-    )
-    .map((annotation) => {
-      const anchorTop = Math.min(...annotation.rects.map((rect) => rect.top));
-      const anchorRect = annotation.rects.reduce((rightmost, rect) =>
-        rect.left + rect.width > rightmost.left + rightmost.width ? rect : rightmost
-      );
-      const top = Math.min(86, Math.max(anchorTop, nextTop));
-      nextTop = top + 13;
-      return { anchorRect, annotation, top };
-    });
-}
-
-export function buildPdfMarginConnectorGeometry(input: {
-  anchorRect: PdfAnnotationRect;
-  pageHeight: number;
-  pageWidth: number;
-}) {
-  const startX = input.pageWidth * Math.min(100, input.anchorRect.left + input.anchorRect.width) / 100;
-  const startY = input.pageHeight * (
-    input.anchorRect.top + input.anchorRect.height / 2
-  ) / 100;
-  const endX = input.pageWidth + 8;
-  return {
-    left: startX,
-    length: Math.max(0, endX - startX),
-    top: startY
-  };
-}
-
 type PdfPageViewProps = {
   activeSearchMatch?: PdfReaderSearchMatch;
   annotations: PdfAnnotationV2[];
@@ -1435,7 +1398,6 @@ export function PdfPageView({
     const rects = readingQuoteRects(nativeCharModel, annotation.excerpt);
     return rects.length ? { ...annotation, rects } : annotation;
   }), [annotations, pageNumber, nativeCharModel, renderActive]);
-  const marginComments = marginCommentsVisible ? layoutPdfMarginComments(pageAnnotations) : [];
 
   return (
     <div
@@ -1444,26 +1406,6 @@ export function PdfPageView({
       }`}
       style={{ minHeight: pageSize.height }}
     >
-      {marginCommentConnectorsVisible ? marginComments.map(({ anchorRect, annotation }) => {
-        const connector = buildPdfMarginConnectorGeometry({
-          anchorRect,
-          pageHeight: pageSize.height,
-          pageWidth: pageSize.width
-        });
-        return (
-          <span
-            aria-hidden="true"
-            className="pdf-margin-comment-connector"
-            data-annotation-id={annotation.id}
-            key={`margin-connector-${annotation.id}`}
-            style={{
-              left: connector.left,
-              top: connector.top,
-              width: connector.length
-            }}
-          />
-        );
-      }) : null}
       <article
         aria-label={`PDF.js 页面 ${pageNumber}`}
         className={`pdf-page-shell ${focused ? "evidence-target focused-page" : ""} ${
@@ -1571,39 +1513,12 @@ export function PdfPageView({
         ))}
         </div>
       </article>
-      {marginComments.length > 0 ? (
-        <aside
-          aria-label={`第 ${pageNumber} 页页外批注栏`}
-          className="pdf-margin-comment-rail"
-          style={{ height: pageSize.height }}
-        >
-          {marginComments.map(({ annotation, top }) => (
-          <section
-            aria-label={`第 ${annotation.page} 页${getAnnotationLabel(annotation.kind)}批注：${annotation.note}`}
-            className="pdf-margin-comment"
-            key={`margin-comment-${annotation.id}`}
-            onPointerDown={(event) => event.stopPropagation()}
-            style={{ top: `${top}%` }}
-          >
-            <header>
-              <span>{getAnnotationLabel(annotation.kind)}</span>
-              <Button
-                aria-label={`编辑页边批注：${annotation.excerpt}`}
-                appearance="subtle"
-                icon={<EditRegular />}
-                onClick={(event) => {
-                  const pageElement = pageShellRef.current;
-                  if (pageElement) onAnnotationActivate?.(annotation, pageElement, event.currentTarget);
-                }}
-                size="small"
-                title="编辑批注"
-              />
-            </header>
-            <PdfAnnotationMarkdown value={annotation.note ?? ""} />
-          </section>
-          ))}
-        </aside>
-      ) : null}
+      {marginCommentsVisible ? <PdfMarginComments annotations={pageAnnotations} pageNumber={pageNumber}
+        pageWidth={pageSize.width} pageHeight={pageSize.height} connectorsVisible={marginCommentConnectorsVisible}
+        onEdit={(annotation, anchor) => {
+          const pageElement = pageShellRef.current;
+          if (pageElement) onAnnotationActivate?.(annotation, pageElement, anchor);
+        }} /> : null}
     </div>
   );
 }
