@@ -119,6 +119,79 @@ test("publishes by content hash, verifies the result, and removes staging", asyn
   assert.deepEqual(calls, ["HeadObjectCommand", "CopyObjectCommand", "HeadObjectCommand", "DeleteObjectCommand"]);
 });
 
+function aliyunOssConfig() {
+  return {
+    bucket: "liteasy-private-documents",
+    endpoint: "https://oss-cn-hongkong.aliyuncs.com",
+    forcePathStyle: false,
+    prefix: "documents",
+    provider: "aliyun-oss",
+    region: "cn-hongkong"
+  };
+}
+
+function ossClient({ serverSideEncryption = "AES256", versioningStatus = "Enabled" } = {}) {
+  const calls = [];
+  return {
+    calls,
+    async send(command) {
+      const name = command.constructor.name;
+      calls.push(name);
+      if (name === "GetBucketVersioningCommand") return { Status: versioningStatus };
+      if (name === "GetObjectLockConfigurationCommand") {
+        const error = new Error("not configured");
+        error.name = "NoSuchObjectLockConfiguration";
+        throw error;
+      }
+      if (name === "PutObjectCommand") return {};
+      if (name === "HeadObjectCommand") {
+        return serverSideEncryption ? { ServerSideEncryption: serverSideEncryption } : {};
+      }
+      return {};
+    }
+  };
+}
+
+test("accepts Aliyun OSS buckets that are private, encrypted and versioned", async () => {
+  const client = ossClient();
+  const store = new S3ObjectStore(aliyunOssConfig(), {
+    client,
+    fetchImpl: async () => ({ ok: false, status: 403 })
+  });
+  assert.deepEqual(await store.assertSecurityConfiguration(), {
+    encryption: true,
+    privateAccess: true,
+    versioningOrObjectLock: true
+  });
+  assert.deepEqual(client.calls, [
+    "GetBucketVersioningCommand",
+    "GetObjectLockConfigurationCommand",
+    "PutObjectCommand",
+    "HeadObjectCommand",
+    "DeleteObjectCommand"
+  ]);
+});
+
+test("rejects Aliyun OSS buckets without encryption, public access or versioning", async () => {
+  const unencrypted = new S3ObjectStore(aliyunOssConfig(), {
+    client: ossClient({ serverSideEncryption: null }),
+    fetchImpl: async () => ({ ok: false, status: 403 })
+  });
+  await assert.rejects(() => unencrypted.assertSecurityConfiguration(), /encryption_missing/);
+
+  const publicBucket = new S3ObjectStore(aliyunOssConfig(), {
+    client: ossClient(),
+    fetchImpl: async () => ({ ok: true, status: 200 })
+  });
+  await assert.rejects(() => publicBucket.assertSecurityConfiguration(), /public_access_not_blocked/);
+
+  const unversioned = new S3ObjectStore(aliyunOssConfig(), {
+    client: ossClient({ versioningStatus: null }),
+    fetchImpl: async () => ({ ok: false, status: 403 })
+  });
+  await assert.rejects(() => unversioned.assertSecurityConfiguration(), /recovery_protection_missing/);
+});
+
 test("stores a validated immutable raster object and verifies the published head", async () => {
   const bytes = Buffer.from("png payload");
   const hash = (await import("node:crypto")).createHash("sha256").update(bytes).digest("hex");

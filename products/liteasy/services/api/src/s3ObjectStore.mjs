@@ -74,11 +74,15 @@ export function createS3Client(config, S3ClientType = S3Client) {
 }
 
 export class S3ObjectStore {
-  constructor(config, { client = createS3Client(config), UploadType = Upload } = {}) {
+  constructor(config, { client = createS3Client(config), UploadType = Upload, fetchImpl = globalThis.fetch } = {}) {
     this.bucket = config.bucket;
     this.client = client;
+    this.endpoint = config.endpoint;
+    this.forcePathStyle = config.forcePathStyle === true;
     this.prefix = config.prefix;
+    this.provider = config.provider === "aliyun-oss" ? "aliyun-oss" : "s3";
     this.UploadType = UploadType;
+    this.fetchImpl = fetchImpl;
   }
 
   stagingKey(operationId = randomUUID()) {
@@ -91,6 +95,8 @@ export class S3ObjectStore {
   }
 
   async assertSecurityConfiguration() {
+    if (this.provider === "aliyun-oss") return this.assertAliyunOssSecurityConfiguration();
+
     const publicAccess = await this.client.send(new GetPublicAccessBlockCommand({ Bucket: this.bucket }));
     const block = publicAccess.PublicAccessBlockConfiguration;
     if (!block || ![block.BlockPublicAcls, block.IgnorePublicAcls, block.BlockPublicPolicy, block.RestrictPublicBuckets].every(Boolean)) {
@@ -113,6 +119,58 @@ export class S3ObjectStore {
     }
     if (versioning.Status !== "Enabled" && !objectLockEnabled) {
       throw new Error("storage_bucket_recovery_protection_missing");
+    }
+    return {
+      encryption: true,
+      privateAccess: true,
+      versioningOrObjectLock: true
+    };
+  }
+
+  objectUrl(key) {
+    const endpoint = new URL(this.endpoint);
+    const encodedKey = key.split("/").map(encodeURIComponent).join("/");
+    if (this.forcePathStyle) {
+      return `${endpoint.origin}/${this.bucket}/${encodedKey}`;
+    }
+    return `${endpoint.protocol}//${this.bucket}.${endpoint.host}/${encodedKey}`;
+  }
+
+  async assertAliyunOssSecurityConfiguration() {
+    const versioning = await this.client.send(new GetBucketVersioningCommand({ Bucket: this.bucket }));
+    let objectLockEnabled = false;
+    try {
+      const objectLock = await this.client.send(new GetObjectLockConfigurationCommand({ Bucket: this.bucket }));
+      objectLockEnabled = objectLock.ObjectLockConfiguration?.ObjectLockEnabled === "Enabled";
+    } catch (error) {
+      if (!commandFailedWithMissingConfiguration(error)) throw error;
+    }
+    if (versioning.Status !== "Enabled" && !objectLockEnabled) {
+      throw new Error("storage_bucket_recovery_protection_missing");
+    }
+
+    const probeKey = `${this.prefix}/.security-check/${randomUUID()}`;
+    await this.client.send(new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: probeKey,
+      Body: Buffer.from("liteasy-storage-security-check"),
+      ContentType: "text/plain"
+    }));
+    try {
+      const probe = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: probeKey }));
+      if (!probe.ServerSideEncryption) throw new Error("storage_bucket_encryption_missing");
+
+      const response = await this.fetchImpl(this.objectUrl(probeKey), { method: "GET" });
+      if (response.ok) throw new Error("storage_bucket_public_access_not_blocked");
+      if (response.status !== 403 && response.status !== 401 && response.status !== 404) {
+        throw new Error("storage_bucket_public_access_unverified");
+      }
+    } finally {
+      try {
+        await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: probeKey }));
+      } catch {
+        // The probe object is cleaned up on the next maintenance pass if this fails.
+      }
     }
     return {
       encryption: true,

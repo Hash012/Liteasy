@@ -65,6 +65,14 @@ function parseBoolean(value, name, fallback = false) {
   throw new Error(`cloud_config_invalid: ${name} must be true or false`);
 }
 
+function parseS3Provider(value) {
+  const provider = (value ?? "s3").trim().toLowerCase();
+  if (provider !== "s3" && provider !== "aliyun-oss") {
+    throw new Error("cloud_config_invalid: LITEASY_S3_PROVIDER must be s3 or aliyun-oss");
+  }
+  return provider;
+}
+
 function parseAllowedOrigins(value, environment) {
   if (!value?.trim()) throw new Error("cloud_config_missing: LITEASY_ALLOWED_ORIGINS is required");
   const origins = [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))];
@@ -371,6 +379,7 @@ export function loadCloudConfig(env = process.env) {
       endpoint: validateEndpoint(env.LITEASY_S3_ENDPOINT?.trim(), environment),
       forcePathStyle: parseBoolean(env.LITEASY_S3_FORCE_PATH_STYLE, "LITEASY_S3_FORCE_PATH_STYLE"),
       prefix: normalizePrefix(env.LITEASY_S3_PREFIX),
+      provider: parseS3Provider(env.LITEASY_S3_PROVIDER),
       region: required(env, "LITEASY_S3_REGION")
     }),
     visualization: Object.freeze({
