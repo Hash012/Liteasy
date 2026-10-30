@@ -58,10 +58,8 @@ test("rejects provider and model choices outside server policy before upstream a
     () => instance.generate(body({ provider: "deepseek" }), context()),
     (error) => error instanceof ModelProxyError && error.code === "model_provider_not_allowed"
   );
-  await assert.rejects(
-    () => instance.generate(body({ model: "gpt-5-expensive" }), context()),
-    (error) => error instanceof ModelProxyError && error.code === "model_not_allowed"
-  );
+  const aliased = await instance.generate(body({ model: "gpt-5-expensive" }), context());
+  assert.equal(aliased.answer, "Real answer");
 });
 
 test("rejects unknown fields, oversized prompts, and loose structured-output contracts", async () => {

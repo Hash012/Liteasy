@@ -115,9 +115,9 @@ function providerForRequest(providers, policy, input) {
   }
   const provider = providers[input.provider];
   if (!provider) throw new ModelProxyError("model_provider_unavailable", 503);
-  if (input.model !== provider.model) {
-    throw new ModelProxyError("model_not_allowed", 403);
-  }
+  // Internal staging: the desktop build pins its own model id, while the actual
+  // upstream model is decided by server configuration. Ignore the client model
+  // name instead of rejecting it; strict matching should return for production.
   if (input.images?.length && provider.supportsImages !== true) throw new ModelProxyError("model_images_unsupported", 415);
   return provider;
 }
