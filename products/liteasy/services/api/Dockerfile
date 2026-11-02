@@ -4,12 +4,14 @@ FROM ${NODE_IMAGE}
 ENV NODE_ENV=production
 WORKDIR /app
 
-COPY --chown=node:node package.json package-lock.json ./
+COPY --chown=node:node services/api/package.json services/api/package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-COPY --chown=node:node migrations ./migrations
-COPY --chown=node:node scripts ./scripts
-COPY --chown=node:node src ./src
+COPY --chown=node:node services/api/migrations ./migrations
+COPY --chown=node:node services/api/scripts ./scripts
+COPY --chown=node:node services/api/src ./src
+COPY --chown=node:node packages/device-control /packages/device-control
+COPY --chown=node:node packages/shared /packages/shared
 
 USER node
 EXPOSE 8787

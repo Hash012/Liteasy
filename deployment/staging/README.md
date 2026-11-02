@@ -639,8 +639,9 @@ docker login --username=<ACR用户名> registry.cn-hongkong.aliyuncs.com
 
 ```bash
 docker build \
+  --file products/liteasy/services/api/Dockerfile \
   --tag <acr>/liteasy-api:<git-sha> \
-  products/liteasy/services/api
+  products/liteasy
 
 docker build \
   --file products/intuecho/services/api/Dockerfile \

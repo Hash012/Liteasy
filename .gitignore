@@ -40,3 +40,6 @@ products/liteasy/apps/desktop/scripts/retrieval-gate-worksheet.json
 .DS_Store
 Thumbs.db
 ICS2-13-Network-复习讲解.html
+
+# Codex files
+/codex/
