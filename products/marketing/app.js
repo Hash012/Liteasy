@@ -318,7 +318,7 @@ const submitButtonLabel = submitButton.innerHTML;
 
 document.querySelectorAll("[data-download-link]").forEach((link) => {
   link.addEventListener("click", () => {
-    formStatus.textContent = "安装包面向已提交体验申请的用户开放。请先完成下方申请，审核信息提交后即可获取当前版本。";
+    formStatus.textContent = "安装包面向已提交体验申请的用户开放。请先完成下方申请，提交后即可获取当前版本。";
   });
 });
 
@@ -343,7 +343,7 @@ waitlistForm.addEventListener("submit", async (event) => {
     }
 
     if (!result.downloadUrl) {
-      formStatus.textContent = result.message || "体验申请已提交。安装包准备完成后，我们将通过邮件通知你。";
+      formStatus.textContent = result.message || "体验申请已记录，安装包暂未开放下载。";
       return;
     }
 

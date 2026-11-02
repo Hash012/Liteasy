@@ -16,6 +16,7 @@ import { PostgresTeamAnnotationRepository } from "../src/teamAnnotationRepositor
 import { validatePostgresIntegrationDatabases } from "./postgresIntegrationGuard.mjs";
 import { verifyOrganizationLifecycleConcurrency } from "./organizationLifecycleConcurrency.mjs";
 import { verifyAccountDeletionConcurrency } from "./accountDeletionConcurrency.mjs";
+import { MarketingWaitlistService } from "../src/marketingWaitlist.mjs";
 
 const connectionString = process.env.LITEASY_TEST_DATABASE_URL;
 if (!connectionString) throw new Error("LITEASY_TEST_DATABASE_URL is required");
@@ -58,12 +59,25 @@ try {
     "025_personalization_explicit_opt_in.sql",
     "026_normalize_library_literature_references.sql",
     "027_visualization_reservation_groups.sql",
-    "028_device_control.sql"
+    "028_device_control.sql",
+    "029_marketing_waitlist.sql"
   ]);
   await assert.rejects(
     () => pool.query("CREATE TABLE app_role_must_not_create(id text)"),
     /permission denied/
   );
+
+  const waitlist = new MarketingWaitlistService(pool, {
+    origin: "https://www.example.com", installerKey: "installers/test.exe", expiresSeconds: 600
+  }, async () => "https://private.example.com/signed-test");
+  const submissions = await Promise.allSettled(Array.from({ length: 6 }, () => waitlist.submit({
+    email: "waitlist@example.com", role: "研究生"
+  }, { origin: "https://www.example.com", clientIp: "192.0.2.1" })));
+  assert.equal(submissions.filter((item) => item.status === "fulfilled").length, 5);
+  assert.equal(submissions.find((item) => item.status === "rejected").reason.code, "waitlist_rate_limited");
+  const savedApplications = await pool.query("SELECT * FROM marketing_waitlist_applications");
+  assert.equal(savedApplications.rows.length, 5);
+  assert.equal(savedApplications.rows.every((row) => row.client_hash !== "192.0.2.1"), true);
 
   await pool.query(`
     INSERT INTO storage_quotas(scope_type, scope_id, limit_bytes, updated_by)

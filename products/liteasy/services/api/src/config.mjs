@@ -1,4 +1,5 @@
 import { parseVisualizationSecrets } from "./visualizationSecretStore.mjs";
+import { loadMarketingWaitlistConfig } from "./marketingWaitlist.mjs";
 
 const allowedEnvironments = new Set(["production", "staging", "test"]);
 const allowedSslModes = new Set(["require", "verify-ca", "verify-full"]);
@@ -374,6 +375,7 @@ export function loadCloudConfig(env = process.env) {
         60_000
       )
     }),
+    marketingWaitlist: loadMarketingWaitlistConfig(env),
     s3: Object.freeze({
       bucket,
       endpoint: validateEndpoint(env.LITEASY_S3_ENDPOINT?.trim(), environment),

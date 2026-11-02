@@ -70,11 +70,22 @@ try {
   assert.equal(await page.locator("[data-association-title]").textContent(), "聚焦关联");
 
   let waitlistPayload;
+  let waitlistMode = "unpublished";
+  await page.route("**/test-installer.exe", (route) => route.fulfill({
+    contentType: "application/octet-stream",
+    headers: { "content-disposition": 'attachment; filename="test-installer.exe"' },
+    body: "download-contract-test"
+  }));
   await page.route("**/api/waitlist", async (route) => {
     waitlistPayload = route.request().postDataJSON();
     await route.fulfill({
+      status: waitlistMode === "failed" ? 503 : 200,
       contentType: "application/json",
-      body: JSON.stringify({ ok: true, message: "体验申请已提交。安装包准备完成后，我们将通过邮件通知你。" })
+      body: JSON.stringify(waitlistMode === "failed"
+        ? { ok: false, error: "申请已记录，但安装包暂时无法下载，请稍后重新提交。" }
+        : waitlistMode === "download"
+          ? { ok: true, downloadUrl: `${baseUrl}/test-installer.exe`, expiresIn: 600 }
+          : { ok: true, message: "体验申请已记录，安装包暂未开放下载。" })
     });
   });
   await page.getByRole("link", { name: "Download" }).click();
@@ -86,9 +97,19 @@ try {
   assert.equal(waitlistPayload, undefined);
   await role.selectOption({ label: "研究生" });
   await page.locator("[data-waitlist-form]").evaluate((form) => form.requestSubmit());
-  await page.getByText("体验申请已提交").waitFor();
+  await page.getByText("体验申请已记录").waitFor();
   assert.equal(waitlistPayload.role, "研究生");
   assert.equal(waitlistPayload.email, "reader@example.com");
+  waitlistMode = "failed";
+  await page.locator("[data-waitlist-form]").evaluate((form) => form.requestSubmit());
+  await page.getByText("申请已记录，但安装包暂时无法下载，请稍后重新提交。").waitFor();
+  assert.equal(await page.locator('[data-waitlist-form] button[type="submit"]').isEnabled(), true);
+  waitlistMode = "download";
+  const downloadPromise = page.waitForEvent("download");
+  await page.locator("[data-waitlist-form]").evaluate((form) => form.requestSubmit());
+  const download = await downloadPromise;
+  assert.equal(download.suggestedFilename(), "test-installer.exe");
+  assert.equal(await download.failure(), null);
   for (const image of await page.locator('img[src][loading="lazy"]').all()) {
     await image.scrollIntoViewIfNeeded();
     await image.evaluate((element) => element.decode());

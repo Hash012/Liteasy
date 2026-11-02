@@ -78,6 +78,12 @@ test("staging containers rotate local Docker logs", () => {
   assert.equal(compose.match(/logging: \*json-logging/g)?.length, 3);
 });
 
+test("marketing submissions use the API and gateway replaces spoofable client IP headers", () => {
+  const caddy = fs.readFileSync(new URL("Caddyfile", directory), "utf8");
+  assert.match(caddy, /handle \/api\/waitlist\s*\{\s*reverse_proxy liteasy-api:8787/);
+  assert.equal(caddy.match(/header_up X-Liteasy-Client-IP \{remote_host\}/g)?.length, 2);
+});
+
 test("maintenance scheduling reports success and failure to the system log", () => {
   const script = fs.readFileSync(new URL("scripts/run-maintenance.sh", directory), "utf8");
   const service = fs.readFileSync(

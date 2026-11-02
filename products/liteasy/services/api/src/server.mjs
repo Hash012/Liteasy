@@ -25,6 +25,7 @@ import { VisualizationServiceError } from "./visualizationService.mjs";
 import { handleVisualizationRequest } from "./visualizationRoutes.mjs";
 import { handleDeviceControl } from "../../../packages/device-control/src/routes.mjs";
 import { DeviceControlError } from "../../../packages/device-control/src/service.mjs";
+import { MarketingWaitlistError } from "./marketingWaitlist.mjs";
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -289,6 +290,40 @@ export function createCloudRequestHandler(runtime, config) {
     const traceId = `trace_${randomUUID()}`;
     try {
       const url = new URL(request.url ?? "/", "http://localhost");
+      if (url.pathname === "/api/waitlist") {
+        if (request.method !== "POST") {
+          response.setHeader("allow", "POST");
+          sendJson(response, 405, { ok: false, error: "Method not allowed" });
+          return;
+        }
+        if (!runtime.marketingWaitlist) {
+          sendJson(response, 503, { ok: false, error: "体验申请暂未开放。" });
+          return;
+        }
+        try {
+          if (request.headers["content-type"]?.split(";")[0].trim() !== "application/json") {
+            sendJson(response, 415, { ok: false, error: "请使用申请表单提交。" });
+            return;
+          }
+          const result = await runtime.marketingWaitlist.submit(await readJsonBody(request, 16 * 1024), {
+            origin: request.headers.origin,
+            clientIp: String(request.headers["x-liteasy-client-ip"] ?? request.socket.remoteAddress)
+          });
+          sendJson(response, 200, result);
+        } catch (error) {
+          if (!(error instanceof MarketingWaitlistError) && !(error instanceof LibraryRepositoryError)) {
+            // Do not log request data, OSS credentials, or signed URLs.
+            console.error(`[waitlist] ${traceId} submission_failed`);
+          }
+          if (error.status === 429) response.setHeader("retry-after", "600");
+          sendJson(response, error.status ?? 500, {
+            ok: false,
+            error: error instanceof MarketingWaitlistError ? error.message : "申请提交失败，请稍后重试。",
+            traceId
+          });
+        }
+        return;
+      }
       applyCorsOrigin(request, response, config);
       if (request.method === "OPTIONS") {
         if (!response.liteasyCorsOrigin) throw new LibraryAuthorizationError("origin_required", 403);

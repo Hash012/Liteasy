@@ -45,10 +45,17 @@ import { ThinReadingVisualizationSourceResolver } from "./thinReadingVisualizati
 import { LocalTesseractRasterOcr } from "./visualizationRasterOcr.mjs";
 import { PostgresDeviceControlRepository } from "./deviceControlRepository.mjs";
 import { DeviceControlService } from "../../../packages/device-control/src/service.mjs";
+import { MarketingWaitlistService, createOssInstallerSigner } from "./marketingWaitlist.mjs";
 
 export async function startCloudRuntime(config, dependencies = {}) {
   const pool = dependencies.pool ?? createPostgresPool(config.database);
   const objectStore = dependencies.objectStore ?? new S3ObjectStore(config.s3);
+  const marketingWaitlist = config.marketingWaitlist ? new MarketingWaitlistService(
+    pool, config.marketingWaitlist,
+    dependencies.signInstaller ?? createOssInstallerSigner(config.s3, () => objectStore.client.config.credentials(), {
+      transferAcceleration: config.marketingWaitlist.transferAcceleration
+    })
+  ) : undefined;
   const identityVerifier = dependencies.identityVerifier ?? createIdentityVerifier(config.identity);
   const identityReadinessCheck = dependencies.identityReadinessCheck ?? verifyIdentityProviderReadiness;
   const identityAdminClient = dependencies.identityAdminClient ?? new IdentityAdminClient(config.identity);
@@ -227,6 +234,7 @@ export async function startCloudRuntime(config, dependencies = {}) {
       literatureAuthorityClient,
       modelProxyService,
       objectStore,
+      marketingWaitlist,
       organizationGovernanceRepository,
       organizationPolicyRepository,
       personalizationRepository,

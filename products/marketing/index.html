@@ -261,7 +261,7 @@
             </div>
             <label>
               邮箱 <em>*</em>
-              <input name="email" type="email" autocomplete="email" required placeholder="you@example.com" />
+              <input name="email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com" />
             </label>
             <label>
               你的身份 <em>*</em>
@@ -276,11 +276,11 @@
             </label>
             <label>
               研究领域 <span>可选</span>
-              <input name="field" type="text" placeholder="例如：信息检索、材料科学" />
+              <input name="field" type="text" maxlength="200" placeholder="例如：信息检索、材料科学" />
             </label>
             <label>
               最想解决的问题 <span>可选</span>
-              <textarea name="problem" rows="3" placeholder="阅读、比较、整理或汇报文献时，最困扰你的是什么？"></textarea>
+              <textarea name="problem" rows="3" maxlength="2000" placeholder="阅读、比较、整理或汇报文献时，最困扰你的是什么？"></textarea>
             </label>
             <button class="button button-primary form-submit" type="submit">提交体验申请并获取安装包 <span aria-hidden="true">&#8594;</span></button>
             <p class="form-status" aria-live="polite" data-form-status></p>

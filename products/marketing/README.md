@@ -30,9 +30,15 @@ MARKETING_BASE_URL=http://127.0.0.1:8090 npm run verify:browser
 
 营销站没有登录功能，不接收 Liteasy 或 Intuecho 的账号密码。
 
-页面默认向同域 `/api/waitlist` 提交 JSON 申请。部署在不同 API 域名时，可以在加载 `app.js` 前设置 `window.LITEASY_WAITLIST_URL` 覆盖该地址。服务端在安装包可用时返回短时 `downloadUrl`，页面会在申请保存成功后自动开始下载；安装包未就绪时只确认申请已记录，不会显示虚假的下载成功状态。
+页面默认向同域 `/api/waitlist` 提交 JSON 申请。Staging Caddy 将这个地址转发给 Liteasy API；由 API 保存 PostgreSQL 申请记录，再为私有 OSS 安装包生成短时 `downloadUrl`。表单保存后自动开始下载，安装包未配置时只确认申请已记录。当前为提交后自动发放，不含人工审批或邮箱验证。
 
-预发布环境的服务配置示例位于 `waitlist/.env.example`。只有经过评审和签名的 Windows 安装包才能写入 `WAITLIST_INSTALLER_PATH`；`WAITLIST_DOWNLOAD_SECRET` 使用独立随机值并只保存在服务器运行配置中。下载地址包含短时签名，不能绕过体验申请直接访问。
+配置位于 `deployment/staging/templates/liteasy-api.env.example`：设置 `LITEASY_WAITLIST_ORIGIN` 开启申请入口，`LITEASY_WAITLIST_INSTALLER_KEY` 指定同一私有 Bucket 中的 `installers/` 下 EXE，`LITEASY_WAITLIST_DOWNLOAD_TTL_SECONDS` 默认 600 秒（允许 60 至 3600 秒）。复用 API 的 AWS 环境凭据和 `LITEASY_S3_BUCKET`、`LITEASY_S3_REGION`；要求 `LITEASY_S3_PROVIDER=aliyun-oss`，下载使用官方 OSS SDK 的 V4 签名和公网 HTTPS 地址，不经过 ECS 传输安装包。
+
+先执行新增的 `029_marketing_waitlist.sql` 迁移，再部署 API 和网关。安装包未找到或 OSS 不可用时返回明确错误，但已保存的申请不会丢失。网关覆盖客户端 IP 请求头，API 按来源 IP/邮箱限制每 10 分钟 5 次、全局每分钟 100 次；记录 IP 哈希，不保存原始 IP。下载 URL 有效期内可重复使用和转发，不是一次性链接，过期后需重新提交申请。不要把 Bucket 或安装包 ACL 改成公开读。
+
+申请数据表为 `marketing_waitlist_applications`，包含邮箱、身份、研究领域、问题和时间。前端源码与静态站点不包含凭据或固定下载地址；目前跨域提交不受支持，应通过同域网关提供接口。
+
+下载网络需要加速时，先在 OSS 控制台开启 Bucket 传输加速，再设置 `LITEASY_WAITLIST_TRANSFER_ACCELERATION=true` 并重新创建 API 容器。安装包检查和下载签名将使用公网加速域名，签名地域保持 Bucket 实际地域。该选项默认关闭，不改变业务文献的 S3 Endpoint；启用会产生额外传输加速费用。
 
 ## 页面图片
 
