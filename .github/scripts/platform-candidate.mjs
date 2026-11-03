@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -81,7 +81,9 @@ export function createReport(candidate, steps, metadata) {
       performance: unexecuted("Requires native measurements with recorded fixtures."),
       installer_smoke: unexecuted("Package inspection does not install, launch or uninstall the app."),
       upgrade_recovery: unexecuted("No installed predecessor or user-data migration scenario executed."),
-      signing: unexecuted("No distribution signing credentials supplied. Any toolchain ad-hoc signing is not distribution signing validation."),
+      signing: candidate.id === "macos-arm64"
+        ? evidence("inspect", "The packaged app's ad-hoc code signature is cryptographically verified; this does not establish a trusted developer identity or Gatekeeper acceptance.")
+        : unexecuted("No macOS application bundle was built."),
       notarization: unexecuted("No Apple notarization credentials or submission configured."),
       production_driver_absence: unexecuted("No test driver is added by this change; absence of runtime listener/permissions still needs binary acceptance."),
     },
@@ -147,8 +149,20 @@ function inspect(candidate, root) {
     } else if (suffix === ".app") {
       run("plutil", ["-lint", path.join(source, "Contents", "Info.plist")]);
       assert.equal(run("lipo", ["-archs", path.join(source, "Contents", "MacOS", "liteasy-desktop")]), "arm64");
+      run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", source]);
+      const signature = runWithStderr("codesign", ["-dv", "--verbose=4", source]);
+      assert.match(signature, /Signature=adhoc/, "macOS candidate app must carry an ad-hoc code signature");
     } else run("hdiutil", ["verify", source]);
   }
+}
+
+function runWithStderr(command, args) {
+  const result = spawnSync(command, args, { encoding: "utf8" });
+  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
+  process.stdout.write(output);
+  if (result.error) throw result.error;
+  assert.equal(result.status, 0, `${command} exited with ${result.status}`);
+  return output;
 }
 
 function main() {
@@ -181,6 +195,9 @@ function main() {
     } else assert.match(run("sw_vers", ["-productVersion"]), /^15\./);
     const config = JSON.parse(fs.readFileSync(path.join(desktop, "src-tauri", candidate.config), "utf8"));
     assert.deepEqual(config.bundle.targets, candidate.bundles.split(","));
+    if (candidate.id === "macos-arm64") {
+      assert.equal(config.bundle.macOS?.signingIdentity, "-", "macOS candidate must use ad-hoc code signing");
+    }
     assert.equal(run("rustc", ["-vV"]).match(/^host: (.+)$/m)?.[1], candidate.target);
     run("node", ["--version"]);
     run("cargo", ["--version"]);

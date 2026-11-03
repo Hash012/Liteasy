@@ -1,6 +1,9 @@
 name: Desktop platform candidates
 
 on:
+  push:
+    branches:
+      - internal/macos-arm64-candidate
   workflow_dispatch:
     inputs:
       platform:
@@ -35,7 +38,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - id: select
         env:
-          CANDIDATE_SELECTION: ${{ inputs.platform }}
+          CANDIDATE_SELECTION: ${{ inputs.platform || 'macos-arm64' }}
         run: node .github/scripts/platform-candidate.mjs select
 
   frontend:

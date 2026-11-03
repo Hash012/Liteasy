@@ -18,10 +18,11 @@ function mapping(text, name, indent) {
 const jobs = mapping(workflow, "jobs", 0);
 const candidate = mapping(jobs, "candidate", 2);
 
-test("platform packaging requires explicit dispatch and cannot publish or alter Windows depth", () => {
+test("platform packaging dispatches explicitly and rebuilds the Apple Silicon candidate branch on push", () => {
   const events = mapping(workflow, "on", 0);
+  assert.match(events, /^  push:\n    branches:\n      - internal\/macos-arm64-candidate$/m);
   assert.match(events, /^  workflow_dispatch:/m);
-  assert.doesNotMatch(events, /^  (?:push|pull_request|pull_request_target|workflow_run|schedule):/m);
+  assert.doesNotMatch(events, /^  (?:pull_request|pull_request_target|workflow_run|schedule):/m);
   for (const id of candidateMatrix("both").map((item) => item.id)) assert.ok(events.includes(`- ${id}`));
   assert.match(workflow, /permissions:\n  contents: read/);
   assert.doesNotMatch(workflow, /continue-on-error|secrets:|gh release|publish|desktop-windows\.yml|build-installer:/);
@@ -36,6 +37,7 @@ test("native candidates reuse frontend validation and setup with default-feature
   assert.match(frontend, /uses: \.\/\.github\/workflows\/desktop-frontend\.yml/);
   assert.match(frontend, /full-tests: true/);
   assert.match(candidate, /needs: \[select, frontend\]/);
+  assert.match(workflow, /CANDIDATE_SELECTION: \$\{\{ inputs\.platform \|\| 'macos-arm64' \}\}/);
   assert.match(candidate, /uses: \.\/\.github\/actions\/setup-desktop/);
   assert.match(candidate, /toolchain: \$\{\{ needs\.select\.outputs\.rust \}\}/);
   assert.match(readRustToolchain(read("../workflows/desktop-windows.yml")), /^\d+\.\d+\.\d+$/);
@@ -55,6 +57,16 @@ test("native candidates reuse frontend validation and setup with default-feature
   });
   assert.deepEqual(offsets, [...offsets].sort((a, b) => a - b));
   assert.doesNotMatch(candidate, /--no-default-features|mkdir[^\n]*\bdist\b|--ignore|--skip/);
+  assert.doesNotMatch(candidate, /--no-sign/);
+});
+
+test("macOS candidate requires ad-hoc app signing and verifies the bundled signature", () => {
+  const config = JSON.parse(readFileSync(new URL("../../products/liteasy/apps/desktop/src-tauri/tauri.macos.conf.json", import.meta.url), "utf8"));
+  assert.equal(config.bundle.macOS.signingIdentity, "-");
+  const script = read("platform-candidate.mjs");
+  assert.match(script, /config\.bundle\.macOS\?\.signingIdentity, "-"/);
+  assert.match(script, /codesign", \["--verify", "--deep", "--strict", "--verbose=2", source\]/);
+  assert.match(script, /Signature=adhoc/);
 });
 
 test("native dependencies use segregated optional caches and no native node_modules cache", () => {

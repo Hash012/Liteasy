@@ -4,7 +4,7 @@
 
 ## 选择与执行
 
-合入平台配置及本工作流后，在 GitHub Actions 手动选择包含这些改动的提交所属分支，选择 `linux-x64`、`macos-arm64` 或 `both`。该工作流没有 push、PR、定时或发布触发器，不读取签名秘密，不发布 Release。两个候选均以现有完整前端验证工作流通过为前提。
+推送到 `internal/macos-arm64-candidate` 时自动构建 `macos-arm64`；也可在 GitHub Actions 手动选择 `linux-x64`、`macos-arm64` 或 `both`。自动构建只匹配该内测分支，不读取签名秘密，不发布 Release。两个候选均以现有完整前端验证工作流通过为前提。
 
 | 选择 | 原生 runner / Rust target | 候选产物 | 验证范围 |
 | --- | --- | --- | --- |
@@ -15,7 +15,7 @@
 
 Ubuntu 24.04 和 macOS 15 仅是构建候选基线，未据此声明最低受支持系统。Intel Mac、Universal、AppImage 和其他 Linux 发行版不在此切片中。DMG 必须由 Mac 上的 Tauri 工具生成。[Tauri DMG 说明](https://v2.tauri.app/distribute/dmg/)
 
-平台配置由集成人维护：`tauri.linux.conf.json` 的 `bundle.targets` 为 `['deb']`，`tauri.macos.conf.json` 为 `['app', 'dmg']`。本工作流用标准文件名自动合并，不覆盖共享窗口配置；构建与打包显式传递同一 Rust target。[Tauri CLI 配置和 bundle 参数](https://v2.tauri.app/reference/cli/#bundle)
+平台配置由集成人维护：`tauri.linux.conf.json` 的 `bundle.targets` 为 `['deb']`，`tauri.macos.conf.json` 为 `['app', 'dmg']` 并为 macOS 应用指定 ad-hoc 签名身份 `-`。本工作流用标准文件名自动合并，不覆盖共享窗口配置；构建与打包显式传递同一 Rust target。[Tauri CLI 配置和 bundle 参数](https://v2.tauri.app/reference/cli/#bundle)
 
 ## 工具链、缓存与门禁
 
@@ -27,11 +27,11 @@ Ubuntu 24.04 和 macOS 15 仅是构建候选基线，未据此声明最低受支
 
 ## 产物与状态
 
-每个真正构建成功的产物附带 `.sha256` 与 `.metadata.json`，记录 commit、version、target、OS 基线、字节数、SHA256 和同目录 `verification-report.json` 引用。app 先归档为 tar.gz，以保留执行位和符号链接。失败的构建只上传已存在的日志/报告，不输出冒充成功的候选包。
+每个真正构建成功的产物附带 `.sha256` 与 `.metadata.json`，记录 commit、version、target、OS 基线、字节数、SHA256 和同目录 `verification-report.json` 引用。macOS 候选在上传前验证 app 的代码签名及 ad-hoc 身份；app 先归档为 tar.gz，以保留执行位和符号链接。失败的构建只上传已存在的日志/报告，不输出冒充成功的候选包。
 
 报告沿用 `liteasy.client-verification/v1` 形状，独立记录 `build`、`rust_locked`、`artifact_structure`、`native_ipc`、`native_window_file_events`、`installer_smoke`、`upgrade_recovery`、`signing`、`notarization`。Rust 单元测试可能含模拟对象，因此不被记为真实 IPC 测试；package inspection 也不代表安装或启动成功。
 
-此工作流始终令 `release_ready=false`。原生 GUI/IPC、文件关联、拖拽、凭据操作、安装升级、签名、公证和运行时测试驱动器端口排除都为 `not_run`，不能由打包成功推导通过。Apple 工具链可能产生 ad-hoc 签名，这不是受信任分发签名验收。
+此工作流始终令 `release_ready=false`。原生 GUI/IPC、文件关联、拖拽、凭据操作、安装升级、公证和运行时测试驱动器端口排除都为 `not_run`，不能由打包成功推导通过。ad-hoc 签名不是受信任分发签名或 Gatekeeper 安装验收；首次运行仍可能需要在 Mac 的“隐私与安全性”中允许打开。
 
 ## 当前官方原生自动化方案评估（2026-10-02）
 

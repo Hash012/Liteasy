@@ -34,6 +34,12 @@ test("successful packaging never promotes native UI, installation or signing evi
   assert.equal(report.environment.webview, null);
 });
 
+test("macOS signing evidence only passes when the packaged app signature check passes", () => {
+  const candidate = candidateMatrix("macos-arm64")[0];
+  assert.equal(createReport(candidate, success, metadata).checks.signing.status, "passed");
+  assert.notEqual(createReport(candidate, { ...success, inspect: { outcome: "failure" } }, metadata).checks.signing.status, "passed");
+});
+
 test("failed, cancelled, missing and skipped build requirements cannot report a build pass", () => {
   for (const id of Object.keys(success)) {
     for (const outcome of ["failure", "cancelled", "skipped", undefined]) {
