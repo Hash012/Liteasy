@@ -40,6 +40,7 @@ test("native candidates reuse frontend validation and setup with default-feature
   assert.match(workflow, /CANDIDATE_SELECTION: \$\{\{ inputs\.platform \|\| 'macos-arm64' \}\}/);
   assert.match(candidate, /uses: \.\/\.github\/actions\/setup-desktop/);
   assert.match(candidate, /toolchain: \$\{\{ needs\.select\.outputs\.rust \}\}/);
+  assert.match(candidate, /NODE_OPTIONS: --max-old-space-size=6144/);
   assert.match(readRustToolchain(read("../workflows/desktop-windows.yml")), /^\d+\.\d+\.\d+$/);
   const commands = [
     "platform-candidate.mjs host",

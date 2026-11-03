@@ -66,6 +66,7 @@ jobs:
       VITE_LITEASY_CLOUD_URL: https://api.staging.liteasyclaw.com
       CARGO_INCREMENTAL: 0
       CARGO_PROFILE_TEST_DEBUG: 0
+      NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Create evidence directory
