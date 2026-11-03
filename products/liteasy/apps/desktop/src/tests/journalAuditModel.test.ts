@@ -5,6 +5,7 @@ import {
   createModelAssistedJournalAuditModel,
   generateJournalAuditWithModelFallback
 } from "../app/features/generative-ui/journalAuditModel";
+import { getModelForSettings } from "../app/features/models/modelPolicy";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 
 describe("auditExecutionJournalTrace", () => {
@@ -174,6 +175,7 @@ describe("auditExecutionJournalTrace", () => {
 
   test("routes optional journal audit through the model gateway", async () => {
     const settings = createSettingsStore().getState();
+    const model = getModelForSettings(settings);
     let requestBody = "";
     const auditModel = createModelAssistedJournalAuditModel({
       modelTransport: async (request) => {
@@ -214,7 +216,7 @@ describe("auditExecutionJournalTrace", () => {
 
     expect(JSON.parse(requestBody)).toEqual(
       expect.objectContaining({
-        model: "gpt-5-mini",
+        model,
         provider: "openai",
         source: "cloud_proxy"
       })
@@ -223,7 +225,7 @@ describe("auditExecutionJournalTrace", () => {
     expect(document.audit).toEqual(
       expect.objectContaining({
         generatedBy: "model",
-        model: "gpt-5-mini"
+        model
       })
     );
   });

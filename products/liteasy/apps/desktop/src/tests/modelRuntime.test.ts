@@ -1,4 +1,5 @@
 import { createModelGatewayFromSettings } from "../app/features/models/modelRuntime";
+import { getModelForSettings } from "../app/features/models/modelPolicy";
 import {
   clearTrustedModelProxyEndpointsForTests,
   trustModelProxyEndpointFromPolicy
@@ -22,7 +23,7 @@ test("uses the real local cloud endpoint by default with an injected test transp
   });
 
   const result = await gateway.generateAnswer({
-    model: "gpt-5-mini",
+    model: getModelForSettings(settings),
     prompt: "问题：这篇论文讲了什么？",
     provider: "openai"
   });
@@ -61,7 +62,7 @@ test("uses the injected http client when the cloud endpoint is a real url", asyn
   });
 
   const result = await gateway.generateAnswer({
-    model: "gpt-5-mini",
+    model: getModelForSettings(store.getState()),
     prompt: "问题：这篇论文讲了什么？",
     provider: "openai"
   });

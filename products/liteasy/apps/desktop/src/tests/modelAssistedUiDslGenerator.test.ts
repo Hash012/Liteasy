@@ -4,6 +4,7 @@ import {
   createModelAssistedUIDslGenerator,
   generateUIDslWithModelFallback
 } from "../app/features/generative-ui/uiDslGenerator";
+import { getModelForSettings } from "../app/features/models/modelPolicy";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 
 function themePlan(): SemanticActionPlan {
@@ -192,6 +193,7 @@ describe("generateUIDslWithModelFallback", () => {
 describe("createModelAssistedUIDslGenerator", () => {
   test("routes runtime UI DSL generation through the model gateway and validators", async () => {
     const settings = createSettingsStore().getState();
+    const model = getModelForSettings(settings);
     const requestBodies: string[] = [];
     const generator = createModelAssistedUIDslGenerator({
       modelTransport: async (request) => {
@@ -207,7 +209,7 @@ describe("createModelAssistedUIDslGenerator", () => {
               audit: {
                 createdAt: "2026-07-05T00:00:00.000Z",
                 generatedBy: "model",
-                model: "gpt-5-mini",
+                model,
                 traceId: "trace-model-ui"
               },
               dataSources: [],
@@ -251,7 +253,7 @@ describe("createModelAssistedUIDslGenerator", () => {
 
     expect(JSON.parse(requestBodies[0])).toEqual(
       expect.objectContaining({
-        model: "gpt-5-mini",
+        model,
         provider: "openai",
         source: "cloud_proxy"
       })
@@ -262,7 +264,7 @@ describe("createModelAssistedUIDslGenerator", () => {
       expect.objectContaining({
         audit: expect.objectContaining({
           generatedBy: "model",
-          model: "gpt-5-mini"
+          model
         }),
         id: "ui-model-runtime",
         surface: "assistant"
