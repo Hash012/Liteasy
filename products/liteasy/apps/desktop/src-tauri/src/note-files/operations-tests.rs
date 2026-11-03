@@ -8,7 +8,13 @@ struct Fixture {
 }
 impl Fixture {
     fn new(count: usize) -> Self {
-        let root = std::env::temp_dir().join(format!("liteasy-copy-test-{}", nonce()));
+        // macOS temp paths can exceed the Unix socket path limit used by this fixture.
+        let temp_root = if cfg!(unix) {
+            std::path::PathBuf::from("/tmp")
+        } else {
+            std::env::temp_dir()
+        };
+        let root = temp_root.join(format!("liteasy-copy-test-{}", nonce()));
         fs::create_dir_all(root.join("source")).unwrap();
         fs::create_dir(root.join("output")).unwrap();
         for index in 0..count {
