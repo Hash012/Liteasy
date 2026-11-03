@@ -351,7 +351,7 @@
       "file": "products/marketing/index.html",
       "rule": "template-select",
       "control": "waitlist role",
-      "reviewedGitBlob": "bdf87597ef1052774c80e14230792a6dd000adfc",
+      "reviewedGitBlob": "07e12618775acc384388df51564f92ab973b515a",
       "decision": "platform-exception",
       "owner": "marketing",
       "renderedSurface": "waitlist role",
