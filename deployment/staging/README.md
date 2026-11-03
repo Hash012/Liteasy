@@ -1106,8 +1106,8 @@ https://auth.staging.liteasyclaw.com/admin/
 1. 选择 `liteasy` realm。
 2. 进入 `Realm settings -> Email`，填写真实 SMTP 主机、端口、发件人和加密方式。SMTP 密码的权威副本保存在 KMS，需要配置时由授权运维人员填入 Keycloak 页面；不要发送到聊天。然后点击测试连接/发送测试邮件，测试邮件未收到就停止。
 3. 进入 `Realm settings -> Login` 打开 `Verify email`；再到 `Authentication -> Required actions` 确认 `Verify Email` 已启用。用一个新测试账号完成邮箱验证。
-4. 在 `Authentication -> Policies` 配置组织认可的 OTP 或 WebAuthn 策略；在 `Required actions` 启用对应注册动作。若选择 OTP，应把 `Configure OTP` 设为默认动作，使新用户首次登录必须配置；再用测试账号完成第二因素注册和重新登录。仅在界面中打开开关但未实际登录不算验收。
-5. 启用并实际测试忘记密码、恢复代码或组织选定的账号恢复流程，确认恢复过程不会绕过 MFA。
+4. 普通用户登录不强制二次验证：在 `Authentication -> Required actions` 保持 `Configure OTP` 已启用，但不要设为默认动作；不要在 realm 的默认 Browser flow 中把 OTP 改为 Required。若此前按旧版手册为普通用户添加了待完成的 `Configure OTP`，仅清除这些普通账号上的该动作，保留邮箱验证和管理员的必需动作。为 `liteasy-admin-public` 创建独立 Browser flow，要求 `Username Password Form` 和 `OTP Form` 都为 Required，并在该 client 的 `Authentication flow overrides` 中绑定；不要让 Cookie 或其他 Alternative 步骤绕过管理员验证码。配置 AMR mapper，使实际完成 OTP 后的 token 含服务端要求的 `amr: ["mfa"]`，不得用固定 claim 冒充验证结果。分别验证普通新用户无需绑定 OTP、管理员必须完成 OTP，以及普通用户 SSO 会话不能绕过管理员验证码。
+5. 启用并实际测试忘记密码、恢复代码或组织选定的账号恢复流程，确认管理员恢复过程不会绕过 MFA。
 6. 为每一位实际运维人员分别创建具名、可审计的长期 Keycloak 管理员，只授予所需 realm 管理权限，并强制该账号使用 MFA；需要多个管理员就重复这一步，不要多人共用一个管理员用户名。
 7. 在另一个浏览器会话验证长期管理员可以完成所需管理操作后，移除或禁用临时 bootstrap 管理员。
 

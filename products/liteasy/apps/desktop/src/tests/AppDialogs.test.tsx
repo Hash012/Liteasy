@@ -19,7 +19,10 @@ beforeEach(() => {
     return this.closest("[hidden]") ? null : this.parentElement;
   });
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 
 async function readyModal(name: string) {
   const dialog = await screen.findByRole("dialog", { name });
@@ -131,6 +134,20 @@ describe("AppDialogs", () => {
     const dialog = await readyModal("轻量登录面板");
     await user.click(within(dialog).getByRole("button", { name: "使用系统浏览器登录" }));
     expect(onSubmitSystemBrowserLogin).toHaveBeenCalledTimes(1);
+    expect(within(dialog).queryByLabelText("邮箱")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("密码")).not.toBeInTheDocument();
+  });
+
+  test("production build hides password login and registration even with a loopback endpoint", async () => {
+    vi.stubEnv("DEV", false);
+    render(<AppDialogs {...createProps({
+      controlPlaneEndpoint: "http://127.0.0.1:8787",
+      loginDialogOpen: true
+    })} />);
+
+    const dialog = await readyModal("轻量登录面板");
+    expect(within(dialog).getByRole("button", { name: "使用系统浏览器登录" })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "创建账号" })).not.toBeInTheDocument();
     expect(within(dialog).queryByLabelText("邮箱")).not.toBeInTheDocument();
     expect(within(dialog).queryByLabelText("密码")).not.toBeInTheDocument();
   });

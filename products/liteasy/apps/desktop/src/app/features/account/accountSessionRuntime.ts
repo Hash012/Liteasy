@@ -20,7 +20,7 @@ export async function createRegisteredCloudAccountSession(
   deps: AccountSessionRuntimeDeps = {}
 ) {
   const endpoint = settings["models.control_plane_endpoint"];
-  if (!isLoopbackAccountEndpoint(endpoint)) {
+  if (!import.meta.env.DEV || !isLoopbackAccountEndpoint(endpoint)) {
     throw new Error("development_account_endpoint_required");
   }
 
@@ -37,7 +37,7 @@ export async function createAuthenticatedCloudAccountSession(
   deps: AccountSessionRuntimeDeps = {}
 ) {
   const endpoint = settings["models.control_plane_endpoint"];
-  if (!isLoopbackAccountEndpoint(endpoint)) {
+  if (!import.meta.env.DEV || !isLoopbackAccountEndpoint(endpoint)) {
     throw new Error("development_account_endpoint_required");
   }
   return loginCloudAccount({

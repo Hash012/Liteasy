@@ -60,6 +60,17 @@ export function resolveLocalDevCloudEndpoint(
   return `${locationLike.protocol}//${hostname}:${devCloudPort}`;
 }
 
+export function resolveCloudEndpoint(
+  configuredEndpoint: string,
+  envLike: DevCloudEnvLike = import.meta.env,
+  developmentBuild = import.meta.env.DEV
+) {
+  if (configuredEndpoint.startsWith("http://") || configuredEndpoint.startsWith("https://")) {
+    return configuredEndpoint;
+  }
+  return developmentBuild ? resolveLocalDevCloudEndpoint(undefined, envLike) : "";
+}
+
 export function hasInjectedLocalDevCloudEndpoint(envLike: DevCloudEnvLike = import.meta.env) {
   return (
     typeof envLike.VITE_LITEASY_DEV_CLOUD_PORT === "string" &&

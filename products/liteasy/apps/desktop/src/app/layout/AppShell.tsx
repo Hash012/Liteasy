@@ -130,7 +130,7 @@ import {
 import { usePolicySync } from "../features/models/usePolicySync";
 import { useModelSettingsActions } from "../features/models/useModelSettingsActions";
 import {
-  resolveLocalDevCloudEndpoint,
+  resolveCloudEndpoint,
   shouldApplyLocalDevCloudDefaults,
   type DevCloudEnvLike
 } from "../features/models/localDevCloudEndpoint";
@@ -338,9 +338,7 @@ export function AppShell({
     const cloud = createArtifactResultClient({
       getBaseEndpoint() {
         const configured = settingsStoreRef.current.getState()["models.cloud_proxy_endpoint"];
-        return configured.startsWith("http://") || configured.startsWith("https://")
-          ? configured
-          : resolveLocalDevCloudEndpoint();
+        return resolveCloudEndpoint(configured, localDevCloudEnv);
       }
     });
     const local = localArtifactResultClientRef.current;
@@ -436,11 +434,10 @@ export function AppShell({
       setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
     }
   });
-  const externalKnowledgeEndpoint =
-    settingsState["models.cloud_proxy_endpoint"].startsWith("http://") ||
-    settingsState["models.cloud_proxy_endpoint"].startsWith("https://")
-      ? settingsState["models.cloud_proxy_endpoint"]
-      : resolveLocalDevCloudEndpoint();
+  const externalKnowledgeEndpoint = resolveCloudEndpoint(
+    settingsState["models.cloud_proxy_endpoint"],
+    localDevCloudEnv
+  );
   const [importJobsByDocumentId, setImportJobsByDocumentId] = useState<Record<string, ImportJob>>({});
   const [cloudTreeRevision, setCloudTreeRevision] = useState(0);
   const savedMineruResourcesRef = useRef<Record<string, PaperMineruResources>>({});
@@ -458,10 +455,10 @@ export function AppShell({
   const loadPaperPdfBytes = useCallback(async (sourcePath: string) => {
     const hasTauriInvoke = typeof window !== "undefined" &&
       typeof (window as Window & { __TAURI_INTERNALS__?: { invoke?: unknown } }).__TAURI_INTERNALS__?.invoke === "function";
-    const configuredEndpoint = settingsState["models.cloud_proxy_endpoint"];
-    const endpoint = configuredEndpoint.startsWith("http")
-      ? configuredEndpoint
-      : resolveLocalDevCloudEndpoint(undefined, localDevCloudEnv);
+    const endpoint = resolveCloudEndpoint(
+      settingsState["models.cloud_proxy_endpoint"],
+      localDevCloudEnv
+    );
     return loadPdfBytesForImport({
       devCloudEndpoint: endpoint,
       readTauriPdf: readLocalLibraryPdf,
@@ -842,7 +839,6 @@ export function AppShell({
     accountCapabilitiesTransport,
     accountTransport,
     getSettings: () => settingsStoreRef.current.getState(),
-    applyLocalDevCloudDefaults: modelSettings.applyLocalDevCloudDefaults,
     isOnline,
     suppressAutomaticLoginPrompt: allowUnauthenticatedLocalDevModel || settingsState["models.connection_mode"] === "direct",
     onRegistered: () => {

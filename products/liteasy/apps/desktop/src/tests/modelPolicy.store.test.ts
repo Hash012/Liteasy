@@ -1,4 +1,7 @@
+import { afterEach, vi } from "vitest";
 import { createSettingsStore } from "../app/features/settings/settings.store";
+
+afterEach(() => vi.unstubAllEnvs());
 
 test("stores cloud-governed model access policy defaults", () => {
   const store = createSettingsStore();
@@ -17,6 +20,14 @@ test("uses release HTTPS endpoints injected by the desktop build", () => {
   expect(store.getState()["models.cloud_proxy_endpoint"]).toBe("https://api.staging.liteasyclaw.com");
   expect(store.getState()["models.control_plane_endpoint"]).toBe("https://api.staging.liteasyclaw.com");
   expect(store.getState()["thin_reading.intuecho_endpoint"]).toBe("https://community.staging.liteasyclaw.com");
+});
+
+test("keeps missing production endpoints empty instead of selecting the local service", () => {
+  vi.stubEnv("DEV", false);
+  const store = createSettingsStore({});
+
+  expect(store.getState()["models.cloud_proxy_endpoint"]).toBe("");
+  expect(store.getState()["models.control_plane_endpoint"]).toBe("");
 });
 
 test("uses an explicitly injected local DeepSeek provider", () => {

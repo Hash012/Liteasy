@@ -24,7 +24,6 @@ import { configureRasterAssetClient } from "../features/visualization/rasterAsse
 type UseCloudAccountControllerInput = {
   accountCapabilitiesTransport?: AccountCapabilitiesTransport;
   accountTransport?: AccountTransport;
-  applyLocalDevCloudDefaults: () => void;
   getSettings: () => SettingsState;
   isOnline: boolean;
   onRegistered?: () => void;
@@ -62,7 +61,6 @@ type CloudAccountActions = {
 export function useCloudAccountController({
   accountCapabilitiesTransport,
   accountTransport,
-  applyLocalDevCloudDefaults,
   getSettings,
   isOnline,
   onRegistered,
@@ -87,8 +85,7 @@ export function useCloudAccountController({
     shouldShowLoginReminder
   } = useAccountSession({
     accountTransport,
-    getSettings,
-    onSessionRestored: applyLocalDevCloudDefaults
+    getSettings
   });
   const { isCloudReachable } = useCloudAvailabilityProbe({
     enabled: isOnline && accountSession !== null,
@@ -154,7 +151,6 @@ export function useCloudAccountController({
   }, [accountSession]);
 
   async function submitAccountRegistration(registration: AccountRegistrationInput) {
-    applyLocalDevCloudDefaults();
     const session = await registerPersonalAccount(registration);
     if (session) {
       setLoginDialogDismissedThisSession(true);
@@ -164,7 +160,6 @@ export function useCloudAccountController({
   }
 
   async function submitAccountLogin(login: AccountLoginInput) {
-    applyLocalDevCloudDefaults();
     const session = await loginPersonalAccount(login);
     if (session) {
       setLoginDialogDismissedThisSession(true);

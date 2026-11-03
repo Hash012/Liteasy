@@ -48,3 +48,26 @@ test("retains the real password API only for the explicit local development serv
   }, { transport })).resolves.toMatchObject({ sessionId: "ltsy_local_session" });
   expect(transport).toHaveBeenCalledTimes(1);
 });
+
+test("rejects local password login and registration in production builds", async () => {
+  vi.stubEnv("DEV", false);
+  try {
+    const settings = createSeededSettingsStore({
+      "models.control_plane_endpoint": "http://127.0.0.1:8787"
+    }).getState();
+    const transport = vi.fn();
+
+    await expect(createAuthenticatedCloudAccountSession(settings, {
+      email: "ada@example.com",
+      password: "private-password"
+    }, { transport })).rejects.toThrow("development_account_endpoint_required");
+    await expect(createRegisteredCloudAccountSession(settings, {
+      displayName: "Ada",
+      email: "ada@example.com",
+      password: "private-password"
+    }, { transport })).rejects.toThrow("development_account_endpoint_required");
+    expect(transport).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});

@@ -36,7 +36,19 @@ function requireInvoke(override?: DesktopIdentityInvoke) {
 }
 
 function identityConfigurationUrl(endpoint: string) {
-  return `${endpoint.replace(/\/+$/, "")}/v1/identity/desktop-config`;
+  let parsed: URL;
+  try {
+    parsed = new URL(endpoint);
+  } catch {
+    throw new Error("oauth_configuration_invalid");
+  }
+  if (
+    parsed.username || parsed.password || parsed.search || parsed.hash ||
+    (parsed.protocol !== "https:" && !(import.meta.env.DEV && isLoopbackAccountEndpoint(endpoint)))
+  ) {
+    throw new Error("oauth_configuration_invalid");
+  }
+  return `${parsed.href.replace(/\/+$/, "")}/v1/identity/desktop-config`;
 }
 
 function validatePublicIdentityConfiguration(value: unknown): DesktopIdentityConfiguration {

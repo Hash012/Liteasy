@@ -123,7 +123,9 @@ export function useAccountSession({
         .catch((error) => {
           if (!isCurrent()) return;
           const code = error instanceof Error ? error.message : String(error);
-          if (!code.includes("oauth_session_not_found") && !code.includes("oauth_configuration_unavailable")) {
+          if (code.startsWith("oauth_configuration_")) {
+            setAccountMessage("账号服务配置错误，请检查服务端点和身份服务配置。");
+          } else if (!code.includes("oauth_session_not_found")) {
             setAccountMessage("暂时无法恢复云账号会话，请检查网络后重试；本地资料仍可使用。");
           }
         })
@@ -157,6 +159,8 @@ export function useAccountSession({
       const code = error instanceof Error ? error.message : String(error);
       setAccountMessage(code.includes("oauth_authorization_denied")
         ? "登录已取消。"
+        : code.startsWith("oauth_configuration_")
+        ? "账号服务配置错误，请检查服务端点和身份服务配置。"
         : "系统浏览器登录失败，请检查身份服务配置后重试。");
       return null;
     } finally {

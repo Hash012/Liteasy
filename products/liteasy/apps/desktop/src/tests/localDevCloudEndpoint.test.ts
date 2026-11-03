@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   resolveLocalDevCloudEndpoint,
+  resolveCloudEndpoint,
   shouldApplyLocalDevCloudDefaults
 } from "../app/features/models/localDevCloudEndpoint";
 
@@ -73,5 +74,21 @@ describe("resolveLocalDevCloudEndpoint", () => {
         protocol: "http:"
       })
     ).toBe(false);
+  });
+});
+
+describe("resolveCloudEndpoint", () => {
+  test("keeps an injected cloud endpoint in production", () => {
+    expect(resolveCloudEndpoint("https://api.liteasy.example", {}, false))
+      .toBe("https://api.liteasy.example");
+  });
+
+  test("does not fall back to a local service when production endpoint is missing or invalid", () => {
+    expect(resolveCloudEndpoint("", {}, false)).toBe("");
+    expect(resolveCloudEndpoint("not-an-endpoint", {}, false)).toBe("");
+  });
+
+  test("uses the local service fallback only in development builds", () => {
+    expect(resolveCloudEndpoint("", {}, true)).toBe("http://127.0.0.1:8787");
   });
 });

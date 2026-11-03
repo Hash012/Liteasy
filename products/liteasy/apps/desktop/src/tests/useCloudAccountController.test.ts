@@ -12,7 +12,6 @@ function createControllerInput() {
   });
 
   return {
-    applyLocalDevCloudDefaults: vi.fn(),
     getSettings: () => settingsStore.getState(),
     isOnline: true
   };
@@ -76,7 +75,6 @@ describe("useCloudAccountController", () => {
       });
     });
 
-    expect(input.applyLocalDevCloudDefaults).toHaveBeenCalledTimes(1);
     expect(accountTransport).toHaveBeenCalledTimes(1);
     expect(result.current.model.accountSession?.sessionId).toBe("ltsy_session_1");
     await waitFor(() => {

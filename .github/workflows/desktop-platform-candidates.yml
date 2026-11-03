@@ -58,6 +58,9 @@ jobs:
       CANDIDATE_ID: ${{ matrix.id }}
       CANDIDATE_TARGET: ${{ matrix.target }}
       CANDIDATE_BUNDLES: ${{ matrix.bundles }}
+      VITE_FORUM_API_URL: https://community.staging.liteasyclaw.com
+      VITE_FORUM_WEB_URL: https://community.staging.liteasyclaw.com
+      VITE_LITEASY_CLOUD_URL: https://api.staging.liteasyclaw.com
       CARGO_INCREMENTAL: 0
       CARGO_PROFILE_TEST_DEBUG: 0
     steps:

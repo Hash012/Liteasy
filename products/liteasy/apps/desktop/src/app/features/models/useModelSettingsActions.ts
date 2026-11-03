@@ -35,6 +35,7 @@ export function useModelSettingsActions({
   }
 
   function applyLocalDevCloudDefaults() {
+    if (!import.meta.env.DEV) return;
     const endpoint = resolveLocalDevCloudEndpoint(undefined, localDevCloudEnv);
     applyModelPolicySnapshot({
       "models.cloud_proxy_endpoint": endpoint,

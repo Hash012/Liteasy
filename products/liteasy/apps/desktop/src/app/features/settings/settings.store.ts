@@ -147,7 +147,7 @@ function persistViewSettings(state: SettingsState) {
 }
 
 export function createSettingsStore(runtimeEnv: DesktopRuntimeEnv = import.meta.env) {
-  const cloudEndpoint = releaseEndpoint(runtimeEnv.VITE_LITEASY_CLOUD_URL, "http://127.0.0.1:8787");
+  const cloudEndpoint = releaseEndpoint(runtimeEnv.VITE_LITEASY_CLOUD_URL, import.meta.env.DEV ? "http://127.0.0.1:8787" : "");
   const forumEndpoint = releaseEndpoint(runtimeEnv.VITE_FORUM_API_URL, "");
   const state: SettingsState & Record<(typeof languageFontKeys)[number], string> & SelectionLookupSettings & Record<GenerationPromptSettingKey, string> & Record<"ai.quickAsk.presets" | "ai.quickAsk.lastPresetId", string> & { "view.language": UiLanguagePreference; "view.list_density": "comfortable" | "compact"; "assistant.context_window": string; "view.close_empty_panels": boolean; "view.markdown_mode": "live" | "manual"; "view.markdown_autosave": boolean } = {
     ...loadGenerationPrompts() as Record<GenerationPromptSettingKey, string>,
