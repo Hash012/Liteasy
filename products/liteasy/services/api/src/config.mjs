@@ -81,6 +81,8 @@ function parseAllowedOrigins(value, environment) {
     throw new Error("cloud_config_invalid: LITEASY_ALLOWED_ORIGINS cannot use a wildcard");
   }
   return origins.map((origin) => {
+    // Node's URL parser serializes non-HTTP schemes as the opaque origin "null".
+    if (origin === "tauri://localhost") return origin;
     let parsed;
     try {
       parsed = new URL(origin);

@@ -76,6 +76,21 @@ test("loads a strict production PostgreSQL and S3 configuration", () => {
   assert.equal(JSON.stringify(publicAdminIdentityConfig(config)).includes("secret"), false);
 });
 
+test("allows the exact macOS Tauri origin without accepting opaque or malformed origins", () => {
+  const config = loadCloudConfig(validEnv({
+    LITEASY_ALLOWED_ORIGINS: "http://tauri.localhost,tauri://localhost,https://app.liteasy.example"
+  }));
+  assert.deepEqual(config.allowedOrigins, [
+    "http://tauri.localhost", "tauri://localhost", "https://app.liteasy.example"
+  ]);
+  for (const origin of [
+    "null", "tauri://localhost/", "tauri://localhost:1234", "tauri://otherhost",
+    "tauri://user@localhost", "tauri://localhost?query=1", "tauri://localhost#fragment"
+  ]) {
+    assert.throws(() => loadCloudConfig(validEnv({ LITEASY_ALLOWED_ORIGINS: origin })), /LITEASY_ALLOWED_ORIGINS|allowed origins/);
+  }
+});
+
 test("mobile identity is opt-in and uses a separate public client without secrets", () => {
   assert.equal(publicMobileIdentityConfig(loadCloudConfig(validEnv())), null);
   const value = publicMobileIdentityConfig(loadCloudConfig(validEnv({ LITEASY_IDP_MOBILE_CLIENT_ID: "liteasy-mobile-public" })));

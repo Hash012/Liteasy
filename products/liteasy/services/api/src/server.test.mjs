@@ -1364,25 +1364,38 @@ test("maps PDF scanner rejection and outage to stable upload errors", async () =
 test("allows only exact configured CORS origins and returns a bounded preflight", async () => {
   const instance = runtime();
   const handler = createCloudRequestHandler(instance, {
-    allowedOrigins: ["http://tauri.localhost"], database: { sslMode: "verify-full" },
-    environment: "production", s3: { region: "test" }
+    allowedOrigins: ["http://tauri.localhost", "tauri://localhost"], database: { sslMode: "verify-full" },
+    environment: "production", s3: { region: "test" },
+    identity: { desktopClientId: "liteasy-desktop-public", issuer: "https://identity.example", revocationUrl: "https://identity.example/revoke" }
   });
-  const allowedRequest = request("OPTIONS", "/v1/library/tree");
-  allowedRequest.headers.origin = "http://tauri.localhost";
-  const allowedResponse = response();
-  await handler(allowedRequest, allowedResponse);
-  assert.equal(allowedResponse.status, 204);
-  assert.equal(allowedResponse.headers["access-control-allow-origin"], "http://tauri.localhost");
-  assert.equal(allowedResponse.headers["access-control-allow-credentials"], undefined);
-  assert.match(allowedResponse.headers["access-control-allow-headers"], /x-liteasy-session-id/);
-  assert.equal(allowedResponse.headers["access-control-allow-methods"], "DELETE, GET, PATCH, POST, OPTIONS");
+  for (const origin of ["http://tauri.localhost", "tauri://localhost"]) {
+    const allowedRequest = request("OPTIONS", "/v1/library/tree");
+    allowedRequest.headers.origin = origin;
+    const allowedResponse = response();
+    await handler(allowedRequest, allowedResponse);
+    assert.equal(allowedResponse.status, 204);
+    assert.equal(allowedResponse.headers["access-control-allow-origin"], origin);
+    assert.equal(allowedResponse.headers["access-control-allow-credentials"], undefined);
+    assert.match(allowedResponse.headers["access-control-allow-headers"], /x-liteasy-session-id/);
+    assert.equal(allowedResponse.headers["access-control-allow-methods"], "DELETE, GET, PATCH, POST, OPTIONS");
 
-  const deniedRequest = request("OPTIONS", "/v1/library/tree");
-  deniedRequest.headers.origin = "https://untrusted.example";
-  const deniedResponse = response();
-  await handler(deniedRequest, deniedResponse);
-  assert.equal(deniedResponse.status, 403);
-  assert.equal(deniedResponse.headers["access-control-allow-origin"], undefined);
+    const identityRequest = request("GET", "/v1/identity/desktop-config");
+    identityRequest.headers.origin = origin;
+    const identityResponse = response();
+    await handler(identityRequest, identityResponse);
+    assert.equal(identityResponse.status, 200);
+    assert.equal(identityResponse.headers["access-control-allow-origin"], origin);
+    assert.equal(jsonBody(identityResponse).clientId, "liteasy-desktop-public");
+  }
+
+  for (const origin of ["https://untrusted.example", "null", "tauri://localhost.attacker.example"]) {
+    const deniedRequest = request("OPTIONS", "/v1/library/tree");
+    deniedRequest.headers.origin = origin;
+    const deniedResponse = response();
+    await handler(deniedRequest, deniedResponse);
+    assert.equal(deniedResponse.status, 403);
+    assert.equal(deniedResponse.headers["access-control-allow-origin"], undefined);
+  }
 });
 
 test("authorizes a document by scope-bound id without exposing or opening its object", async () => {

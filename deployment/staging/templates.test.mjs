@@ -21,7 +21,9 @@ function environment(name) {
 test("service templates satisfy the production configuration parsers", () => {
   const liteasy = environment("liteasy-api");
   const intuecho = environment("intuecho-api");
-  loadCloudConfig(liteasy);
+  const cloudConfig = loadCloudConfig(liteasy);
+  assert.ok(cloudConfig.allowedOrigins.includes("http://tauri.localhost"));
+  assert.ok(cloudConfig.allowedOrigins.includes("tauri://localhost"));
   loadMigrationDatabaseConfig(liteasy);
   loadIntuechoProductionConfig(intuecho);
   loadIntuechoMigrationConfig(intuecho);
