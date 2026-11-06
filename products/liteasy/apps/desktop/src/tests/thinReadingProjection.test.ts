@@ -754,7 +754,7 @@ describe("thinReadingProjection", () => {
         retentionFocus: ["核心结论", "关键推导", "领域位置"],
         requestedDepth: "standard" as const
       },
-      model: { id: "gpt-5-mini", provider: "openai" },
+      model: { id: "gpt-6.1-terra", provider: "openai" },
       paperEvidenceRecovery: {
         addedEvidenceIds: ["evidence-2"],
         answerObligations: ["补齐结论成立边界"],

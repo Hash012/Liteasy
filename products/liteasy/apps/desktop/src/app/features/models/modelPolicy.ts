@@ -19,7 +19,7 @@ export function getDefaultModelForProvider(provider: string) {
     return "deepseek-v4-flash";
   }
   const injectedModel = import.meta.env.VITE_LITEASY_OPENAI_MODEL?.trim();
-  return injectedModel || "gpt-5.4-mini";
+  return injectedModel || "gpt-6.1-terra";
 }
 
 export function getModelPolicyFromSettings(settings: SettingsState): ModelPolicy {

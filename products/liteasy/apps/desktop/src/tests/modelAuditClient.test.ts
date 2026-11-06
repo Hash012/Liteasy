@@ -11,7 +11,7 @@ test("posts generated answers and citations to the model audit endpoint", async 
       return {
         json: async () => ({
           audit: {
-            model: "gpt-5-mini-auditor",
+            model: "gpt-6.1-terra",
             rationale: "云端审计确认回答有引用支撑。",
             score: 0.91,
             verdict: "pass"
@@ -32,7 +32,7 @@ test("posts generated answers and citations to the model audit endpoint", async 
         snippet: "masked language model"
       }
     ],
-    model: "gpt-5-mini-auditor",
+    model: "gpt-6.1-terra",
     provider: "openai",
     question: "预训练目标是什么？",
     retrievalConfidence: 0.86
@@ -42,7 +42,7 @@ test("posts generated answers and citations to the model audit endpoint", async 
     model: "remote_service",
     checkerKind: "remote_service",
     semanticStatus: "unverified",
-    reportedModel: "gpt-5-mini-auditor",
+    reportedModel: "gpt-6.1-terra",
     score: 0.91,
     verdict: "review"
   });
@@ -57,7 +57,7 @@ test("posts generated answers and citations to the model audit endpoint", async 
             snippet: "masked language model"
           }
         ],
-        model: "gpt-5-mini-auditor",
+        model: "gpt-6.1-terra",
         provider: "openai",
         question: "预训练目标是什么？",
         retrievalConfidence: 0.86,

@@ -220,7 +220,7 @@ describe("artifactLocalRepository", () => {
           generationAudit: {
             evidencePlan: { focus: ["核心贡献"], selectedEvidenceIds: ["evidence-1"] },
             evidenceReview: { reason: "每句均有直接证据。", unsupportedSentenceIds: [], verdict: "pass" },
-            model: { id: "gpt-5-mini", provider: "openai" },
+            model: { id: "gpt-6.1-terra", provider: "openai" },
             qualityGate: { attempts: 1, repaired: false, repairReasons: [] },
             version: "liteasy.thin-reading-agent/v1"
           },

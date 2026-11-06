@@ -17,13 +17,13 @@ test("uses cloud proxy path by default when policy is cloud-governed", async () 
       };
     },
     policy: {
-      allowedModels: ["gpt-5-mini"],
+      allowedModels: ["gpt-6.1-terra"],
       allowedProviders: ["openai"]
     }
   });
 
   const result = await gateway.generateAnswer({
-    model: "gpt-5-mini",
+    model: "gpt-6.1-terra",
     prompt: "Explain BERT pretraining",
     provider: "openai"
   });

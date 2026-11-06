@@ -57,7 +57,7 @@ test("does not register a DeepSeek provider when no DeepSeek api key is configur
 test("rejects live-only generation instead of using the OpenAI mock fallback", async () => {
   await assert.rejects(
     generateAnswer({
-      model: "gpt-5-mini",
+      model: "gpt-6.1-terra",
       prompt: "thin reading",
       provider: "openai",
       requireLive: true
@@ -66,21 +66,21 @@ test("rejects live-only generation instead of using the OpenAI mock fallback", a
   );
 });
 
-test("falls through tera, luna, then sol after explicitly retryable upstream failures", async () => {
+test("falls back from an explicitly configured model to the approved cloud model", async () => {
   const attemptedModels = [];
   const provider = createOpenAIModelFailoverProvider(async ({ model }) => {
     attemptedModels.push(model);
-    if (model !== "gpt-5.6-sol") {
-      const error = new Error("upstream temporarily unavailable");
-      error.status = 503;
-      error.retryable = true;
+    if (model !== "gpt-6.1-terra") {
+      const error = new Error("Model configured-primary is unavailable");
+      error.status = 404;
+      error.retryable = false;
       throw error;
     }
-    return "sol recovered the request";
+    return "approved model recovered the request";
   });
 
-  assert.equal(await provider({ model: "gpt-5.6-terra", prompt: "test" }), "sol recovered the request");
-  assert.deepEqual(attemptedModels, openAIModelFailoverOrder);
+  assert.equal(await provider({ model: "configured-primary", prompt: "test" }), "approved model recovered the request");
+  assert.deepEqual(attemptedModels, ["configured-primary", ...openAIModelFailoverOrder]);
 });
 
 test("honors the configured model before bounded fallback candidates", async () => {
@@ -91,36 +91,30 @@ test("honors the configured model before bounded fallback candidates", async () 
   });
 
   assert.equal(
-    await provider({ model: "gpt-5.4-mini", prompt: "test" }),
+    await provider({ model: "gpt-6.1-terra", prompt: "test" }),
     "configured model answer"
   );
-  assert.deepEqual(attemptedModels, ["gpt-5.4-mini"]);
+  assert.deepEqual(attemptedModels, ["gpt-6.1-terra"]);
 });
 
-test("skips an unavailable fallback model and continues to the next candidate", async () => {
+test("falls back to the approved model after an unavailable configured model", async () => {
   const attemptedModels = [];
   const provider = createOpenAIModelFailoverProvider(async ({ model }) => {
     attemptedModels.push(model);
-    if (model === "gpt-5.6-terra") {
+    if (model === "configured-primary") {
       const error = new Error("upstream temporarily unavailable");
       error.status = 503;
       error.retryable = true;
       throw error;
     }
-    if (model === "gpt-5.6-luna") {
-      const error = new Error('Model "gpt-5.6-luna" is not supported');
-      error.status = 404;
-      error.retryable = false;
-      throw error;
-    }
-    return "sol recovered the request";
+    return "approved model recovered the request";
   });
 
   assert.equal(
-    await provider({ model: "gpt-5.6-terra", prompt: "test" }),
-    "sol recovered the request"
+    await provider({ model: "configured-primary", prompt: "test" }),
+    "approved model recovered the request"
   );
-  assert.deepEqual(attemptedModels, openAIModelFailoverOrder);
+  assert.deepEqual(attemptedModels, ["configured-primary", ...openAIModelFailoverOrder]);
 });
 
 test("does not hide permanent OpenAI errors behind model failover", async () => {
@@ -134,14 +128,14 @@ test("does not hide permanent OpenAI errors behind model failover", async () => 
   });
 
   await assert.rejects(provider({ prompt: "test" }), /invalid API key/);
-  assert.deepEqual(attemptedModels, ["gpt-5.6-terra"]);
+  assert.deepEqual(attemptedModels, ["gpt-6.1-terra"]);
 });
 
 test("switches stream models before any output but never mixes streamed answers", async () => {
   const attemptedModels = [];
   const provider = createOpenAIModelFailoverStreamProvider(async function* ({ model }) {
     attemptedModels.push(model);
-    if (model === "gpt-5.6-terra") {
+    if (model === "configured-primary") {
       const error = new Error("gateway timeout");
       error.status = 504;
       error.retryable = true;
@@ -151,38 +145,32 @@ test("switches stream models before any output but never mixes streamed answers"
   });
 
   const chunks = [];
-  for await (const chunk of provider({ prompt: "test" })) {
+  for await (const chunk of provider({ model: "configured-primary", prompt: "test" })) {
     chunks.push(chunk);
   }
 
   assert.deepEqual(chunks, ["recovered stream"]);
-  assert.deepEqual(attemptedModels, ["gpt-5.6-terra", "gpt-5.6-luna"]);
+  assert.deepEqual(attemptedModels, ["configured-primary", "gpt-6.1-terra"]);
 });
 
-test("stream failover skips an unavailable model before emitting output", async () => {
+test("stream failover uses the approved model before emitting output", async () => {
   const attemptedModels = [];
   const provider = createOpenAIModelFailoverStreamProvider(async function* ({ model }) {
     attemptedModels.push(model);
-    if (model === "gpt-5.6-terra") {
+    if (model === "configured-primary") {
       const error = new Error("gateway unavailable");
       error.status = 503;
       error.retryable = true;
       throw error;
     }
-    if (model === "gpt-5.6-luna") {
-      const error = new Error('Model "gpt-5.6-luna" is not supported');
-      error.status = 404;
-      error.retryable = false;
-      throw error;
-    }
-    yield "sol recovered stream";
+    yield "approved model recovered stream";
   });
 
   const chunks = [];
-  for await (const chunk of provider({ model: "gpt-5.6-terra", prompt: "test" })) {
+  for await (const chunk of provider({ model: "configured-primary", prompt: "test" })) {
     chunks.push(chunk);
   }
 
-  assert.deepEqual(chunks, ["sol recovered stream"]);
-  assert.deepEqual(attemptedModels, openAIModelFailoverOrder);
+  assert.deepEqual(chunks, ["approved model recovered stream"]);
+  assert.deepEqual(attemptedModels, ["configured-primary", ...openAIModelFailoverOrder]);
 });

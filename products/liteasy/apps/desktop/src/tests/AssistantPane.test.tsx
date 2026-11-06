@@ -43,7 +43,7 @@ const testModelTransport: ModelTransport = async ({ body }) => {
 const testAuditTransport: ModelAuditTransport = async () => ({
   json: async () => ({
     audit: {
-      model: "gpt-5-mini-auditor",
+      model: "gpt-6.1-terra",
       rationale: "测试审计通过。",
       score: 0.84,
       verdict: "pass"
@@ -687,7 +687,7 @@ test("renders model-assisted command result DSL when the model returns valid UI 
             audit: {
               createdAt: "2026-07-05T00:00:00.000Z",
               generatedBy: "model",
-              model: "gpt-5-mini",
+              model: "gpt-6.1-terra",
               traceId: "trace-model-runtime-ui"
             },
             dataSources: [],
@@ -760,7 +760,7 @@ test("renders model-assisted journal audit commentary after command execution", 
               audit: {
                 createdAt: "2026-07-05T00:00:00.000Z",
                 generatedBy: "model",
-                model: "gpt-5-mini",
+                model: "gpt-6.1-terra",
                 traceId: "trace-model-runtime-ui"
               },
               dataSources: [],
@@ -1194,7 +1194,7 @@ test("regenerates the latest model answer from the previous user prompt", async 
     vi.fn(async () => ({
       json: async () => ({
         audit: {
-          model: "gpt-5-mini-auditor",
+          model: "gpt-6.1-terra",
           rationale: "测试审计通过。",
           score: 0.9,
           verdict: "pass"
@@ -1262,7 +1262,7 @@ test("clears the composer immediately after sending a model request", async () =
     vi.fn(async () => ({
       json: async () => ({
         audit: {
-          model: "gpt-5-mini-auditor",
+          model: "gpt-6.1-terra",
           rationale: "测试审计通过。",
           score: 0.9,
           verdict: "pass"

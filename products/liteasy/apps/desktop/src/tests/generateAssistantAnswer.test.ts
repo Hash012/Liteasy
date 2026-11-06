@@ -54,7 +54,7 @@ const liveModelTransport = async () => ({
 const liveAuditTransport = async () => ({
   json: async () => ({
     audit: {
-      model: "gpt-5-mini-auditor",
+      model: "gpt-6.1-terra",
       rationale: "回答包含可追溯引用，且引用片段覆盖问题关键词。",
       score: 0.86,
       verdict: "pass"
@@ -904,7 +904,7 @@ test("generates cloud-proxy answers through an injected live transport", async (
     model: "remote_service",
     checkerKind: "remote_service",
     semanticStatus: "unverified",
-    reportedModel: "gpt-5-mini-auditor",
+    reportedModel: "gpt-6.1-terra",
     score: 0.86,
     verdict: "review"
   });
@@ -1012,7 +1012,7 @@ test("uses the cloud audit endpoint after http model generation", async () => {
       return {
         json: async () => ({
           audit: {
-            model: "gpt-5-mini-auditor",
+            model: "gpt-6.1-terra",
             rationale: "云端审计确认回答有引用支撑。",
             score: 0.91,
             verdict: "pass"
@@ -1051,14 +1051,14 @@ test("uses the cloud audit endpoint after http model generation", async () => {
     model: "remote_service",
     checkerKind: "remote_service",
     semanticStatus: "unverified",
-    reportedModel: "gpt-5-mini-auditor",
+    reportedModel: "gpt-6.1-terra",
     score: 0.91,
     verdict: "review"
   });
   expect(requests[0].url).toBe("https://liteasy.example.com/model-proxy/v1/model/audit");
   expect(JSON.parse(requests[0].body)).toMatchObject({
     answer: "真实模型回答",
-    model: "gpt-5-mini-auditor",
+    model: "gpt-6.1-terra",
     provider: "openai",
     question: "总结这篇论文的核心方法",
     source: "cloud_proxy"
@@ -1083,7 +1083,7 @@ test("uses the DeepSeek default model for assistant generation when provider is 
     auditTransport: async () => ({
       json: async () => ({
         audit: {
-          model: "gpt-5-mini-auditor",
+          model: "gpt-6.1-terra",
           rationale: "云端审计确认回答有引用支撑。",
           score: 0.91,
           verdict: "pass"
@@ -1151,7 +1151,7 @@ test("injects agent core context into qa generation prompts", async () => {
     auditTransport: async () => ({
       json: async () => ({
         audit: {
-          model: "gpt-5-mini-auditor",
+          model: "gpt-6.1-terra",
           rationale: "测试审计。",
           score: 0.9,
           verdict: "pass"
@@ -2192,7 +2192,7 @@ test("parses thin-reading structured output from a live model request", async ()
     auditTransport: async () => ({
       json: async () => ({
         audit: {
-          model: "gpt-5-mini-auditor",
+          model: "gpt-6.1-terra",
           rationale: "薄读审计通过。",
           score: 0.92,
           verdict: "pass"
@@ -2483,7 +2483,7 @@ test("runs thin-reading through the DeepSeek provider without downgrading to moc
     auditTransport: async () => ({
       json: async () => ({
         audit: {
-          model: "gpt-5-mini-auditor",
+          model: "gpt-6.1-terra",
           rationale: "DeepSeek 薄读审计通过。",
           score: 0.9,
           verdict: "pass"
@@ -5143,7 +5143,7 @@ test("restricts a direct thin-reading request to its primary paper", async () =>
     auditTransport: async () => ({
       json: async () => ({
         audit: {
-          model: "gpt-5-mini-auditor",
+          model: "gpt-6.1-terra",
           rationale: "薄读审计通过，但检索覆盖不足。",
           score: 0.82,
           verdict: "review"

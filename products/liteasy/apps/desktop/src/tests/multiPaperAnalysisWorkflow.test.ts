@@ -270,7 +270,7 @@ test("assistant generation uses the evidence matrix and returns an auditable ana
     auditTransport: async () => ({
       json: async () => ({
         audit: {
-          model: "gpt-5-mini-auditor",
+          model: "gpt-6.1-terra",
           rationale: "All claims have evidence.",
           score: 0.92,
           verdict: "pass"

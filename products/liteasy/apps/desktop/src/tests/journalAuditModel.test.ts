@@ -102,14 +102,14 @@ describe("auditExecutionJournalTrace", () => {
           summary: "模型审计：低风险面板动作已按策略执行。",
           verdict: "pass"
         }),
-      model: "gpt-5-mini-auditor",
+      model: "gpt-6.1-terra",
       traceId: "trace-model-audit"
     });
 
     expect(document.audit).toEqual(
       expect.objectContaining({
         generatedBy: "model",
-        model: "gpt-5-mini-auditor",
+        model: "gpt-6.1-terra",
         traceId: "trace-model-audit"
       })
     );
@@ -157,7 +157,7 @@ describe("auditExecutionJournalTrace", () => {
             summary: "function () { document.querySelector('.app').remove() }",
             verdict: "pass"
           }),
-        model: "gpt-5-mini-auditor",
+        model: "gpt-6.1-terra",
         traceId: "trace-bad-model-audit"
       }
     );
@@ -214,7 +214,7 @@ describe("auditExecutionJournalTrace", () => {
 
     expect(JSON.parse(requestBody)).toEqual(
       expect.objectContaining({
-        model: "gpt-5-mini",
+        model: "gpt-6.1-terra",
         provider: "openai",
         source: "cloud_proxy"
       })
@@ -223,7 +223,7 @@ describe("auditExecutionJournalTrace", () => {
     expect(document.audit).toEqual(
       expect.objectContaining({
         generatedBy: "model",
-        model: "gpt-5-mini"
+        model: "gpt-6.1-terra"
       })
     );
   });

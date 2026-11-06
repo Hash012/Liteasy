@@ -11,7 +11,7 @@ function config(overrides = {}) {
       openai: {
         apiKey: "deployment-openai-secret",
         baseUrl: "https://api.openai.example/v1",
-        model: "gpt-5-mini",
+        model: "gpt-6.1-terra",
         provider: "openai"
       },
       ...overrides
@@ -40,7 +40,7 @@ test("uses only the deployment model and credential for OpenAI Responses", async
 
   assert.equal(answer, "Grounded answer");
   assert.equal(observed.url, "https://api.openai.example/v1/responses");
-  assert.equal(observed.body.model, "gpt-5-mini");
+  assert.equal(observed.body.model, "gpt-6.1-terra");
   assert.equal(observed.body.input, "Explain the paper");
   assert.equal(observed.headers.Authorization, "Bearer deployment-openai-secret");
 });

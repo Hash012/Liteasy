@@ -207,7 +207,7 @@ describe("createModelAssistedUIDslGenerator", () => {
               audit: {
                 createdAt: "2026-07-05T00:00:00.000Z",
                 generatedBy: "model",
-                model: "gpt-5-mini",
+                model: "gpt-6.1-terra",
                 traceId: "trace-model-ui"
               },
               dataSources: [],
@@ -251,7 +251,7 @@ describe("createModelAssistedUIDslGenerator", () => {
 
     expect(JSON.parse(requestBodies[0])).toEqual(
       expect.objectContaining({
-        model: "gpt-5-mini",
+        model: "gpt-6.1-terra",
         provider: "openai",
         source: "cloud_proxy"
       })
@@ -262,7 +262,7 @@ describe("createModelAssistedUIDslGenerator", () => {
       expect.objectContaining({
         audit: expect.objectContaining({
           generatedBy: "model",
-          model: "gpt-5-mini"
+          model: "gpt-6.1-terra"
         }),
         id: "ui-model-runtime",
         surface: "assistant"
@@ -285,7 +285,7 @@ describe("createModelAssistedUIDslGenerator", () => {
               audit: {
                 createdAt: "2026-07-05T00:00:00.000Z",
                 generatedBy: "model",
-                model: "gpt-5-mini",
+                model: "gpt-6.1-terra",
                 traceId: "trace-model-ui-risk"
               },
               dataSources: [],

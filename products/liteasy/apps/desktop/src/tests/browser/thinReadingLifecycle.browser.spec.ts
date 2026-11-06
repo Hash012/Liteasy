@@ -42,7 +42,7 @@ test(`generates thin reading from ${entry} with a real PDF without library selec
   await page.goto("/?pdf-highlight-fixture#importable");
   await page.getByRole("button", { name: "设置", exact: true }).click();
   await page.getByLabel("AI 接入方式").selectOption("direct");
-  await page.getByLabel("模型 ID", { exact: true }).fill("gpt-5-mini");
+  await page.getByLabel("模型 ID", { exact: true }).fill("gpt-6.1-terra");
   await page.getByLabel("API key", { exact: true }).fill("browser-test-only-key");
   await page.getByRole("button", { name: "保存并测试", exact: true }).click();
   await expect(page.getByLabel("测试响应")).toHaveValue("连接测试响应。");

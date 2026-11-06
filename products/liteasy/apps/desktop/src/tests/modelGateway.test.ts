@@ -13,13 +13,13 @@ test("uses the cloud model path when provider and model are allowed", async () =
       }
     }),
     policy: {
-      allowedModels: ["gpt-5-mini"],
+      allowedModels: ["gpt-6.1-terra"],
       allowedProviders: ["openai"]
     }
   });
 
   const result = await gateway.generateAnswer({
-    model: "gpt-5-mini",
+    model: "gpt-6.1-terra",
     prompt: "hello",
     provider: "openai"
   });
@@ -47,7 +47,7 @@ test("rejects a request when the model is not allowed by cloud policy", async ()
 
   await expect(
     gateway.generateAnswer({
-      model: "gpt-5-mini",
+      model: "gpt-6.1-terra",
       prompt: "hello",
       provider: "openai"
     })

@@ -69,7 +69,7 @@ test("posts to the OpenAI Responses API and extracts text output", async () => {
   });
 
   const answer = await provider({
-    model: "gpt-5-mini",
+    model: "gpt-6.1-terra",
     prompt: "问题：BERT 的核心方法是什么？",
     provider: "openai",
     source: "cloud_proxy"
@@ -80,7 +80,7 @@ test("posts to the OpenAI Responses API and extracts text output", async () => {
     init: {
       body: JSON.stringify({
         input: "问题：BERT 的核心方法是什么？",
-        model: "gpt-5-mini"
+        model: "gpt-6.1-terra"
       }),
       headers: {
         Authorization: "Bearer sk-test",
@@ -107,7 +107,7 @@ test("requests strict JSON Schema output when an artifact supplies an output for
   });
 
   await provider({
-    model: "gpt-5-mini",
+    model: "gpt-6.1-terra",
     outputFormat: {
       name: "liteasy_thin_reading",
       schema: { additionalProperties: false, type: "object" },
@@ -182,7 +182,7 @@ test("retries once without schema fields when an OpenAI-compatible endpoint reje
   });
 
   const answer = await provider({
-    model: "gpt-5-mini",
+    model: "gpt-6.1-terra",
     outputFormat: { name: "thin_reading", schema: { type: "object" }, strict: true },
     prompt: "Return JSON."
   });
@@ -209,7 +209,7 @@ test("throws a readable error when the OpenAI provider returns a non-ok status",
 
   await assert.rejects(
     provider({
-      model: "gpt-5-mini",
+      model: "gpt-6.1-terra",
       prompt: "问题：BERT 的核心方法是什么？",
       provider: "openai",
       source: "cloud_proxy"

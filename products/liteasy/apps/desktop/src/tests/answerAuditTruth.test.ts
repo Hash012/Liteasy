@@ -6,11 +6,11 @@ const request = {
   answer: "The treatment always improves survival for every patient.",
   citations: [{ paperId: "paper-1", page: 2, snippet: "No improvement in survival was observed." }],
   retrievalConfidence: 0.84,
-  model: "gpt-5-mini-auditor",
+  model: "gpt-6.1-terra",
   provider: "openai",
   question: "Does treatment improve survival?"
 };
-const remotePayload = { audit: { model: "gpt-5-mini-auditor", score: 0.99, verdict: "pass", rationale: "Everything is supported." } };
+const remotePayload = { audit: { model: "gpt-6.1-terra", score: 0.99, verdict: "pass", rationale: "Everything is supported." } };
 afterEach(() => vi.useRealTimers());
 
 describe("audit truth boundaries", () => {
@@ -27,7 +27,7 @@ describe("audit truth boundaries", () => {
 
   test("treats legacy model identity and pass as unverified remote claims", async () => {
     const client = createHttpModelAuditClient({ endpoint: "https://example.test", source: "cloud_proxy", transport: async () => ({ ok: true, status: 200, json: async () => remotePayload }) });
-    expect(await client(request)).toMatchObject({ model: "remote_service", checkerKind: "remote_service", status: "completed", semanticStatus: "unverified", verdict: "review", reportedModel: "gpt-5-mini-auditor" });
+    expect(await client(request)).toMatchObject({ model: "remote_service", checkerKind: "remote_service", status: "completed", semanticStatus: "unverified", verdict: "review", reportedModel: "gpt-6.1-terra" });
   });
 
   test.each([NaN, Infinity, -1, 2])("rejects invalid score %s", async (score) => {

@@ -9,9 +9,7 @@ import {
 // These are bounded fallbacks for compatible gateways. The configured/requested
 // model is still tried first so OPENAI_MODEL remains authoritative.
 export const openAIModelFailoverOrder = [
-  "gpt-5.6-terra",
-  "gpt-5.6-luna",
-  "gpt-5.6-sol"
+  "gpt-6.1-terra"
 ];
 
 function resolveModelCandidates(model) {

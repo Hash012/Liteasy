@@ -110,7 +110,7 @@ export const defaultConfig = {
   })(),
   openaiApiBaseUrl: process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1",
   openaiApiKey: process.env.OPENAI_API_KEY,
-  openaiModel: process.env.OPENAI_MODEL ?? process.env.VITE_LITEASY_OPENAI_MODEL ?? "gpt-5.4-mini",
+  openaiModel: process.env.OPENAI_MODEL ?? process.env.VITE_LITEASY_OPENAI_MODEL ?? "gpt-6.1-terra",
   openaiReasoningEffort: process.env.OPENAI_REASONING_EFFORT,
   policyVersion: "dev-policy-v1",
   recommendationEmbeddingApiKey: process.env.LITEASY_RECOMMENDATION_EMBEDDING_API_KEY,

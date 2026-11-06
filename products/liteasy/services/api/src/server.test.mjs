@@ -570,7 +570,7 @@ test("authenticates formal model generation and derives the subject from the des
   });
   const result = response();
   await handler(request("POST", "/v1/model/generate", {
-    model: "gpt-5-mini",
+    model: "gpt-6.1-terra",
     prompt: "Explain this paper",
     provider: "openai",
     source: "cloud_proxy"
@@ -587,7 +587,7 @@ test("authenticates formal model generation and derives the subject from the des
 test("permits bounded image-sized model requests while retaining the normal JSON limit elsewhere", async () => {
   const instance = runtime();
   const handler = createCloudRequestHandler(instance, internalConfig());
-  const body = { model: "gpt-5-mini", provider: "openai", source: "cloud_proxy", prompt: "Figure",
+  const body = { model: "gpt-6.1-terra", provider: "openai", source: "cloud_proxy", prompt: "Figure",
     images: [{ mediaType: "image/png", label: "Figure", base64: "a".repeat(2 * 1024 * 1024) }] };
   for (const path of ["/v1/model/generate", "/v1/model/generate-stream"]) {
     const result = response();
@@ -724,7 +724,7 @@ test("streams the desktop NDJSON contract through the authenticated cloud route"
   });
   const result = response();
   await handler(request("POST", "/v1/model/generate-stream", {
-    model: "gpt-5-mini",
+    model: "gpt-6.1-terra",
     prompt: "Stream this answer",
     provider: "openai",
     source: "cloud_proxy"
@@ -749,7 +749,7 @@ test("finishes an already-started model stream with a stable error event", async
   });
   const result = response();
   await handler(request("POST", "/v1/model/generate-stream", {
-    model: "gpt-5-mini",
+    model: "gpt-6.1-terra",
     prompt: "Do not echo this input",
     provider: "openai",
     source: "cloud_proxy"
@@ -773,7 +773,7 @@ test("returns stable model errors without exposing upstream details", async () =
   });
   const result = response();
   await handler(request("POST", "/v1/model/generate", {
-    model: "gpt-5-mini",
+    model: "gpt-6.1-terra",
     prompt: "Sensitive source text",
     provider: "openai",
     source: "cloud_proxy"

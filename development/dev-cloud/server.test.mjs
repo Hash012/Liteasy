@@ -3349,7 +3349,7 @@ test("uses the configured openai provider when an api key is available", async (
       host: "127.0.0.1:8787"
     },
     body: JSON.stringify({
-      model: "gpt-5-mini",
+      model: "gpt-6.1-terra",
       prompt: "问题：BERT 的核心方法是什么？",
       provider: "openai",
       source: "cloud_proxy"
@@ -3367,7 +3367,7 @@ test("uses the configured openai provider when an api key is available", async (
   });
 
   assert.deepEqual(capturedInput, {
-    model: "gpt-5-mini",
+    model: "gpt-6.1-terra",
     prompt: "问题：BERT 的核心方法是什么？",
     provider: "openai",
     source: "cloud_proxy"
@@ -4735,7 +4735,7 @@ test("returns an audit score from the model audit endpoint", async () => {
           snippet: "deep bidirectional representations are pre-trained"
         }
       ],
-      model: "gpt-5-mini-auditor",
+      model: "gpt-6.1-terra",
       provider: "openai",
       question: "BERT 的核心方法是什么？",
       retrievalConfidence: 0.86,

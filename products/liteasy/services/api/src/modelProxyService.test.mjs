@@ -11,7 +11,7 @@ function context() {
 
 function body(overrides = {}) {
   return {
-    model: "gpt-5-mini",
+    model: "gpt-6.1-terra",
     prompt: "private prompt body",
     provider: "openai",
     source: "cloud_proxy",
@@ -23,7 +23,7 @@ function service(overrides = {}) {
   const events = [];
   const provider = {
     async generate() { return "Real answer"; },
-    model: "gpt-5-mini",
+    model: "gpt-6.1-terra",
     async *stream() { yield "Real "; yield "answer"; }
   };
   return {
@@ -96,7 +96,7 @@ test("maps upstream details to stable errors while retaining minimal diagnostics
             "upstream said secret diagnostic"
           );
         },
-        model: "gpt-5-mini",
+        model: "gpt-6.1-terra",
         async *stream() { yield "unused"; }
       }
     }
@@ -126,7 +126,7 @@ test("streams only text deltas and records completion after the iterator finishe
 
 test("validates and forwards images for generation and streaming without logging their content", async () => {
   const inputs = [];
-  const { instance, events } = service({ providers: { openai: { model: "gpt-5-mini", supportsImages: true,
+  const { instance, events } = service({ providers: { openai: { model: "gpt-6.1-terra", supportsImages: true,
     async generate(input) { inputs.push(input); return "Image answer"; },
     async *stream(input) { inputs.push(input); yield "Image answer"; },
   } } });
@@ -140,7 +140,7 @@ test("validates and forwards images for generation and streaming without logging
 
 test("rejects malformed, external, mismatched and excessive image data before provider access", async () => {
   let accessed = false;
-  const { instance } = service({ providers: { openai: { model: "gpt-5-mini", supportsImages: true,
+  const { instance } = service({ providers: { openai: { model: "gpt-6.1-terra", supportsImages: true,
     async generate() { accessed = true; return "unused"; },
   } } });
   for (const images of [null, {}, Array(13).fill(image), [{ ...image, url: "https://untrusted/image.png" }],

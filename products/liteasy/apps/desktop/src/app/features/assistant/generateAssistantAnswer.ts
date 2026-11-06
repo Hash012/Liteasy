@@ -4766,7 +4766,7 @@ async function generateAssistantAnswerInternal({
   })({
     answer: generatedAnswerText,
     citations: groundedAnswer.citations,
-    model: "gpt-5-mini-auditor",
+    model,
     provider: getActiveModelProvider(settings),
     question,
     retrievalConfidence: groundedAnswer.confidence,

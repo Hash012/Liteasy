@@ -1,4 +1,5 @@
 import { afterEach, vi } from "vitest";
+import { getDefaultModelForProvider, getModelForSettings, getModelPolicyFromSettings } from "../app/features/models/modelPolicy";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 
 afterEach(() => vi.unstubAllEnvs());
@@ -42,4 +43,16 @@ test("rejects non-HTTPS remote release endpoints", () => {
   expect(() => createSettingsStore({
     VITE_LITEASY_CLOUD_URL: "http://api.staging.liteasyclaw.com"
   })).toThrow("desktop_runtime_endpoint_invalid");
+});
+
+
+test("cloud generation and policy share the approved model default and explicit deployment override", () => {
+  vi.stubEnv("VITE_LITEASY_OPENAI_MODEL", "");
+  const settings = createSettingsStore().getState();
+  expect(getDefaultModelForProvider("openai")).toBe("gpt-6.1-terra");
+  expect(getModelForSettings(settings)).toBe("gpt-6.1-terra");
+  expect(getModelPolicyFromSettings(settings).allowedModels).toEqual(["gpt-6.1-terra"]);
+  vi.stubEnv("VITE_LITEASY_OPENAI_MODEL", "deployment-approved-model");
+  expect(getModelForSettings(settings)).toBe("deployment-approved-model");
+  expect(getModelPolicyFromSettings(settings).allowedModels).toEqual(["deployment-approved-model"]);
 });

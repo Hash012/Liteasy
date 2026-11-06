@@ -97,7 +97,7 @@ test("posts a typed model request to the backend endpoint", async () => {
   });
 
   const result = await client({
-    model: "gpt-5-mini",
+    model: "gpt-6.1-terra",
     prompt: "Explain BERT",
     provider: "openai"
   });
@@ -115,7 +115,7 @@ test("posts a typed model request to the backend endpoint", async () => {
   expect(requests).toEqual([
     {
       body: JSON.stringify({
-        model: "gpt-5-mini",
+        model: "gpt-6.1-terra",
         prompt: "Explain BERT",
         provider: "openai",
         source: "cloud_proxy"
@@ -141,7 +141,7 @@ test("forwards an artifact's structured output contract to the backend", async (
   });
 
   await client({
-    model: "gpt-5-mini",
+    model: "gpt-6.1-terra",
     outputFormat: {
       name: "liteasy_thin_reading",
       schema: { type: "object" },
@@ -175,7 +175,7 @@ test("throws a readable error when the backend returns a non-ok status", async (
 
   await expect(
     client({
-      model: "gpt-5-mini",
+      model: "gpt-6.1-terra",
       prompt: "Explain BERT",
       provider: "openai"
     })
@@ -198,7 +198,7 @@ test("shows the formal cloud stable message and trace id", async () => {
   });
 
   await expect(client({
-    model: "gpt-5-mini",
+    model: "gpt-6.1-terra",
     prompt: "Explain BERT",
     provider: "openai"
   })).rejects.toThrow("The model provider is temporarily unavailable.（trace_model_1）");
@@ -219,7 +219,7 @@ test("throws a readable error when the backend response shape is invalid", async
 
   await expect(
     client({
-      model: "gpt-5-mini",
+      model: "gpt-6.1-terra",
       prompt: "Explain BERT",
       provider: "openai"
     })
@@ -250,7 +250,7 @@ test("passes abort signals through to the model transport", async () => {
   });
 
   await client({
-    model: "gpt-5-mini",
+    model: "gpt-6.1-terra",
     prompt: "Explain cancellation",
     provider: "openai",
     signal: controller.signal
@@ -322,7 +322,7 @@ test("reports stable errors that occur after a model stream starts", async () =>
   });
 
   await expect(client({
-    model: "gpt-5-mini",
+    model: "gpt-6.1-terra",
     onDelta: () => {},
     prompt: "stream",
     provider: "openai"

@@ -61,7 +61,7 @@ if (provider === "openai") {
   if (process.env.OPENAI_BASE_URL) {
     env.OPENAI_BASE_URL = process.env.OPENAI_BASE_URL;
   }
-  env.VITE_LITEASY_OPENAI_MODEL = process.env.VITE_LITEASY_OPENAI_MODEL ?? "gpt-5.4-mini";
+  env.VITE_LITEASY_OPENAI_MODEL = process.env.VITE_LITEASY_OPENAI_MODEL ?? "gpt-6.1-terra";
 } else if (!process.env.DEEPSEEK_API_KEY) {
   throw new Error("DEEPSEEK_API_KEY must be configured in development/dev-cloud/.env.local");
 }

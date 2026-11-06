@@ -93,10 +93,10 @@ test("loads deployment-scoped model providers without exposing credentials", () 
     LITEASY_MODEL_DEEPSEEK_MODEL: "deepseek-v4-flash",
     LITEASY_MODEL_OPENAI_API_KEY: "openai-deployment-secret",
     LITEASY_MODEL_OPENAI_BASE_URL: "https://api.openai.com/v1",
-    LITEASY_MODEL_OPENAI_MODEL: "gpt-5-mini"
+    LITEASY_MODEL_OPENAI_MODEL: "gpt-6.1-terra"
   }));
 
-  assert.equal(config.models.providers.openai.model, "gpt-5-mini");
+  assert.equal(config.models.providers.openai.model, "gpt-6.1-terra");
   assert.equal(config.models.providers.deepseek.apiKey, "deepseek-deployment-secret");
   assert.equal(publicCloudConfig(config).modelProxy, "configured");
   assert.equal(JSON.stringify(publicCloudConfig(config)).includes("openai"), false);
@@ -127,12 +127,12 @@ test("rejects partial, insecure, or credential-bearing model provider configurat
   assert.throws(() => loadCloudConfig(validEnv({
     LITEASY_MODEL_OPENAI_API_KEY: "secret",
     LITEASY_MODEL_OPENAI_BASE_URL: "http://api.openai.com/v1",
-    LITEASY_MODEL_OPENAI_MODEL: "gpt-5-mini"
+    LITEASY_MODEL_OPENAI_MODEL: "gpt-6.1-terra"
   })), /must use HTTPS/);
   assert.throws(() => loadCloudConfig(validEnv({
     LITEASY_MODEL_OPENAI_API_KEY: "secret",
     LITEASY_MODEL_OPENAI_BASE_URL: "https://user:pass@models.example/v1?token=secret",
-    LITEASY_MODEL_OPENAI_MODEL: "gpt-5-mini"
+    LITEASY_MODEL_OPENAI_MODEL: "gpt-6.1-terra"
   })), /cannot contain credentials/);
 });
 

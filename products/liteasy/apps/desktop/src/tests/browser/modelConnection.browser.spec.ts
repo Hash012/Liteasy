@@ -30,7 +30,7 @@ test("configures a personal API and generates a chat answer without signing in",
   await page.getByRole("button", { name: "AI 与助手", exact: true }).click();
   await page.getByLabel("AI 接入方式").click();
   await page.getByRole("option", { name: /^自备 API key/ }).click();
-  await page.getByLabel("模型 ID", { exact: true }).fill("gpt-5-mini");
+  await page.getByLabel("模型 ID", { exact: true }).fill("gpt-6.1-terra");
   await page.getByLabel("API key", { exact: true }).fill("browser-test-only-key");
   await page.getByRole("button", { name: "保存并测试", exact: true }).click();
   await expect(page.getByLabel("测试响应")).toHaveValue("连接测试响应。");
