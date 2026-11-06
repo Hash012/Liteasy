@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import type { ModelTransportResponse } from "../models/modelHttpClient";
 import { readCloudServiceError } from "../network/cloudErrorMessage";
 import type { OrganizationRole } from "./organization.types";
@@ -56,7 +57,7 @@ function idempotencyKey(operation: string) {
 }
 
 async function defaultTransport(request: OrganizationActionTransportRequest): Promise<ModelTransportResponse> {
-  return fetch(request.url, {
+  return accountAuthenticatedFetch(request.url, {
     body: request.body,
     headers: request.headers,
     method: request.method

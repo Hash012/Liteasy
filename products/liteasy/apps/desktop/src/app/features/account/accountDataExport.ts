@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "./accountAuthenticatedFetch";
 import { strToU8, zipSync } from "fflate";
 import { isArtifactResult } from "../artifacts/artifactResultClient";
 import type { AgentArtifactResult } from "../artifacts/artifact.types";
@@ -154,7 +155,7 @@ export function createAccountDataExportClient(input: {
   download?: (archive: AccountDataExportArchive) => void;
 }) {
   const now = input.now ?? Date.now;
-  const transport = input.fetchImpl ?? fetch;
+  const transport = input.fetchImpl ?? accountAuthenticatedFetch;
   type Prepared = {
     binding: ReturnType<typeof captureAccountSessionRequest>;
     issuer: string;

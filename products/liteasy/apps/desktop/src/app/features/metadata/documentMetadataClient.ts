@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import type { ModelTransportResponse } from "../models/modelHttpClient";
 import { readCloudServiceError } from "../network/cloudErrorMessage";
 import type { DocumentMetadataSyncInput, DocumentMetadataSyncResult } from "./metadata.types";
@@ -53,7 +54,7 @@ function isDocumentMetadataPayload(payload: unknown): payload is DocumentMetadat
 async function defaultTransport(
   request: DocumentMetadataTransportRequest
 ): Promise<ModelTransportResponse> {
-  return fetch(request.url, {
+  return accountAuthenticatedFetch(request.url, {
     body: request.body,
     headers: request.headers,
     method: request.method

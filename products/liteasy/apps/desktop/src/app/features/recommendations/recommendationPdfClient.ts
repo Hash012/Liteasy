@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import { loadStoredAccountSession } from "../account/accountSessionStorage";
 import {
   downloadExternalPdf,
@@ -25,7 +26,7 @@ function isGrant(value: unknown): value is RecommendationPdfGrant {
 async function defaultTransport(request: Parameters<ModelTransport>[0]): Promise<ModelTransportResponse> {
   const sessionId = loadStoredAccountSession()?.sessionId;
   if (!sessionId) throw new Error("登录已失效，请重新登录后保存推荐文献。");
-  return fetch(request.url, {
+  return accountAuthenticatedFetch(request.url, {
     body: request.body,
     headers: { ...request.headers, Authorization: `Bearer ${sessionId}` },
     method: request.method,

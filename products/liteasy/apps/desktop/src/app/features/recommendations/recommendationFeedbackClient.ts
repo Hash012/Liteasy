@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import type { ModelTransportResponse } from "../models/modelHttpClient";
 import type { RecommendationItem } from "./recommendation.types";
 
@@ -15,7 +16,7 @@ export type RecommendationFeedbackTransport = (
 ) => Promise<ModelTransportResponse>;
 
 async function defaultTransport(request: RecommendationFeedbackTransportRequest) {
-  return fetch(request.url, {
+  return accountAuthenticatedFetch(request.url, {
     body: request.body,
     headers: request.headers,
     method: request.method

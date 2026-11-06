@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import type { GenerateAnswerInput, ModelGenerationResult } from "./modelGateway";
 import type { ModelExecutionTrace } from "./modelExecution";
 import { validateModelImages } from "./modelImages";
@@ -110,7 +111,7 @@ function buildExecutionTrace(
 }
 
 async function defaultTransport(request: ModelTransportRequest): Promise<ModelTransportResponse> {
-  return fetch(request.url, {
+  return accountAuthenticatedFetch(request.url, {
     body: request.body,
     headers: request.headers,
     method: request.method,
@@ -120,7 +121,7 @@ async function defaultTransport(request: ModelTransportRequest): Promise<ModelTr
 
 export function createBearerModelTransport({
   allowUnauthenticatedLocalDev = false,
-  fetchImpl = fetch,
+  fetchImpl = accountAuthenticatedFetch,
   getAccessToken
 }: BearerModelTransportInput): ModelTransport {
   return async (request) => {

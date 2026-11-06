@@ -19,6 +19,7 @@ type DesktopIdentityClientInput = {
   fetchImpl?: typeof fetch;
   invoke?: DesktopIdentityInvoke;
   isCurrent?: () => boolean;
+  refresh?: boolean;
 };
 
 function isTauriRuntime() {
@@ -131,7 +132,8 @@ export async function restoreSystemBrowserSession(input: DesktopIdentityClientIn
   const configuration = await loadDesktopIdentityConfiguration(input);
   if (input.isCurrent && !input.isCurrent()) throw new Error("oauth_session_changed");
   const session = await requireInvoke(input.invoke)<AccountSession>("restore_desktop_oauth_session", {
-    configuration
+    configuration,
+    ...(input.refresh ? { refresh: true } : {})
   });
   if (!session.userId?.trim()) throw new Error("oauth_verified_subject_missing");
   return { ...session, endpoint: input.endpoint.replace(/\/+$/, ""), issuer: configuration.issuer };

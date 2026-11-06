@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { accountActorStorageKey, captureAccountSessionRequest } from "../app/features/account/accountSessionBinding";
-import { clearStoredAccountSession, getAccountSessionGeneration, storeAccountSession } from "../app/features/account/accountSessionStorage";
+import { clearStoredAccountSession, getAccountSessionGeneration, replaceRefreshedAccountSession, storeAccountSession } from "../app/features/account/accountSessionStorage";
 
 const session = { email: "same-label@example.test", name: "Same label", expiresAt: "2099-01-01T00:00:00Z", endpoint: "https://api.example.test", issuer: "https://idp.example.test", userId: "verified-subject", sessionId: "private-token" };
 
@@ -26,4 +26,18 @@ test("a logout and same-token login still invalidate the former operation genera
   expect(getAccountSessionGeneration()).not.toBe(before);
   expect(before).toMatch(/^.+:\d+$/);
   expect(() => request.assertCurrent()).toThrow("账号或云服务已变化");
+});
+
+test("renewal keeps the original actor and in-flight operation generation", () => {
+  storeAccountSession(session);
+  const request = captureAccountSessionRequest(session.endpoint);
+  const generation = getAccountSessionGeneration();
+  replaceRefreshedAccountSession({ ...session, sessionId: "renewed-token" }, generation);
+  expect(getAccountSessionGeneration()).toBe(generation);
+  expect(() => request.assertCurrent()).not.toThrow();
+  expect(accountActorStorageKey(session, session.endpoint)).toBe(request.actorKey);
+  expect(() => replaceRefreshedAccountSession({ ...session, userId: "other" }, generation)).toThrow("oauth_session_changed");
+  clearStoredAccountSession();
+  storeAccountSession(session);
+  expect(() => replaceRefreshedAccountSession(session, generation)).toThrow("oauth_session_changed");
 });

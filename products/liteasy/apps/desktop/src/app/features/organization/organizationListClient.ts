@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import type { ModelTransportResponse } from "../models/modelHttpClient";
 import { readCloudServiceError } from "../network/cloudErrorMessage";
 import type { OrganizationList, OrganizationListInput, OrganizationRole } from "./organization.types";
@@ -39,7 +40,7 @@ function number(value: unknown, fallback = 0) {
 }
 
 async function defaultTransport(request: OrganizationListTransportRequest): Promise<ModelTransportResponse> {
-  return fetch(request.url, {
+  return accountAuthenticatedFetch(request.url, {
     body: request.body,
     headers: request.headers,
     method: request.method

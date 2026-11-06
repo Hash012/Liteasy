@@ -2819,7 +2819,7 @@ export function PdfReader({
         }
       } else if (current && currentOperation &&
         publicationIntentsRef.current.get(annotation.id) === (currentOperation === "retract" ? "private" : "public")) {
-        queueMicrotask(() => void applyPublication(current, currentOperation));
+        queueMicrotask(() => void applyPublication(current, currentOperation, false, undefined, explicitIntent));
       }
       return;
     }

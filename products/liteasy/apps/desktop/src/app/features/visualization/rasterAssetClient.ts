@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 export type RasterAssetBytes = {
   bytes: Uint8Array;
   mimeType: "image/png";
@@ -26,7 +27,7 @@ export const loadConfiguredRasterAsset: RasterAssetLoader = async (assetRef, sig
   if (!token) throw new Error("raster_asset_unauthorized");
   const endpoint = new URL(current.endpoint);
   if (!new Set(["http:", "https:"]).has(endpoint.protocol)) throw new Error("raster_asset_endpoint_invalid");
-  const response = await (current.fetchImpl ?? fetch)(
+  const response = await (current.fetchImpl ?? accountAuthenticatedFetch)(
     `${current.endpoint.replace(/\/+$/u, "")}/v1/account/visualization/assets/${match[1]}`,
     {
       headers: { Accept: "image/png", Authorization: `Bearer ${token}` },

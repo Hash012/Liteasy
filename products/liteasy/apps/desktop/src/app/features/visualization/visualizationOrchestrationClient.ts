@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import type {
   ThinReadingVisualizationGenerationRequest,
   ThinReadingVisualizationOmissionReason
@@ -96,7 +97,7 @@ function wait(milliseconds: number, signal: AbortSignal, setTimeoutImpl: typeof 
 
 export function createVisualizationOrchestrationClient({
   endpoint: endpointInput,
-  fetchImpl = fetch,
+  fetchImpl = accountAuthenticatedFetch,
   getAccessToken,
   getCapability,
   issuer,

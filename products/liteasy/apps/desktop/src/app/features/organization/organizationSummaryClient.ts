@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import { organizationAuditActionLabel, organizationMemberLabel } from "./organizationIdentityPresentation";
 import type { ModelTransportResponse } from "../models/modelHttpClient";
 import { readCloudServiceError } from "../network/cloudErrorMessage";
@@ -170,7 +171,7 @@ function normalizeSummary(value: unknown): OrganizationSummary {
 }
 
 async function defaultTransport(request: OrganizationSummaryTransportRequest): Promise<ModelTransportResponse> {
-  return fetch(request.url, {
+  return accountAuthenticatedFetch(request.url, {
     body: request.body,
     headers: request.headers,
     method: request.method

@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import type { AccountSession } from "../account/account.types";
 import type { ModelTransportResponse } from "../models/modelHttpClient";
 import type { AcademicProfile } from "./profile.types";
@@ -97,7 +98,7 @@ function isSnapshot(value: unknown): value is AcademicProfileSnapshot {
 async function defaultTransport(
   request: AcademicProfileTransportRequest
 ): Promise<ModelTransportResponse> {
-  return fetch(request.url, {
+  return accountAuthenticatedFetch(request.url, {
     body: request.body,
     headers: request.headers,
     method: request.method

@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import { hasReadableRecommendationMetadata } from "./recommendationMetadataValidation";
 import type { ModelTransportResponse } from "../models/modelHttpClient";
 import type { RecommendationItem } from "./recommendation.types";
@@ -110,7 +111,7 @@ function isClearPayload(payload: unknown): payload is RecommendationCacheClearRe
 async function defaultTransport(
   request: RecommendationCacheTransportRequest
 ): Promise<ModelTransportResponse> {
-  return fetch(request.url, {
+  return accountAuthenticatedFetch(request.url, {
     body: request.body,
     headers: request.headers,
     method: request.method

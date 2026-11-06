@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import { hasReadableRecommendationMetadata } from "./recommendationMetadataValidation";
 import type { ModelTransportResponse } from "../models/modelHttpClient";
 import { readCloudServiceError } from "../network/cloudErrorMessage";
@@ -113,7 +114,7 @@ function isRecommendationPayload(payload: unknown): payload is RecommendationPay
 async function defaultTransport(
   request: RecommendationTransportRequest
 ): Promise<ModelTransportResponse> {
-  return fetch(request.url, {
+  return accountAuthenticatedFetch(request.url, {
     body: request.body,
     headers: request.headers,
     method: request.method,

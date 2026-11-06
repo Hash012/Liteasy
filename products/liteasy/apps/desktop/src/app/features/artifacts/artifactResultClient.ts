@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import { researchDocumentSchema, researchDocumentMarkdown } from "../research-skills/researchDocument";
 import { artifactMetadataIssueCount, isArtifactPaperRef, projectArtifactMetadata } from "./artifactMetadataProjection";
 import type { AgentArtifactResult } from "./artifact.types";
@@ -71,7 +72,7 @@ export function createArtifactResultClient(input: {
   getBaseEndpoint: () => string;
   transport?: ArtifactResultTransport;
 }): ArtifactResultClient {
-  const transport = input.transport ?? fetch;
+  const transport = input.transport ?? accountAuthenticatedFetch;
   const getAccessToken = input.getAccessToken ?? (() => loadStoredAccountSession()?.sessionId);
   function captureRequest() {
     const token = requireAccessToken(getAccessToken);

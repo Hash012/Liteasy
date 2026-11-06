@@ -11,6 +11,7 @@ export function getAccountSessionGeneration() {
 }
 
 let inMemoryAccountSession: AccountSession | null = null;
+const currentSessionTokens = new Set<string>();
 
 function removeLegacyBrowserSession() {
   if (typeof window === "undefined" || !window.localStorage) return;
@@ -29,14 +30,36 @@ export function storeAccountSession(session: AccountSession) {
   if (!inMemoryAccountSession || ["sessionId", "endpoint", "issuer", "userId"].some((key) =>
     inMemoryAccountSession?.[key as keyof AccountSession] !== session[key as keyof AccountSession])) {
     accountSessionGeneration += 1;
+    currentSessionTokens.clear();
   }
   inMemoryAccountSession = { ...session, membershipTier };
+  currentSessionTokens.add(session.sessionId);
   return inMemoryAccountSession;
+}
+
+/** Rotate credentials within the same verified login, without invalidating its work. */
+export function replaceRefreshedAccountSession(session: AccountSession, generation: string) {
+  if (generation !== getAccountSessionGeneration() || !inMemoryAccountSession ||
+    !session.userId || !session.issuer || !session.endpoint ||
+    ["endpoint", "issuer", "userId"].some((key) =>
+      inMemoryAccountSession?.[key as keyof AccountSession] !== session[key as keyof AccountSession])) {
+    throw new Error("oauth_session_changed");
+  }
+  inMemoryAccountSession = { ...inMemoryAccountSession, ...session };
+  // Bound aliases retained for requests whose token was captured before renewal.
+  currentSessionTokens.add(session.sessionId);
+  if (currentSessionTokens.size > 32) currentSessionTokens.delete(currentSessionTokens.values().next().value!);
+  return inMemoryAccountSession;
+}
+
+export function isCurrentAccountSessionToken(token: string) {
+  return currentSessionTokens.has(token);
 }
 
 export function clearStoredAccountSession() {
   accountSessionGeneration += 1;
   inMemoryAccountSession = null;
+  currentSessionTokens.clear();
   removeLegacyBrowserSession();
 }
 

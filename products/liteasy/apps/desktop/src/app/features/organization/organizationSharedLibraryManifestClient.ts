@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import type { ModelTransportResponse } from "../models/modelHttpClient";
 import type {
   OrganizationSharedLibraryManifest,
@@ -75,7 +76,7 @@ function isManifestPayload(payload: unknown): payload is OrganizationSharedLibra
 async function defaultTransport(
   request: OrganizationSharedLibraryManifestTransportRequest
 ): Promise<ModelTransportResponse> {
-  return fetch(request.url, {
+  return accountAuthenticatedFetch(request.url, {
     body: request.body,
     headers: request.headers,
     method: request.method

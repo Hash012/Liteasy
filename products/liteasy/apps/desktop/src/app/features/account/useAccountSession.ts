@@ -10,8 +10,10 @@ import {
 } from "./accountSessionRuntime";
 import {
   clearStoredAccountSession,
+  getAccountSessionGeneration,
   loadSuppressLoginReminderPreference,
   loadStoredAccountSession,
+  replaceRefreshedAccountSession,
   storeAccountSession,
   storeSuppressLoginReminderPreference
 } from "./accountSessionStorage";
@@ -29,6 +31,7 @@ import {
   revokeSystemBrowserSession,
   type DesktopIdentityInvoke
 } from "./desktopIdentityClient";
+import { registerAccountSessionRefresher } from "./accountAuthenticatedFetch";
 
 type UseAccountSessionInput = {
   accountTransport?: AccountTransport;
@@ -54,6 +57,9 @@ export function useAccountSession({
   onSessionRestoredRef.current = onSessionRestored;
   const [accountSession, setAccountSession] = useState<AccountSession | null>(null);
   const [accountPending, setAccountPending] = useState(false);
+  const accountPendingRef = useRef(accountPending);
+  accountPendingRef.current = accountPending;
+  const refreshInFlight = useRef<{ generation: string; promise: Promise<void> } | null>(null);
   const [accountMessage, setAccountMessage] = useState<string | undefined>();
   const [authenticationMode, setAuthenticationMode] = useState<"development" | "oauth" | null>(null);
   const [shouldShowLoginReminder, setShouldShowLoginReminder] = useState(
@@ -66,6 +72,98 @@ export function useAccountSession({
     return () => requestGeneration.current === generation &&
       settingsRef.current()["models.control_plane_endpoint"] === endpoint;
   }
+
+  function invalidateSession() {
+    clearStoredAccountSession();
+    setAccountSession(null);
+    setAuthenticationMode(null);
+    setAccountMessage("登录会话已过期，请重新登录；本地资料仍可使用。");
+  }
+
+  async function refreshAccountSession(force = false): Promise<void> {
+    const stored = loadStoredAccountSession();
+    if (!stored || authenticationMode !== "oauth") return;
+    const generation = getAccountSessionGeneration();
+    if (refreshInFlight.current?.generation === generation) return refreshInFlight.current.promise;
+    if (accountPendingRef.current) throw new Error("oauth_session_changed");
+    if (!force && Date.parse(stored.expiresAt) > Date.now() + 60_000) return;
+    const request = requestGeneration.current;
+    const endpoint = settingsRef.current()["models.control_plane_endpoint"].replace(/\/+$/, "");
+    const isCurrent = () => requestGeneration.current === request &&
+      generation === getAccountSessionGeneration() &&
+      settingsRef.current()["models.control_plane_endpoint"].replace(/\/+$/, "") === endpoint;
+    if (stored.endpoint !== endpoint) {
+      invalidateSession();
+      throw new Error("oauth_session_configuration_mismatch");
+    }
+    const promise = (async () => {
+      try {
+        const renewed = await restoreSystemBrowserSession({
+          endpoint,
+          fetchImpl: desktopIdentityFetch,
+          invoke: desktopIdentityInvoke,
+          isCurrent,
+          refresh: true
+        });
+        if (!isCurrent()) throw new Error("oauth_session_changed");
+        if (renewed.issuer !== stored.issuer || renewed.userId !== stored.userId ||
+          !(Date.parse(renewed.expiresAt) > Date.now())) throw new Error("oauth_session_invalid");
+        setAccountSession(replaceRefreshedAccountSession(renewed, generation));
+        setAccountMessage("云账号会话有效。");
+      } catch (error) {
+        if (!isCurrent()) throw error;
+        const code = error instanceof Error ? error.message : String(error);
+        if (["oauth_session_expired", "oauth_session_not_found", "oauth_session_invalid",
+          "oauth_session_configuration_mismatch", "oauth_verified_subject_missing"].some((value) => code.includes(value))) {
+          invalidateSession();
+        } else if (!code.includes("oauth_session_changed")) {
+          // Keep the secure credential available for retries, but stop showing an expired login.
+          if (!(Date.parse(stored.expiresAt) > Date.now())) setAccountSession(null);
+          setAccountMessage("登录续期暂时失败，请检查网络；连接恢复后会自动重试，本地资料仍可使用。");
+        }
+        throw error;
+      }
+    })();
+    refreshInFlight.current = { generation, promise };
+    try { await promise; }
+    finally { if (refreshInFlight.current?.promise === promise) refreshInFlight.current = null; }
+  }
+
+  const refreshSessionRef = useRef(refreshAccountSession);
+  refreshSessionRef.current = refreshAccountSession;
+  useEffect(() => {
+    if (authenticationMode !== "oauth") return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const unregister = registerAccountSessionRefresher({
+      refresh: (force) => refreshSessionRef.current(force),
+      invalidate: invalidateSession
+    });
+    function schedule() {
+      if (stopped) return;
+      const session = loadStoredAccountSession();
+      if (!session) return;
+      const untilRefresh = Date.parse(session.expiresAt) - Date.now() - 60_000;
+      const delay = Number.isFinite(untilRefresh) ? Math.min(60_000, Math.max(15_000, untilRefresh)) : 15_000;
+      timer = setTimeout(() => {
+        void refreshSessionRef.current().catch(() => {}).finally(schedule);
+      }, delay);
+    }
+    const resume = () => { void refreshSessionRef.current().catch(() => {}); };
+    const visible = () => { if (document.visibilityState === "visible") resume(); };
+    window.addEventListener("focus", resume);
+    window.addEventListener("online", resume);
+    document.addEventListener("visibilitychange", visible);
+    schedule();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      unregister();
+      window.removeEventListener("focus", resume);
+      window.removeEventListener("online", resume);
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, [authenticationMode]);
 
   useEffect(() => {
     const isCurrent = beginRequest();
@@ -125,6 +223,8 @@ export function useAccountSession({
           const code = error instanceof Error ? error.message : String(error);
           if (code.startsWith("oauth_configuration_")) {
             setAccountMessage("账号服务配置错误，请检查服务端点和身份服务配置。");
+          } else if (code.includes("oauth_session_expired")) {
+            setAccountMessage("登录会话已过期，请重新登录；本地资料仍可使用。");
           } else if (!code.includes("oauth_session_not_found")) {
             setAccountMessage("暂时无法恢复云账号会话，请检查网络后重试；本地资料仍可使用。");
           }

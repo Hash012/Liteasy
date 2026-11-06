@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "./accountAuthenticatedFetch";
 import {
   generatedVisualizationModalities,
   type GeneratedVisualizationModality
@@ -41,7 +42,7 @@ export type AccountCapabilitiesTransport = (
 }>;
 
 async function defaultTransport(request: AccountCapabilitiesTransportRequest) {
-  return fetch(request.url, {
+  return accountAuthenticatedFetch(request.url, {
     cache: "no-store",
     headers: request.headers,
     method: request.method

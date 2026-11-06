@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import { loadStoredAccountSession } from "../account/accountSessionStorage";
 import { readCloudServiceError } from "../network/cloudErrorMessage";
 import { normalizeLiteratureRecord } from "./literatureRecord";
@@ -20,7 +21,7 @@ function apiUrl(endpoint: string, path: string) {
 
 export function createLiteratureAuthorityClient({
   endpoint,
-  fetchImpl = fetch,
+  fetchImpl = accountAuthenticatedFetch,
   getSessionId = () => loadStoredAccountSession()?.sessionId
 }: LiteratureAuthorityClientOptions) {
   async function request<T>(path: string, init: RequestInit): Promise<T> {

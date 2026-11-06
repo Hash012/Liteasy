@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import { captureAccountSessionRequest } from "../account/accountSessionBinding";
 import { CloudServiceError, readCloudServiceError } from "../network/cloudErrorMessage";
 import { cacheExternalPdf, readCachedPdf } from "./paperCacheClient";
@@ -146,7 +147,7 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
 
 function createBoundCloudLibraryStorageClient({
   endpoint,
-  fetchImpl = fetch,
+  fetchImpl = accountAuthenticatedFetch,
   sessionBinding
 }: CreateCloudLibraryStorageClientInput) {
   const binding = sessionBinding ?? captureAccountSessionRequest(endpoint);

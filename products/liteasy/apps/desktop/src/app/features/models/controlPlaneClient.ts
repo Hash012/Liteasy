@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import type { SettingsState } from "../settings/settings.types";
 import { readCloudServiceError } from "../network/cloudErrorMessage";
 import type { ModelTransportResponse } from "./modelHttpClient";
@@ -55,7 +56,7 @@ function isControlPlanePayload(payload: unknown): payload is ControlPlanePayload
 async function defaultTransport(
   request: ControlPlaneTransportRequest
 ): Promise<ModelTransportResponse> {
-  return fetch(request.url, {
+  return accountAuthenticatedFetch(request.url, {
     headers: request.headers,
     method: request.method
   });

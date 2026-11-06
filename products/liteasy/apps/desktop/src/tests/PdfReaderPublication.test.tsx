@@ -239,6 +239,7 @@ test("requeues a current publish revision when note editing races literature hin
 
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
   expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+    newPublication: true,
     annotation: expect.objectContaining({
       note: "Edited during publish hint collection",
       revision: 3

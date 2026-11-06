@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import type { ModelTransportResponse } from "../models/modelHttpClient";
 import type { OrganizationGovernanceInput, OrganizationGovernanceSummary } from "./organization.types";
 
@@ -76,7 +77,7 @@ function isGovernancePayload(payload: unknown): payload is OrganizationGovernanc
 async function defaultTransport(
   request: OrganizationGovernanceTransportRequest
 ): Promise<ModelTransportResponse> {
-  return fetch(request.url, {
+  return accountAuthenticatedFetch(request.url, {
     body: request.body,
     headers: request.headers,
     method: request.method

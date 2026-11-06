@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import { z } from "zod";
 import { thinReadingSyncPayload } from "../../../../../../../intuecho/packages/contracts/src/thinReadingSyncPayload.js";
 import type {
@@ -58,7 +59,7 @@ export async function lookupThinReadingPublications(input: {
       payloadDigest: sha256Hex(thinReadingSyncPayload(original)) });
   }
   assertActor();
-  const response = await fetch(`${input.actor.endpoint}/v1/thin-reading/annotations:lookup`, {
+  const response = await accountAuthenticatedFetch(`${input.actor.endpoint}/v1/thin-reading/annotations:lookup`, {
     method: "POST", headers: { Authorization: `Bearer ${input.sessionId}`, "Content-Type": "application/json" },
     body: JSON.stringify({ queries })
   });

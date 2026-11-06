@@ -493,8 +493,14 @@ pub async fn begin_desktop_oauth_login(
 #[tauri::command]
 pub async fn restore_desktop_oauth_session(
     configuration: DesktopIdentityConfiguration,
+    refresh: Option<bool>,
 ) -> Result<DesktopOAuthSession, String> {
-    let generation = begin_session_request()?;
+    // Renewal keeps running operations authorized; login/logout still fence late writes.
+    let generation = if refresh.unwrap_or(false) {
+        authorization_epoch()?
+    } else {
+        begin_session_request()?
+    };
     let issuer = validate_identity_configuration(&configuration)?;
     let mut stored = {
         let state = IDENTITY_STATE
@@ -530,7 +536,14 @@ pub async fn restore_desktop_oauth_session(
         .map_err(|_| "oauth_token_endpoint_missing".to_string())?
         .request_async(&http_client)
         .await
-        .map_err(|_| "oauth_session_refresh_failed".to_string())?;
+        .map_err(|error| match error {
+            openidconnect::RequestTokenError::ServerResponse(response)
+                if response.error().as_ref() == "invalid_grant" =>
+            {
+                "oauth_session_expired".to_string()
+            }
+            _ => "oauth_session_refresh_failed".to_string(),
+        })?;
     let _: CoreUserInfoClaims = client
         .user_info(
             token_response.access_token().to_owned(),
@@ -842,6 +855,7 @@ mod tests {
         assert!(authorize_device_session("a", "token-a").is_ok());
         assert!(authorize_device_session("a", "token-b").is_err());
         assert!(authorize_device_session("b", "token-a").is_err());
+        assert_eq!(authorization_epoch().unwrap(), generation);
         let rotated = session_from_token(
             "token-a-rotated".into(),
             Some(Duration::from_secs(900)),
@@ -857,6 +871,7 @@ mod tests {
             .unwrap();
         assert!(authorize_device_session("a", "token-a").is_err());
         assert!(authorize_device_session("a", "token-a-rotated").is_ok());
+        assert_eq!(authorization_epoch().unwrap(), generation);
         IDENTITY_STATE
             .lock()
             .unwrap()

@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import type { PdfAnnotation } from "../pdf/pdfAnnotationStorage";
 import { CloudServiceError, readCloudServiceError } from "../network/cloudErrorMessage";
 
@@ -61,7 +62,7 @@ async function jsonResponse<T>(response: Response): Promise<T> {
 export function createTeamAnnotationClient({
   accessToken,
   endpoint,
-  fetchImpl = fetch
+  fetchImpl = accountAuthenticatedFetch
 }: TeamAnnotationClientInput) {
   async function post<T>(path: string, body: Record<string, unknown>) {
     let response: Response;

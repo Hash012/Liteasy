@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import type { CommunitySourceReference, CommunitySourceRevision } from "./communitySourceReference";
 import { desktopAnnotationPublicationPayload } from "../../../../../../../intuecho/packages/contracts/src/desktopAnnotationPublicationPayload.js";
 import { sha256Hex } from "../paper-identity/paperIdentity";
@@ -27,7 +28,7 @@ function joinUrl(baseUrl: string, path: string) {
 
 export function createForumClient({
   apiBaseUrl = import.meta.env.VITE_FORUM_API_URL ?? "http://127.0.0.1:4040",
-  fetchImpl = fetch,
+  fetchImpl = accountAuthenticatedFetch,
   getSessionId,
   getActorBinding,
   sessionId

@@ -1,3 +1,4 @@
+import { accountAuthenticatedFetch } from "../account/accountAuthenticatedFetch";
 import { freezePaperIdentity } from "../paper-identity/paperIdentity";
 import { sha256Hex } from "../paper-identity/paperIdentity";
 import type { ForumAnnotationTarget, ForumLiteratureReference, PublicationAuthorProfile } from "../forum/forum.types";
@@ -279,7 +280,7 @@ export function createHttpIntuechoSyncAdapter(input: {
         syncableItems.map((item) => `${item.queueKey}\u0000${wireAnnotation(item).updatedAt}`).join("\u0001")
       )}`;
       const transport = input.transport ?? (async (request) => {
-        const response = await fetch(request.url, {
+        const response = await accountAuthenticatedFetch(request.url, {
           body: request.body,
           headers: request.headers,
           method: request.method
