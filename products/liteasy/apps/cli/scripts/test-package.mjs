@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import http from "node:http";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const directory = await mkdtemp(path.join(os.tmpdir(), "liteasy package "));
@@ -40,6 +40,27 @@ try {
     if (process.platform === "win32") {
       const powershell = await command("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "& $env:LITEASY_PACKAGE_EXECUTABLE --version --json"], directory, "", { LITEASY_PACKAGE_EXECUTABLE: path.join(directory, "node_modules", ".bin", "liteasy.cmd") });
       assert.equal(JSON.parse(powershell).result.version, "0.1.0");
+      const { readPrivateJson, writePrivateJson } = await import(pathToFileURL(path.join(path.dirname(main), "credentials.mjs")));
+      const aclFixture = path.join(directory, "ACL 配置 with spaces");
+      const file = path.join(aclFixture, "synthetic.json");
+      await writePrivateJson(file, { synthetic: true });
+      const allowEveryone = `
+$ErrorActionPreference = 'Stop'
+[Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
+$p = [Console]::In.ReadToEnd()
+$directory = [IO.Directory]::Exists($p)
+$access = [Security.AccessControl.AccessControlSections]::Access
+$acl = if ($directory) { [IO.Directory]::GetAccessControl($p, $access) } else { [IO.File]::GetAccessControl($p, $access) }
+$rule = [Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-1-0'), [Security.AccessControl.FileSystemRights]::Read, [Security.AccessControl.AccessControlType]::Allow)
+[void]$acl.AddAccessRule($rule)
+if ($directory) { [IO.Directory]::SetAccessControl($p, $acl) } else { [IO.File]::SetAccessControl($p, $acl) }
+`;
+      await command("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", allowEveryone], directory, file);
+      await assert.rejects(readPrivateJson(file), { code: "credential_file_unsafe" });
+      await command("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", allowEveryone], directory, aclFixture);
+      // Replacing the file also repairs a pre-existing explicit directory grant.
+      await writePrivateJson(file, { synthetic: "repaired" });
+      assert.deepEqual(await readPrivateJson(file), { synthetic: "repaired" });
     }
     await command(process.execPath, [main, "auth", "logout", "--json"], directory, "", env);
   } finally { await new Promise((resolve) => server.close(resolve)); }

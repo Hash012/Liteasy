@@ -32,6 +32,7 @@ export async function runProgram(program, args, input = "") {
 // Static C# and PowerShell only; credential data travels over stdin, never argv.
 const windowsVault = `
 $ErrorActionPreference = 'Stop'
+[Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
 $data = [Console]::In.ReadToEnd() | ConvertFrom-Json
 Add-Type -TypeDefinition @'
 using System;
@@ -64,14 +65,39 @@ switch ($data.action) {
 export function credentialKey(account) {
   return createHash("sha256").update(`${account.origin}\0${account.subject}`).digest("hex");
 }
+const windowsPrivateAcl = `
+$ErrorActionPreference = 'Stop'
+[Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
+$data = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+if ($data.action -eq 'restrict') {
+  $acl = [Security.AccessControl.DirectorySecurity]::new()
+  $acl.SetAccessRuleProtection($true, $false)
+  $inherit = [Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [Security.AccessControl.InheritanceFlags]::ObjectInherit
+  $rule = [Security.AccessControl.FileSystemAccessRule]::new($sid, [Security.AccessControl.FileSystemRights]::FullControl, $inherit, [Security.AccessControl.PropagationFlags]::None, [Security.AccessControl.AccessControlType]::Allow)
+  [void]$acl.AddAccessRule($rule)
+  [IO.Directory]::SetAccessControl($data.path, $acl)
+} elseif ($data.action -eq 'check') {
+  $acl = [IO.File]::GetAccessControl($data.path, [Security.AccessControl.AccessControlSections]::Access)
+  $rules = @($acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
+  if ($rules.Length -eq 0) { throw 'private file has no restricted ACL' }
+  foreach ($rule in $rules) {
+    if ($rule.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and $rule.IdentityReference.Value -ne $sid.Value) {
+      throw 'private file has another allowed principal'
+    }
+  }
+} else { throw 'invalid ACL action' }
+`;
+async function windowsAcl(file, action) {
+  return runProgram("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", windowsPrivateAcl], JSON.stringify({ path: file, action }));
+}
 async function secureDirectory(directory) {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const stat = await lstat(directory);
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw new CliError("config_path_unsafe", "配置目录必须是当前用户拥有的真实目录。", 8);
   if (process.platform === "win32") {
-    // Restrict inheritance and grant only the current SID. Use argument arrays for paths with spaces.
-    const sid = await runProgram("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "[Console]::Write([Security.Principal.WindowsIdentity]::GetCurrent().User.Value)"]);
-    await runProgram("icacls.exe", [directory, "/inheritance:r", "/grant:r", `*${sid}:(OI)(CI)F`]);
+    // Replace inherited and explicit grants in one ACL update; paths travel on stdin.
+    await windowsAcl(directory, "restrict");
   } else {
     if (stat.uid !== process.getuid()) throw new CliError("config_path_unsafe", "配置目录不属于当前用户。", 8);
     await chmod(directory, 0o700);
@@ -90,6 +116,10 @@ export async function readPrivateJson(file) {
   if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 256 * 1024 ||
     (process.platform !== "win32" && (stat.uid !== process.getuid() || (stat.mode & 0o077)))) {
     throw new CliError("credential_file_unsafe", "恢复或凭据文件必须仅允许当前用户读取。", 8);
+  }
+  if (process.platform === "win32") {
+    try { await windowsAcl(file, "check"); }
+    catch { throw new CliError("credential_file_unsafe", "恢复或凭据文件必须仅允许当前用户读取。", 8); }
   }
   try { return JSON.parse((await readFile(file, "utf8")).replace(/^\uFEFF/, "")); }
   catch { throw new CliError("config_invalid", "配置或恢复文件格式无效。", 2); }

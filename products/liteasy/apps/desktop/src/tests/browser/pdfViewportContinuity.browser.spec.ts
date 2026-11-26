@@ -48,15 +48,21 @@ test("mixed-size pages keep the reading line through zoom, resize and reopening"
   await expect.poll(async () => Math.abs(await offset(page, 6, 64) - readingPoint)).toBeLessThan(0.01);
   await page.setViewportSize({ width: 1200, height: 900 });
   await expect.poll(async () => Math.abs(await offset(page, 6, 64) - readingPoint)).toBeLessThan(0.01);
-  const savedOffset = await offset(page, 6);
-  await expect.poll(() => page.evaluate(() => new Promise<number | undefined>((resolve, reject) => {
-    const request = indexedDB.open("liteasy.objects.v1"); request.onerror = () => reject(request.error);
-    request.onsuccess = () => {
-      const db = request.result, read = db.transaction("records").objectStore("records").getAll();
-      read.onsuccess = () => { db.close(); resolve(read.result.find((row) => row.key === "reader-state/pdf/manual-das24a-preview")?.value.topRatio); };
-      read.onerror = () => { db.close(); reject(read.error); };
-    };
-  }))).toBeCloseTo(savedOffset, 2);
+  // Resize restoration can still settle after the 1% reading-line assertion.
+  // Compare persistence with the live viewport using the same 0.5% tolerance.
+  let savedOffset = 0;
+  await expect.poll(async () => {
+    savedOffset = await offset(page, 6);
+    const storedOffset = await page.evaluate(() => new Promise<number | undefined>((resolve, reject) => {
+      const request = indexedDB.open("liteasy.objects.v1"); request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const db = request.result, read = db.transaction("records").objectStore("records").getAll();
+        read.onsuccess = () => { db.close(); resolve(read.result.find((row) => row.key === "reader-state/pdf/manual-das24a-preview")?.value.topRatio); };
+        read.onerror = () => { db.close(); reject(read.error); };
+      };
+    }));
+    return storedOffset === undefined ? Infinity : Math.abs(storedOffset - savedOffset);
+  }).toBeLessThan(0.005);
   await page.reload(); await expect(page.getByLabel("当前页码")).toHaveValue("6", { timeout: 30_000 });
   await expect(page.getByLabel("PDF 显示比例 140%")).toBeVisible();
   await expect(page.locator('.pdf-page-shell[data-page="6"] .pdf-text-layer')).toContainText("PAGE 6");

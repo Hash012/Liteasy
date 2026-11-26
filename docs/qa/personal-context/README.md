@@ -31,9 +31,11 @@ API Docker 构建现在使用仓库根目录为 context，包含共享契约和�
 - SDK：HTTP 编码、host transport、错误映射、origin/路径限制和拒绝重定向。
 - CLI：JSON/stdout/stderr、凭据边界、两个目录同归组、两宿主安装/升级/卸载保留用户修改、Zotero 身份区分。
 - 真实 `.tgz` 在仓库外安装，验证 help/version、stdin 登录、doctor、logout；仅 Linux 本地结果，不替代 Windows 原生验收。
+- 本机 Windows Node 24.21.0/PowerShell 合成验证通过：中文/空格路径下拒绝额外显式授权的文件，重写时替换目录的完整 DACL，Credential Manager 写入/读取/清理后不可再读。系统凭据未进入参数或日志；Node 22.23.2 下同产物的安装与 ACL 回归由 Windows CI 单独验证。
 - 桌面：受影响组件、AppShell/原文件集成、旧 research-skills、Quick Ask、真实 workspace Context 工具循环、选定内容发布和冲突保留检查通过；`ci:smoke`、内容边界与生产构建通过。
 - `ci:ui` 与其 `ci:context` 分别通过 216/200 项测试；四个新界面已登记现有 UI inventory，选择器与修订折叠沿用已审核的公共控件。隔离的干净提交 worktree 通过 `ci:contracts`，生成契约和锁文件无漂移。
 - 浏览器：`personalContext.browser.spec.ts` 验证实际请求 expectedRevision、保留冲突编辑、来源可达性；已检查截图，运行生成物不提交。
+- 桌面 CI 一次暴露原有 PDF 恢复测试提前冻结 resize 中间偏移的竞态。持久化断言改为轮询当前视口与已保存位置的一致性，保留原来的 0.005 容差及重载恢复检查；没有放宽位置精度或修改 PDF 实现。
 - Mobile：14 个测试文件、28 项测试和前端生产构建通过。草稿重启、丢失响应使用原操作、guest 与账号切换均有合成验证；分享素材的标题和链接在本机阶段遵循云契约上限，完整正文保留。
 - Android：仓库 wrapper 指定的 Gradle 8.14.3、JDK 17，`compileUniversalDebugKotlin` 与 `testUniversalDebugUnitTest` 通过。此次 Kotlin 检查排除 Rust 构建，不声称 APK/真机已经通过。
 - Skills：六个 Codex 包通过 skill-creator 校验；六个 Claude 包保留并检查其专用 `disable-model-invocation` 字段。独立合成行为推演覆盖未知资源/指导、过时 CFP、来源夹带指令、计划与完成、超时恢复；属于文档/行为推演，不是两种实际宿主的端到端通过。
@@ -61,7 +63,7 @@ LITEASY_CONTEXT_TEST_DATABASE_URL='YOUR_TEST_DATABASE_URL' node --test products/
 
 额外运行 dev-cloud 全套时，大 JSON 请求断言得到 502 而非 413；在原始 `b46e359c` 隔离 worktree 同样复现。
 另一个 OpenAlex/arXiv 合并测试在首次全套运行失败，单独重跑通过，原始基线全套也通过该项。
-未修改这两处无关开发服务实现或放宽断言。系统凭据库、真实账号部署及跨设备用户试用仍需各自证据，不能从安装包 smoke、Linux 或静态校验推导通过。
+未修改这两处无关开发服务实现或放宽断言。其他系统凭据库、真实账号部署及跨设备用户试用仍需各自证据，不能从单一 Windows 用户环境、安装包 smoke、Linux 或静态校验推导通过。
 
 ## Pilot 待执行
 
