@@ -34,7 +34,7 @@ API Docker 构建现在使用仓库根目录为 context，包含共享契约和�
 - 桌面：受影响组件、AppShell/原文件集成、旧 research-skills、Quick Ask、真实 workspace Context 工具循环、选定内容发布和冲突保留检查通过；`ci:smoke`、内容边界与生产构建通过。
 - `ci:ui` 与其 `ci:context` 分别通过 216/200 项测试；四个新界面已登记现有 UI inventory，选择器与修订折叠沿用已审核的公共控件。隔离的干净提交 worktree 通过 `ci:contracts`，生成契约和锁文件无漂移。
 - 浏览器：`personalContext.browser.spec.ts` 验证实际请求 expectedRevision、保留冲突编辑、来源可达性；已检查截图，运行生成物不提交。
-- Mobile：14 个测试文件、27 项测试和前端生产构建通过。草稿重启、丢失响应使用原操作、guest 与账号切换均有合成验证。
+- Mobile：14 个测试文件、28 项测试和前端生产构建通过。草稿重启、丢失响应使用原操作、guest 与账号切换均有合成验证；分享素材的标题和链接在本机阶段遵循云契约上限，完整正文保留。
 - Android：仓库 wrapper 指定的 Gradle 8.14.3、JDK 17，`compileUniversalDebugKotlin` 与 `testUniversalDebugUnitTest` 通过。此次 Kotlin 检查排除 Rust 构建，不声称 APK/真机已经通过。
 - Skills：六个 Codex 包通过 skill-creator 校验；六个 Claude 包保留并检查其专用 `disable-model-invocation` 字段。独立合成行为推演覆盖未知资源/指导、过时 CFP、来源夹带指令、计划与完成、超时恢复；属于文档/行为推演，不是两种实际宿主的端到端通过。
 - Workflow：actionlint 与仓库 CI 脚本测试通过。Windows/Linux 同一产物安装、PostgreSQL/API 镜像等由 `.github/workflows/liteasy-context.yml` 验证。
@@ -46,7 +46,7 @@ API Docker 构建现在使用仓库根目录为 context，包含共享契约和�
 - 正式服务原有完整 PostgreSQL 集成脚本在独立临时集群、分离迁移/应用账号下通过，验证 29 项迁移、账号删除与组织并发。额外同步其迁移清单，保持精确断言。
 - 账号边界 CI 暴露后台界面测试过早读取加载中控件的竞态；改为等待实际控件，并保留主体/revision/reason 断言，通过真实 API 客户端额外断言序列化请求的幂等键。Admin 全套 22 项及生产构建通过。
 
-审阅入口：[PR #14](https://github.com/Hash012/Liteasy/pull/14)。以上运行针对同一实现代码；后续仅集成脚本、后台测试和验证记录修订仍按对应 CI 检查。
+审阅入口：[PR #14](https://github.com/Hash012/Liteasy/pull/14)。各运行对应链接中的提交；最新分支修订继续由对应 CI 验证。
 
 复跑真实数据库场景：先构建 CLI，再提供一个专用测试数据库 URL（需要创建临时 schema 的权限）：
 

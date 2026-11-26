@@ -9,6 +9,18 @@ const account: AccountStatus = { scope: "account:alice", subject: "alice", apiBa
 const who = { schemaVersion: "liteasy.context-api/v1", subject: "alice", actor: "mobile", readScopes: ["*"], writeScopes: ["*"], expiresAt: null, idempotencyWindowSeconds: 604800 };
 const receipt = (operationId: string) => ({ schemaVersion: "liteasy.context-api/v1", operationId, entryId: crypto.randomUUID(), revision: 1, scopeKey: "personal", action: "create", committedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 604800_000).toISOString() });
 describe("Idea persistence and submission", () => {
+  it("keeps a shared link's full content with a bounded title before creating an upload operation", async () => {
+    const repository = new BrowserLibraryRepository(`ideas-${crypto.randomUUID()}`);
+    const draft = createIdeaDraft(account.scope, { id: "share-link", title: "🧪".repeat(200), text: "", sourceUrl: "https://example.test/paper", state: "ready", receivedAt: new Date().toISOString(), collection: "收件箱", note: "" });
+    await saveIdeaDraft(repository, draft);
+    const saved = (await readIdeaDrafts(repository, account.scope))[0];
+    expect(Array.from(saved.title)).toHaveLength(160);
+    expect(saved.bodyMarkdown).toBe("https://example.test/paper");
+    expect(saved.shareId).toBe("share-link");
+    expect(saved.pending).toBeUndefined();
+    await expect(saveIdeaDraft(repository, { ...saved, title: "长".repeat(161) })).rejects.toThrow("160");
+    expect((await readIdeaDrafts(repository, account.scope))[0].title).toBe(saved.title);
+  });
   it("keeps local drafts across repository restarts and refuses guest upload", async () => {
     const name = `ideas-${crypto.randomUUID()}`;
     const repository = new BrowserLibraryRepository(name);

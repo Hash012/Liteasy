@@ -7,10 +7,10 @@ export function IdeaDraftView({ controls }: { controls: Controls }) {
   return <section className="form-stack" aria-label="Idea 草稿"><h1>Idea</h1>
     <p>想法先保存在本机；点击提交并收到回执后才会保存到云端。</p>
     <Button disabled={controls.busy} onClick={() => setEdit(controls.create())}>记录新想法</Button>
-    {edit ? <div className="form-stack"><Field label="标题（可选）"><Input value={edit.title} onChange={(_, data) => setEdit({ ...edit, title: data.value })} /></Field>
+    {edit ? <div className="form-stack"><Field label="标题（可选）"><Input maxLength={160} value={edit.title} onChange={(_, data) => setEdit({ ...edit, title: data.value })} /></Field>
       <Field label="想法"><Textarea rows={6} value={edit.bodyMarkdown} onChange={(_, data) => setEdit({ ...edit, bodyMarkdown: data.value })} /></Field>
       <Field label="归组"><Input value={edit.scopeKey} onChange={(_, data) => setEdit({ ...edit, scopeKey: data.value })} /></Field>
-      <Field label="来源链接（可选）"><Input value={edit.sourceUrl ?? ""} onChange={(_, data) => setEdit({ ...edit, sourceUrl: data.value || undefined })} /></Field>
+      <Field label="来源链接（可选）"><Input maxLength={4096} value={edit.sourceUrl ?? ""} onChange={(_, data) => setEdit({ ...edit, sourceUrl: data.value || undefined })} /></Field>
       <Button disabled={controls.busy || !edit.bodyMarkdown.trim()} onClick={async () => { if (await controls.save(edit)) setEdit(undefined); }}>保存到本机</Button><Button onClick={() => setEdit(undefined)}>关闭编辑</Button></div> : null}
     <ul>{controls.drafts.map((draft) => <li key={draft.id}><strong>{draft.title || draft.bodyMarkdown.slice(0, 60)}</strong><p>{draft.bodyMarkdown}</p>
       <p role="status">{draft.receipt ? `云端已保存 · ${draft.receipt.entryId} · 版本 ${draft.receipt.revision}` : draft.pending ? "待提交 · 上次结果尚未确认" : "本机已保存"}</p>

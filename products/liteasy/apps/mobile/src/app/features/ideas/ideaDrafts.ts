@@ -9,7 +9,7 @@ export type IdeaDraft = {
 };
 const key = "idea-drafts:v1";
 export function createIdeaDraft(ownerScope: string, capture?: SharedCapture): IdeaDraft {
-  return { id: crypto.randomUUID(), ownerScope, scopeKey: "personal", title: capture?.title ?? "", bodyMarkdown: capture?.text ?? capture?.sourceUrl ?? "",
+  return { id: crypto.randomUUID(), ownerScope, scopeKey: "personal", title: Array.from(capture?.title ?? "").slice(0, 160).join(""), bodyMarkdown: capture?.text?.trim() ? capture.text : capture?.sourceUrl ?? "",
     ...(capture?.sourceUrl ? { sourceUrl: capture.sourceUrl } : {}), ...(capture ? { shareId: capture.id } : {}), updatedAt: new Date().toISOString() };
 }
 export async function readIdeaDrafts(repository: LibraryRepository, scope: string) {
@@ -19,10 +19,11 @@ export async function readIdeaDrafts(repository: LibraryRepository, scope: strin
 }
 export async function saveIdeaDraft(repository: LibraryRepository, draft: IdeaDraft) {
   if (!draft.bodyMarkdown.trim() || Array.from(draft.bodyMarkdown).length > 12000 || !/^(personal|project\/[a-z0-9][a-z0-9-]{0,63})$/.test(draft.scopeKey)) throw new Error("请填写 12000 字以内的想法和有效归组。");
+  if (Array.from(draft.title).length > 160) throw new Error("标题不能超过 160 字，内容仍可保留在想法正文中。");
   if (draft.sourceUrl) {
     let url;
     try { url = new URL(draft.sourceUrl); } catch { throw new Error("来源链接必须是 HTTP 或 HTTPS 地址。"); }
-    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) throw new Error("来源链接必须是 HTTP 或 HTTPS 地址。");
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || draft.sourceUrl.length > 4096) throw new Error("来源链接必须是 4096 字以内的 HTTP 或 HTTPS 地址。");
   }
   const values = await readIdeaDrafts(repository, draft.ownerScope);
   const previous = values.find((item) => item.id === draft.id);
