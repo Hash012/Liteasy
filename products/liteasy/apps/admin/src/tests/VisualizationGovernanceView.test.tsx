@@ -2,10 +2,16 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vitest";
 import { VisualizationGovernanceView } from "../VisualizationGovernanceView";
-import type { AdminApiClient } from "../api";
+import { createAdminApiClient, type AdminApiClient } from "../api";
 
 test("saves a user entitlement with revision, reason, and idempotency", async () => {
   const user = userEvent.setup();
+  const wire: Record<string, unknown>[] = [];
+  const realClient = createAdminApiClient({ accessToken: "synthetic-admin", cloudUrl: "https://cloud.example.invalid", forumUrl: "https://forum.example.invalid",
+    fetchImpl: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      wire.push(JSON.parse(String(init?.body)));
+      return { ok: true, status: 200, json: async () => ({ entitlement: { allowed: true, explicitRequestsAllowed: false, allowedModalities: [], revision: 4 } }) } as Response;
+    }) });
   const api = {
     getVisualizationEntitlement: vi.fn(async () => ({ entitlement: {
       allowed: false,
@@ -17,24 +23,21 @@ test("saves a user entitlement with revision, reason, and idempotency", async ()
     listVisualizationProviderRoutes: vi.fn(async () => ({ routes: [] })),
     listVisualizationQuotaPolicies: vi.fn(async () => ({ policies: [] })),
     listVisualizationUsage: vi.fn(async () => ({ rows: [] })),
-    setVisualizationEntitlement: vi.fn(async () => ({ entitlement: {
-      allowed: true,
-      explicitRequestsAllowed: false,
-      allowedModalities: [],
-      revision: 4
-    } }))
+    setVisualizationEntitlement: vi.fn(realClient.setVisualizationEntitlement)
   } as unknown as AdminApiClient;
 
   render(<VisualizationGovernanceView api={api} principal={{ grants: [], roles: ["platform_admin"], subjectId: "admin-1" }} />);
   await waitFor(() => expect(api.listVisualizationProviderRoutes).toHaveBeenCalled());
-  await user.type(screen.getByLabelText("用户 ID"), "user-1");
+  await user.type(await screen.findByLabelText("用户 ID"), "user-1");
   await user.click(screen.getByRole("button", { name: "查询" }));
   await user.click(await screen.findByRole("switch", { name: "允许生成" }));
   await user.click(screen.getByRole("button", { name: "保存" }));
   expect(api.setVisualizationEntitlement).toHaveBeenCalledWith(expect.objectContaining({
     expectedRevision: 3,
-    subjectId: "user-1"
+    subjectId: "user-1",
+    reason: "管理员控制面板更新"
   }));
+  expect(wire[0]).toMatchObject({ expectedRevision: 3, subjectId: "user-1", allowed: true, reason: "管理员控制面板更新", idempotencyKey: expect.stringMatching(/^set-visualization-entitlement:/) });
 });
 
 test("fails closed for non platform administrators", () => {
@@ -54,7 +57,7 @@ test("filters advanced usage and audit data through the administrator API", asyn
 
   render(<VisualizationGovernanceView api={api} principal={{ grants: [], roles: ["platform_admin"], subjectId: "admin-1" }} />);
   await waitFor(() => expect(api.listVisualizationUsage).toHaveBeenCalled());
-  await user.type(screen.getByLabelText("使用量用户 ID"), "user-usage");
+  await user.type(await screen.findByLabelText("使用量用户 ID"), "user-usage");
   await user.click(screen.getByRole("button", { name: "刷新使用量" }));
   await waitFor(() => expect(api.listVisualizationUsage).toHaveBeenLastCalledWith({ limit: 50, subjectId: "user-usage" }));
   await user.type(screen.getByLabelText("审计用户 ID"), "user-audit");
@@ -127,7 +130,7 @@ test("creates a usable route with mutation-only fields and a valid initial revis
   } as unknown as AdminApiClient;
   render(<VisualizationGovernanceView api={api} principal={{ grants: [], roles: ["platform_admin"], subjectId: "admin-1" }} />);
   await waitFor(() => expect(api.listVisualizationProviderRoutes).toHaveBeenCalled());
-  await user.click(screen.getByRole("button", { name: "新增路由" }));
+  await user.click(await screen.findByRole("button", { name: "新增路由" }));
   await user.clear(screen.getByLabelText("路由 ID"));
   await user.type(screen.getByLabelText("路由 ID"), "route-new");
   await user.clear(screen.getByLabelText("Provider ID"));
@@ -167,7 +170,7 @@ test("does not save entitlement flags under a different subject after switching 
   } as unknown as AdminApiClient;
   render(<VisualizationGovernanceView api={api} principal={{ grants: [], roles: ["platform_admin"], subjectId: "admin-1" }} />);
   await waitFor(() => expect(api.listVisualizationProviderRoutes).toHaveBeenCalled());
-  const subject = screen.getByLabelText("用户 ID");
+  const subject = await screen.findByLabelText("用户 ID");
   await user.type(subject, "user-a");
   await user.click(screen.getByRole("button", { name: "查询" }));
   await screen.findByRole("switch", { name: "允许生成" });
@@ -188,7 +191,7 @@ test("looks up and creates a quota policy with an explicit timezone", async () =
   } as unknown as AdminApiClient;
   render(<VisualizationGovernanceView api={api} principal={{ grants: [], roles: ["platform_admin"], subjectId: "admin-1" }} />);
   await waitFor(() => expect(api.listVisualizationProviderRoutes).toHaveBeenCalled());
-  await user.type(screen.getByLabelText("配额用户 ID"), "user-outside-page");
+  await user.type(await screen.findByLabelText("配额用户 ID"), "user-outside-page");
   await user.click(screen.getByRole("button", { name: "查询配额" }));
   await screen.findByLabelText("user-outside-page 每日配额");
   await user.click(screen.getByRole("combobox", { name: "user-outside-page 时区" }));

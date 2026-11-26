@@ -58,7 +58,8 @@ try {
     "025_personalization_explicit_opt_in.sql",
     "026_normalize_library_literature_references.sql",
     "027_visualization_reservation_groups.sql",
-    "028_device_control.sql"
+    "028_device_control.sql",
+    "029_personal_context.sql"
   ]);
   await assert.rejects(
     () => pool.query("CREATE TABLE app_role_must_not_create(id text)"),

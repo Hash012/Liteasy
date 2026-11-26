@@ -39,6 +39,15 @@ API Docker 构建现在使用仓库根目录为 context，包含共享契约和�
 - Skills：六个 Codex 包通过 skill-creator 校验；六个 Claude 包保留并检查其专用 `disable-model-invocation` 字段。独立合成行为推演覆盖未知资源/指导、过时 CFP、来源夹带指令、计划与完成、超时恢复；属于文档/行为推演，不是两种实际宿主的端到端通过。
 - Workflow：actionlint 与仓库 CI 脚本测试通过。Windows/Linux 同一产物安装、PostgreSQL/API 镜像等由 `.github/workflows/liteasy-context.yml` 验证。
 
+远端证据：
+
+- [Personal context and CLI：PostgreSQL、API 镜像、同一产物的 Windows/Linux 安装通过](https://github.com/Hash012/Liteasy/actions/runs/45792725920)。Windows 包检查包含原生 PowerShell，测试明确使用受限文件凭据存储；不等同于所有用户环境的 Credential Manager 已验证。
+- [Android APK、ARM64/16 KiB 包装和原生测试构建通过](https://github.com/Hash012/Liteasy/actions/runs/45792725702)。未运行真实设备上的用户资料 pilot。
+- 正式服务原有完整 PostgreSQL 集成脚本在独立临时集群、分离迁移/应用账号下通过，验证 29 项迁移、账号删除与组织并发。额外同步其迁移清单，保持精确断言。
+- 账号边界 CI 暴露后台界面测试过早读取加载中控件的竞态；改为等待实际控件，并保留主体/revision/reason 断言，通过真实 API 客户端额外断言序列化请求的幂等键。Admin 全套 22 项及生产构建通过。
+
+审阅入口：[PR #14](https://github.com/Hash012/Liteasy/pull/14)。以上运行针对同一实现代码；后续仅集成脚本、后台测试和验证记录修订仍按对应 CI 检查。
+
 复跑真实数据库场景：先构建 CLI，再提供一个专用测试数据库 URL（需要创建临时 schema 的权限）：
 
 ```bash
@@ -52,7 +61,7 @@ LITEASY_CONTEXT_TEST_DATABASE_URL='YOUR_TEST_DATABASE_URL' node --test products/
 
 额外运行 dev-cloud 全套时，大 JSON 请求断言得到 502 而非 413；在原始 `b46e359c` 隔离 worktree 同样复现。
 另一个 OpenAlex/arXiv 合并测试在首次全套运行失败，单独重跑通过，原始基线全套也通过该项。
-未修改这两处无关开发服务实现或放宽断言。Windows、本机系统凭据库、API Docker 镜像、Android APK 与真实设备的证据分别记录，不能从 Linux 或静态校验推导通过。
+未修改这两处无关开发服务实现或放宽断言。系统凭据库、真实账号部署及跨设备用户试用仍需各自证据，不能从安装包 smoke、Linux 或静态校验推导通过。
 
 ## Pilot 待执行
 
