@@ -32,6 +32,7 @@ API Docker 构建现在使用仓库根目录为 context，包含共享契约和�
 - CLI：JSON/stdout/stderr、凭据边界、两个目录同归组、两宿主安装/升级/卸载保留用户修改、Zotero 身份区分。
 - 真实 `.tgz` 在仓库外安装，验证 help/version、stdin 登录、doctor、logout；仅 Linux 本地结果，不替代 Windows 原生验收。
 - 桌面：受影响组件、AppShell/原文件集成、旧 research-skills、Quick Ask、真实 workspace Context 工具循环、选定内容发布和冲突保留检查通过；`ci:smoke`、内容边界与生产构建通过。
+- `ci:ui` 与其 `ci:context` 分别通过 216/200 项测试；四个新界面已登记现有 UI inventory，选择器与修订折叠沿用已审核的公共控件。隔离的干净提交 worktree 通过 `ci:contracts`，生成契约和锁文件无漂移。
 - 浏览器：`personalContext.browser.spec.ts` 验证实际请求 expectedRevision、保留冲突编辑、来源可达性；已检查截图，运行生成物不提交。
 - Mobile：14 个测试文件、27 项测试和前端生产构建通过。草稿重启、丢失响应使用原操作、guest 与账号切换均有合成验证。
 - Android：仓库 wrapper 指定的 Gradle 8.14.3、JDK 17，`compileUniversalDebugKotlin` 与 `testUniversalDebugUnitTest` 通过。此次 Kotlin 检查排除 Rust 构建，不声称 APK/真机已经通过。
