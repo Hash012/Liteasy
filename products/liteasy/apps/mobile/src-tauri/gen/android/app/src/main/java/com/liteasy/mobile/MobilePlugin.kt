@@ -34,7 +34,12 @@ class MobilePlugin(private val activity: Activity) : Plugin(activity) {
                     }
                     "cancelLogin" -> { account.cancelLogin(); account.status() }
                     "logout" -> account.logout()
-                    "accountRequest" -> account.request(request.getString("path"), request.optString("method", "GET"), request.optJSONObject("body"))
+                    "accountRequest" -> {
+                        val path = request.getString("path")
+                        val expectedScope = request.optString("expectedScope").ifEmpty { null }
+                        if (path.startsWith("/v1/mobile/context")) require(expectedScope != null && expectedScope != "local") { "提交 Idea 前请明确选择已登录账号。" }
+                        account.request(path, request.optString("method", "GET"), request.optJSONObject("body"), expectedScope = expectedScope)
+                    }
                     "tasksSnapshot" -> MobileTasks(activity, scope).snapshot()
                     "taskResult" -> MobileTasks(activity, scope).result(request.getString("taskId"), request.optLong("updatedAt"))
                     "pairDesktop" -> MobileTasks(activity, scope).pair(request.getString("code"))

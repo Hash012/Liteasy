@@ -2,9 +2,10 @@ import { useState } from "react";
 import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Textarea } from "@fluentui/react-components";
 import type { CaptureEdit, SharedCapture } from "./shareInbox";
 
-export function ShareInboxView({ captures, busy, error, onSave, onDiscard, destination }: {
+export function ShareInboxView({ captures, busy, error, onSave, onDiscard, destination, onIdea }: {
   captures: SharedCapture[]; busy: boolean; error: string;
   destination?: string;
+  onIdea?: (capture: SharedCapture) => void;
   onSave: (id: string, input: CaptureEdit) => Promise<boolean>; onDiscard: (id: string) => Promise<boolean>;
 }) {
   const [selected, setSelected] = useState<SharedCapture>();
@@ -19,6 +20,7 @@ export function ShareInboxView({ captures, busy, error, onSave, onDiscard, desti
         setSelected(capture); setEdit({ title: capture.title, collection: capture.collection, note: capture.note });
       }}>归档</Button> : null}
       {capture.state !== "capturing" ? <Button disabled={busy} onClick={() => void onDiscard(capture.id)}>删除分享</Button> : null}
+      {capture.state === "ready" && (capture.text || capture.sourceUrl) && onIdea ? <Button disabled={busy} onClick={() => onIdea(capture)}>存为 Idea 草稿</Button> : null}
     </li>)}</ul>
     <Dialog open={!!selected} onOpenChange={(_, data) => { if (!data.open && !busy) setSelected(undefined); }}>
       <DialogSurface><DialogBody>

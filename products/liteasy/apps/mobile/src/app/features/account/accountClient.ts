@@ -9,5 +9,5 @@ export const accountClient = {
   cancel: () => nativeRequest<AccountStatus>("cancelLogin"),
   logout: () => nativeRequest<AccountStatus>("logout"),
   copyGuest: () => nativeRequest<{ copied: number; skipped: number }>("copyGuestLibrary"),
-  request: <T>(path: string, method = "GET", body?: Record<string, unknown>) => nativeRequest<T>("accountRequest", { path, method, body })
+  request: <T>(path: string, method = "GET", body?: Record<string, unknown>, expectedScope?: string) => nativeRequest<T>("accountRequest", { path, method, body, ...(expectedScope ? { scope: expectedScope, expectedScope } : {}) })
 };
