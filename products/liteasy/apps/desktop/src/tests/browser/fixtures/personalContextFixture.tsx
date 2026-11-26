@@ -1,0 +1,10 @@
+import { createRoot } from "react-dom/client";
+import { ApplicationThemeProvider } from "../../../app/features/theme/ApplicationThemeProvider";
+import { ResearchContextPanel } from "../../../app/features/research-context/ResearchContextPanel";
+import { ContextGrantPanel } from "../../../app/features/context-grants/ContextGrantPanel";
+import { storeAccountSession } from "../../../app/features/account/accountSessionStorage";
+import "../../../app/styles/app.css";
+import "../../../app/features/profile/personalCenter.css";
+const session = { endpoint: window.location.origin, issuer: window.location.origin, userId: "synthetic-user", sessionId: "fixture", name: "合成研究者", email: "fixture@example.invalid", expiresAt: "2030-01-01T00:00:00Z" };
+storeAccountSession(session);
+createRoot(document.getElementById("root")!).render(<ApplicationThemeProvider><main className="profile-page" style={{ maxWidth: 860, padding: 16 }}><ResearchContextPanel session={session} /><ContextGrantPanel session={session} /></main></ApplicationThemeProvider>);

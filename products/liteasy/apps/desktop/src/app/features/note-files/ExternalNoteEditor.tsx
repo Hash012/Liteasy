@@ -15,6 +15,7 @@ import type { ExternalEditingStatus } from "./obsidianWorkspace";
 import { ReferenceSourceContext, ResourceReferencesContext } from "../resource-links/ResourceReferencesContext";
 import { liteasyPath } from "../resource-filesystem/liteasyPath";
 import "./externalNoteEditor.css";
+import { ContextPublishButton } from "../research-context/contextPublication";
 
 export type ExternalNoteModel = {
   session?: { snapshot: NoteFileSnapshot; draft: string; editing: boolean; changed: boolean };
@@ -50,6 +51,9 @@ export function ExternalNoteEditor({ model }: { model: ExternalNoteModel }) {
       <MarkdownFontControl {...font} />
       {!live && <Button icon={session.editing ? <BookOpenRegular /> : <EditRegular />} onClick={() => model.setEditing(!session.editing)}>{session.editing ? "阅读" : "编辑"}</Button>}
       <Button appearance="primary" icon={<SaveRegular />} disabled={model.busy || !dirty} onClick={() => void model.save()}>保存</Button>
+      <ContextPublishButton selection={() => ({ title: session.snapshot.name, text: session.draft, basis: "user_authored",
+        source: { provider: "liteasy", origin: `note-mount:${session.snapshot.mountId}`, sourceId: session.snapshot.path,
+          ...(source ? { locator: source } : {}), ...(!dirty && session.snapshot.version ? { revision: session.snapshot.version } : {}), availability: "local_only" } })} />
       <Menu><MenuTrigger disableButtonEnhancement><IconAction density="compact" label="更多笔记操作" icon={<MoreHorizontalRegular />} /></MenuTrigger><MenuPopover><MenuList><MenuItem icon={<ArrowClockwiseRegular />} disabled={model.busy} onClick={() => dirty ? setConfirmReload(true) : void model.reload()}>重新载入</MenuItem></MenuList></MenuPopover></Menu>
     </header>
     {live ? <span role="status" className="markdown-save-status">{model.busy ? "正在保存…" : session.changed || model.error || model.status?.editing ? "自动保存已暂停 · 草稿保留，可手动保存" : dirty ? preference.autosave ? "等待自动保存…" : "未保存 · Ctrl+S 保存" : "已保存"}</span> : null}

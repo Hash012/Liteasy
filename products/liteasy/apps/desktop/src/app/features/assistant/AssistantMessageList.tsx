@@ -38,6 +38,7 @@ import { getAnswerDisplayText } from "./answerFormatter";
 import type { Paper } from "../workspace/workspace.types";
 import type { Citation } from "../retrieval/retrieval.types";
 import { AssistantUserMarkdown } from "./AssistantUserMarkdown";
+import { ContextPublishButton } from "../research-context/contextPublication";
 
 function ExpandableUserMessage({ value, contextTokens = [] }: { value: string; contextTokens?: AssistantContextToken[] }) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -332,6 +333,9 @@ export function AssistantMessageList({
               ) : null}
             </div>
             <ContextualActions label="消息操作" className="assistant-message-actions" menuOpen={actionMenu === message.id}>
+              <ContextPublishButton selection={() => ({ title: message.role === "user" ? "选定的对话陈述" : "选定的对话整理", text: captureInput(message).excerpt,
+                basis: message.role === "user" ? "user_statement" : "agent_summary",
+                source: { provider: "liteasy", origin: workbench?.scopeId ?? "local-conversation", sourceId: message.id, locator: `liteasy-conversation:${targetId ?? "unknown"}/${message.id}`, availability: "local_only" } })} />
               {message.role === "user" ? (
                 <>
                   <IconAction density="compact"

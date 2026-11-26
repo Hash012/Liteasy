@@ -10,6 +10,7 @@ import { PdfAnnotationMarkdown } from "./PdfAnnotationMarkdown";
 import { compilePdfAnnotationQuery, teamPdfAnnotation } from "./pdfAnnotationQuery";
 import { comparePdfAnnotations, pdfAnnotationSortLabels, type PdfAnnotationSort } from "./pdfAnnotationSort";
 import { PdfAnnotationSortPicker } from "./PdfAnnotationSortPicker";
+import { ContextPublishButton } from "../research-context/contextPublication";
 
 import { PdfAnnotationFilters, emptyPdfAnnotationFacets, matchesPdfAnnotationFacets, pdfAnnotationKindLabels as labels } from "./PdfAnnotationFilters";
 export function PdfAnnotationsOverview({ annotations, teamAnnotations, paperIdentity, searchMetadata, error, onNavigate, onClose }: {
@@ -54,6 +55,10 @@ export function PdfAnnotationsOverview({ annotations, teamAnnotations, paperIden
         {annotation.quickAsk ? <><strong><SearchHighlight text={annotation.quickAsk.question} query={query} /></strong><PdfAnnotationMarkdown value={annotation.quickAsk.answer} /></> : null}
         {annotation.review ? <PdfAnnotationMarkdown value={annotation.review.text} /> : null}
         {annotation.note ? <PdfAnnotationMarkdown value={annotation.note} images={annotation.images} /> : <p className="pdf-overview-muted">{annotation.kind === "ink" ? "手绘批注，点击定位原文查看笔迹。" : annotation.kind === "text" ? "空白文本框" : "未添加备注"}</p>}
+        <ContextPublishButton selection={() => ({ title: `第 ${annotation.page} 页批注`, text: [annotation.excerpt ? `## 资料摘录\n${annotation.excerpt}` : "", annotation.note ? `## 批注笔记\n${annotation.note}` : "",
+          annotation.quickAsk ? `## AI 回答\n${annotation.quickAsk.answer}` : "", annotation.review ? `## AI 评阅\n${annotation.review.text}` : ""].filter(Boolean).join("\n\n"),
+          basis: annotation.quickAsk || annotation.review ? "agent_summary" : annotation.note ? "user_authored" : "source_excerpt",
+          source: { provider: "liteasy", origin: "local-pdf-annotation", sourceId: annotation.id, ...(annotation.revision !== undefined ? { revision: String(annotation.revision) } : {}), locator: `page:${annotation.page}`, availability: "local_only" } })} />
       </li>)}</ol>
       {filtered.length > limit ? <Button onClick={() => setLimit((value) => value + 80)}>显示更多批注（剩余 {filtered.length - limit} 条）</Button> : null}
     </div>

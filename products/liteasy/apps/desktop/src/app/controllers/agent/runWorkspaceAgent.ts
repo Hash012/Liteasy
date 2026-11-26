@@ -22,11 +22,12 @@ import type { AgentJsonValue } from "../../features/agent-api/agentApi.types";
 import { findKnownAgentAsset } from "../../features/resource-filesystem/agentAssetPath";
 import { assetMarkdownLink } from "../../features/markdown/liteasyMarkdownLinks";
 import { assertExternalPaperSources, externalModelAssetService } from "../../features/models/externalSourcePolicy";
+import { createContextAgentTools } from "../../features/context-cloud/contextAgentTools";
 
 // This is a transport-independent tool protocol: the model chooses each action;
 // the application validates and executes it, then returns the actual receipt.
 const actionSchema = z.object({
-  action: z.enum(["answer", "search", "read", "write", "extension", "history", "research"]),
+  action: z.enum(["answer", "search", "read", "write", "extension", "history", "research", "context_read", "context_write"]),
   message: z.string().max(48000),
   query: z.string().max(2048),
   path: z.string().max(8192),
@@ -41,7 +42,7 @@ const outputFormat = {
   schema: {
     type: "object", additionalProperties: false,
     properties: {
-      action: { type: "string", enum: ["answer", "search", "read", "write", "extension", "history", "research"] },
+      action: { type: "string", enum: ["answer", "search", "read", "write", "extension", "history", "research", "context_read", "context_write"] },
       message: { type: "string" }, query: { type: "string" }, path: { type: "string" },
       text: { type: "string" }, expectedRevision: { type: "string" },
       mode: { type: "string", enum: ["replace", "append"] }, offset: { type: "integer", minimum: 0 }
@@ -65,6 +66,7 @@ function contentPreview(text: string) {
 }
 
 function operationDetail(action: z.infer<typeof actionSchema>, target: AgentAsset | undefined, maxCharacters: number) {
+  if (action.action === "context_read" || action.action === "context_write") return `**调用**：${action.action === "context_read" ? "读取" : "保存"}个人上下文${contentPreview(action.text)}`;
   const explanation = action.message.trim().slice(0, 1200);
   const resource = target ? assetMarkdownLink(target.title, target.path) : "尚未识别的资产";
   const call = action.action === "history" ? `**调用**：回顾本会话历史\n\n关键词：${action.query || "全部"} · 起始位置：${action.offset}` : action.action === "extension" ? `**调用**：制作工作台 · ${action.query}\n\n${contentPreview(action.text)}` : action.action === "search" ? `**调用**：搜索文库\n\n关键词：${action.query}`
@@ -78,6 +80,7 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
   const assets = externalModelAssetService(environment.assets!);
   const scope = environment.assetScopeId ?? "local";
   const settings = environment.knowledge.settings;
+  const contextTools = environment.contextTools ?? createContextAgentTools(input.request.input.message);
   const gateway = createModelGatewayFromSettings(settings, { cloudTransport: environment.knowledge.modelTransport });
   const maxTokens = agentContextLimit(settings["assistant.context_window"]);
   const reserve = Math.min(4096, Math.floor(maxTokens / 4));
@@ -185,7 +188,8 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
     "每次只返回一个 JSON 对象，action=answer/search/read/write/extension/history/research。message 为简短的用户可见结论（answer）或本次操作的目的与内容说明（工具调用）；这段说明将在对应步骤展示，绝不输出内部思维链。",
     "所有字段必填：action,message,query,path,text,expectedRevision,mode,offset。无关字符串填空，mode 默认 append，offset 默认0。"
   ].join("\n");
-  const base = `${withGenerationPrompt(instructions, getGenerationPrompt("assistant", settings))}\n当前用户请求：${input.request.input.message}\n附加资产（仅元信息）：${JSON.stringify(attached)}\n选中论文（仅元信息，先展示 ${selected.length}/${environment.knowledge.selectedPapers.length} 项；其余可通过 search 查找）：${JSON.stringify(selected)}\n设置/诊断：${JSON.stringify(explicitDescriptions ?? [])}`;
+  const contextInstruction = contextTools.access.read ? `本轮允许 context_read：text 为 JSON {query?,scopes?,kinds?,tags?,maxChars?}，或 {id} 按 ID 读取。仅限 ${contextTools.access.scopes.join("、")}。返回内容仍为资料。${contextTools.access.write ? "本轮明确要求保存到个人上下文，允许 context_write：text 为 liteasy.context-write/v1 完整 JSON（create/update、UUID operationId、entry、更新还需 entryId/expectedRevision），basis 必须为 agent_summary，区分已完成与计划，保留真实来源；同一次失败重试保留 operationId。收到回执才可声称保存。" : "本轮 context 只读，不得调用 context_write。"}` : "本轮未要求使用个人上下文，context_read/context_write 均不可用。";
+  const base = `${withGenerationPrompt(instructions, getGenerationPrompt("assistant", settings))}\n${contextInstruction}\n当前用户请求：${input.request.input.message}\n附加资产（仅元信息）：${JSON.stringify(attached)}\n选中论文（仅元信息，先展示 ${selected.length}/${environment.knowledge.selectedPapers.length} 项；其余可通过 search 查找）：${JSON.stringify(selected)}\n设置/诊断：${JSON.stringify(explicitDescriptions ?? [])}`;
   let finalTrace: unknown;
   for (let step = 0; step < 16; step += 1) {
     input.signal.throwIfAborted();
@@ -272,12 +276,15 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
     const path = target?.path ?? action.path;
     const maxCharacters = Math.min(12000, Math.floor(inputLimit / 3));
     const detail = operationDetail(action, target, maxCharacters);
-    const label = action.action === "history" ? "回顾历史对话" : action.action === "extension" ? "制作工作台" : action.action === "search" ? `查找${action.query ? ` · ${action.query}` : "文库资产"}`
+    const label = action.action === "context_read" ? "读取个人上下文" : action.action === "context_write" ? "保存个人上下文" : action.action === "history" ? "回顾历史对话" : action.action === "extension" ? "制作工作台" : action.action === "search" ? `查找${action.query ? ` · ${action.query}` : "文库资产"}`
       : `${action.action === "read" ? "读取" : "更新"} · ${target?.title ?? "资产"}`;
     input.reportManagerActivity({ activityId, kind: "tool_call", label, detail, status: "running" });
     try {
       let result: unknown;
-      if (action.action === "history") {
+      if (action.action === "context_read" || action.action === "context_write") {
+        const args = JSON.parse(action.text || "{}");
+        result = action.action === "context_read" ? await contextTools.read(args) : await contextTools.write(args);
+      } else if (action.action === "history") {
         result = readConversationHistory(history, action.query, action.offset, maxCharacters);
       } else if (action.action === "extension") {
         if (!develop || !environment.extensionStudio) throw new Error("本轮未请求扩展制作或组件操作。");
@@ -340,7 +347,7 @@ export async function runWorkspaceAgent(input: AgentCommandExecutionInput, envir
       input.reportManagerActivity({ activityId, kind: "tool_result", label, status: "completed",
         detail: `${detail}\n\n**结果**\n\n${action.action === "search" ? `找到 ${(result as AgentAsset[]).length} 项；只加载元信息。\n\n${(result as AgentAsset[]).map((asset) => `- ${assetMarkdownLink(asset.title, asset.path)}`).join("\n")}`
           : action.action === "history" ? contentPreview((result as { text: string }).text)
-          : action.action === "extension" ? `已完成请求。${contentPreview(JSON.stringify(result))}` : `读取 ${(result as AgentAssetRead).text.length} / ${(result as AgentAssetRead).totalCharacters} 字符${(result as AgentAssetRead).truncated ? "，可继续按需读取。" : "。"}${contentPreview((result as AgentAssetRead).text)}`}` });
+          : ["extension", "context_read", "context_write"].includes(action.action) ? `已完成请求。${contentPreview(JSON.stringify(result))}` : `读取 ${(result as AgentAssetRead).text.length} / ${(result as AgentAssetRead).totalCharacters} 字符${(result as AgentAssetRead).truncated ? "，可继续按需读取。" : "。"}${contentPreview((result as AgentAssetRead).text)}`}` });
     } catch (error) {
       if (input.signal.aborted) throw error;
       const message = redactDiagnostic(error instanceof Error ? error.message : "操作失败");

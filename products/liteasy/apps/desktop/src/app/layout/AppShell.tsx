@@ -193,6 +193,8 @@ import { resolveReaderPaper } from "../features/library/cachedReaderPapers";
 import { createCloudLibraryStorageClient } from "../features/library/cloudLibraryStorageClient";
 import { useWorkspaceSelectionController } from "../controllers/useWorkspaceSelectionController";
 import { useCloudAccountController } from "../controllers/useCloudAccountController";
+import { useContextPublicationController } from "../controllers/useContextPublicationController";
+import { ContextPublicationContext, ContextPublicationDialog } from "../features/research-context/contextPublication";
 import { useArtifactWorkflowController } from "../controllers/useArtifactWorkflowController";
 import { useArtifactExportController } from "../controllers/useArtifactExportController";
 import { useKnowledgeSyncController } from "../controllers/useKnowledgeSyncController";
@@ -2734,6 +2736,7 @@ export function AppShell({
 
   usePickerReaderActivity({ scope: objectWorkbench.repository.scopeId, activePaperId: activeReaderPaper?.id, title: activeReaderPaper?.title, visible: workspaceShell.activeSurfaceId === `pdf-${activeReaderPaper?.id}` });
 
+  const contextPublication = useContextPublicationController(accountSession);
   const aiWorkbench = useAiWorkbenchController({
     scopeId: objectWorkbench.repository.scopeId,
     papers: workspaceState.papers,
@@ -2759,6 +2762,8 @@ export function AppShell({
 
   return (
     <GenerationPromptContext.Provider value={settingsState}>
+    <ContextPublicationContext.Provider value={contextPublication.open}>
+    <ContextPublicationDialog model={contextPublication.model} />
     <LocalMcpContext.Provider value={localMcp}>
     <DeviceControlContext.Provider value={deviceControl}>
     <WorkbenchCommandAvailabilityContext.Provider value={commandAvailability}>
@@ -2975,6 +2980,7 @@ export function AppShell({
     </WorkbenchCommandAvailabilityContext.Provider>
     </DeviceControlContext.Provider>
     </LocalMcpContext.Provider>
+    </ContextPublicationContext.Provider>
     </GenerationPromptContext.Provider>
   );
 }

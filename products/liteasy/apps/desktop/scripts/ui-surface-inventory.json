@@ -129,10 +129,14 @@
         "handleToggleFavoriteMessage"
       ],
       "interactions": [
-        "AssistantComposer"
+        "AssistantComposer",
+        "Popover",
+        "PopoverSurface",
+        "PopoverTrigger"
       ],
       "styles": [
-        "../../features/assistant/assistantView.css"
+        "../../features/assistant/assistantView.css",
+        "../../features/assistant/assistantCompact.css"
       ],
       "migration": "product-primitives",
       "disclosure": {
@@ -1224,6 +1228,34 @@
         "infoPopover": false,
         "filterPopover": false,
         "optionPicker": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
+      "path": "src/app/features/context-grants/ContextGrantPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "symbols": [
+        "ContextGrantPanel",
+        "run",
+        "refresh",
+        "create"
+      ],
+      "interactions": [],
+      "styles": [],
+      "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
         "commandMenu": false,
         "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
         "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
@@ -5278,6 +5310,94 @@
       "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
     },
     {
+      "path": "src/app/features/research-context/PublishProfilePanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "symbols": [
+        "PublishProfilePanel"
+      ],
+      "interactions": [],
+      "styles": [],
+      "migration": "existing-Fluent-adapter",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": false,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
+      "path": "src/app/features/research-context/ResearchContextPanel.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "symbols": [
+        "sourceLink",
+        "ResearchContextPanel",
+        "run",
+        "load",
+        "choose",
+        "write"
+      ],
+      "interactions": [],
+      "styles": [],
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": true,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
+      "path": "src/app/features/research-context/contextPublication.tsx",
+      "batch": "M6",
+      "owner": "M6 surface owner / shared UI review",
+      "symbols": [
+        "ContextPublishButton",
+        "ContextPublicationDialog"
+      ],
+      "interactions": [
+        "Dialog",
+        "DialogActions",
+        "DialogBody",
+        "DialogContent",
+        "DialogSurface",
+        "DialogTitle"
+      ],
+      "styles": [],
+      "migration": "product-primitives",
+      "disclosure": {
+        "contextualActions": false,
+        "semanticSection": false,
+        "infoPopover": false,
+        "filterPopover": false,
+        "optionPicker": true,
+        "commandMenu": false,
+        "ownership": "Primary actions, active values and risk states remain host-owned; secondary controls use explicit disclosure",
+        "runtimeAcceptance": "Requires per-surface browser evidence; static inventory is not acceptance"
+      },
+      "themeOwner": "ApplicationThemeProvider + productPrimitives.css",
+      "retainedContracts": "Existing controller, storage, authorization, ContentView and ExportDocument ownership unchanged",
+      "reviewGate": "scripts/check-ui-boundaries.mjs exact AST/CSS exceptions; browser surface matrix",
+      "releaseReview": "QAU-10; current platform results recorded separately, migration marker is not visual acceptance"
+    },
+    {
       "path": "src/app/features/research-loop/ResearchWorkbench.tsx",
       "batch": "M5",
       "owner": "M5 surface owner / shared UI review",
@@ -7339,6 +7459,7 @@
       "interactions": [
         "AiWorkbenchDialog",
         "AppDialogs",
+        "ContextPublicationDialog",
         "GlobalSearchDialog",
         "WorkbenchCommandsDialog",
         "button"

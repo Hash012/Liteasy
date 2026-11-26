@@ -5,6 +5,7 @@ import { useMarkdownEditing } from "../markdown/MarkdownEditingContext";
 import { useMarkdownAutosave } from "../markdown/useMarkdownAutosave";
 import { visualEditorDrafts } from "../visual-blocks/visualEditorDrafts";
 import type { NotesItem, NotesViewModel } from "./notes.types";
+import { ContextPublishButton } from "../research-context/contextPublication";
 
 export function NotesInlineEditor({ item, model, path }: { item: NotesItem; model: NotesViewModel; path: string }) {
   const preference = useMarkdownEditing();
@@ -40,6 +41,11 @@ export function NotesInlineEditor({ item, model, path }: { item: NotesItem; mode
     <MarkdownEditor documentKey={path} label="笔记正文" value={draft} onChange={change} previewProps={{ paperAnchors: item.paperAnchors ?? item.object?.paperAnchors }} />
     <div className="notes-item-actions"><span role="status" className="markdown-save-status">{busy ? "正在保存…" : error || failure ? "自动保存已暂停 · 草稿保留" : saved === draft ? "已保存" : preference.autosave ? "等待自动保存…" : "未保存"}</span>
       <Button size="small" disabled={busy || Boolean(error) || draft === saved} onClick={() => void save()}>保存</Button>
+      <ContextPublishButton selection={() => ({ title: item.title, text: draft, basis: "user_authored", source: {
+        provider: "liteasy", origin: "local-notes", sourceId: item.object?.objectId ?? path, locator: path,
+        ...(draft === item.text && revision ? { revision } : {}),
+        ...(draft === item.text && item.object ? { nativeRef: { objectId: item.object.objectId, revision: String(item.object.revision) } } : {}), availability: "local_only"
+      } })} />
       {error || failure ? <Button size="small" onClick={() => setConfirm(true)}>重新载入</Button> : null}</div>
     {error || failure ? <p role="alert">{error || failure}</p> : null}
     {confirm ? <div><p>重新载入会放弃此处草稿，请先复制需要保留的内容。</p><Button onClick={() => { visualEditorDrafts.remove(path); setDraft(item.text); setSaved(item.text); setError(""); setConfirm(false); }}>放弃修改并载入</Button><Button onClick={() => setConfirm(false)}>保留草稿</Button></div> : null}

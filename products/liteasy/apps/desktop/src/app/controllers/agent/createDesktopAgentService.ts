@@ -80,6 +80,7 @@ type KnowledgeEnvironment = Omit<
 >;
 
 export type DesktopAgentEnvironment = {
+  contextTools?: ReturnType<typeof import("../../features/context-cloud/contextAgentTools").createContextAgentTools>;
   executeResearchTurn?: (input: AgentCommandExecutionInput) => Promise<AgentKnowledgeExecutionResult>;
   personalization?: { summary?: string; response?: string };
   assets?: AgentAssetService;
