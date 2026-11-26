@@ -1,0 +1,394 @@
+{
+  "schemaVersion": "liteasy.context-implementation/v1",
+  "date": "2026-11-26",
+  "timezone": "Asia/Shanghai",
+  "planVersion": "0.2",
+  "sourceArchive": "Liteasy-Personal-Context-SPEC-2026-11-26.zip",
+  "sourceArchiveSha256": "06b3627a630eaca770ef162e2fafd16c0c9653314721503cc6e44f23426fcdf3",
+  "implementationBase": "b46e359c",
+  "branch": "feat/personal-context-v02",
+  "notes": [
+    "IDs are specification plan IDs, not GitHub PR numbers.",
+    "PR-01–23 code is implemented; review does not assert device, deployment or host acceptance.",
+    "PR-24 requires selected real research material, actual device/host versions and user feedback."
+  ],
+  "pullRequests": [
+    {
+      "id": "PR-01",
+      "title": "确定轻量 ContextEntry 契约与 ADR",
+      "module": "core-api",
+      "milestone": "M0",
+      "dependsOn": [],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-02",
+      "title": "实现 ContextEntry 持久化、修订与幂等",
+      "module": "core-api",
+      "milestone": "M0",
+      "dependsOn": [
+        "PR-01"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-03",
+      "title": "开放受鉴权的 Context CRUD 与基础列表",
+      "module": "core-api",
+      "milestone": "M0",
+      "dependsOn": [
+        "PR-02"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-04",
+      "title": "提供 Context 专用凭据与最小账号管理入口",
+      "module": "core-api",
+      "milestone": "M0",
+      "dependsOn": [
+        "PR-03"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-05",
+      "title": "建立纯 HTTP SDK 与独立 CLI 包骨架",
+      "module": "cli",
+      "milestone": "M0",
+      "dependsOn": [
+        "PR-01"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-06",
+      "title": "交付 CLI 登录、条目读写与 doctor",
+      "module": "cli",
+      "milestone": "M0",
+      "dependsOn": [
+        "PR-03",
+        "PR-04",
+        "PR-05"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-07",
+      "title": "验证 Windows 与 Linux 独立安装发布",
+      "module": "cli",
+      "milestone": "M0",
+      "dependsOn": [
+        "PR-06"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-08",
+      "title": "实现有界 context get 与可选目录归组",
+      "module": "cli",
+      "milestone": "M1",
+      "dependsOn": [
+        "PR-06"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-09",
+      "title": "提供 Skills 包版本与宿主安装管理",
+      "module": "skills",
+      "milestone": "M1",
+      "dependsOn": [
+        "PR-07"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-10",
+      "title": "提供显式读取研究背景 Skill",
+      "module": "skills",
+      "milestone": "M1",
+      "dependsOn": [
+        "PR-08",
+        "PR-09"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-11",
+      "title": "提供显式保存认识与进度 Skill",
+      "module": "skills",
+      "milestone": "M1",
+      "dependsOn": [
+        "PR-06",
+        "PR-09"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-12",
+      "title": "实现桌面条目浏览、编辑与来源查看",
+      "module": "desktop",
+      "milestone": "M1",
+      "dependsOn": [
+        "PR-03",
+        "PR-05"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-13",
+      "title": "发布选定 Liteasy 笔记、批注或对话内容",
+      "module": "desktop",
+      "milestone": "M1",
+      "dependsOn": [
+        "PR-12"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-14",
+      "title": "选择式发布已有画像",
+      "module": "desktop",
+      "milestone": "M1",
+      "dependsOn": [
+        "PR-13"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-15",
+      "title": "导入 Zotero Markdown 笔记快照",
+      "module": "sources",
+      "milestone": "M2",
+      "dependsOn": [
+        "PR-06"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-16",
+      "title": "让 Liteasy 内置 AI 共用 Context 服务读写",
+      "module": "desktop",
+      "milestone": "M2",
+      "dependsOn": [
+        "PR-03",
+        "PR-05",
+        "PR-12"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-17",
+      "title": "在 Android 捕获本机 Idea 草稿",
+      "module": "mobile",
+      "milestone": "M2",
+      "dependsOn": [
+        "PR-01"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-18",
+      "title": "提交 Android Idea 到云端并跨设备可读",
+      "module": "mobile",
+      "milestone": "M2",
+      "dependsOn": [
+        "PR-03",
+        "PR-05",
+        "PR-17"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-19",
+      "title": "整理私有研究组背景条目",
+      "module": "desktop",
+      "milestone": "M2",
+      "dependsOn": [
+        "PR-12"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-20",
+      "title": "提供背景相关的论文推荐 Skill",
+      "module": "skills",
+      "milestone": "M3",
+      "dependsOn": [
+        "PR-10"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-21",
+      "title": "提供研究方向与会议匹配 Skill",
+      "module": "skills",
+      "milestone": "M3",
+      "dependsOn": [
+        "PR-10",
+        "PR-19"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-22",
+      "title": "提供遇阻换路线 Skill",
+      "module": "skills",
+      "milestone": "M3",
+      "dependsOn": [
+        "PR-10",
+        "PR-11"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-23",
+      "title": "提供认识关联与 Idea 整理 Skill",
+      "module": "skills",
+      "milestone": "M3",
+      "dependsOn": [
+        "PR-10",
+        "PR-11"
+      ],
+      "status": "review",
+      "implementation": "implemented",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    },
+    {
+      "id": "PR-24",
+      "title": "记录跨设备完整 pilot 与首版验收证据",
+      "module": "pilot",
+      "milestone": "PILOT",
+      "dependsOn": [
+        "PR-14",
+        "PR-15",
+        "PR-16",
+        "PR-18",
+        "PR-20",
+        "PR-21",
+        "PR-22",
+        "PR-23"
+      ],
+      "status": "planned",
+      "implementation": "pilot_prepared",
+      "prUrl": null,
+      "evidenceUrls": [
+        "docs/qa/personal-context/README.md"
+      ]
+    }
+  ]
+}

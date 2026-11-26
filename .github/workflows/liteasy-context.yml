@@ -1,0 +1,97 @@
+name: Personal context and CLI
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/liteasy-context.yml"
+      - "products/liteasy/apps/cli/**"
+      - "products/liteasy/packages/context-*/**"
+      - "products/liteasy/packages/shared/context*.schema.json"
+      - "products/liteasy/services/api/**"
+  pull_request:
+    paths:
+      - ".github/workflows/liteasy-context.yml"
+      - "products/liteasy/apps/cli/**"
+      - "products/liteasy/packages/context-*/**"
+      - "products/liteasy/packages/shared/context*.schema.json"
+      - "products/liteasy/services/api/**"
+
+permissions:
+  contents: read
+
+jobs:
+  service:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: context_test
+          POSTGRES_PASSWORD: synthetic_ci_only
+          POSTGRES_DB: context_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      LITEASY_CONTEXT_TEST_DATABASE_URL: postgresql://context_test:synthetic_ci_only@localhost:5432/context_test
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: products/liteasy/apps/desktop/.nvmrc
+          cache: npm
+          cache-dependency-path: products/liteasy/services/api/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        working-directory: products/liteasy/services/api
+      - run: npm ci --no-audit --no-fund
+        working-directory: products/liteasy/apps/cli
+      - name: Generate and verify SDK and CLI
+        run: |
+          node products/liteasy/packages/context-contracts/generate.mjs
+          node products/liteasy/packages/context-skills/generate.mjs
+          npm test --prefix products/liteasy/packages/context-client
+          npm test --prefix products/liteasy/apps/cli
+          npm run build --prefix products/liteasy/apps/cli
+          git diff --exit-code -- products/liteasy/packages/shared products/liteasy/packages/context-skills
+      - name: Test production API and real PostgreSQL Context operations
+        run: npm test
+        working-directory: products/liteasy/services/api
+      - name: Verify API image includes its shared runtime contracts
+        run: docker build --file products/liteasy/services/api/Dockerfile --tag liteasy-context-api:ci .
+      - name: Pack standalone CLI
+        working-directory: products/liteasy/apps/cli
+        run: npm pack --pack-destination "${{ runner.temp }}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: liteasy-context-cli
+          path: ${{ runner.temp }}/liteasy-context-cli-*.tgz
+          if-no-files-found: error
+  install:
+    needs: service
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: products/liteasy/apps/desktop/.nvmrc
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: liteasy-context-cli
+          path: ${{ runner.temp }}/context-cli-package
+      - name: Install the same artifact and check the native command environment
+        shell: bash
+        working-directory: products/liteasy/apps/cli
+        run: |
+          npm ci --no-audit --no-fund
+          LITEASY_CLI_ARCHIVE="$(find "${{ runner.temp }}/context-cli-package" -name '*.tgz' -print -quit)" npm run test:package
