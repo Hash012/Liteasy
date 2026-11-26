@@ -45,6 +45,9 @@ import { ThinReadingVisualizationSourceResolver } from "./thinReadingVisualizati
 import { LocalTesseractRasterOcr } from "./visualizationRasterOcr.mjs";
 import { PostgresDeviceControlRepository } from "./deviceControlRepository.mjs";
 import { DeviceControlService } from "../../../packages/device-control/src/service.mjs";
+import { PostgresContextEntryRepository } from "./context/contextEntryRepository.mjs";
+import { ContextEntryService } from "./context/contextEntryService.mjs";
+import { ContextGrantRepository } from "./context/contextGrantRepository.mjs";
 
 export async function startCloudRuntime(config, dependencies = {}) {
   const pool = dependencies.pool ?? createPostgresPool(config.database);
@@ -66,6 +69,9 @@ export async function startCloudRuntime(config, dependencies = {}) {
   const agentArtifactRepository = dependencies.agentArtifactRepository ??
     new PostgresAgentArtifactRepository(pool);
   const deviceControlService = dependencies.deviceControlService ?? new DeviceControlService(new PostgresDeviceControlRepository(pool));
+  const contextEntries = new PostgresContextEntryRepository(pool);
+  const contextEntryService = dependencies.contextEntryService ?? new ContextEntryService(contextEntries);
+  const contextGrantRepository = dependencies.contextGrantRepository ?? new ContextGrantRepository(contextEntries);
   const accountLifecycleService = dependencies.accountLifecycleService ?? new AccountLifecycleService(
     accountLifecycleRepository,
     identityAdminClient,
@@ -214,6 +220,8 @@ export async function startCloudRuntime(config, dependencies = {}) {
       accountLifecycleService,
       agentArtifactRepository,
       deviceControlService,
+      contextEntryService,
+      contextGrantRepository,
       close: async () => {
         try {
           await visualizationOrchestrationService.close?.();

@@ -25,6 +25,8 @@ import { VisualizationServiceError } from "./visualizationService.mjs";
 import { handleVisualizationRequest } from "./visualizationRoutes.mjs";
 import { handleDeviceControl } from "../../../packages/device-control/src/routes.mjs";
 import { DeviceControlError } from "../../../packages/device-control/src/service.mjs";
+import { handleContextRequest } from "./context/contextRoutes.mjs";
+import { handleMobileContextRequest } from "./context/mobileContextRoutes.mjs";
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -327,6 +329,8 @@ export function createCloudRequestHandler(runtime, config) {
         sendJson(response, 200, { subject: identity.subject, issuer: config.identity.issuer, audience: "liteasy-mobile" });
         return;
       }
+      if (await handleContextRequest({ request, response, url, runtime, config, readJsonBody, sendJson })) return;
+      if (await handleMobileContextRequest({ request, response, url, runtime, config, readJsonBody, sendJson })) return;
       if (await handleDeviceControl({ request, url, service: runtime.deviceControlService,
         authenticate: async (kind) => {
           const clientId = config.identity[kind === "mobile" ? "mobileClientId" : "desktopClientId"];

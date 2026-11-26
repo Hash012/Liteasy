@@ -74,6 +74,7 @@ export class PostgresAccountLifecycleRepository {
         ) {
           throw new AccountLifecycleError("account_lifecycle_in_progress", 409);
         }
+        if (input.status !== "active") await client.query("UPDATE context_grants SET revoked_at=COALESCE(revoked_at,now()) WHERE subject_id=$1", [input.subjectId]);
         await client.query(`
           UPDATE account_lifecycle_operations
              SET state = 'running', attempts = attempts + 1, error_code = NULL, updated_at = now()
@@ -81,6 +82,7 @@ export class PostgresAccountLifecycleRepository {
         `, [input.actorId, input.idempotencyKey]);
         return { replayed: false };
       }
+      if (input.status !== "active") await client.query("UPDATE context_grants SET revoked_at=COALESCE(revoked_at,now()) WHERE subject_id=$1", [input.subjectId]);
       await client.query(`
         INSERT INTO account_lifecycle_operations(
           actor_id, idempotency_key, request_hash, subject_id, requested_status, state
@@ -266,6 +268,8 @@ export class PostgresAccountLifecycleRepository {
         [input.subjectId]
       );
       await client.query("DELETE FROM device_control_accounts WHERE subject_id = $1", [input.subjectId]);
+      await client.query("DELETE FROM context_grants WHERE subject_id = $1", [input.subjectId]);
+      await client.query("DELETE FROM context_entries WHERE subject_id = $1", [input.subjectId]);
       const visualizationGenerationRequests = await client.query(
         "DELETE FROM visualization_generation_requests WHERE subject_id = $1",
         [input.subjectId]
