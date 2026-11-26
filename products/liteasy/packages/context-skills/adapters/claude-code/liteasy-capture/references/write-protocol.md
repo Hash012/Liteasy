@@ -1,0 +1,17 @@
+# Context write protocol
+
+Use only the discussion/material the user asked to save. A request to save this turn already authorizes that write; do not add per-entry approval loops. Ask only if an unresolved account or scope choice would misfile the content.
+Run liteasy doctor --json. Choose profile, understanding, progress, idea, group_background, or reference according to the content. Keep source excerpts, user statements and Agent summaries distinguishable with basis. Use agent_summary for your synthesis; never impersonate a user's original words. Separate done/blocked/next; keep unverified ideas as hypotheses.
+Create a UTF-8 JSON task file containing schemaVersion liteasy.context-write/v1, a fresh UUID operationId, action create, and entry with scopeKey, kind, title, bodyMarkdown, basis, tags and sourceRefs. SourceRefs carry provider and origin; preserve real source IDs, locators, available hash/revision and capturedAt. Leave unknown source versions absent. A context snapshot can be cited by its entry ID/revision and liteasy-context locator.
+Submit with liteasy context add --input TASK_FILE --json. To correct an existing entry, read its revision first, use action update, entryId, expectedRevision and the complete entry, then liteasy context update ID --input TASK_FILE --json. A conflict requires reading the current version and making a new deliberate correction, never silent overwrite.
+Keep exact input and operationId for an uncertain outcome; consult context receipt or the CLI recovery file. Never change the operationId merely because a write timed out. Beyond the advertised idempotency window, inspect current entries before starting a new operation.
+Report actual receipt IDs/revisions and titles. Failure means not confirmed saved. Stop after this task; this grant of permission does not enable future automatic capture.
+
+A minimal create file:
+
+```json
+{"schemaVersion":"liteasy.context-write/v1","operationId":"REPLACE_WITH_FRESH_UUID","action":"create","entry":{"scopeKey":"personal","kind":"idea","title":"Short title","bodyMarkdown":"The selected content and its conditions","basis":"agent_summary","tags":[],"sourceRefs":[]}}
+```
+
+An imported Context snapshot can be cited as {"provider":"liteasy","origin":"YOUR_CONFIGURED_API_ORIGIN","sourceId":"ENTRY_ID","revision":"ACTUAL_REVISION","locator":"liteasy-context:ENTRY_ID","availability":"remote"}. Replace placeholders with values actually returned by the service. Empty sourceRefs are allowed when there is no source identifier; explain that gap in the saved text.
+For an uncertain write, run liteasy context receipt OPERATION_ID --json. A 404 is not proof the original write never happened: it may still be in flight. The CLI error includes recoveryFile and operationId; use liteasy context retry --retry RECOVERY_FILE --json, or resubmit the unchanged original task file. The recovery file retains the first attempt time, origin and account. liteasy auth status --json reports the current service idempotencyWindowSeconds. Never edit that first-attempt time to extend the window. After one check and safe retry, continued network failure ends this task with the recovery location and unconfirmed status. Outside the window, inspect current entries before deciding on a new operation. Identical titles or bodies, or an empty search result, do not uniquely prove the old operation outcome; if it cannot be established, keep the outcome unconfirmed rather than automatically issuing a new operationId.
