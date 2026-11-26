@@ -1,0 +1,459 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.liteasy.app/contextEntry.v1.schema.json",
+  "type": "object",
+  "properties": {
+    "scopeKey": {
+      "type": "string",
+      "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "profile",
+        "understanding",
+        "progress",
+        "idea",
+        "group_background",
+        "reference"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "bodyMarkdown": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 12000
+    },
+    "basis": {
+      "type": "string",
+      "enum": [
+        "user_authored",
+        "user_statement",
+        "agent_summary",
+        "source_excerpt",
+        "imported"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "draft",
+        "archived"
+      ],
+      "default": "active"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "maxItems": 20,
+      "uniqueItems": true
+    },
+    "sourceRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "liteasy",
+              "zotero",
+              "web",
+              "user",
+              "import",
+              "other"
+            ]
+          },
+          "origin": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "sourceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "title": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 180
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "locator": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 4096
+          },
+          "capturedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "remote",
+              "local_only",
+              "unknown",
+              "unavailable"
+            ]
+          },
+          "nativeRef": {
+            "anyOf": [
+              {
+                "$ref": "https://schemas.liteasy.app/resourceRef.v1.schema.json"
+              },
+              {
+                "$ref": "https://schemas.liteasy.app/objectRef.v1.schema.json"
+              },
+              {
+                "$ref": "https://schemas.liteasy.app/contextRef.v1.schema.json"
+              }
+            ]
+          }
+        },
+        "required": [
+          "provider",
+          "origin"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 20
+    },
+    "attributes": {
+      "type": "object",
+      "maxProperties": 20
+    }
+  },
+  "required": [
+    "scopeKey",
+    "kind",
+    "title",
+    "bodyMarkdown",
+    "basis"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "stored": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "liteasy.context-entry/v1"
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "scopeKey": {
+          "type": "string",
+          "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "profile",
+            "understanding",
+            "progress",
+            "idea",
+            "group_background",
+            "reference"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "bodyMarkdown": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 12000
+        },
+        "basis": {
+          "type": "string",
+          "enum": [
+            "user_authored",
+            "user_statement",
+            "agent_summary",
+            "source_excerpt",
+            "imported"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "draft",
+            "archived"
+          ],
+          "default": "active"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "maxItems": 20,
+          "uniqueItems": true
+        },
+        "sourceRefs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "liteasy",
+                  "zotero",
+                  "web",
+                  "user",
+                  "import",
+                  "other"
+                ]
+              },
+              "origin": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "sourceId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "title": {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 180
+              },
+              "revision": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "contentHash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "locator": {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 4096
+              },
+              "capturedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "availability": {
+                "type": "string",
+                "enum": [
+                  "remote",
+                  "local_only",
+                  "unknown",
+                  "unavailable"
+                ]
+              },
+              "nativeRef": {
+                "anyOf": [
+                  {
+                    "$ref": "https://schemas.liteasy.app/resourceRef.v1.schema.json"
+                  },
+                  {
+                    "$ref": "https://schemas.liteasy.app/objectRef.v1.schema.json"
+                  },
+                  {
+                    "$ref": "https://schemas.liteasy.app/contextRef.v1.schema.json"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "provider",
+              "origin"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 20
+        },
+        "attributes": {
+          "type": "object",
+          "maxProperties": 20
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "revision",
+        "owner",
+        "actor",
+        "scopeKey",
+        "kind",
+        "title",
+        "bodyMarkdown",
+        "basis",
+        "status",
+        "tags",
+        "sourceRefs",
+        "attributes",
+        "createdAt",
+        "updatedAt"
+      ],
+      "additionalProperties": false
+    },
+    "sourceRef": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": [
+            "liteasy",
+            "zotero",
+            "web",
+            "user",
+            "import",
+            "other"
+          ]
+        },
+        "origin": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "sourceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "title": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 180
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "contentHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 4096
+        },
+        "capturedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "availability": {
+          "type": "string",
+          "enum": [
+            "remote",
+            "local_only",
+            "unknown",
+            "unavailable"
+          ]
+        },
+        "nativeRef": {
+          "anyOf": [
+            {
+              "$ref": "https://schemas.liteasy.app/resourceRef.v1.schema.json"
+            },
+            {
+              "$ref": "https://schemas.liteasy.app/objectRef.v1.schema.json"
+            },
+            {
+              "$ref": "https://schemas.liteasy.app/contextRef.v1.schema.json"
+            }
+          ]
+        }
+      },
+      "required": [
+        "provider",
+        "origin"
+      ],
+      "additionalProperties": false
+    },
+    "scopeKey": {
+      "type": "string",
+      "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "profile",
+        "understanding",
+        "progress",
+        "idea",
+        "group_background",
+        "reference"
+      ]
+    }
+  }
+}

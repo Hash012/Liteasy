@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.liteasy.app/contextWrite.v1.schema.json",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "liteasy.context-write/v1"
+        },
+        "operationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "action": {
+          "const": "create"
+        },
+        "entry": {
+          "$ref": "https://schemas.liteasy.app/contextEntry.v1.schema.json"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operationId",
+        "action",
+        "entry"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "liteasy.context-write/v1"
+        },
+        "operationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "action": {
+          "const": "update"
+        },
+        "entryId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "entry": {
+          "$ref": "https://schemas.liteasy.app/contextEntry.v1.schema.json"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operationId",
+        "action",
+        "entryId",
+        "expectedRevision",
+        "entry"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "liteasy.context-write/v1"
+        },
+        "operationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "action": {
+          "const": "delete"
+        },
+        "entryId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operationId",
+        "action",
+        "entryId",
+        "expectedRevision"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "liteasy.context-write/v1",
+  "operationId": "11111111-1111-4111-8111-000000000006",
+  "action": "create",
+  "entry": {
+    "scopeKey": "personal",
+    "kind": "reference",
+    "title": "Zotero导出笔记快照",
+    "bodyMarkdown": "【合成示例】这是一份导出笔记的原始文本。文献回链只指向来源，不证明这份笔记的身份，也不表示用户认同所有内容。",
+    "basis": "imported",
+    "status": "draft",
+    "tags": [
+      "synthetic-example"
+    ],
+    "sourceRefs": [
+      {
+        "provider": "zotero",
+        "origin": "synthetic-export-file",
+        "sourceId": "synthetic-source-not-note-identity",
+        "title": "仅作格式示例的来源",
+        "locator": "zotero://select/library/items/EXAMPLE1",
+        "availability": "local_only"
+      }
+    ],
+    "attributes": {
+      "synthetic": true
+    }
+  }
+}

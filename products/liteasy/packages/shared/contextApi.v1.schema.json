@@ -1,0 +1,993 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.liteasy.app/contextApi.v1.schema.json",
+  "$defs": {
+    "write": {
+      "$ref": "https://schemas.liteasy.app/contextWrite.v1.schema.json"
+    },
+    "filters": {
+      "type": "object",
+      "properties": {
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+          },
+          "maxItems": 50,
+          "uniqueItems": true
+        },
+        "kinds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "profile",
+              "understanding",
+              "progress",
+              "idea",
+              "group_background",
+              "reference"
+            ]
+          },
+          "maxItems": 6,
+          "uniqueItems": true
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "maxItems": 20,
+          "uniqueItems": true
+        },
+        "query": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 256
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "draft",
+            "archived"
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "queryRequest": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "liteasy.context-api/v1"
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+          },
+          "maxItems": 50,
+          "uniqueItems": true
+        },
+        "kinds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "profile",
+              "understanding",
+              "progress",
+              "idea",
+              "group_background",
+              "reference"
+            ]
+          },
+          "maxItems": 6,
+          "uniqueItems": true
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "maxItems": 20,
+          "uniqueItems": true
+        },
+        "query": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 256
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "draft",
+            "archived"
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "maxChars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "maxChars"
+      ],
+      "additionalProperties": false
+    },
+    "receipt": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "liteasy.context-api/v1"
+        },
+        "operationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "entryId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "create",
+            "update",
+            "delete"
+          ]
+        },
+        "scopeKey": {
+          "type": "string",
+          "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+        },
+        "committedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operationId",
+        "entryId",
+        "revision",
+        "action",
+        "scopeKey",
+        "committedAt",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "grantInput": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "readScopes": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+              },
+              {
+                "const": "*"
+              }
+            ]
+          },
+          "maxItems": 50,
+          "uniqueItems": true
+        },
+        "writeScopes": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+              },
+              {
+                "const": "*"
+              }
+            ]
+          },
+          "maxItems": 50,
+          "uniqueItems": true
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "name",
+        "readScopes",
+        "writeScopes",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "grant": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "readScopes": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+              },
+              {
+                "const": "*"
+              }
+            ]
+          },
+          "maxItems": 50,
+          "uniqueItems": true
+        },
+        "writeScopes": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+              },
+              {
+                "const": "*"
+              }
+            ]
+          },
+          "maxItems": 50,
+          "uniqueItems": true
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "revokedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lastUsedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "readScopes",
+        "writeScopes",
+        "expiresAt",
+        "createdAt",
+        "revokedAt",
+        "lastUsedAt"
+      ],
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "liteasy.context-api/v1"
+        },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "retryable": {
+              "type": "boolean"
+            },
+            "requestId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "currentRevision": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "code",
+            "message",
+            "retryable",
+            "requestId"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "error"
+      ],
+      "additionalProperties": false
+    },
+    "entryResponse": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "liteasy.context-api/v1"
+        },
+        "entry": {
+          "$ref": "https://schemas.liteasy.app/contextEntry.v1.schema.json#/$defs/stored"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "entry"
+      ],
+      "additionalProperties": false
+    },
+    "listResponse": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "liteasy.context-api/v1"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "https://schemas.liteasy.app/contextEntry.v1.schema.json#/$defs/stored"
+          },
+          "maxItems": 100
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "entries",
+        "nextCursor"
+      ],
+      "additionalProperties": false
+    },
+    "historyResponse": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "liteasy.context-api/v1"
+        },
+        "revisions": {
+          "type": "array",
+          "items": {
+            "$ref": "https://schemas.liteasy.app/contextEntry.v1.schema.json#/$defs/stored"
+          },
+          "maxItems": 100
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "revisions",
+        "nextCursor"
+      ],
+      "additionalProperties": false
+    },
+    "queryResponse": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "liteasy.context-api/v1"
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "selectedEntries": {
+          "type": "array",
+          "items": {
+            "$ref": "https://schemas.liteasy.app/contextEntry.v1.schema.json#/$defs/stored"
+          },
+          "maxItems": 100
+        },
+        "filters": {
+          "type": "object",
+          "properties": {
+            "scopes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+              },
+              "maxItems": 50,
+              "uniqueItems": true
+            },
+            "kinds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "profile",
+                  "understanding",
+                  "progress",
+                  "idea",
+                  "group_background",
+                  "reference"
+                ]
+              },
+              "maxItems": 6,
+              "uniqueItems": true
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "maxItems": 20,
+              "uniqueItems": true
+            },
+            "query": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 256
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "active",
+                "draft",
+                "archived"
+              ]
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "cursor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "budget": {
+          "type": "object",
+          "properties": {
+            "maxChars": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "usedChars": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unit": {
+              "const": "unicode_code_point"
+            }
+          },
+          "required": [
+            "maxChars",
+            "usedChars",
+            "unit"
+          ],
+          "additionalProperties": false
+        },
+        "omitted": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "scopeKey": {
+                "type": "string",
+                "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "profile",
+                  "understanding",
+                  "progress",
+                  "idea",
+                  "group_background",
+                  "reference"
+                ]
+              },
+              "length": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "reason": {
+                "const": "budget"
+              }
+            },
+            "required": [
+              "id",
+              "revision",
+              "title",
+              "scopeKey",
+              "kind",
+              "length",
+              "reason"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 100
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "generatedAt",
+        "selectedEntries",
+        "filters",
+        "budget",
+        "omitted",
+        "nextCursor"
+      ],
+      "additionalProperties": false
+    },
+    "whoamiResponse": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "liteasy.context-api/v1"
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "readScopes": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+              },
+              {
+                "const": "*"
+              }
+            ]
+          },
+          "maxItems": 50,
+          "uniqueItems": true
+        },
+        "writeScopes": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+              },
+              {
+                "const": "*"
+              }
+            ]
+          },
+          "maxItems": 50,
+          "uniqueItems": true
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "idempotencyWindowSeconds": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "subject",
+        "actor",
+        "readScopes",
+        "writeScopes",
+        "expiresAt",
+        "idempotencyWindowSeconds"
+      ],
+      "additionalProperties": false
+    },
+    "grantsResponse": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "liteasy.context-api/v1"
+        },
+        "grants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "readScopes": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+                    },
+                    {
+                      "const": "*"
+                    }
+                  ]
+                },
+                "maxItems": 50,
+                "uniqueItems": true
+              },
+              "writeScopes": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+                    },
+                    {
+                      "const": "*"
+                    }
+                  ]
+                },
+                "maxItems": 50,
+                "uniqueItems": true
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "revokedAt": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "lastUsedAt": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "readScopes",
+              "writeScopes",
+              "expiresAt",
+              "createdAt",
+              "revokedAt",
+              "lastUsedAt"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 100
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "grants"
+      ],
+      "additionalProperties": false
+    },
+    "grantCreatedResponse": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "liteasy.context-api/v1"
+        },
+        "grant": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "readScopes": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+                  },
+                  {
+                    "const": "*"
+                  }
+                ]
+              },
+              "maxItems": 50,
+              "uniqueItems": true
+            },
+            "writeScopes": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^(personal|project/[a-z0-9][a-z0-9-]{0,63})$"
+                  },
+                  {
+                    "const": "*"
+                  }
+                ]
+              },
+              "maxItems": 50,
+              "uniqueItems": true
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "revokedAt": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "lastUsedAt": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "readScopes",
+            "writeScopes",
+            "expiresAt",
+            "createdAt",
+            "revokedAt",
+            "lastUsedAt"
+          ],
+          "additionalProperties": false
+        },
+        "secret": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "grant",
+        "secret"
+      ],
+      "additionalProperties": false
+    },
+    "grantRevokedResponse": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "liteasy.context-api/v1"
+        },
+        "revoked": {
+          "const": true
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "revoked"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/write"
+    },
+    {
+      "$ref": "#/$defs/queryRequest"
+    },
+    {
+      "$ref": "#/$defs/receipt"
+    },
+    {
+      "$ref": "#/$defs/entryResponse"
+    },
+    {
+      "$ref": "#/$defs/listResponse"
+    },
+    {
+      "$ref": "#/$defs/historyResponse"
+    },
+    {
+      "$ref": "#/$defs/queryResponse"
+    },
+    {
+      "$ref": "#/$defs/whoamiResponse"
+    },
+    {
+      "$ref": "#/$defs/error"
+    },
+    {
+      "$ref": "#/$defs/grantsResponse"
+    },
+    {
+      "$ref": "#/$defs/grantCreatedResponse"
+    },
+    {
+      "$ref": "#/$defs/grantRevokedResponse"
+    }
+  ]
+}

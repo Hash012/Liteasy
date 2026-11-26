@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "liteasy.context-write/v1",
+  "operationId": "11111111-1111-4111-8111-000000000001",
+  "action": "create",
+  "entry": {
+    "scopeKey": "personal",
+    "kind": "profile",
+    "title": "背景与表达偏好",
+    "bodyMarkdown": "【合成示例】我正在学习数据库系统；希望先看到结论，再展开机制。",
+    "basis": "user_statement",
+    "status": "active",
+    "tags": [
+      "synthetic-example"
+    ],
+    "sourceRefs": [],
+    "attributes": {
+      "synthetic": true
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "liteasy.context-write/v1",
+  "operationId": "11111111-1111-4111-8111-000000000007",
+  "action": "update",
+  "entry": {
+    "scopeKey": "project/vector-db",
+    "kind": "understanding",
+    "title": "对压缩态处理的个人认识",
+    "bodyMarkdown": "【合成示例】纠正：必须先确认算子支持哪些编码；目前不能推断所有操作都可直接在压缩态执行。",
+    "basis": "agent_summary",
+    "status": "active",
+    "tags": [
+      "synthetic-example"
+    ],
+    "sourceRefs": [],
+    "attributes": {
+      "synthetic": true
+    }
+  },
+  "entryId": "22222222-2222-4222-8222-000000000001",
+  "expectedRevision": 1
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "liteasy.context-write/v1",
+  "operationId": "11111111-1111-4111-8111-000000000005",
+  "action": "create",
+  "entry": {
+    "scopeKey": "personal",
+    "kind": "group_background",
+    "title": "课题组背景草稿",
+    "bodyMarkdown": "【合成示例】已知：选定资料涉及检索与系统方向。待确认：可继承代码、设备使用条件、具体指导意愿。",
+    "basis": "user_statement",
+    "status": "draft",
+    "tags": [
+      "synthetic-example"
+    ],
+    "sourceRefs": [],
+    "attributes": {
+      "synthetic": true
+    }
+  }
+}

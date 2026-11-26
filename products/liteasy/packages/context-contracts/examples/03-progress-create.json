@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "liteasy.context-write/v1",
+  "operationId": "11111111-1111-4111-8111-000000000003",
+  "action": "create",
+  "entry": {
+    "scopeKey": "project/vector-db",
+    "kind": "progress",
+    "title": "检索课题的本轮进展",
+    "bodyMarkdown": "【合成示例】已完成：整理问题列表。阻塞：尚无可比较基线。下一步：选定工作负载。实验尚未运行。",
+    "basis": "agent_summary",
+    "status": "active",
+    "tags": [
+      "synthetic-example"
+    ],
+    "sourceRefs": [],
+    "attributes": {
+      "synthetic": true
+    }
+  }
+}

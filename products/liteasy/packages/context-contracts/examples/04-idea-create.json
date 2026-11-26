@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "liteasy.context-write/v1",
+  "operationId": "11111111-1111-4111-8111-000000000004",
+  "action": "create",
+  "entry": {
+    "scopeKey": "personal",
+    "kind": "idea",
+    "title": "对象关系与检索假设",
+    "bodyMarkdown": "【合成示例】我想用对象与关系的概念区分帮助检查检索任务的建模假设。这只是概念启发，尚不是算法改进结论。",
+    "basis": "user_authored",
+    "status": "draft",
+    "tags": [
+      "synthetic-example"
+    ],
+    "sourceRefs": [],
+    "attributes": {
+      "synthetic": true
+    }
+  }
+}
